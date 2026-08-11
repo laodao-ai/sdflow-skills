@@ -1,0 +1,1209 @@
+# Review package: 042e0f5..6dfb417
+
+## Commits
+6dfb417 Task 5: docs 与全仓扫尾
+
+## Files changed
+ AGENTS.md                                          |   2 +-
+ CLAUDE.md                                          |   4 +-
+ docs/criteria-mechanization-tracker.md             |   9 +-
+ docs/workflow-console.html                         |  34 +++----
+ docs/workflow-map.html                             |  14 +--
+ docs/workflow-map.md                               |  12 ++-
+ docs/workflow-overview.md                          |  44 +++++----
+ .../impl-pipeline-matt-vs-superpowers.md           |   2 +
+ .../0033-tickets-plan-filename-split-by-track.md   |   2 +
+ openspec/adr/0042-tickets-sole-impl-pipeline.md    |   2 +
+ .../impl-reports/task5-brief.md                    |  22 +++++
+ .../impl-reports/task5-docs-sweep.md               | 110 +++++++++++++++++++++
+ .../changes/remove-superpowers-pipeline/tickets.md |  12 +--
+ openspec/workflow/WORKFLOW-GUIDE.md                |  15 ++-
+ sdflow-init/assets/snippets/claude-section.md      |   2 +-
+ sdflow-init/assets/workflow/WORKFLOW-GUIDE.md      |   8 +-
+ .../assets/workflow/prompts/step7-subagent-dev.md  |   1 -
+ .../assets/workflow/reference/quality-layering.md  |  30 +++---
+ sdflow-init/assets/workflow/workflow.md            |   8 +-
+ 19 files changed, 241 insertions(+), 92 deletions(-)
+
+## Diff
+diff --git a/AGENTS.md b/AGENTS.md
+index 6aed26c..9d5d86f 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -219,21 +219,21 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回
+ 经 `resolve-workflow.sh` 两步链解析；消费仓不再持有规则副本）。规则集（同解析到全局 `~/.sdflow/workflow/`）：
+ `trigger-catalog.md`（触发单一源 TG）· `spec-checklists/`、`code-checklists/`（设计审/代码审）·
+ `ff-generation-constraints.md` · `design-diagrams.md` · `spec-review.md` · `generation-process.md`。
+ 质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（同解析到全局 `~/.sdflow/workflow/`）。
+ 
+ **强制操作规范**
+ 
+ - **起手判触发**：收到 `opsx:ff` / `propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
+   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
+ - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
+-  子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
++  子 agent 调度期间（sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
+ - **阶段一入口为唯一线性路径**：问题模糊/方向未定先 `opsx:explore` 发散，清晰则直接进 `/sdflow-spec`。
+   人可直接触发；**人示意收敛**（如"开搞"/"做吧"/"开 change"）时**模型 SHALL 自动 invoke `/sdflow-spec`**。
+   **模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发，触发方式的改变不缩减
+   相位 B 拷问的深度（generation-process.md §四）。
+ - **开分支 = FF-0 三分支判定**：保护分支 → `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。MUST NOT 沿用「已在 feature 分支就跳过」的弱判据。
+ - **实现管线唯一 = tickets**：路由至 `sdflow-implement`（tickets 轨），无需判 `impl-pipeline` 键。
+ - **INDEX 同步**（仅 toolkit 源仓维护 canonical bundle 时适用）：新增/删 `sdflow-init/assets/workflow/` 下的规则文件后，同步 `openspec/INDEX.md`（消费仓不再持有规则副本，无需同步）。
+ 
+ **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
+ 
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 76622e4..18af5d6 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -205,21 +205,21 @@ pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
+ 
+ ### dev/runtime checkout 纪律（adr/0005 + 设计门拍板）
+ 
+ - **运行 checkout** = `~/.skills/sdflow-skills`：只 `git pull` + `setup.sh`，日常一键用 `/sdflow-upgrade`；
+   remote 必须 = `laodao-ai/sdflow-skills.git`。
+ - **开发 checkout** = 本仓：编辑 skill / bundle。本仓不再保留规则副本（规则经全局 canonical 解析），
+   故要**真跑**改过的 skill / 规则 / hack 脚本全链路，须在开发 checkout 跑一次 `setup.sh`——
+   知情临时指 dev，测完/合并后在运行 checkout 重跑 setup 还原。但这是测试三层里的**最后一层**，
+   能用低层就别翻全局，见下方「开发期测试三层」。
+ - **发布边界** = push（开发）→ pull（运行）→ **立即** setup（pull 与 setup 之间是"新 SKILL 调旧脚本"的窗口期）。
+-- **反向窗口**：pull 后既有 SKILL 路由（如 ship 链序）即生效（symlink 即时），而新增 skill 的链接须 setup 后才存在——已开 `impl-pipeline: tickets` 的仓在窗口期触发 RUN_PLAN 会调不存在的 sdflow-implement；故 pull 与 setup 之间勿跑阶段三。
++- **反向窗口**：pull 后既有 SKILL 路由（如 ship 链序）即生效（symlink 即时），而新增 skill 的链接须 setup 后才存在——窗口期触发 RUN_PLAN 会调不存在的 sdflow-implement（实现管线唯一为 tickets，无需判 `impl-pipeline` 键存在性）；故 pull 与 setup 之间勿跑阶段三。
+ - **回滚** = 运行 checkout `git checkout <上一已知良好 commit>` + 重跑 setup.sh。
+   🔴 若回滚的是 `adr/0039`（消灭双链）本身：改动集中且几乎全是删除 ⇒ `git revert` 即复原；复原后
+   MUST 依次执行——每台机回运行 checkout 重跑 `bash setup.sh`（拿回三步链 resolver）→ 各消费仓重跑
+   `sdflow-init update`（拿回 `tools/`，否则回滚后首轮评审因缺 tools 裸崩）。顺序不可颠倒（design.md
+   Migration Plan「回滚」段）。
+ 
+ ### 开发期测试三层（影响面递增，能用低层就不开高层）
+ 
+ 背景：纪律态下全局指针（canonical `~/.sdflow/workflow`、`~/.claude/skills`、`~/.codex/skills` 软链）
+ 全指运行 checkout ⇒ 开发树的改动是**惰性**的，本仓项目侧与其他项目仓都吃已发布旧版。测试按影响面选层：
+@@ -410,21 +410,21 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回
+ 经 `resolve-workflow.sh` 两步链解析；消费仓不再持有规则副本）。规则集（同解析到全局 `~/.sdflow/workflow/`）：
+ `trigger-catalog.md`（触发单一源 TG）· `spec-checklists/`、`code-checklists/`（设计审/代码审）·
+ `ff-generation-constraints.md` · `design-diagrams.md` · `spec-review.md` · `generation-process.md`。
+ 质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（同解析到全局 `~/.sdflow/workflow/`）。
+ 
+ **强制操作规范**
+ 
+ - **起手判触发**：收到 `opsx:ff` / `propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
+   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
+ - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
+-  子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
++  子 agent 调度期间（sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
+ - **阶段一入口为唯一线性路径**：问题模糊/方向未定先 `opsx:explore` 发散，清晰则直接进 `/sdflow-spec`。
+   人可直接触发；**人示意收敛**（如"开搞"/"做吧"/"开 change"）时**模型 SHALL 自动 invoke `/sdflow-spec`**。
+   **模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发，触发方式的改变不缩减
+   相位 B 拷问的深度（generation-process.md §四）。
+ - **开分支 = FF-0 三分支判定**：保护分支 → `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。MUST NOT 沿用「已在 feature 分支就跳过」的弱判据。
+ - **实现管线唯一 = tickets**：路由至 `sdflow-implement`（tickets 轨），无需判 `impl-pipeline` 键。
+ - **INDEX 同步**（仅 toolkit 源仓维护 canonical bundle 时适用）：新增/删 `sdflow-init/assets/workflow/` 下的规则文件后，同步 `openspec/INDEX.md`（消费仓不再持有规则副本，无需同步）。
+ 
+ **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
+ 
+diff --git a/docs/criteria-mechanization-tracker.md b/docs/criteria-mechanization-tracker.md
+index 5ca0252..e0b1dd7 100644
+--- a/docs/criteria-mechanization-tracker.md
++++ b/docs/criteria-mechanization-tracker.md
+@@ -50,28 +50,31 @@
+ | 4.5b | outside-voice **per-site 完整性**（该层应有锚的站点是否都落了锚）| 🟢 | 报告落 `declared-sites` 锚（`{design-voice\|code-voice} ∪ {hr-tg \| HR-TG∩≠∅}`）| ✅ `anchor_lint.check_declared_sites`：双向核「declared == 公式重算期望集」+「declared == 实落 `site=` 集」，补家族级门（≥1 条即过）的 per-site 盲区 ⇒ 并发 2 站点漏收一个不再判 CLEAN；复用 `fence_outside_lines` 口径（无裸 grep 二源、自指不假阳）| ✅ **ship `async-outside-voice`**：站点集按「**应有锚**」而非「应 dispatch」定义（复用态 design-voice 未派仍落锚、code-voice always，按 dispatch 定义必假红）；**强度边界**：反规避只在 hr-tg `declared=` 可信时成立（依赖 4.4 的 S1 残余）|
+ | 4.6 | 镜价值度量（findings/采纳/独立/sev）| 🟢 | `lens_metric_emit.py` → lens-metric 锚 | `/sdflow-retro` 聚合（`lens_metric_aggregate.py`）| 写此、用在 retro |
+ | 4.7 | finding 对抗裁决（采纳/裁掉/defer、是否真爆）| 🔵 | — | — | 主 session 强档判断 |
+ | 4.8 | finding 置信度（高/中/低）| 🔵 | — | — | 主观分级（可辅助不可机定）|
+ | 4.9 | 数值一致性（锚 findings=N vs 合并池实收）| 🟡 | — | — | 有信号（可交叉核数），当前主 session 信任边界、未机械守 |
+ 
+ ## 5. ship·路由 + 判官（ship_gate 全程）
+ | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
+ |---|---|---|---|---|---|
+ | 5.1 | 下一步是谁（11 verdict 推导）| 🟢 | 盘面（四件套/三报告 frontmatter/checkpoint）| `ship_gate.py`（`:32-44`,`:647`；exit 0/3/4/5/6）| 阶段三判官核心 |
+-| 5.2 | 管线路由（config→marker→缺省）| 🟢 | `PIPELINE_RECEIPT`（route emit）+ plan frontmatter marker | `impl_route.py route`（回显+机判）| tickets/superpowers |
+ | 5.3 | 坏 frontmatter 分类（越域/重复键/bad-type/tab/absent）| 🟢 | — | `ship_gate.py:295-345`（live→UNKNOWN(6)/归档→fail-safe none）| — |
+ | 5.4 | 熔断无进展（STEP_IN_PROGRESS / RERUN_STALE）| 🟢 | 报告 frontmatter 状态集快照 | `ship_gate.py` `anchor_set`/`breaker_no_progress`（单 invocation 持有）| mlh-p5 |
+ 
+-## 5b. ship·plan（tickets/superpowers）
++> 旧 5.2「管线路由（config→marker→缺省）」随 `adr/0042`（tickets 成唯一管线，用户 2026-08-11 拍板）整体删除——
++> `impl_route.py route` 子命令 / `PIPELINE_RECEIPT` / plan marker 路由均已切除，RUN_PLAN/CONTINUE_IMPL 直连
++> `sdflow-implement`，无残余路由判据可跟踪（行号不回收，避免下游引用错位）。
++
++## 5b. ship·plan（tickets 唯一管线）
+ | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
+ |---|---|---|---|---|---|
+-| 5b.1 | plan 是否缺 → RUN_PLAN | 🟢 | `tickets.md`（tickets 轨）/ `superpowers-plan.md`（superpowers 轨，D5/adr-0033）| `ship_gate`（共享 resolver 按序探测两名，双存在 fail-closed；plan 缺）| — |
++| 5b.1 | plan 是否缺 → RUN_PLAN | 🟢 | `tickets.md`（单名，D5/adr-0033 双名分列已随 adr/0042 收口为单名）| `ship_gate`（resolver 缩为单名探测；plan 缺）| — |
+ | 5b.2 | checkpoint 完成标签契约 | 🟢 | `checkpoint({change}:task<N>-…)` commit | `ship_gate.py:492` `TAG_RE` | slug 须含横杠（memory）|
+ | 5b.3 | ticket 切片粒度 / Blocked-by 拓扑划分 | 🔵 | `Blocked-by:` 声明（写） | — | 划成几片=判断；拓扑解析=🟢下条 |
+ | 5b.4 | next-ready ticket（Blocked-by 拓扑 + done 集）| 🟢 | `Blocked-by:` | `impl_route.py frontier` | tickets 管线 |
+ 
+ ## 5c. ship·实现
+ | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
+ |---|---|---|---|---|---|
+ | 5c.1 | 完成集（哪些 task 已完成）| 🟢 | checkpoint 标签 ∪ tasks.md 复选框 | `ship_gate` 集合归属（done⊇plan）| 双通道 |
+ | 5c.2 | implementer 状态（DONE/DONE_WITH_CONCERNS/NEEDS_CONTEXT/BLOCKED）| 🟡 | 状态词（结构化四值）| 编排据词分诊 | 词是结构化，词背后的判断🔵 |
+ | 5c.3 | 双轴审是否通过（Standards+Spec）| 🔵 | — | — | 判断（domain 清单命中🟢辅助）|
+diff --git a/docs/workflow-console.html b/docs/workflow-console.html
+index 1d526b0..291a517 100644
+--- a/docs/workflow-console.html
++++ b/docs/workflow-console.html
+@@ -358,21 +358,21 @@
+       <div class="eyebrow">02 — 阶段三最底层</div>
+       <h2>ship_gate 判定机</h2>
+       <p class="sub">编排器 <code>/sdflow-ship</code> 每步前后必调 gate，<strong>照判定走、禁凭 prose 记忆步序</strong>。
+         gate 从盘面（产物 + 锚 + checkpoint 标签）推导「下一步是谁」，每个执行完的步都回到 gate 再问——这就是「盘面即状态」。</p>
+       <div class="gatewrap">
+         <div class="gatecore">
+           <div class="node">ship_gate<small>每步前后必调 · 从盘面推导</small></div>
+         </div>
+         <div class="routes">
+           <div class="route stop"><div><div class="verdict">REFUSE_START</div><div class="act">未过设计门 / change 不存在</div></div><span class="ec">exit 3</span></div>
+-          <div class="route go"><div><div class="verdict">RUN_PLAN</div><div class="act">writing-plans → SDD</div></div><span class="ec">exit 0</span></div>
++          <div class="route go"><div><div class="verdict">RUN_PLAN</div><div class="act">sdflow-implement（出票）</div></div><span class="ec">exit 0</span></div>
+           <div class="route go"><div><div class="verdict">CONTINUE_IMPL</div><div class="act">传 done_tasks，勿重派</div></div><span class="ec">exit 0</span></div>
+           <div class="route go"><div><div class="verdict">RUN_CODE_REVIEW</div><div class="act">实现完成，进代码审</div></div><span class="ec">exit 0</span></div>
+           <div class="route go"><div><div class="verdict">RUN_VERIFY</div><div class="act">进收尾 sdflow-done</div></div><span class="ec">exit 0</span></div>
+           <div class="route loop"><div><div class="verdict">RERUN_STALE</div><div class="act">产物过期，重跑 next 步</div></div><span class="ec">exit 0</span></div>
+           <div class="route loop"><div><div class="verdict">STEP_IN_PROGRESS</div><div class="act">步在跑，重跑 next（熔断防死循环）</div></div><span class="ec">exit 0</span></div>
+           <div class="route stop"><div><div class="verdict">BLOCKED_UPSTREAM</div><div class="act">上游阻塞，上抛清单</div></div><span class="ec">exit 4</span></div>
+           <div class="route stop"><div><div class="verdict">VERIFY_FAIL</div><div class="act">核心缺口，上抛清单</div></div><span class="ec">exit 5</span></div>
+           <div class="route stop"><div><div class="verdict">UNKNOWN</div><div class="act">无法判定，转述 reason</div></div><span class="ec">exit 6</span></div>
+           <div class="route go"><div><div class="verdict">SHIPPED</div><div class="act">完成，输出摘要 ✅</div></div><span class="ec">exit 0</span></div>
+         </div>
+@@ -380,42 +380,42 @@
+       <div class="callout">
+         <div class="lab">resume · 人机同权</div>
+         <p>ship 零跨步内存状态——任何时刻中断，重调 <code>/sdflow-ship {change}</code> 即从盘面推导缺口续跑；期间人工手跑某步产出的报告同样被 gate 认（gate 不辨产者），手改锚行 = 显式越权通道（git 留痕可审计）。</p>
+       </div>
+     </section>
+ 
+     <!-- ============ skills ============ -->
+     <section id="skills" class="reveal">
+       <div class="eyebrow">03 — 每个 skill 的角色与契约</div>
+       <h2>skill 矩阵</h2>
+-      <p class="sub">主流程涉及的 skill 分两类：<strong>外部黑盒</strong>（gstack / superpowers，只画契约、内部另有详解）与
+-        <strong>自制编排器</strong>（sdflow-* / grill）。每张卡标注「本 workflow 注入是建议式还是强制」的主基调。</p>
++      <p class="sub">主流程涉及的 skill 分两类：<strong>外部黑盒</strong>（gstack，只画契约、内部另有详解）与
++        <strong>自制编排器</strong>（sdflow-* / grill）。每张卡标注「本 workflow 注入是建议式还是强制」的主基调。
++        阶段三旧 superpowers 轨（writing-plans / subagent-dev）已随 <code>adr/0042</code>（用户 2026-08-11 拍板
++        「以后只走 tickets」）整体删除，<code>sdflow-implement</code>（自制，tickets 轨）是阶段三唯一实现管线，见下方自制编排器。</p>
+ 
+       <h3>外部黑盒</h3>
+       <div class="matrix">
+         <div class="skill">
+           <div class="top"><span class="nm">gstack · autoplan</span><span class="kind">外部 / 广审</span></div>
+           <div class="role">四审（CEO/Design/Eng/DX）顺序跑 + 6 决策原则自动决策 + 审计留盘 + 最终门交人。</div>
+           <div class="io"><span><b>进</b> 计划文件</span><span><b>出</b> 增补计划 + gstack-review.md</span></div>
+           <div class="foot"><span class="pill adv">注入多为建议式</span><span class="pill enf">下游锚兜底</span></div>
+         </div>
++      </div>
++
++      <h3>自制编排器 · 阶段三实现</h3>
++      <div class="matrix">
+         <div class="skill">
+-          <div class="top"><span class="nm">superpowers · writing-plans</span><span class="kind">外部 / 计划</span></div>
+-          <div class="role">拆成原子任务 TDD 计划。纯文本产物、<strong>零机械校验</strong>，三道自觉护栏。</div>
+-          <div class="io"><span><b>进</b> design + 评审</span><span><b>出</b> superpowers-plan.md</span></div>
+-          <div class="foot"><span class="pill adv">全建议式</span><span class="pill enf">ship_gate 读标签强制</span></div>
+-        </div>
+-        <div class="skill">
+-          <div class="top"><span class="nm">superpowers · subagent-dev</span><span class="kind">外部 / 实现</span></div>
+-          <div class="role">逐任务 fresh 实现 + 双裁决审 + fix 闭环 + 整支终审；台账 resume 抗 compaction。</div>
+-          <div class="io"><span><b>进</b> plan</span><span><b>出</b> commits + progress.md</span></div>
+-          <div class="foot"><span class="pill enf">台账/commit 强制</span><span class="pill adv">注入点B 建议式</span></div>
++          <div class="top"><span class="nm">sdflow-implement</span><span class="kind">自制 / 出票 + 执行（tickets 唯一管线）</span></div>
++          <div class="role">RUN_PLAN → 出票模式：从 design/tasks 出 3-6 张 tracer-bullet ticket，落盘即返回。CONTINUE_IMPL(done_tasks) → 执行模式：宿主条件化受限并行派 fresh implementer，每 ticket 双轴审（Standards+Spec）+ fix 闭环。</div>
++          <div class="io"><span><b>进</b> design + tasks / plan</span><span><b>出</b> tickets.md / commits + checkpoint 标签</span></div>
++          <div class="foot"><span class="pill enf">ship_gate 读标签强制</span><span class="pill adv">Global Constraints 注入建议式</span></div>
+         </div>
+       </div>
+ 
+       <h3>自制编排器</h3>
+       <div class="matrix">
+         <div class="skill">
+           <div class="top"><span class="nm">grill-with-docs</span><span class="kind">自制 / 对话岛（已从流程移除，skill 保留）</span></div>
+           <div class="role">对抗压测设计。已由 sdflow-spec 相位 B 内建拷问替代，不再是流程中的独立步骤。</div>
+           <div class="io"><span><b>进</b> design + 代码</span><span><b>出</b> design/ADR/CONTEXT</span></div>
+           <div class="foot"><span class="pill adv">几乎全建议式</span><span class="pill enf">下游设计门审计</span></div>
+@@ -458,24 +458,24 @@
+         <div class="box gate"><div class="t">下游确定性门</div><div class="d">读到 → 放行（强制生效）；读不到 → REFUSE / 循环</div></div>
+       </div>
+       <p class="sub" style="margin-top:20px">八个注入项的定性汇总——只有背后有确定性载体（脚本/文件/被门读的 git 产物）的才转「强制」：</p>
+       <div class="tablewrap">
+         <table>
+           <thead><tr><th>注入项</th><th>目标 skill</th><th>类型</th><th>强制靠的下游载体</th></tr></thead>
+           <tbody>
+             <tr><td class="k">人类门登记进报告（不弹窗）</td><td>autoplan</td><td><span class="pill adv">建议式</span></td><td>sdflow 锚行自检 + 设计门 HARD-GATE</td></tr>
+             <tr><td class="k">findings 落盘 + 进合并池</td><td>autoplan / review</td><td><span class="pill adv">编排层</span></td><td>主 session 落盘 + grep 锚行自检</td></tr>
+             <tr><td class="k">必审 scope-drift + 完成度</td><td>review</td><td><span class="pill adv">建议式</span></td><td>本就内建、默认不阻断</td></tr>
+-            <tr><td class="k">checkpoint 命名空间标签 <code>&lt;change&gt;:task&lt;N&gt;</code></td><td>writing-plans / SDD</td><td><span class="pill adv">建议式</span></td><td><strong>ship_gate 读 git 标签作完成判据 → 写错卡 gate</strong></td></tr>
+-            <tr><td class="k">design 约束逐字进 Global Constraints</td><td>writing-plans</td><td><span class="pill adv">建议式</span></td><td>无校验漏抄不抓</td></tr>
+-            <tr><td class="k">领域清单作终审 review lens（注入点 B）</td><td>SDD</td><td><span class="pill adv">建议式</span></td><td><strong>事后 sdflow-code-review 每次全跑独立主审兜底</strong></td></tr>
+-            <tr><td class="k"><code>done_tasks</code> 别重派</td><td>SDD</td><td><span class="pill enf">强制</span></td><td>台账文件 progress.md + git</td></tr>
++            <tr><td class="k">checkpoint 命名空间标签 <code>&lt;change&gt;:task&lt;N&gt;</code></td><td>sdflow-implement（tickets-exec）</td><td><span class="pill adv">建议式</span></td><td><strong>ship_gate 读 git 标签作完成判据 → 写错卡 gate</strong></td></tr>
++            <tr><td class="k">design 约束逐字进 Global Constraints</td><td>sdflow-implement（tickets-plan）</td><td><span class="pill adv">建议式</span></td><td>无校验漏抄不抓</td></tr>
++            <tr><td class="k">领域清单作 Standards 轴必填槽</td><td>sdflow-implement（每 ticket 双轴审）</td><td><span class="pill adv">建议式</span></td><td><strong>事后 sdflow-code-review 每次全跑独立主审兜底</strong></td></tr>
++            <tr><td class="k"><code>done_tasks</code> 别重派</td><td>sdflow-implement（tickets-exec）</td><td><span class="pill enf">强制</span></td><td>ship_gate 透传 done_tasks（原样不重算）+ git checkpoint 标签</td></tr>
+             <tr><td class="k">设计已批（放行阶段三）</td><td>ship 链</td><td><span class="pill enf">强制</span></td><td>ship_gate 读 frontmatter <code>design_approved: true</code></td></tr>
+           </tbody>
+         </table>
+       </div>
+       <div class="callout">
+         <div class="lab">自制编排器上更明显</div>
+         <p>sdflow-* 自己带机械门——<strong>锚行存在性自检</strong>（grep 三类 v1 锚缺失即报错阻塞，抓漏镜）、<strong>ship-gate 锚</strong>、
+           <strong>archive CLI validate</strong>、<strong>buglist FIXED 门禁</strong>、<strong>git --ff-only</strong>——这些是强制；而判断层
+           （对抗裁决、反静默压制、置信分流、verify 防假✅、model 档位）是建议式，靠强档主 session + 铁律 + 下游门兜底。
+           唯一刻意不机械化的是 grill（人类对话岛），严谨性靠人类在场 + 下游设计门审计。</p>
+diff --git a/docs/workflow-map.html b/docs/workflow-map.html
+index e13e533..3cb2591 100644
+--- a/docs/workflow-map.html
++++ b/docs/workflow-map.html
+@@ -381,38 +381,38 @@
+ 
+         <div class="ship-group">
+           <div class="ship-banner">
+             <span class="sb-title">▚ 阶段三 · ship（gate 驱动 · 无人类门 P3e）</span>
+             <span class="sb-note"><code>sdflow-ship</code> meta-orchestrator：每步前后 <b>MUST 调 ship_gate</b>，禁 prose 记忆步序（adr/0006b）· ship 零 git 写</span>
+           </div>
+ 
+           <div class="stage">
+             <div class="stage-left">
+               <div class="stage-tag">3b</div>
+-              <div class="stage-name">plan</div>
+-              <span class="stage-skill">superpowers:writing-plans</span>
++              <div class="stage-name">出票</div>
++              <span class="stage-skill">sdflow-implement（mode=tickets-plan）</span>
+             </div>
+             <div class="stage-body">
+-              <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_PLAN · 0</span> plan 缺；每任务 commit 步须按 <code>TAG_RE</code> 显式写 checkpoint 命令（主锚契约）</span></div>
+-              <div class="row-line"><span class="row-k">产物</span><span class="row-v art">superpowers-plan.md（### Task N: 段）</span></div>
++              <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_PLAN · 0</span> plan 缺；出 3-6 张 tracer-bullet ticket，落盘即返回；每任务 commit 步须按 <code>TAG_RE</code> 显式写 checkpoint 命令（主锚契约）</span></div>
++              <div class="row-line"><span class="row-k">产物</span><span class="row-v art">tickets.md（### Task N: 段）</span></div>
+             </div>
+           </div>
+ 
+           <div class="stage">
+             <div class="stage-left">
+               <div class="stage-tag">3c · 实现</div>
+               <div class="stage-name">impl 循环</div>
+-              <span class="stage-skill">subagent-driven-development</span>
++              <span class="stage-skill">sdflow-implement（mode=tickets-exec）</span>
+             </div>
+             <div class="stage-body">
+               <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">CONTINUE_IMPL · 0</span> plan 号集 ⊄ 完成集；<code>done_tasks</code> 已完成号勿重派</span></div>
+-              <div class="row-line"><span class="row-k">判据</span><span class="row-v">完成 = checkpoint 标签集 ∪ 复选框集（集合归属）；注入点B 即时修复闭环</span></div>
++              <div class="row-line"><span class="row-k">判据</span><span class="row-v">完成 = checkpoint 标签集 ∪ 复选框集（集合归属）；每 ticket 双轴审（Standards+Spec）即时修复闭环</span></div>
+               <div class="row-line"><span class="row-k">产物</span><span class="row-v art">checkpoint(&#123;change&#125;:task&lt;N&gt;-…) 提交</span></div>
+             </div>
+           </div>
+ 
+           <div class="stage">
+             <div class="stage-left">
+               <div class="stage-tag">3d · 代码审</div>
+               <div class="stage-name">code-review 主审</div>
+               <span class="stage-skill">sdflow-code-review</span>
+             </div>
+@@ -475,21 +475,21 @@
+         </div>
+       </div>
+     </section>
+ 
+     <!-- ═══ 2. gate 裁决 ═══ -->
+     <section id="verdict">
+       <div class="sec-head"><span class="sec-num">02</span><h2>ship_gate 裁决 × 退出码</h2></div>
+       <p class="sec-sub"><code>ship_gate.py</code> 从盘面（committed 产物 + frontmatter 锚）确定性推导下一步。退出码承载门禁语义：<b>0</b> 可推进 · <b>3/4</b> 拒绝/阻塞 · <b>5</b> verify 失败 · <b>6</b> 判定不能。契约表 <code>ship_gate.py:32-44</code>。</p>
+       <div class="verdict-grid">
+         <div class="verdict"><div class="v-top"><span class="v-name">REFUSE_START</span><span class="code-chip c-blocked">3</span></div><div class="v-desc">未过设计门 / change 不存在</div></div>
+-        <div class="verdict"><div class="v-top"><span class="v-name">RUN_PLAN</span><span class="code-chip c-ok">0</span></div><div class="v-desc">plan 缺 → writing-plans</div></div>
++        <div class="verdict"><div class="v-top"><span class="v-name">RUN_PLAN</span><span class="code-chip c-ok">0</span></div><div class="v-desc">plan 缺 → sdflow-implement（出票）</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">CONTINUE_IMPL</span><span class="code-chip c-ok">0</span></div><div class="v-desc">plan 号集 ⊄ 完成集</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">RUN_CODE_REVIEW</span><span class="code-chip c-ok">0</span></div><div class="v-desc">代码审报告缺</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">BLOCKED_UPSTREAM</span><span class="code-chip c-blocked">4</span></div><div class="v-desc">code_review = blocked</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">RUN_VERIFY</span><span class="code-chip c-ok">0</span></div><div class="v-desc">verify 缺 / 待收尾</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">VERIFY_FAIL</span><span class="code-chip c-fail">5</span></div><div class="v-desc">verify = FAIL 且未陈旧</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">RERUN_STALE</span><span class="code-chip c-ok">0</span></div><div class="v-desc">结论陈旧 → 重跑 next 步</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">STEP_IN_PROGRESS</span><span class="code-chip c-ok">0</span></div><div class="v-desc">报告在但无结论锚</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">SHIPPED</span><span class="code-chip c-accent">0</span></div><div class="v-desc">归档已并 base + verify=PASS</div></div>
+         <div class="verdict"><div class="v-top"><span class="v-name">UNKNOWN</span><span class="code-chip c-unknown">6</span></div><div class="v-desc">多锚冲突 / 坏 frontmatter / 空壳归档 fail-safe</div></div>
+       </div>
+diff --git a/docs/workflow-map.md b/docs/workflow-map.md
+index 552965c..46b09fc 100644
+--- a/docs/workflow-map.md
++++ b/docs/workflow-map.md
+@@ -37,22 +37,24 @@
+               ┏━━━━━━━━━━━━━━━━━━━━━━┓
+    人类门②    ┃  设计 HARD-GATE  design_approved:true  ┃ ◀═══ 唯一机判 pre-flight 锚
+               ┗━━━━━━━━━━━━━━━━━━━━━━┛     REFUSE_START(3) 若未过门
+                    │
+    ══════════ 阶段三 ship（gate 驱动·无人类门 P3e）══════════════════════════════════════════
+                    │      ┌──────────────────────────────────────────────────────┐
+    sdflow-ship ────┤      │ 每步前后 MUST 调 ship_gate.py（盘面即状态·只读零副作用） │
+   (meta-orch)      │      │ 步前:「NEXT 谁+前置缺啥」 步后:「产物落没+门禁结论」      │
+                    │      └──────────────────────────────────────────────────────┘
+                    │
+-     RUN_PLAN(0)───▶ writing-plans            TAG_RE checkpoint 契约              superpowers-plan.md
+-   CONTINUE_IMPL(0)▶ subagent-driven-dev      done_ids⊇plan_ids (集合归属)        checkpoint(task<N>-) 提交
++     RUN_PLAN(0)───▶ sdflow-implement          TAG_RE checkpoint 契约              tickets.md（出票，落盘即返回）
++                     (mode=tickets-plan)
++   CONTINUE_IMPL(0)▶ sdflow-implement          done_ids⊇plan_ids (集合归属)        checkpoint(task<N>-) 提交
++                     (mode=tickets-exec)
+                    │                          注入点B 即时修复闭环
+  RUN_CODE_REVIEW(0)▶ sdflow-code-review  ──▶  anchor_lint --layer code-review ✅#2  code-review-report.md
+                    │  置信<80过滤·T10自动裁    trivial_shape.py · outside-voice     └─ frontmatter:
+                    │                          BLOCKED_UPSTREAM(4) 若 blocked          ship-gate.code_review: pass|blocked
+      RUN_VERIFY(0)─▶ sdflow-done              verify=唯一终门(每✅须机验锚点)      verify-report.md
+                    │  verify→handoff→archive   VERIFY_FAIL(5) 若核心缺口             └─ frontmatter:
+                    │  →commit→merge            issues.py sweep · openspec archive     ship-gate.verify: PASS|FAIL
+                    │                          merge 前 untracked 硬检查(SR-2)      hand-off.md
+                    ▼
+  archive+merge ──▶ (done 内 ff-only)          active 缺席+base可达+verify=PASS     archive/{date}-{change}/
+@@ -66,40 +68,40 @@
+ 
+ ### 阶段表
+ 
+ | # | 阶段 | 编排 skill | 脚本门 / 门禁 | ship_gate verdict（exit） | 产物 + frontmatter 字段 | anchor-lint |
+ |---|------|-----------|--------------|--------------------------|----------------------|-------------|
+ | 0 | explore | `/opsx:explore`〔条件：问题模糊/方向未定〕 | 无门 | —（不覆盖） | 探索笔记 | — |
+ | 1 | propose | **`/sdflow-spec`**（唯一入口；人可直接触发，模型在人示意收敛时自动 invoke） | FF-0 三分支判定 + TG 判定 | — | proposal/design/specs/tasks + decision-memo.md | — |
+ | — | **人类门①** 拷问 | （`/sdflow-spec` 相位 B 内） | 人类拍板 | ship 不跨（adr/0004） | 拷问记录进 decision-memo.md | — |
+ | 2 | **spec-review 设计审** | `sdflow-spec-review` | `anchor_lint --layer spec-review` ✅#1 · outside-voice · HR-TG | 未过 → **REFUSE_START(3)** | `spec-review-report.md` → `design_approved: true` + lens-metric 锚 | ✅ #1 |
+ | — | **人类门②** 设计 HARD-GATE | `sdflow-spec-review` 收敛口 | `design_approved: true`（机判锚） | REFUSE_START(3) 若未过 | 拍板后 prepend 头部 frontmatter | — |
+-| 3a | ship·plan | `superpowers:writing-plans` | `TAG_RE` checkpoint 契约 | **RUN_PLAN(0)** | `superpowers-plan.md`（缺省 tickets 轨路由 sdflow-implement，不产出本文件） | — |
+-| 3b | ship·实现 | `subagent-driven-development` | 完成集 = checkpoint ∪ 复选框（集合归属） | **CONTINUE_IMPL(0)** | `checkpoint({change}:task<N>-…)` 提交 | — |
++| 3a | ship·出票 | `sdflow-implement`（mode=tickets-plan） | `TAG_RE` checkpoint 契约 | **RUN_PLAN(0)** | `tickets.md`（3-6 张 tracer-bullet ticket，落盘即返回，唯一管线） | — |
++| 3b | ship·实现 | `sdflow-implement`（mode=tickets-exec） | 完成集 = checkpoint ∪ 复选框（集合归属） | **CONTINUE_IMPL(0)** | `checkpoint({change}:task<N>-…)` 提交 | — |
+ | 3c | ship·代码审 | `sdflow-code-review` | `anchor_lint --layer code-review` ✅#2 · `trivial_shape` · outside-voice | **RUN_CODE_REVIEW(0)**；blocked → **BLOCKED_UPSTREAM(4)** | `code-review-report.md` → `code_review: pass\|blocked` | ✅ #2 |
+ | 3d | ship·收尾 | `sdflow-done` | verify=唯一终门（每 ✅ 须机验锚点）· `issues.py sweep` · `openspec archive` · merge 前 untracked 硬检查 | **RUN_VERIFY(0)**；FAIL → **VERIFY_FAIL(5)**；陈旧 → **RERUN_STALE(0)** | `verify-report.md` → `verify: PASS\|FAIL` + `hand-off.md` | — |
+ | 4 | archive + merge | `sdflow-done`（内部） | `openspec archive` + ff-only | active 缺席+base可达+PASS → **SHIPPED(0)**；异常 → **UNKNOWN(6)** | `archive/{date}-{change}/` | — |
+ | 5a | retro 复盘 | `sdflow-retro`（只读） | `retro_report.py` / `lens_metric_aggregate.py` | 不受 ship_gate 管 | `openspec/retro/report.md`（D12 待复评区块） | — |
+ | 5b | maintain 一致性 | `sdflow-maintain` | 扫目录 vs INDEX · 改前 AskUserQuestion | 不受 ship_gate 管 | `openspec/INDEX.md`（+N −M） | — |
+ 
+ **两个人类门**：① 拷问（`/sdflow-spec` 相位 B，前提确认，ship 不跨，adr/0004 红线）；② 设计 HARD-GATE（`design_approved: true`，`/sdflow-ship` pre-flight 唯一机判锚）。**阶段三过设计门后无人类门（P3e）**——能修当场修、≥2 方案按 T10 三级协议自动选、拿不准 defer；`sdflow-done` verify 是去人类门后的唯一终门（强档 + Do-Not-Trust 冷启堵假 ✅）。
+ 
+ ---
+ 
+ ## 2. ship_gate 裁决 × 退出码
+ 
+ `ship_gate.py` 从盘面（committed 产物 + frontmatter 锚）确定性推导下一步。退出码承载门禁语义。契约表 `ship_gate.py:32-44`。
+ 
+ | verdict | exit | 含义 |
+ |---------|:----:|------|
+ | REFUSE_START | **3** | 未过设计门 / change 不存在 |
+-| RUN_PLAN | 0 | plan 缺 → writing-plans |
++| RUN_PLAN | 0 | plan 缺 → sdflow-implement（mode=tickets-plan，出票） |
+ | CONTINUE_IMPL | 0 | plan 号集 ⊄ 完成集 |
+ | RUN_CODE_REVIEW | 0 | 代码审报告缺 |
+ | BLOCKED_UPSTREAM | **4** | `code_review = blocked` |
+ | RUN_VERIFY | 0 | verify 缺 / 待收尾 |
+ | VERIFY_FAIL | **5** | `verify = FAIL` 且未陈旧 |
+ | RERUN_STALE | 0 | 结论陈旧 → 重跑 `next` 步 |
+ | STEP_IN_PROGRESS | 0 | 报告在但无结论锚 |
+ | SHIPPED | 0 | 归档已并 base + verify=PASS |
+ | UNKNOWN | **6** | 多锚冲突 / 坏 frontmatter / 空壳归档 fail-safe |
+ 
+diff --git a/docs/workflow-overview.md b/docs/workflow-overview.md
+index 52e50f7..52184f1 100644
+--- a/docs/workflow-overview.md
++++ b/docs/workflow-overview.md
+@@ -2,43 +2,43 @@
+ 
+ > **定位**：这份文档给**人**看——用流程图/状态图 + 表格把 sdflow OpenSpec 工作流「最底层的骨架」讲清楚：
+ > 从需求到 merge 一共几步、每步**目标**是什么、有哪些**注意事项**。
+ >
+ > **与真相源的分工**：机器/AI 向的规则真相源是 `sdflow-init/assets/workflow/workflow.md`（端到端）+ 各规则文件；
+ > 本文**不重复规则细节**，只做人读的可视化梳理。规则改动以真相源为准，本文随后同步。
+ >
+ > **展开文档（[workflow-skills/](./workflow-skills/)）**：主流程涉及的每个 skill 都有一份「详解」——
+ > 内部流程图 + 内部再调度的子 skill + **本 workflow 注入规则是建议式还是强制**。步骤表与 §5 表内均有「详解」链接直达。
+ >
+-> - **外部黑盒**（本文只画契约、详解展内部）：[superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) · [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)（`opsx:ff` 暂未展开）
++> - **历史参考（已退役，非运行时依赖）**：[superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) · [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)——阶段三旧 superpowers 轨，已被 tickets 单管线整体取代（`adr/0042`，用户 2026-08-11 拍板「以后只走 tickets」），两文档保留供了解设计脉络参考；`opsx:ff` 暂未展开详解
+ > - **第三方 skill 参考（非运行时依赖）**：[gstack /review](./workflow-skills/gstack-review.md)（`sdflow-code-review` Step1 已改自持，不再调用）· [gstack autoplan](./workflow-skills/gstack-autoplan.md)（`sdflow-spec-review`/`sdflow-roadmap` 广审已改自持双镜，不再调用）——两者均文档保留供了解设计脉络参考
+-> - **自制编排器**：[grill-with-docs](./workflow-skills/grill-with-docs.md) · [sdflow-spec-review](./workflow-skills/sdflow-spec-review.md) · [sdflow-code-review](./workflow-skills/sdflow-code-review.md) · [sdflow-done](./workflow-skills/sdflow-done.md)
++> - **自制编排器**：[grill-with-docs](./workflow-skills/grill-with-docs.md) · [sdflow-spec-review](./workflow-skills/sdflow-spec-review.md) · [sdflow-code-review](./workflow-skills/sdflow-code-review.md) · [sdflow-done](./workflow-skills/sdflow-done.md) · `sdflow-implement`（阶段三唯一实现管线，tickets 轨，出票/执行两模式，暂无独立「详解」文档）
+ > - **横向提炼**：[自建 Skill 最佳实践](./skill-authoring-best-practices.md)（从上述 skill 提炼可迁移做法 + 我们的补强项）
+ > - **可视化控制台**：[workflow-console.html](./workflow-console.html)（本文的视觉/精简版，同 session 产出——本文是其内容超集）
+ > - **字段 / 脚本映射速查**：[workflow-map.html](./workflow-map.html) · [workflow-map.md](./workflow-map.md)（阶段 × skill × 脚本 × frontmatter 字段全景，本次新增）
+ > - **深度调研文档集**：[sdflow-fable5/](./sdflow-fable5/)（2026-07-10：设计动机 / 全模块参考 / 自改进闭环 / 优化建议）
+ 
+ ---
+ 
+ ## 0. 一句话与全局形态
+ 
+ **一个变更（change）从需求走到 merge，穿过三个阶段、只停一次人类门。**
+ 
+ ```mermaid
+ flowchart TD
+     Start(["需求 / 想法"]) --> EX{"问题模糊 / 方向未定?"}
+     EX -->|是| A["opsx:explore<br/>发散探索"]
+     EX -->|否，或人示意收敛| SP
+     A -.人示意收敛，模型自动 invoke.-> SP["/sdflow-spec<br/>澄清 → 拷问 → 生成，一次连续跑"]
+     SP --> D["sdflow-spec-review<br/>广审 + 并行多镜 → 一份报告"]
+     D --> E{{"★ 设计 HARD-GATE<br/>全流程唯一人类门"}}
+-    E -->|批准| G["writing-plans → subagent-driven-development<br/>（缺省 tickets 轨路由 sdflow-implement）"]
++    E -->|批准| G["sdflow-implement<br/>（tickets 轨，出票 → 执行，唯一管线）"]
+     G --> H["sdflow-code-review<br/>每次全跑 · 独立冷 · 强制主审"]
+     H --> I["sdflow-done<br/>verify → hand-off → archive → commit → merge"]
+     I -.异步.-> J["人类读 hand-off.md<br/>→ 决定开清理 change → 下个 change 输入"]
+ 
+     subgraph 阶段一["阶段一 · 生成（人类对话岛）"]
+         A
+         SP
+     end
+     subgraph 阶段二["阶段二 · 设计审（连续，无 /clear）"]
+         D
+@@ -144,68 +144,68 @@ flowchart TD
+ ---
+ 
+ ## 4. 阶段三 · 实现 + 代码审 + 收尾（gate 驱动，无人类门）
+ 
+ 阶段三的**真正底座是 `ship_gate`**：编排器 `/sdflow-ship` 每步前后必调它，**照判定走，禁止凭 prose 记忆步序**。
+ 
+ ### 4.1 编排步骤流
+ 
+ ```mermaid
+ flowchart TD
+-    IN(["过设计门"]) --> P["writing-plans 🔒 → subagent-driven-development 🔒<br/>原子任务 TDD + 注入点B 领域终审"]
++    IN(["过设计门"]) --> P["sdflow-implement<br/>出票(RUN_PLAN) → 执行(CONTINUE_IMPL)，每 ticket 双轴审"]
+     P --> CR["sdflow-code-review<br/>每次全跑 · 独立冷 · 强制主审"]
+     CR --> DN["sdflow-done<br/>verify → hand-off → archive → commit → merge"]
+     DN --> OUT(["merged ✅"])
+     OUT -.异步.-> HO["人类读 hand-off.md"]
+ ```
+ 
+ | 步 | skill | 目标 | 产出 | 注意事项 |
+ |---|---|---|---|---|
+-| 6 | `writing-plans` 🔒 [详解](./workflow-skills/superpowers-writing-plans.md) | 把 design 拆成**原子任务 TDD 计划** | `superpowers-plan.md` | design 领域约束**逐字**进 plan 的 Global Constraints；每任务 commit 步 MUST 用命名空间标签 `checkpoint-commit.sh <change>:task<N>-<slug>`（gate 完成判据主锚） |
+-| 7 | `subagent-driven-development` 🔒 [详解](./workflow-skills/superpowers-subagent-dev.md) | fresh 子代理**逐任务实现 + 逐任务审**，末尾整支终审 | 代码 + 逐任务 checkpoint | **注入点B**：领域清单 `code-checklists/domains/<栈>` 附给终审 reviewer（领域审前移进循环，即时 fix + re-review 闭环） |
++| 6 | `sdflow-implement`（mode=tickets-plan） | 从 design.md/tasks.md 出**3-6 张 tracer-bullet ticket**，落盘即返回 | `tickets.md` | design 领域约束**逐字**进 `## Global Constraints`（implementer/reviewer 共享同一份注意力透镜） |
++| 7 | `sdflow-implement`（mode=tickets-exec） | 宿主条件化受限并行派 fresh implementer 子代理，**每 ticket 双轴审**（Standards 轴 + Spec 轴，即时 fix + re-review 闭环） | 代码 + 逐 ticket checkpoint | Standards 轴必填槽注入领域清单 `code-checklists/domains/<栈>`；完成信号（复选框 + `checkpoint(<change>:task<N>-<slug>)`）**双轴审通过后**才由执行模式补打 |
+ | 8 | `sdflow-code-review` [详解](./workflow-skills/sdflow-code-review.md) | **每次全跑的独立冷主审**：Step1 自持 scope 审计（fresh 子代理，scope-drift + 完成度）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤 | `code-review-report.md` | **P3c**：非「高风险才跑」，是每次全跑（实测能抓循环内被说服放过的真问题）；与注入点B **并存不是重复**（前者循环内即时、后者事后独立兜底）；能修自动修 `[impl-review-fix]`、拿不准 defer |
+ | 9 | `sdflow-done` [详解](./workflow-skills/sdflow-done.md) | **闭环**：verify → hand-off → archive → commit → merge | verify-report + hand-off.md + 归档 + commit + merge | verify **防假✅**（每 ✅ 附锚点）；archive 走 `openspec archive` CLI **同步 delta 到主 specs**（禁手动 `mv`）；含 **issues sweep 子步**（分诊本 change OPEN 项入批次 → reindex）；merge 缺省 ff-only、**不自动 push** |
+ 
+-> 🔒 = 黑盒：`writing-plans` / `subagent-driven-development` 的内部循环（implementer/reviewer 派发、review-package、ledger）本文不展开，
+-> 只认其契约：**进** = design + plan；**出** = 带命名空间 checkpoint 标签的代码 commit。
++> `sdflow-implement`（自制，非外部黑盒）的内部循环（implementer/双轴审派发、fix 循环、frontier 受限并行）见其自身
++> `SKILL.md`，本文只画契约：**进** = design + plan/tickets；**出** = 带命名空间 checkpoint 标签的代码 commit。
+ 
+ ### 4.2 底座：ship_gate 判定机（阶段三最底层）
+ 
+ `ship_gate` 从**盘面（产物 + frontmatter 锚 + checkpoint 标签）**推导「下一步是谁」，每个执行完的步都**回到 gate 再问**——这就是「盘面即状态、gate 驱动非记忆」。
+ 
+ ```mermaid
+ flowchart LR
+     G(("ship_gate<br/>每步前后必调"))
+     G -->|"REFUSE_START · exit3"| X1["停：未过设计门 / change 不存在"]
+-    G -->|RUN_PLAN| S2["writing-plans → SDD"]
+-    G -->|"CONTINUE_IMPL"| S3["SDD 续跑（传 done_tasks，勿重派）"]
++    G -->|RUN_PLAN| S2["sdflow-implement（出票）"]
++    G -->|"CONTINUE_IMPL"| S3["sdflow-implement 续跑（传 done_tasks，勿重派）"]
+     G -->|RUN_CODE_REVIEW| S4["sdflow-code-review"]
+     G -->|RUN_VERIFY| S5["sdflow-done"]
+     G -->|"BLOCKED_UPSTREAM · exit4"| X2["停：上抛 blocker 清单"]
+     G -->|"VERIFY_FAIL · exit5"| X3["停：上抛缺口清单"]
+     G -->|"RERUN_STALE / STEP_IN_PROGRESS"| S6["重跑 next 指定步（照 JSON next，勿猜）"]
+     G -->|"UNKNOWN · exit6"| X4["停：转述 reason 交人工"]
+     G -->|"SHIPPED · exit0"| DONE["输出摘要 ✅"]
+     S2 --> G
+     S3 --> G
+     S4 --> G
+     S5 --> G
+     S6 --> G
+ ```
+ 
+ **11 个判定态 → 动作 → 退出码**
+ 
+ | 判定态 | 含义 | ship 动作 | exit |
+ |---|---|---|---|
+ | `REFUSE_START` | 未过设计门 / change 不存在 | 停，转述 reason（拍板已发生可人工补 frontmatter 字段=显式越权留痕） | 3 |
+-| `RUN_PLAN` | plan 缺 | `writing-plans` → `subagent-dev` | 0 |
+-| `CONTINUE_IMPL` | 实现未完成 | 把 `done_tasks` 传 SDD **勿重派** | 0 |
++| `RUN_PLAN` | plan 缺 | `sdflow-implement`（mode=tickets-plan，出票） | 0 |
++| `CONTINUE_IMPL` | 实现未完成 | `sdflow-implement`（mode=tickets-exec），`done_tasks` 原样透传**勿重派** | 0 |
+ | `RUN_CODE_REVIEW` | 实现完成 | `/sdflow-code-review` | 0 |
+ | `RUN_VERIFY` | 进入收尾 | `/sdflow-done`（透传 merge 意图） | 0 |
+ | `BLOCKED_UPSTREAM` | 上游阻塞 | 停，原样上抛 blocker | 4 |
+ | `VERIFY_FAIL` | 核心缺口 | 停，原样上抛缺口 | 5 |
+ | `RERUN_STALE` | 产物过期 | 重跑 gate 指定的 `next` 步 | 0 |
+ | `STEP_IN_PROGRESS` | 步在跑 | 重跑 `next` 步（**同步重跑一次仍无锚 → 按 UNKNOWN 停**，熔断防死循环） | 0 |
+ | `UNKNOWN` | 无法判定 | 停，转述 reason | 6 |
+ | `SHIPPED` | 完成 | 输出 SHIPPED 摘要 | 0 |
+ 
+ > **resume / 人机同权**：ship **零跨步内存状态**——任何时刻中断，重调 `/sdflow-ship {change}` 即从盘面推导缺口续跑；
+@@ -213,22 +213,26 @@ flowchart LR
+ 
+ ---
+ 
+ ## 5. 外部 skill 黑盒边界一览
+ 
+ 主流程把下列外部 skill 当黑盒；它们各自的输入/输出契约如下，供理解接缝。**每个的内部流程 + 内部再调度的子 skill + 本 workflow 注入是建议式/强制，见「详解」链接**。
+ 
+ | 黑盒 skill | 在流程里的角色 | 进（输入） | 出（产出契约） | 详解 |
+ |---|---|---|---|---|
+ | `opsx:ff` | 旧入口（保留不删，不在默认管线内）；默认由自制 `/sdflow-spec` 承担生成，非黑盒 | 需求 + config.yaml + trigger-catalog | 四件套 + feature 分支 | （暂未展开） |
+-| superpowers `writing-plans` | 阶段三 plan 生成 | design + 评审结论 | `superpowers-plan.md`（含命名空间 commit 步） | [→](./workflow-skills/superpowers-writing-plans.md) |
+-| superpowers `subagent-driven-development` | 阶段三逐任务实现 | plan | 带 `<change>:task<N>-` checkpoint 标签的代码 commit | [→](./workflow-skills/superpowers-subagent-dev.md) |
++
++> 阶段三已无外部黑盒 skill——旧 superpowers 轨（`writing-plans` / `subagent-driven-development`）随 `adr/0042`
++> （用户 2026-08-11 拍板「以后只走 tickets」）整体删除，`sdflow-implement`（自制，tickets 轨）是阶段三唯一实现
++> 管线，详见其自身 `SKILL.md`（暂无独立「详解」文档）。旧管线两份「详解」文档
++> （[superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) ·
++> [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)）保留供了解设计脉络参考，不再是运行时依赖。
+ 
+ ---
+ 
+ ## 6. 支撑机制：三级决策协议 · checkpoint · 状态锚
+ 
+ ### 6.1 阶段三三级决策协议 `T10-choice`（取代「有把握自动选」；"T10" 保留为历史别名）
+ 
+ 阶段三无人类门，遇 ≥2 方案时**禁以自评置信为唯一依据**，按此三级：
+ 
+ ```mermaid
+@@ -267,58 +271,58 @@ flowchart TD
+ > **历史注记（旧格式已退役）**：frontmatter 之前，状态锚是报告正文的 inline HTML 注释（`<!-- ship-gate: design-approved -->` 等连字符字面），靠「整行独立 + fence-aware」防误配——该时代的「子串检测自指坑」曾致设计门假过（B4），详见 change `gate-anchor-line-scoped`（已 SHIPPED）。迁移 frontmatter 后此坑根治（首块之外正文怎么写都不参与机判）；旧 inline 锚仅在**归档读半场**对迁移前旧归档 dual-read 兜底，live 不再读、新报告不再落。
+ 
+ ---
+ 
+ ## 7. 跑一个变更时的自检清单
+ 
+ - [ ] 问题 / 方向清晰否？不清晰先 `opsx:explore`，人示意收敛才自动接 `/sdflow-spec`
+ - [ ] `/sdflow-spec` 相位 B 起手是否过了 **FF-0 三分支判定**？每步是否 checkpoint？
+ - [ ] 相位 B 拷问是否照常全深度执行（触发方式改变不缩减拷问）？
+ - [ ] `sdflow-spec-review` 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
+-- [ ] 设计是否过 HARD-GATE（用户批准）才进 `writing-plans`？（阶段二唯一人类门）
++- [ ] 设计是否过 HARD-GATE（用户批准）才进 `sdflow-implement`？（阶段二唯一人类门）
+ - [ ] `sdflow-code-review` 是否**每次全跑**（并入 scope+完成度、领域清单、对抗、置信过滤）？
+ - [ ] 阶段三是否连续跑到 merge（无 `/clear`、无人类门）？能修自动修、拿不准 defer？
+ - [ ] `sdflow-done` 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
+ 
+ ---
+ 
+ ## 8. 外部 skill 的注入强制性（建议式 vs 强制）统一规律
+ 
+ > 这是理解 4 份「详解」文档的总纲：**本 workflow 往外部 skill 注入的规则/prompt，绝大多数是「建议式」，
+ > 真正的「强制」不靠控制外部 skill 内部，而靠在下游放一道读 git/文件的确定性门。**
+ 
+ **判据（三句话）**：
+ 
+ 1. 这些外部 skill 都是 **prompt 驱动**（模型读指令跟随），本 workflow 的注入也在 **prompt 层** → **默认建议式**（执行它的模型可偏离/忽略，无特权分级）。
+ 2. 只有当注入项背后有**确定性载体**——脚本、文件、或被下游门禁读取的 git 产物——才**转成强制**。
+-3. 关键手法：本 workflow **不控制外部 skill 内部**，而是**在下游放一道确定性门（`ship_gate` 读 git、设计门读 frontmatter、SDD 台账读文件）去读注入本应产出的锚/产物**——产不出就 REFUSE / 循环重跑。即 **注入处建议式 + 下游门处强制**。
++3. 关键手法：本 workflow **不控制外部 skill 内部**，而是**在下游放一道确定性门（`ship_gate` 读 git、设计门读 frontmatter、`sdflow-implement` 的 `done_tasks` 透传读 gate）去读注入本应产出的锚/产物**——产不出就 REFUSE / 循环重跑。即 **注入处建议式 + 下游门处强制**。
+ 
+ ```mermaid
+ flowchart LR
+     INJ["prompt 注入<br/>（建议式，可被忽略）"] --> SKILL["外部 skill 执行<br/>（模型自觉）"]
+     SKILL --> ART{"产出锚/产物<br/>落进 git/文件了吗?"}
+     ART -->|是| GATE["下游确定性门读到<br/>→ 放行（= 强制生效）"]
+     ART -->|否| REFUSE["下游门 REFUSE / 循环重跑<br/>→ 卡住直到产物正确出现"]
+     REFUSE -.-> SKILL
+ ```
+ 
+ **四个 skill 的注入定性汇总**
+ 
+ | 注入项 | 目标 skill | 建议式 / 强制 | 强制靠的下游载体 |
+ |---|---|---|---|
+ | 人类门登记进报告（不弹窗） | 广审双镜（strategy/plan-eng） | 建议式（与其硬不变量张力，主 session 承接） | sdflow 编排层锚行自检 + 设计门 HARD-GATE |
+ | findings 落盘 + 进合并池 | 广审双镜 / review | 编排层强制（非 skill 内部） | 主 session 落盘 + sdflow grep 锚行自检 |
+ | 必审 scope-drift + 完成度 | review | 建议式（本就内建、默认不阻断） | —（想阻断需 prompt 显式改停走） |
+-| checkpoint 命名空间标签 `<change>:task<N>-<slug>` | writing-plans / SDD | 建议式（无 commit-msg 校验） | **`ship_gate` 读 git 标签作完成判据 → 写错卡 gate** |
+-| design 约束逐字进 Global Constraints | writing-plans | 建议式（无校验漏抄不抓） | —（靠模型自觉 + 下游 reviewer lens） |
+-| 领域清单作终审 review lens（注入点 B） | SDD | 建议式（dispatch 一句话，漏填静默丢） | **事后 `sdflow-code-review` 每次全跑独立主审兜底** |
+-| `done_tasks` 别重派 | SDD | **强制** | 台账文件 `.superpowers/sdd/progress.md` + git |
++| checkpoint 命名空间标签 `<change>:task<N>-<slug>` | `sdflow-implement`（tickets-exec，双轴审通过后补打） | 建议式（无 commit-msg 校验） | **`ship_gate` 读 git 标签作完成判据 → 写错卡 gate** |
++| design 约束逐字进 Global Constraints | `sdflow-implement`（tickets-plan 出票） | 建议式（无校验漏抄不抓） | —（靠模型自觉 + 下游 reviewer lens，implementer/reviewer 共享同一份注意力透镜） |
++| 领域清单作 Standards 轴必填槽（`code-checklists/domains/<栈>`） | `sdflow-implement`（每 ticket 双轴审） | dispatch 模板必填槽（resolver 不可达须显式停/降级记录，非静默） | **事后 `sdflow-code-review` 每次全跑独立主审兜底** |
++| `done_tasks` 别重派 | `sdflow-implement`（tickets-exec） | **强制** | `ship_gate` 透传的 `done_tasks`（原样传递不重算）+ git checkpoint 标签 |
+ | 设计已批（放行阶段三） | ship 链 | **强制** | `ship_gate` pre-flight 读报告头部 frontmatter `design_approved: true` |
+ 
+ **一句话**：想让注入**强制**，就给它一个**确定性载体**（进 git 的 commit/标签、文件、被门读的锚）；只在 prompt 里写一句，永远只是**建议**。本 workflow 的健壮性正来自「把判断留给模型、把不变量焊进下游门」这条分工线。
+ 
+ **同一规律，自制编排器上更明显**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` **自己带机械门**——
+ **正文 v1 锚存在性自检**（`anchor_lint` 机验 4 类 v1 正文锚——三类必在、lens-metric 受 metrics.enabled 门控——缺失即报错阻塞，抓漏镜/漏 outside-voice）、**ship-gate frontmatter 字段**（`design_approved` / `code_review` / `verify` 被 `ship_gate` 读首块，缺则不放行）、**archive CLI validate**、**buglist FIXED 门禁 / issues 批次判据**、**`git --ff-only`**——这些是**强制**；而它们的**判断层**（对抗裁决、反静默压制、置信分流、verify「每 ✅ 附锚点防假✅」、model 档位）是**建议式**，靠强档主 session + 铁律 + 下游门兜底。唯一刻意**不机械化**的是 [`grill-with-docs`](./workflow-skills/grill-with-docs.md)（人类对话岛）——它几乎全建议式，严谨性靠**人类在场（不可轻跳）+ 下游设计门审计**。逐 skill 的建议式/强制拆解见各自「详解」的 §6。
+ 
+ ---
+ 
+ *人类向总览 · 配套真相源 `sdflow-init/assets/workflow/workflow.md`（端到端规则）。外部 skill 内部细节见 [workflow-skills/](./workflow-skills/) 下 4 份详解。接地基线：2026-07-10——ship-gate 机判锚已为 frontmatter 口径（`ship_gate.py` `FIELD_ENUMS` / [workflow-map.md](./workflow-map.md) §3）。*
+diff --git a/docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md b/docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md
+index 84b729c..d9435f2 100644
+--- a/docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md
++++ b/docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md
+@@ -1,12 +1,14 @@
+ # 实现管线替换调研：matt to-tickets/implement vs superpowers writing-plans/subagent-dev
+ 
++> **已过时**：superpowers 旧轨已随 `openspec/adr/0042-tickets-sole-impl-pipeline.md`（tickets 成唯一实现管线）整体删除，本文调研过程与结论保留供了解设计脉络参考，不代表当前实现。
++
+ > 2026-07-10 探索会结论沉淀。议题：能否用 matt 套件的 to-spec → to-tickets → implement → code-review
+ > 替换 sdflow 阶段三的 writing-plans → subagent-driven-development？
+ > **目标锚定：质量已被现管线保住，痛点是慢 + token 贵——分析框架 = 换了省在哪、质量护栏丢不丢。**
+ > 姊妹篇：[matt-pocock-workflow.md](matt-pocock-workflow.md)（套件全景）、
+ > [setup-matt-pocock-skills.md](setup-matt-pocock-skills.md)（位置契约铺设器深潜）。
+ 
+ ## 1. 结论先行
+ 
+ **可换，但不是整链替换，而是「matt 的分解语义 × 自研轻编排」的混血。**
+ 估计实现段 token 可砍 40-60%（结构性，见 §6 杠杆表），墙钟后续还能靠 frontier 并行再砍。
+diff --git a/openspec/adr/0033-tickets-plan-filename-split-by-track.md b/openspec/adr/0033-tickets-plan-filename-split-by-track.md
+index 7962fc2..9247926 100644
+--- a/openspec/adr/0033-tickets-plan-filename-split-by-track.md
++++ b/openspec/adr/0033-tickets-plan-filename-split-by-track.md
+@@ -1,12 +1,14 @@
+ # 计划文件名按轨分列（`tickets.md` / `superpowers-plan.md`），双存在 fail-closed
+ 
++> **Superseded by [adr/0042](./0042-tickets-sole-impl-pipeline.md)**
++
+ > 状态：**Accepted**（2026-07-28，`harden-implement-review-loop` 拷问阶段收敛，用户拍板）· 关联 change：`harden-implement-review-loop`
+ 
+ `superpowers-plan.md` 是 sdflow 阶段三**superpowers-only 时期**的遗留文件名——`writing-plans` 生成它、`subagent-driven-development` 消费它、`ship_gate.py` 按字面名判定 `RUN_PLAN`。`matt-workflow-integration` 引入 tickets 实现管线（`sdflow-implement`）时，为了让 `ship_gate.py` **零改动**兼容，选择让 tickets 轨的出票文件也借用同一个文件名（`adr/0017` 的"试验期外衣"决策）。这个借壳从一开始就是已知的命名负债：文件名叫 `superpowers-plan.md`，内容却是 tickets 轨的行为级 ticket，对读者是明显的误导（`openspec/issues/todolist/2026-07-todolist.md` T135 记录了这条 todo）。
+ 
+ `adr/0017` 当时把"终局文件名迁移"明确留给"Phase B 拍板"（见 `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` Q3 行），本 ADR 就是那次拍板的结果。
+ 
+ **关键事实（决定了不能简单改名）**：该文件名当前**两轨共用**——`ship_gate.py`（gate 按字面名判 `RUN_PLAN`）、`impl_route.py`（route 按字面名取 frontmatter marker）、`superpowers` 轨自己的 `prompts/step6-writing-plans.md`（提示 `/writing-plans` 生成该名）三处都依赖这个字面量。全局改名会把 superpowers 轨也改成 `tickets.md`，与其语义（该轨从未产出"ticket"，产出的是带码步骤的 plan）直接冲突。
+ 
+ ## Considered Options
+ 
+diff --git a/openspec/adr/0042-tickets-sole-impl-pipeline.md b/openspec/adr/0042-tickets-sole-impl-pipeline.md
+index cabf30d..7f50f04 100644
+--- a/openspec/adr/0042-tickets-sole-impl-pipeline.md
++++ b/openspec/adr/0042-tickets-sole-impl-pipeline.md
+@@ -1,12 +1,14 @@
+ # tickets 成唯一实现管线（superpowers 路由退役）
+ 
++> Supersedes [adr/0033](./0033-tickets-plan-filename-split-by-track.md)（两轨计划文件名分列，双名语境随本决策成为历史）。
++
+ 阶段三实现管线的 superpowers 旧轨（`writing-plans → subagent-driven-development`）整体删除，tickets 成唯一管线（用户 2026-08-11 拍板「以后只走 tickets」，T277）：`impl_route.py` 的 `route` 子命令与全部路由函数（config 键读取 / plan marker 路由 / `resolve_pipeline` / PIPELINE_RECEIPT）切除，ship 链序 RUN_PLAN/CONTINUE_IMPL 直连 `sdflow-implement mode=tickets-plan|tickets-exec`；`openspec/config.yaml` 的 `impl-pipeline` 键退役（存量键成无读取方的惰性键）；ship_gate 计划文件 resolver 缩为单名 `tickets.md`（双名探测 / 双存在判 UNKNOWN / 旧名收尾票 grandfather 一并删除）；`workflow/prompts/step6-writing-plans.md` 整文件删除。删除时机的前置条件已验证：在途 superpowers 轨 change 为零、本机全部下游消费仓无显式 `impl-pipeline: superpowers` 键。
+ 
+ **adr/0033（两轨计划文件名分列）的双名语境随本决策成为历史**——单名态下不存在「按轨分列」；0033 本文不改（历史记录照旧），其存活遗产是「在途 plan MUST NOT 重命名」（完成判据窗口锚 `git log --diff-filter=A -- <plan路径>` 不跟随重命名，此约束与轨道无关、继续有效）。adr/0017/0032 的双轨措辞同理按历史语境读。
+ 
+ 演进链：matt-workflow-integration（tickets 管线以 `superpowers-plan.md` 外衣试点）→ adr/0033（文件名按轨分列）→ simplify-workflow（缺省从 superpowers 翻转为 tickets，superpowers 降为显式声明保留）→ 本决策（显式声明路径亦删，单管线收口）。
+ 
+ ## Considered Options
+ 
+ - **深收口（选中）**：路由整体删除，单管线直连。单路路由器是纯开销（无信号可路由，违背机械化基准——路由三跳全在空转）；浅收口必然留一个二次清理碎片，违背「一个 change = 一个完整阶段结果」。代价：改动面大（路由脚本 / gate / 3 个 SKILL / 6 份 bundle 资产 / 2 个 specs / 测试群 / 托管区块），一次做完。
+ - **浅收口（保留单值路由器）**：`LEGAL_PIPELINES` 缩单值、marker 缺省翻转，改动小；但 PIPELINE_RECEIPT、config 键、marker 三跳继续空转，且「删除旧管线」目标只完成一半。
+diff --git a/openspec/changes/remove-superpowers-pipeline/impl-reports/task5-brief.md b/openspec/changes/remove-superpowers-pipeline/impl-reports/task5-brief.md
+new file mode 100644
+index 0000000..9f33c55
+--- /dev/null
++++ b/openspec/changes/remove-superpowers-pipeline/impl-reports/task5-brief.md
+@@ -0,0 +1,22 @@
++### Task 5: docs 与全仓扫尾
++
++**Blocked-by:** 1,2,3,4
++**R-ID:** R7
++
++**docs 收口**：`docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` 头部加 obsolete 标注（一行，指向 adr/0042）。现役视图文档同步：`docs/workflow-overview.md` / `docs/workflow-map.md`(+`.html`) / `docs/workflow-console.html` / `docs/criteria-mechanization-tracker.md` 去 superpowers 管线/writing-plans 阶段叙述。
++
++**ADR 互指**：`adr/0033` 头部加一行 `> **Superseded by [adr/0042](./0042-tickets-sole-impl-pipeline.md)**` 指针；`adr/0042` 加一句 supersede adr/0033 声明（互指，两文正文其余逐字不动）。
++
++**CLAUDE.md 手写段修正**：`CLAUDE.md`:215（托管区块外手写 prose）改写为不依赖 `impl-pipeline` 键存在性的表述。
++
++**grep 扫尾**：`grep -rn "superpowers" --exclude-dir=archive --exclude-dir=.git` 在运行时路径（scripts / SKILL / bundle assets / specs 主文件）仅剩合法残留清单（upstream-watch 追踪目标、superpowers 插件非管线技能引用、docs 历史参考、adr 历史文本）——Success Metrics 判据。
++
++**全仓 pytest**：`/usr/bin/python3 -m pytest` 全绿（含保留半场、gate 回归、hack 守卫全量）；verify-report 对 Success Metrics 第三条（ship 直连 e2e）显式标注「事后锚——由下一真实 change 的 /sdflow-ship 首跑承接」，MUST NOT 留白或假绿。
++
++- [ ] `impl-pipeline-matt-vs-superpowers.md` 头部已加 obsolete 标注
++- [ ] 现役视图文档已去 superpowers 管线叙述
++- [ ] ADR 0033/0042 已互加指针
++- [ ] `CLAUDE.md`:215 手写段已修正
++- [ ] grep 扫尾判据通过（运行时路径仅剩合法残留）
++- [ ] [e2e] 全仓 `/usr/bin/python3 -m pytest` 全绿
++
+diff --git a/openspec/changes/remove-superpowers-pipeline/impl-reports/task5-docs-sweep.md b/openspec/changes/remove-superpowers-pipeline/impl-reports/task5-docs-sweep.md
+new file mode 100644
+index 0000000..55e1eb0
+--- /dev/null
++++ b/openspec/changes/remove-superpowers-pipeline/impl-reports/task5-docs-sweep.md
+@@ -0,0 +1,110 @@
++# Task 5：docs 与全仓扫尾 — 实现报告
++
++**Blocked-by**：1,2,3,4（均已 checkpoint PASS）
++**R-ID**：R7
++
++## 1. docs 收口
++
++- `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md`：头部加一行「已过时」标注，指向 `openspec/adr/0042-tickets-sole-impl-pipeline.md`。
++- 现役视图文档（`docs/workflow-overview.md` / `docs/workflow-map.md` + `.html` / `docs/workflow-console.html` / `docs/criteria-mechanization-tracker.md`）：全部 mermaid 图、阶段表、黑盒 skill 清单、注入项定性表、ship_gate verdict 表里的 `writing-plans` / `subagent-driven-development` / `superpowers:*` 叙述改写为 `sdflow-implement`（mode=tickets-plan / tickets-exec，出票/执行两模式，每 ticket 双轴审 Standards+Spec）。`workflow-map.md` §5b「管线路由」判据行整体删除（路由已被 adr/0042 删除，无残留判据可跟踪，行号不回收注明理由）；`workflow-console.html` 的「外部黑盒」matrix 里两张 superpowers 卡片改为「自制编排器 · 阶段三实现」下的 `sdflow-implement` 单卡。保留的历史参考链接（[superpowers writing-plans](../workflow-skills/superpowers-writing-plans.md) 等）均加了「已退役，见 adr/0042」的显式标注，不再是运行时依赖。
++
++## 2. ADR 互指
++
++- `openspec/adr/0033-tickets-plan-filename-split-by-track.md` 头部加 `> **Superseded by [adr/0042](./0042-tickets-sole-impl-pipeline.md)**`。
++- `openspec/adr/0042-tickets-sole-impl-pipeline.md` 头部加 `> Supersedes [adr/0033](./0033-tickets-plan-filename-split-by-track.md)`。
++- 两文正文其余逐字不动（已核对 diff，仅新增指针行）。
++
++## 3. CLAUDE.md 手写段修正
++
++- `CLAUDE.md:215`（`sdflow-init 铺设托管区块`外的手写「反向窗口」段）：删除「已开 `impl-pipeline: tickets` 的仓」这一前提从句——tickets 现为无条件唯一管线，不再需要按键值分诊；改写为「窗口期触发 RUN_PLAN 会调不存在的 sdflow-implement（实现管线唯一为 tickets，无需判 `impl-pipeline` 键存在性）」。
++- 与同文件 `CLAUDE.md:426`（托管区块内，任务1-4已正确写为「实现管线唯一 = tickets」）核对一致，无矛盾。
++
++## 4. grep 扫尾（Success Metrics 判据）
++
++`grep -rn "superpowers" --exclude-dir=archive --exclude-dir=.git .` 逐条分类核验，运行时路径（scripts / SKILL / bundle assets / specs 主文件）仅剩以下合法残留：
++
++- **upstream-watch 追踪目标**：`sdflow-upstream-watch/{SKILL.md,scripts/upstream_watch.py,tests/}`、`README.md`、`openspec/specs/upstream-watch/spec.md`、`openspec/upstream/*` —— superpowers 是被追踪的四个上游源之一，逻辑本身要保留。
++- **superpowers 插件非管线技能引用**：`sdflow-roadmap/SKILL.md`（`/superpowers:brainstorming` 深度设计场景切换）、`openspec/CONTEXT.md`（gstack/superpowers 合规边界线，适用于任何第三方插件，非管线专属）。
++- **docs 历史参考**：`docs/design-methodology.md`（案例记录当时真实发生的 scope 决策，改写=伪造审计）、`docs/sdflow-fable5/*`、`docs/skill-authoring-best-practices.md`（明确标注"提炼自 gstack/superpowers/grill"的设计灵感来源）、`docs/skill-namespace-research.md`、`docs/windows-pytest-remediation-inventory.md`、`docs/workflow-optimization-research-2026-08.md`、`docs/superpowers/plans/*`（历史 plan 归档）、`docs/workflow-skills/matt-pocock-workflow.md` / `superpowers-writing-plans.md` / `superpowers-subagent-dev.md`（旧管线详解文档本体，保留供了解设计脉络）。
++- **adr 历史文本**：`openspec/adr/0002` / `0007` / `0017` / `0032`（未改，Global Constraints 保护）；`0033` / `0042` 仅加互指指针（见 §2）。
++- **本 change 自身工件**：`openspec/changes/remove-superpowers-pipeline/{proposal,design,tasks,decision-memo,spec-review-report,tickets,token-log,impl-reports/*,specs/*}` —— 描述"删除 superpowers"这件事本身，理应大量提及该词。
++- **issues/roadmaps 追踪记录**：`openspec/issues/{open,closed}/todo/*`、`openspec/issues/{INDEX,CLOSED}.md`、`openspec/roadmaps/workflow-optimization-2026-08/*` —— 历史追踪记录，不回改。
++- **未归档主 specs（预期状态，非缺陷）**：`openspec/specs/impl-orchestration/spec.md`、`openspec/specs/spec-workflow/spec.md` 仍含旧双轨表述——这是 OpenSpec 工作流的正常状态：主 specs 只在 `openspec archive`（`/sdflow-done`）时按 delta 同步，本 change 尚未归档，提前手改主 specs 会绕过归档时的"delta 对码核验"步骤、制造未经验证的 spec 漂移。**非本票缺陷，留给后续 `/sdflow-done` 处理**。
++- **测试文件内的迁移历史注释与刻意保留的 grandfather 夹具**：`hack/tests/test_checkpoint_slug_coverage.py`、`test_yq_wrapper_consistency.py`（迁移注释）、`sdflow-ship/tests/test_gate_*.py` / `test_plan_resolver.py`（测试单名 resolver 对遗留旧名的 fail-closed 兜底行为，属任务2设计范围内的正常测试逻辑）；`hack/tests/test_harden_sdflow_spec_followup_closure.py` 的 `PLAN = CHANGE / "superpowers-plan.md"` 常量按任务2 impl-report 的记录**刻意保留**（指向一个已归档、不可变的历史 change 的真实计划文件名，与本 change 的 gate resolver 逻辑无关）。
++- **脚本内合法残留逻辑**：`sdflow-implement/scripts/impl_route.py`（删除路由的历史注释）、`sdflow-ship/scripts/ship_gate.py`（`LEGACY_PLAN_FILENAME` 遗留旧名兜底——任务2设计的 fail-closed 检测逻辑，非叙述残留）。
++- **`sdflow-implement/SKILL.md`**：三处「借鉴 superpowers subagent-driven-development 的…」是design 灵感来源致谢（附录B出处说明），非声称该管线仍存在。
++
++### 本票额外修复的 3 处真实缺陷（超出字面 grep "superpowers" 但属同一收口面）
++
++grep 扫尾时发现以下内容虽不含字面 `superpowers` 但仍描述已删除的旧管线机制，按「面治优先于点补」一并修复：
++
++1. **`sdflow-init/assets/workflow/workflow.md`**（bundle 权威源，任务4.2 清单内文件，但当时遗漏此文件内 4 处 `subagent-dev` 字面量）：§三.6「代码侧」判据段落把「生成期已三层审 + 注入点B」的旧 SDD 机制改写为「sdflow-implement 每 ticket 双轴审（Standards 轴 + Spec 轴）+ Standards 轴必填槽注入领域清单」；检查清单与附录A的 3 处 `subagent-dev / sdflow-implement` 并列表述精简为单一 `sdflow-implement`。**改动后必须重跑 `python3 hack/gen_workflow_guide.py --write` 重新生成 `WORKFLOW-GUIDE.md`**（它是从 `workflow.md` + `prompts/*.md` 机械生成的产物，手改源后必须重生成，否则 `test_workflow_split.py::test_guide_is_in_sync_with_its_sources` 会红——首轮全仓 pytest 已实测踩到这个坑，见 §5 验证记录）。
++2. **`sdflow-init/assets/snippets/claude-section.md`**（任务4.2 清单内文件，遗漏一处）+ 本仓 `CLAUDE.md:420` / `AGENTS.md:229`（三处均为该 snippet 的下游注入副本）：「子 agent 调度期间（`subagent-driven-development` / sdflow-implement / …）禁 `/clear`」精简为「（`sdflow-implement` / …）」。
++3. **`sdflow-init/assets/workflow/reference/quality-layering.md` §一/§二**：任务4的 impl-report（`task4-bundle-config.md:126-129`）明确记录「未动 §一/§二（生成期三层 review 的 superpowers 具体机制描述）——brief 明确只要求退役"注入点 A/B"与"用 superpowers 跑实现时"清单节两处，§一/§二属 tasks.md 5.2 全仓 grep 扫尾范围」——本票按此移交把 §一/§二 的内部机制描述（`superpowers:subagent-driven-development` 内三层 review 流水线）改写为 `sdflow-implement` 的实际机制（implementer TDD → 双轴审并行判决 → fix 循环 → 出票收尾一致性自扫），并把「领域规则」判据从「❌ 通用 rubric 盲区」更正为「✅ Standards 轴必填槽已注入」（Standards 轴把 `code-checklists/domains/<栈>` 作为 dispatch 模板必填槽，已核实于 `sdflow-implement/SKILL.md`「每 ticket 双轴审」节）。
++4. **`sdflow-init/assets/workflow/prompts/step7-subagent-dev.md`**：全文引用已删除的 `/subagent-driven-development` skill，且经全仓 grep 确认零引用点（`workflow.md` 阶段三入口只指向 `step5-ship.md`，"子步骤 A/B/C" 均为内联 prose、不再指针到 step7/8/9）——与已被任务4.1删除的同源文件 `step6-writing-plans.md` 同构（写票/执行成对），判定为任务4.1 遗漏的配对文件，一并删除。删除不影响 `MIN_CALLSITES`（该文件无 `checkpoint-commit.sh` 调用样例）与 `test_workflow_split.py`（该文件本就不被 workflow.md 指针引用）。
++
++**`openspec/workflow/WORKFLOW-GUIDE.md`**（仓内 `sdflow-init update` 托管刷新的追随副本）与 canonical 源 `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md` 存在 3 处漂移（正是「部署副本漂移只在 update 时暴露」的复现）——`sdflow-init update` 命令因**预置存在的、与本票无关的缺陷**（见下）无法正常执行，改用直接 diff 校验 + `cp` 同步（仅限这一个文件，diff 只有预期的 3 处 hunk，风险可控）。
++
++## 5. 全仓 pytest
++
++```
++$ /usr/bin/python3 -m pytest -q
++```
++
++- **首轮**：`1 failed, 2559 passed, 10 skipped`（`test_workflow_split.py::test_guide_is_in_sync_with_its_sources` 因手改 `workflow.md` 后未重生成 `WORKFLOW-GUIDE.md` 而红）。
++- 修复：`python3 hack/gen_workflow_guide.py --write` 重生成 canonical `WORKFLOW-GUIDE.md`，重新 `cp` 同步 `openspec/workflow/WORKFLOW-GUIDE.md`。
++- **复跑**：`2560 passed, 10 skipped in 358.38s`（全绿；skip 数与首轮一致，均为既有、与本票无关的 skip）。
++
++### Success Metrics 第三条（ship 直连 e2e）标注
++
++Success Metrics「阶段三过设计门后连续自动跑到 merge，全程直连 `sdflow-implement`，无路由分支」——**本票不产出该锚**。理由：路由删除（Task1）、gate 单名收口（Task2）、SKILL 文案收口（Task3）均已完成并各自 checkpoint PASS，但真实 e2e（`/sdflow-ship` 从设计门跑到 merge）需要一次**真实的、独立于本 change 的**未来 change 走满全程才能产出机验锚点——本 change 自身走 `/sdflow-ship` 归档时会是第一次真实验证，但那发生在本 change 的 `sdflow-done` 步骤，不在 Task5 实现期职责内。**事后锚——由下一真实 change 的 `/sdflow-ship` 首跑承接**，MUST NOT 在此留白冒充已验证，也 MUST NOT 假造一次 e2e 记录。
++
++## 6. 已知预置缺陷（发现但明确不在本票范围内，未修复）
++
++- **`sdflow-init/scripts/init.py::_marker_schema()` 不兼容双键 marker**：本仓 `openspec/changes/remove-superpowers-pipeline/.openspec.yaml` 含 `schema:` + `created:` 两个键，而 `_marker_schema()` 要求 marker 文件"恰好一个 `schema` 键"，导致 `python3 sdflow-init/scripts/init.py update --root .` 在本仓当前状态下无法执行（`RuntimeError: schema marker 不可解析`）。该缺陷与本票（superpowers 移除）无关，任务4的 impl-report（`task4-bundle-config.md:123-124`）已记录并建议"另开 todo 处理"。本票同样未修复，只是绕过其影响（§4 末段的直接 diff+cp 同步）。**建议**：另开 todo 让 `_marker_schema()` 兼容 `/sdflow-spec` 当前会写入的 `created` 字段，或让 `/sdflow-spec` 停止写入该字段——两者选一，不在本票判断范围内。
++
++## 7. 与 Global Constraints 的核对
++
++- 未动任何 archive 历史件。
++- 未动既有 ADR 正文（仅 0033/0042 按 brief 明示的例外加互指指针，逐字未动其余内容）。
++
++## 8. 文件清单
++
++改动（15 个已跟踪文件 + 1 个删除）：
++
++```
++M  AGENTS.md
++M  CLAUDE.md
++M  docs/criteria-mechanization-tracker.md
++M  docs/workflow-console.html
++M  docs/workflow-map.html
++M  docs/workflow-map.md
++M  docs/workflow-overview.md
++M  docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md
++M  openspec/adr/0033-tickets-plan-filename-split-by-track.md
++M  openspec/adr/0042-tickets-sole-impl-pipeline.md
++M  openspec/workflow/WORKFLOW-GUIDE.md
++M  sdflow-init/assets/snippets/claude-section.md
++M  sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
++D  sdflow-init/assets/workflow/prompts/step7-subagent-dev.md
++M  sdflow-init/assets/workflow/reference/quality-layering.md
++M  sdflow-init/assets/workflow/workflow.md
++```
++
++未由本票改动、但在working tree中观察到的既有差异（非本票产生，如实披露）：
++
++```
++M  openspec/changes/remove-superpowers-pipeline/tickets.md（Task 4 六个复选框 [ ]→[x]，
++   非本票所改；HEAD 的 task4 checkpoint commit 042e0f5 未包含此改动，推测是执行模式在
++   双轴审通过后补打、尚未随 checkpoint 提交的正常台账状态，本票未触碰 Task 5 自身的
++   复选框——按信号权威表由执行模式在双轴审通过后补打）
++```
++
++## 9. 待办事项清单（tasks.md 5.1-5.6）核对
++
++- [x] 5.1 `impl-pipeline-matt-vs-superpowers.md` 头部已加 obsolete 标注
++- [x] 5.2 grep 扫尾：运行时路径仅剩合法残留清单（见 §4，含 3 处主动补修的真实缺陷 + 1 个孤儿文件删除）
++- [x] 5.3 全仓测试绿：`2560 passed, 10 skipped`；Success Metrics 第三条已显式标注「事后锚」
++- [x] 5.4 `CLAUDE.md:215` 手写段已修正
++- [x] 5.5 现役视图文档已同步去 superpowers 管线叙述
++- [x] 5.6 ADR 0033/0042 已互加指针
+diff --git a/openspec/changes/remove-superpowers-pipeline/tickets.md b/openspec/changes/remove-superpowers-pipeline/tickets.md
+index dd6faab..9b5f568 100644
+--- a/openspec/changes/remove-superpowers-pipeline/tickets.md
++++ b/openspec/changes/remove-superpowers-pipeline/tickets.md
+@@ -85,26 +85,26 @@ impl-pipeline: tickets
+ **六份 bundle 资产收口**：`workflow.md`（子步骤 A、显式 superpowers 段、检查清单行）/ `WORKFLOW-GUIDE.md`（同上）/ `ff-generation-constraints.md`（切片建议条件恒真化 → 改无条件）/ `config.template.yaml`（键注释删）/ `snippets/claude-section.md`（「缺省 tickets / 显式 superpowers」→「唯一管线」表述）/ `reference/quality-layering.md`（superpowers SDD 注入点 A/B 与「用 superpowers 跑实现时」清单节退役）。
+ 
+ **config 键退役**：本仓 `openspec/config.yaml` 删 `impl-pipeline` 键 + 注释。
+ 
+ **托管区块刷新**：`sdflow-init update` 刷本仓 CLAUDE.md / AGENTS.md 托管区块。
+ 
+ **INDEX 同步**：`openspec/INDEX.md` 的 impl-orchestration 描述行（「手动路由三跳」）改单管线表述。
+ 
+ **specs delta**：`specs/yq-yaml-operations/spec.md` delta——R3/R5/R6 的 impl-pipeline Scenario 删除落主 spec；主 spec Purpose 脚本枚举去 `impl_route.py`；`test_yq_wrapper_consistency.py` 成员表核验（Task 1 已完成去条目）。
+ 
+-- [ ] `step6-writing-plans.md` 已删除，三份守卫测试名单已同步
+-- [ ] 六份 bundle 资产 superpowers 叙述已收口
+-- [ ] 本仓 `openspec/config.yaml` 的 `impl-pipeline` 键已删除
+-- [ ] `sdflow-init update` 已执行，CLAUDE.md / AGENTS.md 托管区块已刷新
+-- [ ] `openspec/INDEX.md` 描述行已更新
+-- [ ] yq-yaml-operations delta spec 已同步
++- [x] `step6-writing-plans.md` 已删除，三份守卫测试名单已同步
++- [x] 六份 bundle 资产 superpowers 叙述已收口
++- [x] 本仓 `openspec/config.yaml` 的 `impl-pipeline` 键已删除
++- [x] `sdflow-init update` 已执行，CLAUDE.md / AGENTS.md 托管区块已刷新
++- [x] `openspec/INDEX.md` 描述行已更新
++- [x] yq-yaml-operations delta spec 已同步
+ 
+ ### Task 5: docs 与全仓扫尾
+ 
+ **Blocked-by:** 1,2,3,4
+ **R-ID:** R7
+ 
+ **docs 收口**：`docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` 头部加 obsolete 标注（一行，指向 adr/0042）。现役视图文档同步：`docs/workflow-overview.md` / `docs/workflow-map.md`(+`.html`) / `docs/workflow-console.html` / `docs/criteria-mechanization-tracker.md` 去 superpowers 管线/writing-plans 阶段叙述。
+ 
+ **ADR 互指**：`adr/0033` 头部加一行 `> **Superseded by [adr/0042](./0042-tickets-sole-impl-pipeline.md)**` 指针；`adr/0042` 加一句 supersede adr/0033 声明（互指，两文正文其余逐字不动）。
+ 
+diff --git a/openspec/workflow/WORKFLOW-GUIDE.md b/openspec/workflow/WORKFLOW-GUIDE.md
+index cc299ed..7d66557 100644
+--- a/openspec/workflow/WORKFLOW-GUIDE.md
++++ b/openspec/workflow/WORKFLOW-GUIDE.md
+@@ -31,21 +31,21 @@
+  阶段二·设计审 ── 阶段内部连续,无 /clear（交界两处 SHALL 清:一→二、二→三，见 §三.2）──
+    sdflow-spec-review 编排器               Step1 单批 dispatch(自持广审双镜 strategy/plan-eng+领域镜+对抗镜+接地镜+design-voice)→Step3 一份 report
+      └─ fresh 子代理替代 /clear 保独立；中途不 AskUserQuestion(决策登记进报告)
+      └─ 内部 1×[checkpoint]（sdflow-spec-review 子步）
+         │
+    〔HARD-GATE：用户批准设计〕            ★全流程唯一人类门——过一份 spec-review-report.md 拍板
+         │
+  阶段三·ship ── 过设计门后连续跑到 merge,无人类门 ─────────────────
+    〔入口前 SHALL /clear（G1 交界例外之二，见 §三.2）；调 /sdflow-ship 时重述 merge 意图〕
+    /sdflow-ship {change dir}                一次调用经 ship_gate 确定性台账驱动到底
+-     ├─ 子步骤 A：实现管线（缺省 tickets → sdflow-implement；显式 superpowers → writing-plans + subagent-dev）
++     ├─ 子步骤 A：实现管线（sdflow-implement，唯一管线）
+      │  └─ 逐 ticket/任务 [checkpoint]
+      ├─ 子步骤 B：sdflow-code-review（每次全跑·独立冷视角·强制主审 → code-review-report.md）
+      │  └─ [checkpoint]
+      └─ 子步骤 C：sdflow-done（verify → hand-off.md → archive → commit → merge）
+         │  (无 /clear——子 agent 调度中本就禁清；评审 fan-out 的 fresh 子代理即独立性)
+         │
+    hand-off.md ── 异步 ──▶ 人类读 → 决定开"清理 change" → 作为下个 change 输入
+ ```
+ 
+ > **sdflow-done 含 issues sweep 子步**（§2.1，I5/I6）：verify 判完、写 hand-off 正文前，分诊**本 change**新增的
+@@ -67,42 +67,41 @@
+ | 二 | 3 | /sdflow-spec-review | /sdflow-spec-review 独立审查 {change dir} | spec-review-report.md | 编排器：内部单批 dispatch（自持广审双镜+领域镜+对抗镜+接地镜+design-voice）→**一份**报告；中途不 AskUserQuestion（决策登记进报告）；fresh 子代理替代 /clear；内部 1×checkpoint；改动标 [spec-review-amendment]。**非平凡必跑（主审）** |
+ | 二 | 4 | HARD-GATE | 人工过 **一份** `spec-review-report.md`（决策登记区已摊开选项+推荐+三面后果(系统/用户/开发循环)+主次判定）→ 批准设计 | （人工：批准后才进实现） | generation-process 门；**★全流程唯一人类门** |
+ | 三 | 5 | /sdflow-ship | /sdflow-ship {change dir} 全自动完成任务 | tickets.md + 代码 + code-review-report.md + verify-report + hand-off + 归档 + 提交 + 合并 | 一次调用经 ship_gate 确定性台账驱动到底（实现→代码审→收尾）；阶段三无人类门（P3e）；子步骤详见 [§二.1](#二1sdflow-ship-子步骤) |
+ 
+ ### 二.1　`/sdflow-ship` 子步骤
+ 
+ `/sdflow-ship {change dir}` 经 ship_gate 确定性台账驱动，内部按序执行三个子步骤（阶段内部无 `/clear`、无人类门）：
+ 
+ #### A. 实现管线
+ 
+-- **缺省（tickets 轨）**：路由至 `sdflow-implement` 出票执行（产出 `tickets.md`〔D5/adr-0033〕）；逐 ticket checkpoint。
+-- **显式 `impl-pipeline: superpowers`**：走 writing-plans → subagent-driven-development（产出 `superpowers-plan.md`）；quality-layering 注入点 A/B；逐任务 checkpoint。
++- **唯一管线**：路由至 `sdflow-implement` 出票执行（产出 `tickets.md`〔D5/adr-0033〕）；逐 ticket checkpoint。
+ - 🔴 **派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，看不见 CLAUDE.md。
+ 
+ #### B. sdflow-code-review
+ 
+ 编排器：**每次全跑·独立冷·强制主审**〔P3c〕。Step1 自持 scope 审计（scope-drift + 完成度审计）+ 领域镜 + 对抗镜 + 历史镜 + 机械引用核（`findings_ref_check.py`，DD4）+ 二元裁决。能修自动修标 `[impl-review-fix]`、修不了/拿不准 defer → buglist/todolist；汇总一份 `code-review-report.md`。跨模型 outside voice（always code voice + HR-TG 领域 cross-model）。checkpoint。
+ 
+ #### C. sdflow-done
+ 
+ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 change OPEN 项入批次 → reindex）→ hand-off.md → archive（+ delta 对码核验/同步）→ commit → merge。**必跑（闭环）**。
+ 
+ ## 三、关键设计决策
+ 
+ 1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 `ff-generation-constraints.md` §FF-0。
+ 2. **`/clear` 只在两处阶段交界用，阶段内部不用（G1）**：阶段内部不用 `/clear`（评审独立性由 fresh 子代理提供，依据 `quality-layering.md`）。两处阶段交界 SHALL `/clear`：**阶段一 → 阶段二**（cache 按模型隔离 + 产/审错档纪律）、**阶段二 → 阶段三**（盘面纪律 + 产物自足性检验 + 去作者偏置）。完整推导（为什么恰是这两处、每条理由的证据、边界）见[附录 A](#附录-ag1-完整分析clear-纪律为何如此设计)。
+ 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（**≥2 方案**：选项+推荐+三面后果(系统/用户/开发循环)+主次判定；**核验不了的事实**：待核验证据+风险+默认处理，不强制三镜），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
+ 4. **只在阶段二设计门停一次人类**：拷问是对话岛（人类对抗，不折叠，见 `/sdflow-spec` 相位 B）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议 `T10-choice`〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
+ 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
+ 6. **评审两层、不重复**：
+    - **设计侧**：sdflow-spec-review 编排器 = 自持广审双镜（strategy/plan-eng，按 base R 项划分）+ 本项目多镜（领域镜+对抗镜+接地镜，按 domains/ R 项划分）单批并行 dispatch 合成一份报告。base 与 domains 两层清单本就互斥，无需去重协商。
+-   - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
++   - **代码侧（生成期已有双轴审，事后强制主审）**：`sdflow-implement` 每 ticket **双轴审**（Standards 轴 + Spec 轴，fresh-context 子代理；Standards 轴 dispatch 模板**必填槽**把 domains 领域清单前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**每 ticket 双轴审与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
+ 7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 `reference/quality-layering.md`。
+ 8. **闭环用 `sdflow-done`**：verify → hand-off.md → archive → commit → merge，archive 子代理拿 delta **对真实代码核验后再同步** spec。尾部不再需单独 apply/verify/archive。
+ 9. **深度按 TG / 风险**：explore（模糊才跑）；不分 S/M/L 档。〔Phase C 补：outside voice 默认开，命中 HR-TG 单开领域 cross-model〕
+ 
+ ## 四、生成 ↔ 评审 的对称
+ 
+ ```
+   生成侧(Prevention)            评审侧(Detection)
+   ──────────────────────────────────────────────
+   ①结构 → config 槽       ┐
+@@ -119,36 +118,36 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本
+ - `reference/quality-layering.md` 管**质量分层 + shift-left 注入点**（生成期三层审、领域清单注入终审、事后 sdflow-code-review 为何是**每次全跑的强制主审**、verify 防假✅）；本文据其结论排序。
+ 
+ ## 六、检查清单（跑一个变更时）
+ 
+ - [ ] 问题 / 方向清晰否？不清晰先 `opsx:explore`，人示意收敛才自动接 `/sdflow-spec`
+ - [ ] 生成起手是否过 **FF-0 三分支判定**（保护分支建 / 本 change 分支跳过 / 其它 feature 分支 halt 问人）？每步是否 checkpoint-commit？
+ - [ ] `sdflow-spec` 相位 B 拷问是否照常全深度执行（触发方式改变不缩减拷问）？
+ - [ ] `/clear` 只在**两处阶段交界**用过（阶段一→阶段二、阶段二→阶段三；G1 具名例外）？**阶段内部**全程无 `/clear`？
+ - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
+ - [ ] 设计是否过 HARD-GATE（用户批准）才进阶段三？（阶段二唯一人类门）
+-- [ ] 阶段三实现管线是否按 impl-pipeline 缺省正确路由（缺省 tickets → sdflow-implement；显式 `superpowers` → writing-plans/subagent-dev）？
++- [ ] 阶段三实现管线是否正确路由至 `sdflow-implement`（唯一管线，无需判 impl-pipeline 键）？
+ - [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、机械引用核+二元裁决）？
+-- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
++- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
+ - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
+ 
+ ## 附录 A：G1 完整分析（`/clear` 纪律为何如此设计）
+ 
+ > 本节是**演进推导**（DOC-1 附录）：正文（§三.2）只留结论，这里留完整论证。**跑流程不用读本节**——
+ > 只在需要理解「为什么恰是这两处，不多不少」时查。
+ 
+-**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 `quality-layering.md`）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
++**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/sdflow-implement 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 `quality-layering.md`）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+ 
+ 🔴 **上述结论只覆盖「评审独立性」这一个面，MUST NOT 据此推出「全流程不用 `/clear`」**。曾有措辞称「`/clear` 唯一作用是给评审独立上下文」——**该前提为假**，由它导出的全流程禁令是**过度泛化**：`spec-workflow` spec 的对应 Requirement 也只约束「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。
+ 
+ 🔴 **阶段交界 SHALL 用一次 `/clear`（两处，理由各自都在上述结论射程之外）**：
+ 
+ - **阶段一 → 阶段二**（`/sdflow-spec` 出口序列 `/clear` → 换档 → `/sdflow-spec-review`）：① **cache 按模型隔离**——拖着阶段一的旧上下文切换模型档位 = 缓存作废、全价重付；② **产 / 审错档纪律**——阶段一的产出档与阶段二的评审档本就不同，换档才是这次 `/clear` 的真实动因。
+ - **阶段二 → 阶段三**（设计门通过后、`/sdflow-ship` 之前）：① **盘面纪律**——阶段三链序是「零跨步内存状态」，`NEEDS_CONTEXT` MUST 仅从盘面（design/specs/ticket 文本）自答；热编排器会拿对话记忆替代盘面，而**这一条 fresh 子代理防不住**（implementer 是冷的，回答它的编排器是热的）；② **产物自足性检验**——冷启动跑阶段三是对「四件套 + tickets 是否真的够用」的真实检验，热 session 会在盘面缺信息时无声补上、缺口永不暴露；③ **去作者偏置**——实现期若设计被证伪，热 session 倾向合理化而非叫停。**代价**：编排器需重读 SKILL 与产物（一次性），且 MUST 在调用 `/sdflow-ship` 时**重述 merge 意图**（它从调用语透传、不在盘上）。
+ 
+ 🔴 **MUST NOT 拿「主审裁决需要冷视角」当任一处例外的理由**——那一条已被上述结论正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供），拿它当依据是漏查。
+ 
+-**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 subagent-dev / sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
++**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
+ 
+ *流程 v2（三阶段连续化，单轨线性）· 配套 generation-process.md（生成）/ spec-review.md（评审）/ trigger-catalog.md（深度）/ reference/quality-layering.md（分层）*
+ 
+ *演进史（去掉了什么、为什么这么改）→ `workflow-history.md`——不是当前约束，跑流程不用读。*
+diff --git a/sdflow-init/assets/snippets/claude-section.md b/sdflow-init/assets/snippets/claude-section.md
+index 54838c9..d77bce6 100644
+--- a/sdflow-init/assets/snippets/claude-section.md
++++ b/sdflow-init/assets/snippets/claude-section.md
+@@ -72,21 +72,21 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回
+ 经 `resolve-workflow.sh` 两步链解析；消费仓不再持有规则副本）。规则集（同解析到全局 `~/.sdflow/workflow/`）：
+ `trigger-catalog.md`（触发单一源 TG）· `spec-checklists/`、`code-checklists/`（设计审/代码审）·
+ `ff-generation-constraints.md` · `design-diagrams.md` · `spec-review.md` · `generation-process.md`。
+ 质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（同解析到全局 `~/.sdflow/workflow/`）。
+ 
+ **强制操作规范**
+ 
+ - **起手判触发**：收到 `opsx:ff` / `propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
+   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
+ - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
+-  子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
++  子 agent 调度期间（sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
+ - **阶段一入口为唯一线性路径**：问题模糊/方向未定先 `opsx:explore` 发散，清晰则直接进 `/sdflow-spec`。
+   人可直接触发；**人示意收敛**（如"开搞"/"做吧"/"开 change"）时**模型 SHALL 自动 invoke `/sdflow-spec`**。
+   **模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发，触发方式的改变不缩减
+   相位 B 拷问的深度（generation-process.md §四）。
+ - **开分支 = FF-0 三分支判定**：保护分支 → `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。MUST NOT 沿用「已在 feature 分支就跳过」的弱判据。
+ - **实现管线唯一 = tickets**：路由至 `sdflow-implement`（tickets 轨），无需判 `impl-pipeline` 键。
+ - **INDEX 同步**（仅 toolkit 源仓维护 canonical bundle 时适用）：新增/删 `sdflow-init/assets/workflow/` 下的规则文件后，同步 `openspec/INDEX.md`（消费仓不再持有规则副本，无需同步）。
+ 
+ **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
+ 
+diff --git a/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md b/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
+index 9ac2e29..7d66557 100644
+--- a/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
++++ b/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
+@@ -87,21 +87,21 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本
+ 
+ ## 三、关键设计决策
+ 
+ 1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 `ff-generation-constraints.md` §FF-0。
+ 2. **`/clear` 只在两处阶段交界用，阶段内部不用（G1）**：阶段内部不用 `/clear`（评审独立性由 fresh 子代理提供，依据 `quality-layering.md`）。两处阶段交界 SHALL `/clear`：**阶段一 → 阶段二**（cache 按模型隔离 + 产/审错档纪律）、**阶段二 → 阶段三**（盘面纪律 + 产物自足性检验 + 去作者偏置）。完整推导（为什么恰是这两处、每条理由的证据、边界）见[附录 A](#附录-ag1-完整分析clear-纪律为何如此设计)。
+ 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（**≥2 方案**：选项+推荐+三面后果(系统/用户/开发循环)+主次判定；**核验不了的事实**：待核验证据+风险+默认处理，不强制三镜），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
+ 4. **只在阶段二设计门停一次人类**：拷问是对话岛（人类对抗，不折叠，见 `/sdflow-spec` 相位 B）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议 `T10-choice`〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
+ 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
+ 6. **评审两层、不重复**：
+    - **设计侧**：sdflow-spec-review 编排器 = 自持广审双镜（strategy/plan-eng，按 base R 项划分）+ 本项目多镜（领域镜+对抗镜+接地镜，按 domains/ R 项划分）单批并行 dispatch 合成一份报告。base 与 domains 两层清单本就互斥，无需去重协商。
+-   - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
++   - **代码侧（生成期已有双轴审，事后强制主审）**：`sdflow-implement` 每 ticket **双轴审**（Standards 轴 + Spec 轴，fresh-context 子代理；Standards 轴 dispatch 模板**必填槽**把 domains 领域清单前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**每 ticket 双轴审与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
+ 7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 `reference/quality-layering.md`。
+ 8. **闭环用 `sdflow-done`**：verify → hand-off.md → archive → commit → merge，archive 子代理拿 delta **对真实代码核验后再同步** spec。尾部不再需单独 apply/verify/archive。
+ 9. **深度按 TG / 风险**：explore（模糊才跑）；不分 S/M/L 档。〔Phase C 补：outside voice 默认开，命中 HR-TG 单开领域 cross-model〕
+ 
+ ## 四、生成 ↔ 评审 的对称
+ 
+ ```
+   生成侧(Prevention)            评审侧(Detection)
+   ──────────────────────────────────────────────
+   ①结构 → config 槽       ┐
+@@ -120,34 +120,34 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本
+ ## 六、检查清单（跑一个变更时）
+ 
+ - [ ] 问题 / 方向清晰否？不清晰先 `opsx:explore`，人示意收敛才自动接 `/sdflow-spec`
+ - [ ] 生成起手是否过 **FF-0 三分支判定**（保护分支建 / 本 change 分支跳过 / 其它 feature 分支 halt 问人）？每步是否 checkpoint-commit？
+ - [ ] `sdflow-spec` 相位 B 拷问是否照常全深度执行（触发方式改变不缩减拷问）？
+ - [ ] `/clear` 只在**两处阶段交界**用过（阶段一→阶段二、阶段二→阶段三；G1 具名例外）？**阶段内部**全程无 `/clear`？
+ - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
+ - [ ] 设计是否过 HARD-GATE（用户批准）才进阶段三？（阶段二唯一人类门）
+ - [ ] 阶段三实现管线是否正确路由至 `sdflow-implement`（唯一管线，无需判 impl-pipeline 键）？
+ - [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、机械引用核+二元裁决）？
+-- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
++- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
+ - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
+ 
+ ## 附录 A：G1 完整分析（`/clear` 纪律为何如此设计）
+ 
+ > 本节是**演进推导**（DOC-1 附录）：正文（§三.2）只留结论，这里留完整论证。**跑流程不用读本节**——
+ > 只在需要理解「为什么恰是这两处，不多不少」时查。
+ 
+-**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 `quality-layering.md`）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
++**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/sdflow-implement 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 `quality-layering.md`）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+ 
+ 🔴 **上述结论只覆盖「评审独立性」这一个面，MUST NOT 据此推出「全流程不用 `/clear`」**。曾有措辞称「`/clear` 唯一作用是给评审独立上下文」——**该前提为假**，由它导出的全流程禁令是**过度泛化**：`spec-workflow` spec 的对应 Requirement 也只约束「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。
+ 
+ 🔴 **阶段交界 SHALL 用一次 `/clear`（两处，理由各自都在上述结论射程之外）**：
+ 
+ - **阶段一 → 阶段二**（`/sdflow-spec` 出口序列 `/clear` → 换档 → `/sdflow-spec-review`）：① **cache 按模型隔离**——拖着阶段一的旧上下文切换模型档位 = 缓存作废、全价重付；② **产 / 审错档纪律**——阶段一的产出档与阶段二的评审档本就不同，换档才是这次 `/clear` 的真实动因。
+ - **阶段二 → 阶段三**（设计门通过后、`/sdflow-ship` 之前）：① **盘面纪律**——阶段三链序是「零跨步内存状态」，`NEEDS_CONTEXT` MUST 仅从盘面（design/specs/ticket 文本）自答；热编排器会拿对话记忆替代盘面，而**这一条 fresh 子代理防不住**（implementer 是冷的，回答它的编排器是热的）；② **产物自足性检验**——冷启动跑阶段三是对「四件套 + tickets 是否真的够用」的真实检验，热 session 会在盘面缺信息时无声补上、缺口永不暴露；③ **去作者偏置**——实现期若设计被证伪，热 session 倾向合理化而非叫停。**代价**：编排器需重读 SKILL 与产物（一次性），且 MUST 在调用 `/sdflow-ship` 时**重述 merge 意图**（它从调用语透传、不在盘上）。
+ 
+ 🔴 **MUST NOT 拿「主审裁决需要冷视角」当任一处例外的理由**——那一条已被上述结论正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供），拿它当依据是漏查。
+ 
+-**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 subagent-dev / sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
++**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
+ 
+ *流程 v2（三阶段连续化，单轨线性）· 配套 generation-process.md（生成）/ spec-review.md（评审）/ trigger-catalog.md（深度）/ reference/quality-layering.md（分层）*
+ 
+ *演进史（去掉了什么、为什么这么改）→ `workflow-history.md`——不是当前约束，跑流程不用读。*
+diff --git a/sdflow-init/assets/workflow/prompts/step7-subagent-dev.md b/sdflow-init/assets/workflow/prompts/step7-subagent-dev.md
+deleted file mode 100644
+index 5ef0259..0000000
+--- a/sdflow-init/assets/workflow/prompts/step7-subagent-dev.md
++++ /dev/null
+@@ -1 +0,0 @@
+-/subagent-driven-development 自动完成全部任务，每任务完成跑测试套件确认无 warning；逐任务 checkpoint；final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析） 作额外 review lens 附给 reviewer；无法自动解决的记入 buglists 或 todolists。
+diff --git a/sdflow-init/assets/workflow/reference/quality-layering.md b/sdflow-init/assets/workflow/reference/quality-layering.md
+index d7eae35..d76757f 100644
+--- a/sdflow-init/assets/workflow/reference/quality-layering.md
++++ b/sdflow-init/assets/workflow/reference/quality-layering.md
+@@ -1,47 +1,51 @@
+ # 质量分层：Prevention / Inline Detection / Residual（shift-left）
+ 
+ > **定位**：回答"代码生成质量很高，后面还要那么多次 review 吗？"——不是砍 review，而是
+ > **把标准前移进生成期已有的审查口，消掉事后 review 的冗余**。与 [`spec-review.md`](../spec-review.md)
+ > §一（review 只做 prevention 焊不住的残差）同一条铁律，在**代码层**的展开。
+ > **〔P3c 校准〕"消冗余" ≠ "sdflow-code-review 变可选"**——见 §五：事后 sdflow-code-review **每次全跑**做独立强制主审，
+ > shift-left 消的是通用质量的重复查，不是 sdflow-code-review 本身。
+ 
+ ---
+ 
+-## 一、生成期已经焊进三层 review（不是裸生成）
++## 一、生成期已经焊进 review（不是裸生成）
+ 
+-`superpowers:subagent-driven-development` 内部**自带**一条多层评审流水线（读其 SKILL + 模板得出）：
++`sdflow-implement`（tickets 轨，阶段三唯一实现管线）内部**自带**一条评审流水线——设计脉络借鉴自
++已退役的 superpowers `subagent-driven-development`（reviewer 模板 / pre-flight 冲突扫描，见其自身
++`SKILL.md` 附录 B 出处说明），机制现况：
+ 
+ ```
+-每任务:  implementer TDD + 自审 + commit
+-         → task-reviewer(fresh 子agent, "Do Not Trust the Report")出双判决: spec 合规 + 代码质量
+-         → Critical/Important 进 fix 循环, re-review 到 Approved
+-全任务后: final whole-branch reviewer(最强模型, fresh context)
++每 ticket:  implementer TDD + 自审 + commit
++            → 双轴审(fresh 子agent×2, "Do Not Trust the Report") 并行出双判决: Standards 轴 + Spec 轴
++            → Critical/Important 进 fix 循环, re-review 到 Approved
++出票收尾:   全 ticket 语义一致性自扫(T10-choice 无人类门自主裁决，取代原版"批量呈给人拍板")
+ ```
+ 
+ **关键**：这些 reviewer 都是 **fresh-context 独立子 agent**。所以"独立性"——我们一直强调的卖点——
+ **生成期内部已经有了**。事后 `/clear + /sdflow-code-review` 再加的独立性只是"脱离 controller 的全冷独立"，边际收益。
+ 
+ ## 二、但它们查的是**通用 rubric**，不是我们的领域清单
+ 
+-task-reviewer / final-reviewer 的检查项是 `clean separation / error handling / DRY / edge cases /
+-tests verify real behavior / architecture / security`——**纯通用**。它们**完全不碰**
+-`code-checklists/domains/` 的领域 CR-*（嵌入式看门狗/flash 寿命/ISR、芯片 AT 超时、并发锁序…）。
++双轴审 Standards 轴的基线检查项是 `clean separation / error handling / DRY / edge cases /
++tests verify real behavior / architecture / security`——**通用部分**注入 Fowler smell 基线；
++`code-checklists/domains/` 的领域 CR-*（嵌入式看门狗/flash 寿命/ISR、芯片 AT 超时、并发锁序…）作为
++Standards 轴 dispatch 模板**必填槽**已前移进循环（见 `sdflow-implement/SKILL.md`「每 ticket 双轴审」节），
++不再是通用 rubric 盲区。
+ 
+ | 维度 | 生成期已做? | 事后 review 重复? |
+ |---|---|---|
+-| spec 合规（建的=要的） | ✅ task-reviewer Part 1 | Step1 自持 scope 审计 **部分重复** |
+-| 通用代码质量（CR-01~09 base） | ✅ 三层都查 | /sdflow-code-review base **大幅重复** |
+-| **领域规则（CR-EMB/ML307C/ESP32/GO）** | ❌ 通用 rubric 盲区 | **真残差** ← 唯一不可替代 |
++| spec 合规（建的=要的） | ✅ Spec 轴 | Step1 自持 scope 审计 **部分重复** |
++| 通用代码质量（CR-01~09 base） | ✅ Standards 轴 | /sdflow-code-review base **大幅重复** |
++| **领域规则（CR-EMB/ML307C/ESP32/GO）** | ✅ Standards 轴必填槽已注入 | **冷独立兜底**（见下方 P3c，非"唯一残差"） |
+ | scope-drift / 计划完成度 | ⚠️ 部分 | Step1 自持 scope 审计补全 |
+-| 全冷独立（脱离 controller） | ❌ 终审仍 controller 裁决 | /sdflow-code-review 补，但边际 |
++| 全冷独立（脱离 controller） | ❌ 双轴审仍 implementer/controller 同轮次 | /sdflow-code-review 补，但边际 |
+ | PR 级 DB/API/Auth 改动 | ❌ | 官方 code-review |
+ 
+ **结论**：后置 review 的**通用质量部分是冗余**；真正残差只剩 **领域规则 + scope-drift + PR 风险 + 一点冷独立**。
+ 
+ ## 四、与 spec 侧同构（同一个元模式）  <!-- §三已退役（remove-superpowers-pipeline），编号保留供外部引用 -->
+ 
+ ```
+         Prevention(建对)             Inline Detection(循环内抓)          Residual(冷,事后)
+  spec:  config.yaml 结构+D 约束      grill / 生成对话                    sdflow-spec-review(validation+对抗+接地)
+  code:  plan Global Constraints+TDD   逐任务双判审                        sdflow-code-review(领域+冷独立+scope)
+diff --git a/sdflow-init/assets/workflow/workflow.md b/sdflow-init/assets/workflow/workflow.md
+index 67929cd..1aac089 100644
+--- a/sdflow-init/assets/workflow/workflow.md
++++ b/sdflow-init/assets/workflow/workflow.md
+@@ -80,21 +80,21 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本
+ 
+ ## 三、关键设计决策
+ 
+ 1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
+ 2. **`/clear` 只在两处阶段交界用，阶段内部不用（G1）**：阶段内部不用 `/clear`（评审独立性由 fresh 子代理提供，依据 [quality-layering.md](./reference/quality-layering.md)）。两处阶段交界 SHALL `/clear`：**阶段一 → 阶段二**（cache 按模型隔离 + 产/审错档纪律）、**阶段二 → 阶段三**（盘面纪律 + 产物自足性检验 + 去作者偏置）。完整推导（为什么恰是这两处、每条理由的证据、边界）见[附录 A](#附录-ag1-完整分析clear-纪律为何如此设计)。
+ 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（**≥2 方案**：选项+推荐+三面后果(系统/用户/开发循环)+主次判定；**核验不了的事实**：待核验证据+风险+默认处理，不强制三镜），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
+ 4. **只在阶段二设计门停一次人类**：拷问是对话岛（人类对抗，不折叠，见 `/sdflow-spec` 相位 B）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议 `T10-choice`〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
+ 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
+ 6. **评审两层、不重复**：
+    - **设计侧**：sdflow-spec-review 编排器 = 自持广审双镜（strategy/plan-eng，按 base R 项划分）+ 本项目多镜（领域镜+对抗镜+接地镜，按 domains/ R 项划分）单批并行 dispatch 合成一份报告。base 与 domains 两层清单本就互斥，无需去重协商。
+-   - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
++   - **代码侧（生成期已有双轴审，事后强制主审）**：`sdflow-implement` 每 ticket **双轴审**（Standards 轴 + Spec 轴，fresh-context 子代理；Standards 轴 dispatch 模板**必填槽**把 domains 领域清单前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**每 ticket 双轴审与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
+ 7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 [reference/quality-layering.md](./reference/quality-layering.md)。
+ 8. **闭环用 `sdflow-done`**：verify → hand-off.md → archive → commit → merge，archive 子代理拿 delta **对真实代码核验后再同步** spec。尾部不再需单独 apply/verify/archive。
+ 9. **深度按 TG / 风险**：explore（模糊才跑）；不分 S/M/L 档。〔Phase C 补：outside voice 默认开，命中 HR-TG 单开领域 cross-model〕
+ 
+ ## 四、生成 ↔ 评审 的对称
+ 
+ ```
+   生成侧(Prevention)            评审侧(Detection)
+   ──────────────────────────────────────────────
+   ①结构 → config 槽       ┐
+@@ -113,34 +113,34 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本
+ ## 六、检查清单（跑一个变更时）
+ 
+ - [ ] 问题 / 方向清晰否？不清晰先 `opsx:explore`，人示意收敛才自动接 `/sdflow-spec`
+ - [ ] 生成起手是否过 **FF-0 三分支判定**（保护分支建 / 本 change 分支跳过 / 其它 feature 分支 halt 问人）？每步是否 checkpoint-commit？
+ - [ ] `sdflow-spec` 相位 B 拷问是否照常全深度执行（触发方式改变不缩减拷问）？
+ - [ ] `/clear` 只在**两处阶段交界**用过（阶段一→阶段二、阶段二→阶段三；G1 具名例外）？**阶段内部**全程无 `/clear`？
+ - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
+ - [ ] 设计是否过 HARD-GATE（用户批准）才进阶段三？（阶段二唯一人类门）
+ - [ ] 阶段三实现管线是否正确路由至 `sdflow-implement`（唯一管线，无需判 impl-pipeline 键）？
+ - [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、机械引用核+二元裁决）？
+-- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
++- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
+ - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
+ 
+ ## 附录 A：G1 完整分析（`/clear` 纪律为何如此设计）
+ 
+ > 本节是**演进推导**（DOC-1 附录）：正文（§三.2）只留结论，这里留完整论证。**跑流程不用读本节**——
+ > 只在需要理解「为什么恰是这两处，不多不少」时查。
+ 
+-**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md)）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
++**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/sdflow-implement 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md)）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+ 
+ 🔴 **上述结论只覆盖「评审独立性」这一个面，MUST NOT 据此推出「全流程不用 `/clear`」**。曾有措辞称「`/clear` 唯一作用是给评审独立上下文」——**该前提为假**，由它导出的全流程禁令是**过度泛化**：`spec-workflow` spec 的对应 Requirement 也只约束「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。
+ 
+ 🔴 **阶段交界 SHALL 用一次 `/clear`（两处，理由各自都在上述结论射程之外）**：
+ 
+ - **阶段一 → 阶段二**（`/sdflow-spec` 出口序列 `/clear` → 换档 → `/sdflow-spec-review`）：① **cache 按模型隔离**——拖着阶段一的旧上下文切换模型档位 = 缓存作废、全价重付；② **产 / 审错档纪律**——阶段一的产出档与阶段二的评审档本就不同，换档才是这次 `/clear` 的真实动因。
+ - **阶段二 → 阶段三**（设计门通过后、`/sdflow-ship` 之前）：① **盘面纪律**——阶段三链序是「零跨步内存状态」，`NEEDS_CONTEXT` MUST 仅从盘面（design/specs/ticket 文本）自答；热编排器会拿对话记忆替代盘面，而**这一条 fresh 子代理防不住**（implementer 是冷的，回答它的编排器是热的）；② **产物自足性检验**——冷启动跑阶段三是对「四件套 + tickets 是否真的够用」的真实检验，热 session 会在盘面缺信息时无声补上、缺口永不暴露；③ **去作者偏置**——实现期若设计被证伪，热 session 倾向合理化而非叫停。**代价**：编排器需重读 SKILL 与产物（一次性），且 MUST 在调用 `/sdflow-ship` 时**重述 merge 意图**（它从调用语透传、不在盘上）。
+ 
+ 🔴 **MUST NOT 拿「主审裁决需要冷视角」当任一处例外的理由**——那一条已被上述结论正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供），拿它当依据是漏查。
+ 
+-**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 subagent-dev / sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
++**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
+ 
+ *流程 v2（三阶段连续化，单轨线性）· 配套 generation-process.md（生成）/ spec-review.md（评审）/ trigger-catalog.md（深度）/ reference/quality-layering.md（分层）*
+ 
+ *演进史（去掉了什么、为什么这么改）→ [workflow-history.md](./workflow-history.md)——不是当前约束，跑流程不用读。*
