@@ -1,13 +1,11 @@
 ---
 name: sdflow-implement
 description: >
-  tickets 实现管线双模式编排器——由 /sdflow-ship 按 gate 判定编排调用；含出 ticket + 执行双模式：
+  tickets 唯一管线，由 /sdflow-ship 按 gate 判定以显式 mode= 参数派发；含出 ticket + 执行双模式：
   RUN_PLAN → 出 ticket 模式（从 design.md/tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket，落盘
   即返回，不直通执行）；CONTINUE_IMPL(done_tasks) → 执行模式（按 Blocked-by frontier 宿主条件化
-  受限并行派 fresh implementer 子代理 + 每 ticket 双轴审）。仅当仓 openspec/config.yaml 的
-  impl-pipeline 键（或在途
-  plan 的 frontmatter marker）取值为 tickets 时，才由 sdflow-ship 链序以显式
-  mode=tickets-plan|tickets-exec 字面参数派发；不要在此之外单独触发，也不要作为子代理派发调用。
+  受限并行派 fresh implementer 子代理 + 每 ticket 双轴审）。不要在此之外单独触发，也不要作为子代理
+  派发调用。
 ---
 
 # sdflow-implement — tickets 实现管线双模式编排器
@@ -155,17 +153,15 @@ description: >
 
 tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出可执行的垂直切片）与执行（frontier
 宿主条件化受限并行 + 每 ticket 双轴审）共享一个 skill、两种互斥模式，由 gate 判定的 RUN_PLAN/CONTINUE_IMPL 两态
-经 `/sdflow-ship` 链序以显式参数路由——两态的 gate 插入点力学与旧 writing-plans/subagent-dev 管线
-等价（D1/D2）。
+经 `/sdflow-ship` 链序以显式参数直接派发。
 
 本 skill 由 ship 主 session 经 Skill **inline 执行**——**MUST NOT 作为子代理派发**：子代理无法再派
 子代理，而执行模式需要派发 implementer / 双轴审子代理，这个能力只在主 session 位置成立。
 
-`ship_gate.py` **零改动**——本 skill 只是产出 / 消费 gate 已识别的「试验期外衣」契约
+`ship_gate.py` **零改动**——本 skill 只是产出 / 消费 gate 已识别的完成判据契约
 （`tickets.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
-不触碰 gate 脚本本身，也不读 `openspec/config.yaml`（config 只在 ship 首跳读一次，见路由说明）。
-计划文件名按轨分列〔D5/adr-0033〕：superpowers 轨保持 `superpowers-plan.md` 不变，两名经共享
-resolver 定位，双存在 fail-closed。
+不触碰 gate 脚本本身，也不读 `openspec/config.yaml`。计划文件名单一：`tickets.md`（memo D5，
+adr/0042 supersede adr/0033）；frontmatter marker 为文件格式契约（无路由读取方，memo D3）。
 
 ## 第零步：宿主/档位解析（两入口共用、无条件执行）
 
@@ -213,10 +209,10 @@ problem 一句、ticket 号与名统一填「—（起手失败，无票上下�
 | 7 | tier 缺失 | `$SDFLOW_HOST` ∈ {claude,codex} 但 `$SDFLOW_TIER_STRONG`/`MID`/`LIGHT` 任一为空 | `model-tiers.md` 不可达或机读块缺失（workflow bundle 未装，或未跑 `sdflow-init update`） | 按 stderr 提示跑 `sdflow-init update`；或确认 `~/.sdflow/workflow/model-tiers.md` 存在且含 `model-tier-defaults` 机读块 |
 | 8 | host=unknown | `$SDFLOW_HOST` 取到 `unknown`——resolver **跑成**但判不出宿主 | 当前进程内两个正信号（`CLAUDECODE=1`/非空 `CODEX_THREAD_ID`）均未见或同时出现 | 在受支持宿主（Claude Code 或 Codex CLI）下重新运行 `sdflow-implement`；**MUST NOT** 用空档位或默认值继续派发 |
 
-## 模式派发契约（F4 单一源，与本 change plan 头部逐字共用）
+## 模式派发契约（本 skill 唯一权威源）
 
-skill 内**不自判模式**——管线选择完全是外部确定值（config 键 → plan marker → 缺省一律 superpowers，
-零模型自由裁量），本 skill 只认调用时传入的显式字面参数，不重新判断 RUN_PLAN/CONTINUE_IMPL 语义：
+skill 内**不自判模式**——`mode=` 由调用方（`/sdflow-ship` 按 gate 判定）显式字面传入，零模型
+自由裁量，本 skill 只认调用时传入的显式字面参数，不重新判断 RUN_PLAN/CONTINUE_IMPL 语义：
 
 ```
 sdflow-implement mode=tickets-plan change={change}
@@ -224,20 +220,13 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 ```
 
 `RUN_PLAN` → 出 ticket 模式（`mode=tickets-plan`）；`CONTINUE_IMPL(done_tasks)` → 执行模式
-（`mode=tickets-exec`，`done_tasks` 原样透传，不重算不猜测）。以上两串与
-`openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md` 头部 Global Constraints 节逐字
-一致——改一处两处一起改，禁止任一侧漂移出独立措辞。
+（`mode=tickets-exec`，`done_tasks` 原样透传，不重算不猜测）。
 
 ## 依赖的确定性 helper（machine-verifiable，本 skill 不重新发明判断逻辑）
 
-路由与拓扑判断一律走 stdlib-only 脚本，本 skill 只消费其输出，不自行解析 config/plan 结构。
+拓扑判断一律走 stdlib-only 脚本，本 skill 只消费其输出，不自行解析 plan 结构。
 路径约定：`~/.claude/skills/sdflow-implement/scripts/impl_route.py`；Codex 宿主兜底 `~/.codex/skills/sdflow-implement/scripts/impl_route.py`：
 
-- **route**（由 ship 在派发本 skill **之前** 调用，产出 `PIPELINE_RECEIPT` 决定要不要派发本 skill；
-  本 skill 内部不重复调用）：
-  ```
-  python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py route --root <仓根> --change <change>
-  ```
 - **frontier**（由本 skill **执行模式内部**每轮调用，解析 `Blocked-by` 拓扑 + 已完成号集，算出
   下一批 next-ready ticket 号）：
   ```
@@ -391,13 +380,12 @@ ticket**，承担该聚合回归执行点：
 领域镜 + 机械引用核 + 二元裁决 + fix 循环）覆盖；「收尾票锚点相对 code-review 修复而言不是最新」是
 **已知且接受**的残余风险，见 design「收尾票的定位」节与 `decision-memo.md`「接受的边角」。
 `sdflow-done` 的 verify 引用该票 impl-report 作为「**实现期**聚合覆盖」证据锚时，措辞 MUST 与此
-定位一致——**MUST NOT** 写成「最终全量回归通过」；该锚**按管线条件化**，superpowers 轨判「不
-适用」而非 gap（详见 `sdflow-done/SKILL.md`）。
+定位一致——**MUST NOT** 写成「最终全量回归通过」；该锚为**无条件要求**（详见 `sdflow-done/SKILL.md`）。
 
 ### 外衣（ship_gate.py 既有完成判据契约，零改动兼容）
 
-- 落盘路径固定 `{change_dir}/tickets.md`〔D5/adr-0033：tickets 轨新名；superpowers 轨仍用
-  `superpowers-plan.md`，两名经共享 resolver 定位，本 skill 只产出 tickets 轨文件〕。
+- 落盘路径固定 `{change_dir}/tickets.md`（memo D5，adr/0042 supersede adr/0033：tickets 为
+  唯一管线，单名）。
 - frontmatter **含且仅含** `impl-pipeline: tickets` 单键——**MUST NOT** 加注释行、示例值，或第二个
   frontmatter 块（杂行 / 第二块会被 gate 的 fence-aware 解析算成幻影任务，或触发 UNKNOWN）〔F5〕。
 - 每 ticket 以 `### Task N: <ticket 名>`（N 从 1 连续编号）为标题——与验收复选框、`Blocked-by:`
@@ -407,13 +395,10 @@ ticket**，承担该聚合回归执行点：
   `## Global Constraints`，作为每个 implementer / reviewer 子代理 dispatch 的共享注意力透镜。
 - **plan 首次提交后结构不可变**：**MUST NOT** 重号 / 重排 / 删除 / 复用已出的 Task 号；后续若需
   重新规划，只能**追加新号**〔F1〕。
-- **gate 第四道校验（H12/M17）**：`ship_gate` 额外校验——**当且仅当计划文件名为 `tickets.md`**
-  （本 skill 唯一产出的新名）时，MUST 恰含一张 `R-ID: all` 的「实现验证」收尾 ticket 且其
-  `Blocked-by` ⊇ 全部功能 ticket 号；旧名 `superpowers-plan.md` 不触发本项校验（grandfather，
-  同时覆盖 superpowers 轨与改名生效前落盘的在途 tickets 轨 plan）。**因此每次出票 MUST 按上文
-  「强制实现验证收尾 ticket」规则产出该票，不可省略**——省略或 `Blocked-by` 漏号会让出票落盘后
-  gate 重跑判 UNKNOWN 而非 CONTINUE_IMPL。此判据**只用文件名区分「新出/在途或他轨」，不是轨道
-  路由**——gate 本身不读 config/marker 即可执行本校验。
+- **gate 第四道校验（H12/M17）**：`ship_gate` 额外校验——计划文件（`tickets.md`）MUST 恰含一张
+  `R-ID: all` 的「实现验证」收尾 ticket 且其 `Blocked-by` ⊇ 全部功能 ticket 号。**因此每次出票
+  MUST 按上文「强制实现验证收尾 ticket」规则产出该票，不可省略**——省略或 `Blocked-by` 漏号会让
+  出票落盘后 gate 重跑判 UNKNOWN 而非 CONTINUE_IMPL。gate 本身不读 config 即可执行本校验。
 
 骨架示例（仅示意结构，不是真实 ticket 内容）：
 

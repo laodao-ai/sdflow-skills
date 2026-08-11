@@ -186,7 +186,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 
 ### 0.3 tasks.md 复选框对账（关键，否则 verify/archive 被误导）
 
-实现常经 `tickets.md`（sdflow-implement 出票管线）或 `superpowers-plan.md` / subagent-driven-development〔D5：两轨计划文件名分列，`superpowers-plan` 一名专指 superpowers 轨〕完成，change 自己的 `tasks.md` 复选框**没被勾**。这会让 `openspec archive` 警告 "N/M incomplete"、让 verify 误判。
+实现常经 `tickets.md`（sdflow-implement 出票管线）完成，change 自己的 `tasks.md` 复选框**没被勾**。这会让 `openspec archive` 警告 "N/M incomplete"、让 verify 误判。
 
 - Read `openspec/changes/{change_name}/tasks.md`，与实际实现对照（看 git log / 实现 commit）。
 - **已真实完成的任务勾上** `- [x]`；**确实未做/部分做的保持 `- [ ]` 并补一句说明**（别为过 archive 假勾——保持记录诚实）。
@@ -220,37 +220,19 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 1. Read openspec/changes/{change_name}/tasks.md（看要求什么）
 2. Read openspec/changes/{change_name}/specs/ 下所有 spec（ADDED/MODIFIED 需求）
 3. 用 Grep/Read 核对**代码/迁移/测试**是否反映每条要求（迁移文件、SP、Go、前端、测试）
-4. **实现期聚合覆盖需求（tickets 轨专属，按管线条件化，harden-implement-review-loop D3/Q2/C2）**：
-   先判本 change 走的是哪条实现管线。🔴 **[impl-review-fix FIX-2] 文件名 MUST NOT 参与轨道
-   路由判定**（delta `impl-orchestration/spec.md` 逐字）——**路由权威 = 仓 `openspec/config.yaml`
-   的 `impl-pipeline` 键 + plan 文件头 frontmatter 的 `impl-pipeline` marker**（判定实现见
-   `sdflow-implement/scripts/impl_route.py` 的 `read_plan_marker` / `resolve_pipeline`：
-   marker 存在则 marker 胜出，marker 缺失则取 config 键；marker 键重复/值非法/frontmatter 未闭合
-   → UNKNOWN 语义，停下问人）。**文件名只用于「定位」plan 文件**，两个名字都要找：
-   `openspec/changes/{change_name}/{tickets.md,superpowers-plan.md}`（或已归档路径
-   `openspec/changes/archive/{date}-{change_name}/` 下同名两者）；两者都不存在且 config 键
-   也缺 ⇒ 按 canonical 缺省 superpowers 轨处置。
-   ⚠️ **MUST NOT 因为计划文件叫 `superpowers-plan.md` 就判 superpowers 轨**——grandfather 条款
-   下**旧文件名同样覆盖在途的 tickets 轨 plan**（本 change 自身即反例：plan 名为
-   `superpowers-plan.md`，frontmatter marker 却是 `impl-pipeline: tickets`，它是 tickets 轨、
-   有收尾票）。按文件名判轨会让这条聚合覆盖需求被静默跳过。
-   〔区分：`ship_gate` 第四道 plan 校验**以文件名为判据是对的**——delta 明确它「仅用于区分
-   『新出 plan / 在途或他轨 plan』，MUST NOT 被解读为用文件名做轨道路由」。两处不是同一件事。〕
-   - **tickets 轨**：在 `impl-reports/` 下找「实现验证」收尾 ticket 的报告（`R-ID: all` 那张），
-     核对其证据 schema（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）齐全、结论可接受（通过，或
-     按四类失败分诊记录为可接受的放行）。🔴 **[impl-review-fix FIX-4] MUST 核验各「通过」层的
-     SHA 一致**——该票的语义是「全部功能票实现完毕**这一刻**聚合套件通过」，「这一刻」蕴含单一
-     盘面；若各通过层锚在不同 SHA（如 unit@A、integration@B），说明先绿的层从未在最终盘面上跑过、
-     「全部通过」是拼出来的 ⇒ 判**核心缺口**，MUST NOT 判 ✅（未覆盖层不参与此核验）。
-     找到（且 SHA 一致）→ 该需求判 ✅，锚 = 该 impl-report 文件路径 + 其
-     内的 SHA（**不要求该票有 commit**——`checkpoint-commit.sh` 在干净树上直接成功退出、不建
-     commit，聚合套件一次绿时该票可能本来就无 commit）；**锚语义 MUST 写成「实现期结束时聚合
-     套件通过」，MUST NOT 写成「最终代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其
-     自动修复循环之前，此证据时效缺口是已知且接受的残余风险（design「收尾票的定位」节）。找不到
-     → 判**核心缺口**。
-   - **superpowers 轨**：该需求判**「不适用（非 tickets 轨）」，MUST NOT 判 gap**〔评审 C2：
-     本仓自身 `openspec/config.yaml` 是 `impl-pipeline: tickets`，dogfood 照不到 superpowers 轨
-     这个分支，务必显式按此条处置，不要因为「本仓从没见过」就假设都该判 gap〕。
+4. **实现期聚合覆盖需求（无条件要求，harden-implement-review-loop D3/Q2/C2）**：
+   在 `impl-reports/` 下找「实现验证」收尾 ticket 的报告（`R-ID: all` 那张），
+   核对其证据 schema（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）齐全、结论可接受（通过，或
+   按四类失败分诊记录为可接受的放行）。🔴 **[impl-review-fix FIX-4] MUST 核验各「通过」层的
+   SHA 一致**——该票的语义是「全部功能票实现完毕**这一刻**聚合套件通过」，「这一刻」蕴含单一
+   盘面；若各通过层锚在不同 SHA（如 unit@A、integration@B），说明先绿的层从未在最终盘面上跑过、
+   「全部通过」是拼出来的 ⇒ 判**核心缺口**，MUST NOT 判 ✅（未覆盖层不参与此核验）。
+   找到（且 SHA 一致）→ 该需求判 ✅，锚 = 该 impl-report 文件路径 + 其
+   内的 SHA（**不要求该票有 commit**——`checkpoint-commit.sh` 在干净树上直接成功退出、不建
+   commit，聚合套件一次绿时该票可能本来就无 commit）；**锚语义 MUST 写成「实现期结束时聚合
+   套件通过」，MUST NOT 写成「最终代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其
+   自动修复循环之前，此证据时效缺口是已知且接受的残余风险（design「收尾票的定位」节）。找不到
+   → 判**核心缺口**。
 5. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
 6. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
    - **报告头部 frontmatter（ship-gate 契约，mlh-p5 迁 frontmatter，模板写死二选一，勿改写字段名、勿两键并存）**：
@@ -472,7 +454,7 @@ MUST 段之后或行内。
 禁止 git push。
 ```
 
-> 若实现期已逐 commit 提交（subagent-driven），本步只提交**归档 + spec 同步 + INDEX** 这批收尾变更。
+> 若实现期已逐 commit 提交（tickets 管线逐 ticket checkpoint 提交），本步只提交**归档 + spec 同步 + INDEX** 这批收尾变更。
 
 ---
 
