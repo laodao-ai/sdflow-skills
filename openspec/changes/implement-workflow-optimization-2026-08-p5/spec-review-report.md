@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 143b9f1ebe31e575ed1ea2c27109ad794027ad9c
+---
+
 # Spec Review Report · implement-workflow-optimization-2026-08-p5
 
 - 评审日期：2026-08-12 · 宿主 host=claude（强档主审 + fan-out 子代理）
@@ -154,4 +160,4 @@ defer（Q1/Q2）均转采纳/中，emitter 重跑原地覆盖。）
 
 - [x] Q1/Q2 收口：2026-08-12 人拍板——Q1 选项 A（memo 补 D3 三镜简表）、Q2 调研核销
       （Codex 官方文档 https://developers.openai.com/codex/skills ）
-- [ ] 设计门拍板：＿＿＿＿（日期 / 结论）
+- [x] 设计门拍板：2026-08-12 人批准（reviewed_sha=143b9f1，含全部 18 条 amendment 与 Q1/Q2 收口）
