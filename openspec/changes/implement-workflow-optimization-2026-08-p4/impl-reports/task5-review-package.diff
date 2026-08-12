@@ -1,0 +1,1429 @@
+# Review package: 5fbc438..62b91da (Task 5)
+
+## Commits
+62b91da feat(implement-workflow-optimization-2026-08-p4): Task5 四编排 SKILL effort 适配 + B25 诊断修复 + bundle 同步
+
+## Files changed
+ hack/tests/test_tier_resolution_parity.py          |  12 +-
+ .../impl-reports/task5-brief.md                    |  24 ++
+ .../impl-reports/task5-skill-adaptation.md         | 241 +++++++++++++++++++++
+ sdflow-code-review/SKILL.md                        | 159 +++++++++-----
+ sdflow-done/SKILL.md                               |  26 ++-
+ sdflow-implement/SKILL.md                          |  25 ++-
+ sdflow-init/assets/snippets/claude-section.md      |  13 ++
+ sdflow-init/assets/workflow/config.template.yaml   |  10 +
+ sdflow-init/scripts/init.py                        |  55 ++++-
+ sdflow-init/tests/test_config_lint.py              | 143 ++++++++++++
+ sdflow-spec-review/SKILL.md                        |  65 ++++--
+ 11 files changed, 687 insertions(+), 86 deletions(-)
+
+## Diff
+diff --git a/hack/tests/test_tier_resolution_parity.py b/hack/tests/test_tier_resolution_parity.py
+index 90d8eb4..4377e09 100644
+--- a/hack/tests/test_tier_resolution_parity.py
++++ b/hack/tests/test_tier_resolution_parity.py
+@@ -244,24 +244,30 @@ def test_cli_requires_at_least_two_paths(tmp_path):
+ #
+ # 等值门只保证「四侧一样」，不保证「一样的那份是对的」。本节是段内**内容**的
+ # golden：四类清脏变量、fail-loud 硬停措辞、host 空值/unknown 分家判据——MUST NOT
+ # 只查 SITES[0] 再靠等值门推其余三侧（等值门若被误删，这里就成了盲区）。
+ # ══════════════════════════════════════════════════════════════════════════════
+ 
+ def _segments():
+     return [(rel, P.interior(P.extract(REPO / rel))) for rel in P.SITES]
+ 
+ 
+-def test_unset_clears_all_six_vars():
+-    """(a) 步 MUST 清脏全部六个变量——漏一个就可能拿上一轮的脏值继续跑。"""
++def test_unset_clears_all_nine_vars():
++    """(a) 步 MUST 清脏全部九个变量（六个既有 + 三个 effort）——漏一个就可能拿上一轮的脏值继续跑。
++
++    implement-workflow-optimization-2026-08-p4：effort 维引入后 unset 清脏清单扩含
++    `SDFLOW_EFFORT_STRONG/MID/LIGHT`，否则旧 resolver 不导出 effort 时，同 shell 上一轮
++    残留的脏值会击穿空值回落（与既有六变量清脏同因）。
++    """
+     needle = ("先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID "
+-              "SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏")
++              "SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL "
++              "SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏")
+     for rel, seg in _segments():
+         assert needle in seg, f"{rel}: 清脏步骤缺失或变量集不全"
+ 
+ 
+ def test_precheck_fails_loud_before_continuing():
+     """(b) 步：resolver 不可执行 MUST fail-loud 硬停，MUST NOT 继续。"""
+     for rel, seg in _segments():
+         assert "`[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检" in seg, rel
+         assert "fail-loud 硬停本轮工作" in seg, rel
+         assert "MUST NOT 继续" in seg, rel
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task5-brief.md b/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task5-brief.md
+new file mode 100644
+index 0000000..36043be
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task5-brief.md
+@@ -0,0 +1,24 @@
++### Task 5: 四编排 SKILL 全面适配 + B25 诊断修复 + bundle 同步
++
++**Blocked-by:** 1,2,3,4
++**R-ID:** SW-1, SW-2, SW-3, IO-2, HAE-1
++
++B25 诊断定案：在归档报告数据上重放 `lens_metric_emit.py` 调用，判定「未调用 vs 调用失败未记录」，结论记入 impl-report。按结论修复 emitter 落盘直接成因。
++
++四个编排 SKILL（sdflow-spec-review / sdflow-code-review / sdflow-implement / sdflow-done）全面适配：
++(a) 派发条款接 effort——表格加 effort 档列，派发时构造 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`，空值回落不带 subagent_type；门禁步不低于 high。tier-resolution 托管块 unset 清脏清单扩含 `SDFLOW_EFFORT_*` 三变量。
++(b) 两评审 SKILL 镜派发改三段组装序——段① = `render-review-prefix.sh` 输出原文一句引用；段②③ 界线显式化；SKILL 内与段①重复的散文契约收敛为引用。
++(c) sdflow-code-review Step4 defer 改「当场 recorder add（显式 source_change）+ 返回 id 写台账」；台账改机读结构（表格行 + 专用 id 列）+ 聚合摘要句改写移出 gate 检测范围；Step3 引用核结果落 `sdflow:ref-check` 结构化锚；Step5 义务措辞与门对齐；recorder 失败 fail-loud。
++(d) sdflow-done 三步子代理接 effort 档。
++
++bundle 同步：config.template `effort-tiers` 段示例 + claude-section 说明 + `init.py lint_config` 扩 `effort-tiers` 结构/值域校验（与 resolver 同口径）+ scope-check 表全组复查。
++
++- [ ] B25 诊断结论记入 impl-report（未调用 vs 调用失败，有确定性证据）
++- [ ] B25 直接成因修复（SKILL/脚本改动，按诊断结论定）
++- [ ] 四编排 SKILL 派发条款接 effort（subagent_type 构造 + 空值回落 + 门禁步 ≥ high + unset 扩面）
++- [ ] 两评审 SKILL 镜派发改三段组装序（段① 脚本引用 + 段②③ 显式化 + 重复散文收敛）
++- [ ] sdflow-code-review defer 当场入池（recorder add + id 台账 + ref-check 锚 + 聚合摘要改写）
++- [ ] sdflow-done 三步子代理接 effort 档
++- [ ] bundle 同步：config.template effort-tiers 段 + claude-section + init.py lint_config 扩面 + scope-check
++- [ ] [e2e] 本 change 自身 code-review 报告含 lens-metric 锚 + ref-check 锚 + defer id 对账（dogfood 首证）
++
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task5-skill-adaptation.md b/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task5-skill-adaptation.md
+new file mode 100644
+index 0000000..2126084
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task5-skill-adaptation.md
+@@ -0,0 +1,241 @@
++# Task 5 — 四编排 SKILL 全面适配 + B25 诊断修复 + bundle 同步
++
++**R-ID:** SW-1, SW-2, SW-3, IO-2, HAE-1 · **Blocked-by:** 1,2,3,4（全部已合并进本分支，实查确认）
++
++## (a) B25 诊断：lens_metric_emit.py 未调用（非调用失败）
++
++**方法**：`grep -rl "lens-metric" openspec/changes/archive/` 定位 08-07 起的 6 份归档
++`code-review-report.md`（`fix-probe-scan-precision` / `absorb-gstack-autoplan` /
++`implement-workflow-optimization-2026-08-{p1,p2,p3}` / `remove-superpowers-pipeline`），逐份 grep
++`lens-metric` 锚。
++
++**结果（确定性证据）**：
++
++1. **6/6 归档 code-review-report.md 全部零 `sdflow:lens-metric` 锚**，而同期 `openspec/config.yaml`
++   的 `metrics.enabled=true` 自 2026-07-06（`b092591`）起持续为 `true`，未变过——门控条件全程满足，
++   不是「metrics 关着所以没落锚」。
++2. **对照组（同期 spec-review-report.md）锚齐全**：同 4 份 change 的 `spec-review-report.md`
++   分别含 6~8 处 `lens-metric` 出现——证明 `lens_metric_emit.py` 本身、`metrics.enabled` 门控、
++   以及"评审 SKILL 落锚"这条机制路径**整体是通的**，故障局限在 `sdflow-code-review` 一侧。
++3. **`lens_metric_emit.py` 独立冒烟测试正常**：
++   - 非法输入（缺 `outside-voice` 强制行）→ `exit 1` + 清晰报错，未崩溃。
++   - 合法输入 → `exit 0` 正确产出 `<!-- sdflow:lens-metric v1 ... -->` 逐行 stdout。
++   排除"脚本本体损坏/路径错误"作为直接成因。
++4. **关键证物**：`2026-08-12-remove-superpowers-pipeline/code-review-report.md` 已写出
++   `### 度量锚` 标题 + `（metrics.enabled=true）` 说明，段内却只有 `sdflow:outside-voice` /
++   `sdflow:declared-sites` 两条锚，**唯独缺 `sdflow:lens-metric`**——说明执行者已经"知道"该落
++   度量锚（写了标题+条件说明），但**从未实际调用 `lens_metric_emit.py` 这个具体工具调用**，也
++   从未跑旧 SKILL.md 规定的「锚行自检」（`anchor_lint.py`——若真跑过，脚本会因 `metrics_on` 时
++   缺 `lens-metric` 锚判 `VIOLATION`、退出非 0，SKILL 旧文按"退出码非 0 即本步报错阻塞"的措辞本
++   应挡住该报告落盘/归档，但报告照常存在于归档目录）。
++
++**结论**：**未调用**，非"调用失败未记录"。根因不是脚本 bug，而是**旧版 SKILL.md 把"调 emitter +
++调 `anchor_lint.py` 自检"两个具体工具调用，作为一句散文子弹埋在编号步骤 6「写报告」内部**（旧
++Step5：1 工作树检查→2 修复→3 checkpoint→4 复审→5 取锚→6 写报告〔含度量锚落锚+锚行自检+反馈回路
++三个子弹〕→7 checkpoint→8 收敛口）——执行者在实践中把"写报告"理解为"生成 markdown 文本"，顺带略过
++了嵌在其中、需要真实 Bash 调用的两个动作，且没有任何机制在当轮拦下这个疏漏（旧锚行自检本身也是被
++埋在同一处、同样被跳过的自检步）。spec-review 侧同一时期未复现此故障（对照组锚齐全），提示两个
++SKILL 在"写报告"步骤的结构组织上有实质差异，code-review 侧的嵌套更深、密度更高，更容易被整体略过。
++
++## (b) B25 修复
++
++**已有的外部机械兜底（Task 3，本次未改动）**：`ship_gate.py` 的 `guard_report_anchors()` +
++`metrics_enabled()` 现在会在 `metrics.enabled=true` 时，对 code-review 报告强制要求
++`sdflow:lens-metric layer="code-review"` 锚与 `sdflow:ref-check` 锚，缺任一即判
++`STEP_IN_PROGRESS`（阻断进 verify）。这是本 change 设计层面对 B25 的**主防线**——未来即便 SKILL
++侧再度被跳过，`ship_gate` 也会拒绝放行、逼一次重跑。
++
++**本票新增的 SKILL 侧直接成因修复**（`sdflow-code-review/SKILL.md` 第五步）：
++
++1. **拆分编号步骤，把"度量锚落锚 + 锚行自检"从"写报告"内部的子弹提升为独立编号步骤**：
++   旧 `6. 写报告（含三个子弹：度量锚落锚/锚行自检/反馈回路）` → 新
++   `6. 写报告初稿（不含度量锚，明确声明"本步不产出度量锚/引用核锚，MUST NOT 顺带调用或省略"）` +
++   `7. 度量锚落锚 + 锚行自检（独立编号，标注"是本轮输出锚的唯一途径，是一个具体、不可省略的工具
++   调用，不是写报告那句散文里可以顺带略过的细节"）` + `8. checkpoint（原 7）` +
++   `9. 收敛口（原 8）`。执行顺序小节已有"MUST 按下方编号，不是按小标题在文档里出现的先后"的
++   既有纪律，本次是在**同一纪律下**新增一个不可跳过的编号项，而非新造机制。
++2. **新增历史注记（原文引用本次诊断的确定性证据）**，直接挂在新 Step7 内，说明"这不是假设性风险，
++   是本仓 6/6 归档报告实测复现过的真实故障"，并注明 `ship_gate.py` B25 门已作为外部兜底存在。
++3. **Step3 新增 `sdflow:ref-check` 结构化锚落盘指令**（见 (e)），使锚存在门 ① 的第二个检测对象
++   （引用核落盘锚）在 SKILL 侧也有明确产出指令，不再只有 lens-metric 一侧。
++
++**未做的事（按诊断结论排除）**：未改 `lens_metric_emit.py`、未改脚本调用路径——冒烟测试证明脚本
++本体正常，改脚本不解决"SKILL 执行时跳过调用"这个根因。
++
++## (c) 四 SKILL effort 适配
++
++`sdflow-spec-review` / `sdflow-code-review` / `sdflow-implement` / `sdflow-done` 四个 SKILL.md：
++
++- **tier-resolution 托管块**（4 处逐字节相同，`hack/check_tier_resolution_parity.py` 机械守）：
++  `unset` 清脏清单由 6 变量扩至 9（新增 `SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT`），
++  并在"取回本轮变量"那句尾部补充三个 effort 变量的取值说明（"claude 机队按档位推导的 effort 值……
++  codex/unknown 宿主或旧版 resolver 未导出时为空串，空值即回落不带 `subagent_type`"）。四文件用
++  同一段 Python 替换脚本做逐字节相同编辑，`check_tier_resolution_parity.py` 复跑仍绿（4 处一致）。
++- **`hack/tests/test_tier_resolution_parity.py`**：`test_unset_clears_all_six_vars` 更名为
++  `test_unset_clears_all_nine_vars`，断言串同步扩至 9 变量（红绿验证：改动前该测试对新文本会失败，
++  改动后转绿；未新增独立断言函数，因原测试已完整覆盖"清脏清单必须逐字符匹配"这条不变量）。
++- **各 SKILL 的镜/步派发表格加"effort 档"列**，并在紧邻处补一句 `subagent_type` 构造规则
++  （`$SDFLOW_EFFORT_<档位>` 非空则附带 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`，空
++  则不带、行为与引入前完全相同）：
++  - `sdflow-spec-review`：领域镜/对抗镜/接地镜表格 + "模型选择"节改写为含 model/effort 两列的表格
++    （含主 session / 广审双镜 / 领域对抗镜 / 接地镜四行）。
++  - `sdflow-code-review`：领域镜/对抗镜/历史镜表格 + "模型选择"节同款表格（含 Step1 scope 审计
++    子代理一行）。
++  - `sdflow-implement`：无既有"模型选择"表格（该 SKILL 是散文式派发，三处各自写
++    `model: $SDFLOW_TIER_MID`），新增一张"effort 派发"小表放在 tier-resolution 块之后，列出
++    implementer / Standards+Spec 轴 / fix 子代理三个 dispatch 点，并在三处原有派发说明句里各自
++    补一句 effort 附带规则；**`T10-choice` 三级协议 / `review-loop-breaker` 熔断仲裁用的 strong
++    档对抗镜/fix 子代理不在本票范围**（design 组件清单未点名，未加宽范围）。
++  - `sdflow-done`："模型选择"表格加 effort 档列 + 派发构造说明段；verify/archive/commit 三处
++    "派发 Agent（model: ...）"行原地补一句 `subagent_type` 附带规则。
++- **门禁步不降档**：四处均显式写明"带门禁、无人逐条复核的步（主 session 综合裁决 / verify 终门）
++  MUST NOT 以低于 high 的 effort 执行"。
++
++## (d) 两评审 SKILL 三段组装序
++
++`sdflow-spec-review`（领域镜/对抗镜/接地镜）与 `sdflow-code-review`（领域镜/对抗镜/历史镜）的 Step
++fan-out 章节各新增一段"三段组装序"说明：
++
++- **段①**：`~/.sdflow/hack/render-review-prefix.sh --layer <层>` 的 stdout 原文整体，非零退出
++  fail-loud、MUST NOT 半段前缀继续。
++- **段②**：per-镜角色声明 + 清单/角度 + 该层专属补充（code-review 层的 CR 编号字段 + pre-emit
++  引文纪律细则；spec-review 层的置信度自报字段）。
++- **段③**：动态内容（diff 范围/四件套当前内容）。
++
++**收敛的重复散文**：删除原先"每个子代理 prompt 必须自带……不要 AskUserQuestion"与"🔴 每个子代理
++prompt MUST 原文携带……四条通则区块"两段——这两段内容现在唯一源是脚本（段①），SKILL 正文只留一句
++引用（"SKILL.md 禁静态内联"同款 idiom）。**保留未删的部分**：code-review 层的 pre-emit 引文纪律
++细则（`evidence_pack`/`uncheckable` 分类自报的诚实边界说明）——这部分不在 `render-review-prefix.sh`
++的通用契约段范围内（脚本只含 code-review-base.md 全文 + 通用 findings schema，不含 code-review 层
++专属的 evidence_pack 细则），故保留为段②内容，未误删有效信息。
++
++**未触碰**：`sdflow-spec-review` 的"广审镜（strategy/plan-eng）"prompt 契约仍在独立管理块
++`sdflow:broad-mirror-def`（真相源 `sdflow-init/assets/snippets/broad-mirrors.md`，同时供
++`sdflow-roadmap` 消费）——本票未改该块。理由：该块的"四条通则原文复制"契约与三段组装序是两条
++并行有效的机制，改它会连带影响 `sdflow-roadmap`（不在本票 R-ID/design 组件清单范围内），属加宽
++scope；spec-review 的"模型选择"节已把 effort 覆盖到广审双镜（同中档 `$SDFLOW_EFFORT_MID`），
++effort 维需求已满足，三段组装序对广审双镜的收益（避免重复散文）留待未来若有票同时改
++`sdflow-roadmap` 时一并处理。
++
++## (e) sdflow-code-review defer 当场入池
++
++`sdflow-code-review/SKILL.md` 四处改动：
++
++1. **Step4「修不了/拿不准」分支**：从"defer → 写 buglist/todolist"改为"当场调用 recorder
++   （`issues_v2.py add --pool bug|todo --json '{...,"source_change":"{change_name}"}'`，
++   **`source_change` MUST 显式传**，不依赖脚本自动探测——防多 change 并行挂错）取得返回 id，
++   **当场写入报告台账表行**；新增 🔴 recorder 调用失败 fail-loud 分句：非零退出 MUST NOT 记为
++   已入池、MUST NOT 写"已入 todolist"，报告如实记录失败与待人工补录。
++2. **Step3 新增"机械引用核落盘锚"子弹**：无论有无 findings，都构造
++   `<!-- sdflow:ref-check v1 status="ran|skipped" pass="N" fail="N" uncheckable="N" -->`
++   落进报告——`degraded` 分支才是 `status="skipped"`，其余（含零 findings）恒 `status="ran"`；
++   本锚受 `metrics.enabled` 同款门控，`true` 时是 `ship_gate` B25 门 `require_ref_check=True`
++   的机判对象。
++3. **报告格式模板改写**：
++   - 新增"### 机械引用核锚"小节示范 `sdflow:ref-check` 锚行。
++   - "### 修复 / defer 台账"改为机读表格（`| id | 池 | 摘要 | critique |`），并附一段"台账行
++     判别契约"说明（id 列单元格须恰为单个 `T\d+`/`B\d+`，MUST NOT 出现无 id 的散文 defer 声明）。
++   - Findings 区示例行、聚合摘要句、结论区三处的"defer→buglist"/"defer 残差已入
++     buglist/todolist"改写为"递延见下方台账 T142"/"本轮新增待处理 K 项"/"本轮新增待处理项已入池"
++     —— 移除裸露的英文 "defer" 词，聚合摘要句不再含无 id 的 defer 声明。
++   - **验证**：手工核对新表格格式与 `sdflow-ship/scripts/ship_gate.py::_defer_ledger_id_cells`
++     的解析口径逐字节吻合——`_TABLE_ROW_RE = r"^\s*\|(.*)\|\s*$"` 要求整行首尾 pipe，我新增的
++     `T10-choice复核: <方案> | 对抗镜结论 ... | <理由...>` 散文行不以 `|` 开头，不会被误判为表格行；
++     新表格的表头列名 `id`（大小写不敏感）精确匹配 `_defer_ledger_id_cells` 的 `id_col` 判据。
++4. **Step5 义务措辞对齐**：锚行自检段落新增"该残余缺口现已由 `ship_gate.py` 的 B25 锚存在门在
++   消费点兜底"一句，`旁路声明`段落改写为提及 `ship_gate.py` B25 门的实际判定结果
++   （"该步进行中，重跑"），不再只泛泛提"报告完整性"。
++
++## (f) sdflow-done 三步接 effort
++
++`sdflow-done/SKILL.md`：verify（强档）/archive（中档）/commit（弱档）三处"派发 Agent"行原地补
++`subagent_type` 附带规则；"模型选择"表格加 effort 档列 + 统一的 effort 派发构造说明段，并显式
++"verify 是唯一终门，MUST NOT 以低于 high 的 effort 执行"。
++
++## (g) bundle 同步
++
++1. **`sdflow-init/assets/workflow/config.template.yaml`**：在既有 `model-tiers`（可选覆盖段）
++   示例注释块后新增 `effort-tiers`（可选覆盖段）示例注释块——`claude.{strong,mid,light}`，值域
++   `{low,medium,high,xhigh,max}`，标注"仅 claude 机队有对应物"。
++2. **`sdflow-init/assets/snippets/claude-section.md`**：新增独立小节"## effort 派发（Claude 宿主
++   专属，与上方 model-tiers/Codex 授权是正交维度）"，说明 effort 维的机制、config 覆盖键、
++   前向兼容语义、门禁步下限。
++3. **`sdflow-init/scripts/init.py::lint_config`**：新增 `EFFORT_FLEET_KEYS = {"claude"}`（**与
++   `TIER_FLEET_KEYS` 的关键差异**：不含 `codex`——codex 无 effort 原语，出现即报越域）+
++   `EFFORT_ALLOWED_VALUES = {low,medium,high,xhigh,max}`（封闭域校验，非 model-tiers 的自由字符
++   集）；新增 `_valid_effort_value()` + `_effort_tiers_from_dict()`（**与
++   `_model_tiers_from_dict()` 的关键差异**：无扁平旧格式分支——顶层非 `claude` 的键一律落
++   `bad`，不像 model-tiers 那样把顶层 `strong`/`mid`/`light` 归入 `flat.*`，因为 effort-tiers
++   是本 change 新引入的键、无历史遗留包袱）；`lint_config()` 主体新增条件化校验分支（块整段
++   缺失放行，同 model-tiers/metrics 既有纪律）。
++4. **测试**：`sdflow-init/tests/test_config_lint.py` 新增 `TestConfigLintEffortTiers`（10 用例：
++   无块放行、合法块放行、5 个合法值枚举放行、codex 键越域、扁平旧格式越域、叶子越域、非法值、
++   model-id 风格字符串误放行防护、空值、机队头标量误用）+ `TestEffortTiersFromDict`（5 条白盒
++   用例，锁 `entries`/`bad`/`bad_headers` 归属，含"codex 落 bad 不落 entries"与"扁平顶层键落
++   bad 不落 flat.*"两条关键差异断言）。**红绿验证**：临时 `git stash` 还原 `init.py`
++   改动后重跑新增的 15 个用例，全部因 `AttributeError`（`_effort_tiers_from_dict` 不存在）/
++   断言失败而红；`stash pop` 还原后全绿。
++5. **scope-check 表复查**（design.md「协议文档套件 scope-check 表」逐行核对）：
++   - `model-tiers.md` 表格 + 机读块 —— Task 1 已完成，本票核验未漂移。
++   - `resolve-models.sh` 头注释导出变量清单 6→9 —— Task 1 已完成，本票核验已含 effort 三变量。
++   - bundle `config.template.yaml` / `claude-section.md` —— 本票完成（见上 1/2）。
++   - 4 个编排 SKILL 派发段 effort 列引用 —— 本票完成（见 (c)）。
++   - `CLAUDE.md`/`AGENTS.md` 托管区块 —— **未手改**（按纪律"经 sync/init 工具，勿手改托管块"）。
++     本仓自身的 `CLAUDE.md`/`AGENTS.md` 是从 `claude-section.md` 铺设/更新而来的部署副本
++     （dogfooding），本票已改的是**权威源** `claude-section.md`；部署副本要拿到新增的"effort
++     派发"小节，需下一次 `sdflow-init update` 在本仓自身运行——这不在本票动作范围内（`sdflow-init
++     update` 是全局命名空间操作，且本票未被要求执行它），如实记为已知的、符合既有部署链设计的
++     滞后状态（[[deployed-copy-drift-surfaces-only-on-update]]），非遗漏。
++   - `hack/tests/` + 各 `tests/` 契约测试同步 —— 本票完成（`test_tier_resolution_parity.py` +
++     `test_config_lint.py`，见上）。
++   - `anchor_lint.py::_metrics_enabled` ↔ `ship_gate` B25 门一致性测试 —— Task 3 已完成
++     （`test_metrics_enabled_parity_with_anchor_lint`），本票未改 `anchor_lint.py`（design
++     Non-Goals 明确"不给 anchor_lint 增加新功能"，`sdflow:ref-check` 锚的机判方是 `ship_gate.py`
++     自己的独立解析，不复用 `anchor_lint.py`，故本票的新增内容不触发这条一致性守卫，也未使其
++     失效）。
++   - `init.py::lint_config` ↔ `effort-tiers` 新键 —— 本票完成（见上 3/4）。
++
++## (h) e2e dogfood 判据
++
++本 change 自身即将经历的 `sdflow-code-review`（由 `/sdflow-ship` 在收尾阶段调用）将是 B25/B26 两道
++gate 的**首次真实 dogfood**——它会用本票刚改写的 Step3/Step4/Step5 新指令产出报告，报告须真正含
++`sdflow:lens-metric`、`sdflow:ref-check` 两类锚与机读 defer 台账（若有 defer 项），随后被 Task 3
++实现的 `ship_gate.py` B25/B26 门读取判定。这是设计层面刻意安排的自证闭环，本票不需要（也不能）
++提前模拟它——如实记录该判据存在、无需额外动作。
++
++## 测试结果
++
++```
++/usr/bin/python3 -m pytest sdflow-init/tests/test_config_lint.py -q
++50 passed
++
++/usr/bin/python3 -m pytest sdflow-init/tests/ hack/tests/ -q
++1240 passed, 4 skipped in 248.59s
++
++python3 hack/check_tier_resolution_parity.py
++[tier-resolution-parity] ✅ 4 处宿主/档位解析核心段逐字节一致
++```
++
++```
++/usr/bin/python3 -m pytest -q   （全仓，覆盖全部 skill 的 tests/）
++2639 passed, 10 skipped in 380.89s (0:06:20)
++```
++
++全仓零失败、零回归（对照 Task 3 impl-report 记录的基线 2591 passed，本票 + 期间其余并入分支的
++提交合计新增净 48 条通过用例，量级与本票新增的 tier-resolution 1 条改写 + config-lint 15 条
++新增用例相符）。
++
++## 未做 / 越权说明
++
++- 未勾选 `tasks.md`/`tickets.md` 复选框、未打 checkpoint 标签——按信号权威表由双轴审通过后的
++  执行模式补打。
++- 未运行 `bash setup.sh`（开发期测试三层第 3 层，机器级影响）——`render-review-prefix.sh` 尚未
++  部署到真实 `~/.sdflow/hack/`（Task 4 已把脚本落 bundle 权威源，未跑 setup 前全局路径不可达），
++  本票的 SKILL.md 文本改动本身不需要该脚本真跑即可完成（编辑的是指令文本，非脚本本体）；按
++  design Migration Plan 步骤 0，`bash setup.sh` 留给本 change 收尾阶段真正跑 `/sdflow-code-review`
++  之前统一执行一次，不在本票单独开该窗口。
++- 未改 `sdflow-roadmap/SKILL.md`、未改 `sdflow-init/assets/snippets/broad-mirrors.md`
++  （`sdflow:broad-mirror-def` 管理块）——见 (d) 说明，避免加宽 scope。
++- 未手改本仓 `CLAUDE.md`/`AGENTS.md` 的部署副本——见 (g) scope-check 表说明。
++- 未改 `anchor_lint.py`——design Non-Goals 明确排除，`sdflow:ref-check` 锚的机判方是
++  `ship_gate.py` 独立实现（Task 3），不经 `anchor_lint.py`。
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index 20adaea..a6dab9e 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -191,21 +191,21 @@ Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一
+ 
+ ## 第零步：确认对象 + diff base + 读规则
+ 
+ 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
+ 2. 确认代码已实现且在 feature 分支（`git branch --show-current`）。算 diff base：
+    `git fetch origin <base> --quiet && DIFF_BASE=$(git merge-base origin/<base> HEAD)`。
+ 3. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用代码审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用代码审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/code-checklists/README.md`（架构/选用）、`$RULES_ROOT/code-checklists/code-review-base.md`（CR-01~09）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现两步链。
+ 4. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：
+ 
+ <!-- sdflow:tier-resolution:start v1 -->
+-**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（claude 机队按档位推导的 effort 值，供下方派发子代理时选配 `subagent_type`；codex/unknown 宿主或旧版 resolver 未导出时为空串，空值即回落不带 `subagent_type`，行为与引入前一致，MUST NOT 视为异常）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+ <!-- sdflow:tier-resolution:end -->
+ 
+ （与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、下方能力探针同类；空值/unknown 分家同样遵循 fail-loud 精神——均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
+ 
+ 5. **能力探针（本轮恰好一次，与档位解析同位，Step1 与 Step2 共用同一次结果）**〔spec-review-amendment：时序钉死 · host-adaptive-execution · 子代理不可用时镜数如实降级〕（语义核验非机械门，ADR-4/adr/0023）：
+ 
+    - `$SDFLOW_HOST="claude"` → 免探，恒 `subagents="available"`。
+    - `$SDFLOW_HOST="unknown"` → 不 fan-out（本轮不会走到本段——上一步已判定）。
+    - `$SDFLOW_HOST="codex"` → **MUST** 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，
+      不做任何实质工作）；派不出/机制报错 → `subagents="unavailable"`；派出且收到哨兵 → `subagents="available"`。
+@@ -300,53 +300,56 @@ linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进
+   `{lens:"history", runner:"none", site:"—"}`（MUST NOT 从 roster 整行省略），emitter 归约后产出
+   `runner="none" findings="0"` 的合法锚；报告 Step2 段落一行说明「历史镜本轮条件未命中，按处置表
+   降采样跳过（判据：diff 无 rename 且无≥200 行既有文件大改）」。
+ 
+ - **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
+ 
+ **能力探针已于第零步完成**（与档位解析同位，Step1 与本步共用同一次结果）——本步 fan-out 直接读该结果，**不另探**。
+ `subagents="unavailable"` 时本轮**缩 roster 到主 session 实际独立完成的镜**，报告显著标注「⚠️ 单镜降级（子代理不可用，
+ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「能力探针」全文。
+ 
++**三段组装序（spec-workflow delta：稳定前缀 byte-stable）**——每个镜 dispatch prompt MUST 按固定
++三段拼接，MUST NOT 打散顺序或把段①内容手工重述：
++
++1. **段①（稳定前缀，跨轮跨镜 byte-stable）**：调 `~/.sdflow/hack/render-review-prefix.sh --layer code-review`，
++   把其 **stdout 原文整体**作为 dispatch prompt 的开头——已固定含通则区块全文 + 评审子代理通用契约
++   （结构化 findings schema、引文纪律、输出封顶句「回传目标 ≤2k token，超出按严重度截优先」、不问人）+
++   `code-review-base.md` 全文。**非零退出 ⇒ fail-loud**：显式提示「render-review-prefix.sh 报错——
++   先在运行 checkout 跑 `bash setup.sh`，或按 stderr 的 problem/cause/fix 处置」，**MUST NOT** 用半段
++   前缀继续 fan-out。**MUST NOT 再手工复制粘贴「四条通则」区块或重述结构化 findings schema/引文纪律/
++   不问人**——那些现在唯一源在脚本，本 SKILL 正文只保留这一句引用（「SKILL.md 禁静态内联」同款 idiom）。
++2. **段②（半稳定，per-镜、change 内稳定）**：该镜的角色声明 + `{change_dir}` + 负责的清单/角度
++   （领域镜：命中的 `domains/<栈>` CR-* 项；对抗镜：本镜负责的角度——并发竞态 / 资源泄漏 / 错误路径未覆盖
++   之一；历史镜：`git blame` + 历史 PR 评论核验指令）+ **本层补充字段**：finding 须另带 CR 编号；
++   **🔴 pre-emit 引文纪律补充**（在段①通用引文纪律之上，code-review 层专属）：非局部 finding（缺失校验 /
++   跨文件数据流 / 时序竞态 / absence 类——无单一触发行者）SHALL 以「可复核证据包」（`evidence_pack`）替代
++   单行引文（多处 file:line 逐字引文、或「应在而不在」的缺失对照），仍须可复核定位；两者皆无 ⇒ 该条在
++   Step3 机械引用核判 `fail`（reason=no-quote-no-evidence），机械裁掉标 `[ref-check]`（见 Step3）。本纪律
++   仅约束 Step2 各镜的代码 finding，不作用于 Step1 scope 审计的任务级证据。**诚实边界（两个维度，缺一即
++   声明不全）**：① 引文是否真指向所声明位置自 DD4 起已由机械引用核核验；但引文与断言的语义对应仍无机械
++   核验，是强档二元裁决的活；② 🔴「这条是否真属非局部类」这一分类判断本身仍是子代理自报、同样无核验
++   〔impl-review-fix〕——**MUST NOT 靠再加一层校验来"堵"这个口**，正解是如实声明它：本条分类判断是产出
++   纪律非机械门，MUST NOT 声称机械保证。
++3. **段③（动态）**：`DIFF_BASE..HEAD` diff 范围与 diff 本身。
++
+ **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
+ 
+-| 镜 | 数量 | 干什么 | 建议档位 |
+-|----|------|--------|-----------|
+-| **领域镜** | 每命中领域 1 个 | 读 `DIFF_BASE..HEAD` diff + 相关真实代码，逐条过 `code-review-base.md` CR-01~09 + `domains/<栈>` CR-* 项，列违反/存疑项（带 `file:line`） | 中档（判断） |
+-| **对抗镜** | 2-3 | 各从一个**不同角度**「证明这段代码运行期会爆」：并发竞态 / 资源泄漏 / 错误路径未覆盖。默认 refuted=true，找到爆点才记 | 中档（对抗推理） |
+-| **历史镜**〔条件化，见上「规划镜头」〕 | 0-1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） |
++| 镜 | 数量 | 干什么 | 建议档位 | effort 档 |
++|----|------|--------|-----------|-----------|
++| **领域镜** | 每命中领域 1 个 | 读 `DIFF_BASE..HEAD` diff + 相关真实代码，逐条过 `code-review-base.md` CR-01~09 + `domains/<栈>` CR-* 项，列违反/存疑项（带 `file:line`） | 中档（判断） | `$SDFLOW_EFFORT_MID` |
++| **对抗镜** | 2-3 | 各从一个**不同角度**「证明这段代码运行期会爆」：并发竞态 / 资源泄漏 / 错误路径未覆盖。默认 refuted=true，找到爆点才记 | 中档（对抗推理） | `$SDFLOW_EFFORT_MID` |
++| **历史镜**〔条件化，见上「规划镜头」〕 | 0-1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） | `$SDFLOW_EFFORT_LIGHT` |
+ 
+-> 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回**结构化** findings（每条带：
+-> 问题 / CR 编号 / 证据 **`{file, line, quote}` 或 `evidence_pack`**〔DD4，机械引用核消费字段，MUST 结构化、
+-> MUST NOT 只写散文引用〕/ 严重度 / 建议 / 置信度（自报 0–100，**仅供报告排序，不作裁决判据**）），
+-> **不要 AskUserQuestion**"。
+->
+-> **🔴 每个子代理 prompt MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——见传播纪律。
+-> **代码审是通则 ③ 的最高发区**：子代理眼前只有「已经写出来的代码」，漏带这三条，它**必然**把「它现在能跑 / 现在没出过事」当成「它是对的、不用改」。
+-> **判据是「目标态下会不会出问题」，不是「现在出没出过问题」。**
+->
+-> **🔴 pre-emit 引文纪律（产出纪律非机械门，C9；引文字段本身自 DD4 起进结构化机械核）**：每条 finding MUST
+-> 携带触发它的具体代码行原文的**结构化**引用（`{file, line, quote}`）；**非局部 finding**（缺失校验 /
+-> 跨文件数据流 / 时序竞态 / absence 类——无单一触发行者）SHALL 以**「可复核证据包」**（`evidence_pack`）
+-> 替代单行引文（多处 file:line 逐字引文、或「应在而不在」的缺失对照——引出本应含该防护的位置原文），仍须
+-> 可复核定位；**两者皆无 ⇒ 该条在 Step3 机械引用核（`findings_ref_check.py`）判 `fail`（reason=
+-> no-quote-no-evidence），机械裁掉，标 `[ref-check]`，落「已裁掉」区（见 Step3）**——自报置信仍可照填，
+-> 但不再决定该条是否进主结论，置信只作报告内排序（DD4）。
+-> 本纪律仅约束 Step2 各镜的代码 finding，不作用于 Step1 scope 审计的任务级证据。**诚实边界（两个维度，
+-> 缺一即声明不全）**：① **引文是否真指向所声明位置**（路径存在 / file:line 界内 / 引文命中该行）自 DD4 起
+-> 已由机械引用核核验（`findings_ref_check.py`）；但**引文与断言的语义对应**（这段代码是否真支持该 finding
+-> 的论断）仍无机械核验，是强档二元裁决的活（基准 1 切分：有确定性信号的下沉脚本，语义残余留裁决）；
+-> ② 🔴 **「这条是否真属非局部类」这个分类判断本身仍是子代理自报、同样无核验**〔impl-review-fix，DD4 后依然
+-> 成立〕——一个本可给出单行 `file:line` 的普通局部 bug，只需自称「跨文件数据流 / absence 类」并附
+-> `evidence_pack` 即可改走机械引用核的 `uncheckable` 通道（不裁、直进二元裁决），绕开单行逐字引文的机械
+-> 核验。**MUST NOT 靠再加一层校验来"堵"这个口**（校验方同样是 LLM，只是把同一个自报判断多套一层），
+-> 正解是**如实声明它**：本条分类判断是产出纪律非机械门，MUST NOT 声称机械保证。
++> `$SDFLOW_EFFORT_<对应档位>` 非空时，dispatch MUST 附带 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<对应档位>`；
++> 为空（codex/unknown 宿主、resolver 未升级、`sdflow-effort-*` agent 定义未铺设）时 MUST NOT 带 `subagent_type`
++> 字段，派发行为与 effort 维引入前完全相同（见「模型选择」节，此表仅按镜类型列 model/effort 对应值，
++> 派发构造规则集中写在那里，不在此重复）。
+ 
+ **第二步半：code outside voice（跨模型，always〔C3·R1〕）**：按「helper 调用协议」（site="code-voice"，context = `git diff $DIFF_BASE..HEAD` 全量）跑一次整体找漏第二意见——不受清单约束、不占镜位。**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（进第三步汇总），结果在 Step3 barrier 处 collect**。findings 进 Step3 合并池；v1 锚行按位点写入报告。**复评条款已泛化〔workflow-metrics-loop ADR-5，见第五步「反馈回路」〕**：原「累计 10 次后按采纳率复评降采样为 HR-only」是本条 outside-voice 专属规则，现升级为 per-(层,镜) 通用条款（本镜只是其中一个评估单元，不再单独定义判据）。
+ 
+ ## 第三步：机械引用核 + 二元裁决（主 session · 强档）
+ 
+ 0. 🔴 **进汇总去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的汇总去重。
+ 1. 汇总 Step1（自持 scope 审计）+ 各镜 findings，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，
+    折叠到 canonical lens 后供 Step5 落锚时导出各镜 `独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
+ 2. **机械引用核前置〔DD4，adr/0041，取代旧数值置信滤〕**：把去重后的合并池组装成结构化 JSON（每条 finding 携带
+    pre-emit 引文纪律要求的 `{id, file, line, quote}` 或 `evidence_pack`），调
+@@ -360,20 +363,29 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「
+    - **`fail`**（结构化字段在、任一查不过；或引文与证据包确认皆缺，`reason=no-quote-no-evidence`）→
+      **机械裁掉**，直接落入「已裁掉」区，标来源 `[ref-check]`（reason 取脚本输出的 `reason` 字段），
+      **不进二元裁决**——这是唯一不经强档裁决即可裁掉的路径，因为核验对象是「引用是否真实指向所声明
+      位置」这类有确定性信号的机械判断（基准 1）。
+    - **`uncheckable`**（`evidence_pack` 在场 / 有引文但拿不到干净 `file`+`line` 单行形态——设计层引用 /
+      行范围字符串等）→ **不裁**，原样直进二元裁决，报告该条 finding 旁标注「未经机械核」。
+    - **脚本级不可恢复错误**（`result="degraded"`，输入 JSON 畸形 / 脚本本体崩溃）→ **整批**标
+      `[ref-check-unavailable]` 直进二元裁决，报告本段**显著标注**「⚠️ 机械引用核未生效（degraded），
+      本轮全部 findings 未经机械前置」——MUST NOT 静默呈现「全部 pass」假象，MUST NOT 挡「恒产报告」
+      既有硬约束。
++   - **机械引用核落盘锚〔B25/B26，impl-orchestration delta〕**：本步跑完后（无论有无 findings）构造
++     结构化锚行 `<!-- sdflow:ref-check v1 status="ran|skipped" pass="N" fail="N" uncheckable="N" -->`
++     落进报告「Findings」区之前——`status="ran"` + 三整数计数（`findings_ref_check.py` 未跑到本批时
++     计 0；findings=0 时三者皆 0，**锚仍必落**，`[spec-review-amendment]` 承 spec「全部通过/零 findings
++     锚同样在场」）为常态；仅当上方 `degraded` 分支命中（脚本崩溃/输入畸形）时 `status="skipped"`
++     （三计数填 0，与本段已有的「⚠️ 机械引用核未生效」标注并存，不互相替代）。本锚受 `metrics.enabled`
++     同款门控（见下方第 6 条「lens-metric 度量锚门控」）——缺省/`false` 时**不落**本锚；`true` 时本锚
++     与 lens-metric 锚同为 ship_gate B25 锚存在门的机判对象（`require_ref_check=True`），**MUST NOT
++     省略**、MUST NOT 只落段标题不落锚行——gate 检测的是这行结构化锚，不是「有没有 Findings 小节」。
+ 3. **二元裁决**〔取代旧数值置信滤 + 跨模型豁免矩阵条款〕：对每条通过机械前置（`pass`/`uncheckable`/整批
+    `degraded`）的 finding，主 session 判**采纳 / 裁掉 / defer** 三态之一 + 一句 **critique**（裁决理由，可
+    审计）：
+    - **采纳**：真实运行期问题或真实 scope/spec 偏离，进 Step4 修复/自动选/defer 台账。
+    - **裁掉**：判"不成立"——CI 能抓的 / 纯 nitpick / 未改动行既有问题 / 仅主观风格 / 已被注释显式抑制 /
+      阈值常量取值不强制求注释 / 无害冗余不标（Suppressions 既有口径不变）；理由落「已裁掉」区（不标
+      `[ref-check]`，与机械裁掉来源可辨）。
+    - **defer**：真实但拿不准优先级/方案 → 进 Step4 defer 台账（buglist/todolist）。
+    **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**——旧「被 `anchor_lint` 合法组合矩阵判
+    「跨模型」即跳过数值滤直通对抗裁决」的豁免条款随数值滤一并废止：数值滤门槛已不存在，「豁免于该门槛」
+@@ -384,22 +396,32 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「
+ 5. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
+    判"裁掉"的连 critique 落入报告「已裁掉」区（机械裁掉标 `[ref-check]`，裁决裁掉不标，来源可辨）。
+ 6. **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、
+    Step5 对应自检项跳过、**不调 emitter**（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按 Step4「裁决计数」构造 roster+findings，
+    Step5 调 `lens_metric_emit.py` 产出后落进「报告格式」区。
+ 
+ ## 第四步：自动修 / 自动裁 / defer（阶段三无人类门，P3e）
+ 
+ - **能修的自动修**：标 `[impl-review-fix]`，**不进延后池**。
+ - **≥2 方案（`T10-choice` 三级协议，替换旧「有把握自动选」；"T10" 保留为历史别名）**：①有客观判据（测试/断言/基准可判）→ 自动选并**按三镜 + 主次记理由**入报告；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过才自动选（复核记录写台账）；③复核不过/无从复核 → defer。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。** 不问人。
+-- **修不了 / genuinely 拿不准**：defer → 写 buglist（本 change 引入的代码 bug）/ todolist（改进/关注点），
+-  本 change 不处理，交 hand-off 引导另开清理 change。
++- **修不了 / genuinely 拿不准**：defer → **当场调用 recorder add**（`python3
++  ~/.claude/skills/sdflow-issues/scripts/issues_v2.py add --pool bug|todo --json '{"module":...,
++  "summary":...,"source_change":"{change_name}"}'`——`source_change` **MUST 显式传**当前 change 名，
++  MUST NOT 省略靠脚本自动探测〔recorder-add-auto-change-trap，多 change 并行会挂错〕；bug 池=本
++  change 引入的代码 bug，todo 池=改进/关注点）取得返回 JSON 的 `id`，**当场写入报告「修复 / defer
++  台账」对应表行**（见「报告格式」的机读台账表；行内 id 列单元格 = 该 id，仅此一项内容）——本
++  change 不处理该发现，交 hand-off 引导另开清理 change 或异步再入口。
++  **报告 MUST NOT 出现无 id 的 defer 声明**（「已入 / 待入 todolist」类散文承诺，不落台账表行）。
++  🔴 **recorder 调用失败 fail-loud〔spec-workflow delta〕**：`issues_v2.py add` 非零退出 ⇒ 该 finding
++  **MUST NOT** 记为已入池、**MUST NOT** 写「已入 todolist/buglist」，报告如实记录调用失败（含脚本
++  stderr 摘要）与「待人工补录」，交 hand-off 显式提示；**MUST NOT** 静默吞掉失败后仍在台账写一个
++  假 id 或裸散文占位。
+ - **绝不 AskUserQuestion**（阶段三无人类门）。
+ - **自动修复后的复审边界（硬上限 1 轮）**〔curb-rework-loop-cost · adr/0035〕：Step4 的自动修复**改的
+   正是被审的源码盘面**，而报告 `reviewed_sha` 锚的是修复后的盘面——那份修复本身未经任何镜审查，
+   须由一轮受限复审闭合该缺口：
+   - **有自动修复 ⇒ MUST 复审一轮**，范围**限定为本轮修复 diff**（Step5 第 3 步「仅源码」checkpoint
+     提交本身），**MUST NOT 重新打包整个分支 diff 重审**。
+   - **硬上限 = 1 轮**：该轮复审若仍报出 Critical/Important，**MUST NOT 自发进入第三轮**——全部
+     defer 进 buglist，并在 `code-review-report.md` 显式标注「复审上限已达，N 项残差已 defer」。
+     残差兜底责任在 `sdflow-done` 的 verify（位于所有修复之后）与 issues 池的异步再入口，**MUST NOT**
+     靠延长本循环来兜。
+@@ -441,57 +463,72 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「
+ 4. **复审一轮（硬上限 1，仅当上一步产生了修复提交时触发）**〔curb-rework-loop-cost · adr/0035〕：
+    派一轮复审，输入 diff 范围**限定为上一步 checkpoint 提交本身**（本轮修复 diff），MUST NOT 重新
+    打包整个分支 diff 重审。仍报出 Critical/Important → MUST NOT 自发进入第三轮，全部 defer 进
+    buglist，第 6 步写报告时显式标注「复审上限已达，N 项残差已 defer」。**上一步因无自动修复而
+    跳过时，本步同样跳过**（详见 Step4「自动修复后的复审边界」）。
+ 5. **取锚**：`git rev-parse HEAD` 的完整 40 位小写 OID = 第 3 步的修复提交（或无修复时的被审
+    基线）——第 4 步的复审不产生新的源码改动，锚仍是同一个提交，即报告 frontmatter 的
+    `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是写报告的时刻」）。**报告写盘 MUST
+    在本步之后、下一步之前**——第 3 步的「仅源码」承诺要成立，报告文件在第 3 步提交那一刻就不能
+    已经存在于工作树。
+-6. **写报告** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings（已采纳） + 已裁掉区
+-   + 裁决 + 修复/defer 台账 + 度量锚），frontmatter 带上一步取得的 `reviewed_sha`：
++6. **写报告初稿** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings（已采纳） + 已裁掉区
++   + 裁决 + 修复/defer 台账〔机读表，含专用 id 列，见 Step4〕），frontmatter 带上一步取得的 `reviewed_sha`。
++   **本步只产出报告正文与 frontmatter，不产出度量锚/引用核锚/自检——那是下一步的独立职责，MUST NOT 在
++   本步顺带调用 emitter 或顺带省略下一步**。
++7. **度量锚落锚 + 锚行自检〔B25，impl-orchestration delta〕**——**本步是本轮 code-review 输出
++   lens-metric / ref-check 锚的唯一途径，是一个具体、不可省略的工具调用，MUST NOT 被当作「写报告」
++   那句散文里可以顺带略过的细节**（拆成独立编号正是为此，见下方历史注记）：
+    - **度量锚落锚〔impl-review-fix mlh-p4〕**：`metrics.enabled=false` → 本段不落、**不调 emitter**；`true` → 用 Step4「裁决计数」
+      构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --host "$SDFLOW_HOST" --input <构造的f>`
+      （`--host` 取第零步同一次 `resolve-models.sh` 导出值；roster 中非 outside-voice 普通镜行 `runner` MUST 等于 `--host`；
+      emitter 缺 `--host` / `--host` 越域走受控 fail-closed）→
+      **exit 0 才**把 stdout（逐镜 `<!-- sdflow:lens-metric v1 … -->` 行）落进「报告格式」度量锚段；exit ≠0（fail-closed）→ 本段
+      **不落**、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。**保留残余信任边界声明**：分类正确性 + roster 完备性 +
+      findings JSON 誊写准确仍是主 session 信任边界，emitter 只保证「给定输入的确定性归约」。
+    - **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调
+      `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——
+      退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚（Step1
+      broad-review / hr-tg / outside-voice / **lens-metric**）存在性 + lens-metric 字段/枚举/sev/layer==--layer/
+      计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。
+-     **此自检由同一执行落锚的主 session 自行运行、非独立外部门**（与 `design-approved` 锚由 `ship_gate.py` 外部
+-     拦截不同）——诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"。
++     **此自检由同一执行落锚的主 session 自行运行、非独立外部门**（与 `ship-gate.code_review` 锚由 `ship_gate.py` 外部
++     拦截不同）——诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"（该残余缺口现已由
++     `ship_gate.py` 的 B25 锚存在门在消费点兜底，见下方历史注记）。
+      **保留信任边界声明**：数值一致性（`findings`/`采纳`/`独立`等是否与合并池实收数吻合）**是主 session 信任
+      边界、非机械可验**，脚本 MUST NOT 谎称能机械保证数值正确。
+      **config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
+-     **旁路声明**：lens-metric 锚缺失/取值违规仅拦报告完整性，**MUST NOT** 反向改写已裁决 findings 的采纳结论
+-     或本轮「建议进 /sdflow-done」结论。
++     **旁路声明**：lens-metric/ref-check 锚缺失或取值违规仅拦报告完整性（`ship_gate.py` B25 门判「该步进行中，
++     重跑」），**MUST NOT** 反向改写已裁决 findings 的采纳结论或本轮「建议进 /sdflow-done」结论。
+    - **反馈回路〔泛化，workflow-metrics-loop ADR-5〕**：原「outside-voice 累计 10 次后按采纳率复评降采样为
+      HR-only」条款**泛化到 per-(层,镜)**——本 skill 落的每条 `lens-metric` 锚（domain/adversarial/history/
+      outside-voice(各 site)/broad 均适用，非仅 outside-voice）都是该判据的原始数据；判据本身升级为**采纳率 +
+      独立率双列**（单看采纳率会误留"高采纳但全冗余"的镜，独立率才是砍镜依据；两率定义/归属见规则根
+      `lens-metric-contract.md`）。**本 skill 不做聚合、不做复评判断、不主动 surfacing**——聚合与「出现轮数≥10」
+      的机械显著提示由 `/sdflow-retro` 聚合（跑 `sdflow-retro/scripts/lens_metric_aggregate.py` 只读聚合所有归档报告）；
+      是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
+      不含评审架构本身的取舍）。
+-7. **checkpoint 提交（第二段，report-only）**：
++   - 🔴 **历史注记（B25，diagnosis 见 `impl-reports/task5-skill-adaptation.md`）**：2026-08-07 ~ 08-12
++     六轮归档 `code-review-report.md`（`metrics.enabled=true` 全程未变）**100% 缺 `sdflow:lens-metric`
++     锚**——诊断为「本步被系统性跳过，而非 emitter 调用失败」：独立冒烟测试证实 `lens_metric_emit.py`
++     本身工作正常（合法输入 exit 0 正确产锚、非法输入 exit 1 正确拒收）；其中一份报告甚至已写出
++     「### 度量锚」标题 + 「metrics.enabled=true」说明，却仍未真正调用脚本、也未运行上方锚行自检
++     （若真跑过自检，脚本会因缺 lens-metric 锚判违规、阻塞本步——而报告照常归档说明自检同样被跳过）。
++     `ship_gate.py` 现已加 B25 锚存在门（外部机械兜底，见 impl-orchestration delta「ship_gate 评审报告
++     机械层门」）——未来即便本步再被跳过，`ship_gate` 也会判「该步进行中，重跑」而非放行归档；但
++     SKILL 侧不应只靠外部门兜底，仍 MUST 把度量锚落锚当具体、不可省略的动作执行。
++8. **checkpoint 提交（第二段，report-only）**：
+    🔴 **工作树纪律〔1.6b〕**：`checkpoint-commit.sh` 用 `git add -A` 全量暂存 ⇒ 跑本步**前** MUST 先
+    `git status --porcelain` 确认工作树**只剩报告文件**（`code-review-report.md` 及其 `.outside-voice/` 等评审产物），
+    否则第 3 步之后残留的、与本轮修复无关的改动会被卷进 report commit。若有残留 ⇒ 先处置（提交或撤回）再落报告。
+    `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审报告"`。
+    **该两段时序在本设计下天然可行（已实测）**：code 域比较**排除 `openspec` 顶层条目**，而报告落在 `openspec/` 内
+    ⇒ report-only 提交不改任何非 openspec 顶层条目 ⇒ 不触发 code 域失鲜。
+-8. **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
++9. **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
+ 
+ ---
+ 
+ ## outside-voice helper 调用协议（契约单一源 = `~/.sdflow/hack/outside-voice.sh` 头注释，此处只给分支决策，不转述接口细节）
+ 
+ ```
+ HELPER=~/.sdflow/hack/outside-voice.sh
+ [ -x "$HELPER" ] 不成立 → 显式提示「outside-voice.sh 未安装——先跑 bash setup.sh」+ 直接派 fallback 子代理（不静默）
+ 版本核对：$HELPER version 输出与本 SKILL 预期主版本(1.x)不符 → 告警"helper 疑似陈旧，重跑 setup.sh"后继续
+ $SDFLOW_HOST="unknown"（第零步 resolve-models.sh 判不出宿主）→ 不调用本 helper、不跑 voice；锚行 host="unknown" runner="none" reason_code="host-unknown"（ADR-7），报告显著标注本轮无跨模型第二意见
+@@ -643,54 +680,78 @@ ship-gate:
+ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
+ 若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。头部之后紧接下方正文（含人读结论行，不可省略）：
+ 
+ ```
+ ## code-review 报告 — {change}
+ ### 命中范围
+   栈: backend·go / embedded·ml307c …   清单: CR-01~09 + CR-GO-* + …   Step1 自持 scope 审计: scope-drift/完成度 结论
+ ### 子代理能力锚（host=codex 报告必填，语义核验非机械门，见第零步「能力探针」）
+   <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,history,broad|—" -->
+   subagents="unavailable" 时本报告 MUST 显著标注「⚠️ 单镜降级」（见命中范围/结论区）。
++### 机械引用核锚（B25/B26，受 config `metrics.enabled` 门控——关闭则本段不落，见 Step3）
++  <!-- sdflow:ref-check v1 status="ran|skipped" pass="N" fail="N" uncheckable="N" -->
++  Step3「机械引用核前置」跑完后必落，MUST NOT 只落段标题不落锚行；零 findings 的轮次同样必落（三计数皆 0）。
+ ### Findings（已采纳，按置信降序排列）
+-  [严重度] CR-04 资源泄漏 | file.go:42 | 错误路径未释放 conn | 置信 90 | 已修[impl-review-fix] / defer→buglist
++  [严重度] CR-04 资源泄漏 | file.go:42 | 错误路径未释放 conn | 置信 90 | 已修[impl-review-fix] / 递延见下方台账 T142
+ ### 已裁掉（反静默压制，可审计）
+   X1  reviewer 原始发现 + 主 session 裁掉理由（二元裁决裁掉）
+   X2[ref-check]  reviewer 原始发现 + 机械引用核裁掉理由（`findings_ref_check.py` reason=…，含无引文/无证据包 finding）
+ ### 修复 / defer 台账
+-  自动修 N 项[impl-review-fix]；自动选推荐 M 项(按三镜+主次附理由)；defer K 项 → buglist/todolist
++  自动修 N 项[impl-review-fix]；自动选推荐 M 项(按三镜+主次附理由)；本轮新增待处理 K 项(见下表，
++  recorder 已确认各自 source_change = 本 change)
+   T10-choice复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>   ← 无客观判据的 ≥2 方案自动选必附
++
++  | id | 池 | 摘要 | critique（裁决理由） |
++  |---|---|---|---|
++  | T142 | todo | 一句摘要 | 真实但拿不准优先级，issues_v2.py add 返回 id 已核实池文件存在 |
++
++  ——**台账行判别契约（ship_gate B26 消费此表，MUST 遵守）**：本表每条数据行的 `id` 列**单元格全部内容
++  必须恰为单个 `T\d+`/`B\d+`**（不得夹带其他文字），且该 id 已由 Step4「recorder 调用」当场核实
++  `openspec/issues/open/**/<id>.md` 存在、frontmatter `source_change` = 本 change 名——**本轮 recorder
++  调用失败的项 MUST NOT 出现在本表**（改在正文另起一句如实说明失败与待人工补录，不落表行，不落假 id）。
++  **本表以外**的任何散文句（含上方聚合摘要行）**MUST NOT** 出现裸 `T\d+`/`B\d+` 形式的字符串独占一个
++  表格单元格——聚合摘要行统计数字与"defer"一词**只作陈述，不构成台账行**（gate 只识别本表结构，不做
++  全文子串搜索，但仍应避免歧义写法）。
+ ### 度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落、不调 emitter，见第三步/第五步）
+   domain / adversarial / history / outside-voice（同轮 site="code-voice" 与 site="hr-tg" 若均调用，各独立一行）/ broad（Step1 自持 scope 审计）
+   各一行——本段内容 = Step5「度量锚落锚」调 `lens_metric_emit.py` 后 exit0 落进来的 stdout，MUST NOT 手拼：
+   <!-- sdflow:lens-metric v1 layer="code-review" lens="…" host="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->
+   **broad 行**：`findings[].hits[].raw` 用原始镜名 `scope-audit`（folded 到 canonical `lens="broad"`）；
+   roster 行仍为 canonical `{lens:"broad", runner:"<host>", site:—}`——raw 名只出现在 `hits[].raw`，
+   `lens=` 字段本身恒为折叠后的 `broad`。
+   字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）；
+   原「voice分桶」自由 prose 行已被 outside-voice 镜的此锚吸收取代。
+   这些锚跨 change 归档后由 `/sdflow-retro` 聚合、按 per-(层,镜) 采纳率+独立率双列复评（见第五步「反馈回路」），
+   本报告不重复该判据、只负责落准确的锚。
+ ### 结论
+-  □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
++  □ 建议进 /sdflow-done   □ 本轮新增待处理项已入池（见上方台账，hand-off 会引用）
+ 
+   （机判锚已迁至报告**头部** frontmatter `ship-gate.code_review: pass|blocked`，见上；此处结论区末行只保留人读勾选结论，不再重复机判锚）
+ ```
+ 
+ ## 模型选择（按本步性质，逐步定）
+ 
+ 档位与缺省见规则根 `model-tiers.md`（按机队分列，经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。**取值 MUST 引用第零步同一次 `eval "$(resolve-models.sh)"` 导出的 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`**（已按当前宿主机队 + config.yaml 覆盖解析好的具体模型 id）派子代理，**MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason**〔host-adaptive-execution · 模型档位按机队分列〕一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
+ 
+-```
+-  主 session（裁决 / 自动裁 / 出报告）        强档 = $SDFLOW_TIER_STRONG ← 这是门禁,弱档=假绿
+-  领域镜 / 对抗镜（判断、对抗推理）           中档 = $SDFLOW_TIER_MID
+-  历史镜（git blame，机械）                   弱档 = $SDFLOW_TIER_LIGHT
+-```
++| 角色 | model 档位 | effort 档 |
++|---|---|---|
++| 主 session（裁决 / 自动裁 / 出报告） | 强档 = `$SDFLOW_TIER_STRONG` ← 这是门禁，弱档=假绿 | `$SDFLOW_EFFORT_STRONG`（门禁步 MUST NOT 低于 high；主 session 自身不经 `subagent_type` 派发，此列仅供对照） |
++| Step1 scope 审计子代理 | 中档 = `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
++| 领域镜 / 对抗镜（判断、对抗推理） | 中档 = `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
++| 历史镜（git blame，机械） | 弱档 = `$SDFLOW_TIER_LIGHT` | `$SDFLOW_EFFORT_LIGHT` |
++
++**effort 派发构造（`$SDFLOW_EFFORT_*` 为空即回落现行为，前向兼容——host-adaptive-execution delta）**：
++上表每个子代理 dispatch，对应 `$SDFLOW_EFFORT_<档位>` 非空时 MUST 附带
++`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；为空（codex/unknown 宿主、resolver 未升级、
++`sdflow-effort-*` agent 定义未铺设）时 MUST NOT 带 `subagent_type` 字段，派发行为与 effort 维引入前
++完全相同。**带门禁、无人逐条复核的步（主 session 综合裁决）MUST NOT 以低于 high 的 effort 执行**——
++与 model 档位「不降档」铁律同构、同源（`model-tiers.md` 的 `effort-tier-defaults` 机读块）。
+ 
+ 依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读 blame 可下放弱档；机械引用核
+ （Step3）是纯脚本，不占模型档位（DD4：砍掉弱档子代理逐条核的候选，模型做子串比对既贵又会幻觉）。
+ **不要**把综合判断委派给弱档子代理。阶段三无人类门（不 AskUserQuestion，自动修/裁/defer）。
+ 
+ ## 与官方 code-review 的分工（弃用为独立 step）
+ 
+ | | 官方 /code-review | 本 skill（sdflow-code-review 编排器） |
+ |---|---|---|
+ | 现状 | **弃用为独立 step（P3d）** | 每次全跑·独立冷·强制主审（Step1 自持 scope 审计 + Step2 多镜清单） |
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index 404360a..e9218c0 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -188,34 +188,34 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
+ 
+ 实现常经 `tickets.md`（sdflow-implement 出票管线）完成，change 自己的 `tasks.md` 复选框**没被勾**。这会让 `openspec archive` 警告 "N/M incomplete"、让 verify 误判。
+ 
+ - Read `openspec/changes/{change_name}/tasks.md`，与实际实现对照（看 git log / 实现 commit）。
+ - **已真实完成的任务勾上** `- [x]`；**确实未做/部分做的保持 `- [ ]` 并补一句说明**（别为过 archive 假勾——保持记录诚实）。
+ - 若整批确实完成，可 `sed -i '' 's/^- \[ \]/- [x]/g; s/^  - \[ \]/  - [x]/g'` 批量勾，再单独把未完成项改回。
+ 
+ ### 0.4 宿主/档位解析（每轮恰好一次，ADR-9 同源约束）〔host-adaptive-execution · 模型档位按机队分列〕
+ 
+ <!-- sdflow:tier-resolution:start v1 -->
+-**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（claude 机队按档位推导的 effort 值，供下方派发子代理时选配 `subagent_type`；codex/unknown 宿主或旧版 resolver 未导出时为空串，空值即回落不带 `subagent_type`，行为与引入前一致，MUST NOT 视为异常）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+ <!-- sdflow:tier-resolution:end -->
+ 
+ **下方各步「派发 Agent」的 `model:` 参数 MUST 取对应变量值，MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason** 一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
+ 
+ ---
+ 
+ ## 第一步：Verify（强档子 agent）
+ 
+ > 用强档而非中档/弱档：verify 是**质量门**且要 grep 代码判 PASS/FAIL、辨核心 vs Minor 缺口，judgment 活，中档/弱档易误判 PASS 放不完整的活进归档。sdflow-done 低频，省那点 token 不值。
+ >
+ > **P3h 禁降档（阶段三去人类门后 verify = 唯一终门）**：铁律"带门禁 / 无人逐条复核的步别用弱档——假绿会放不完整的活过关"。verify 用强档 + 下方 prompt 的 **"Do Not Trust the Report" 冷启**，靠证据锚点硬约束堵假✅，不靠人盯。见 design §7.3.1 / adr/0001。
+ 
+-派发 Agent（model: `$SDFLOW_TIER_STRONG`——第零步 0.4 已 eval 出的强档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
++派发 Agent（model: `$SDFLOW_TIER_STRONG`——第零步 0.4 已 eval 出的强档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖；`$SDFLOW_EFFORT_STRONG` 非空时另附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`，为空则不带——verify 是门禁步，MUST NOT 低于 high），prompt：
+ 
+ ```
+ 你是 OpenSpec 验证助手。工作目录：{项目根目录}。
+ 任务：verify change `{change_name}`。
+ 
+ **重要（Do Not Trust the Report，P3h 防假✅）**：核对的是**代码是否真的实现了 tasks.md/specs 的每条要求**，不要只看复选框状态、也不要信任任何已有报告的措辞（实现可能经外部计划执行；复选框/报告可能 stale 或乐观）。**每条判 ✅ 的需求必须附一个可机验证据锚点（测试名 / commit hash / 文件:行）；找不到锚点的一律判 gap，绝不凭复选框或"看起来做了"判 ✅**。真实事故：曾有 verify 把两条根本没落实的需求（无 benchmark 实现）标 ✅ 静默放过，靠事后人肉才揪出（见 design §7.3.1 / adr/0001）。
+ 
+ 步骤：
+ 1. Read openspec/changes/{change_name}/tasks.md（看要求什么）
+ 2. Read openspec/changes/{change_name}/specs/ 下所有 spec（ADDED/MODIFIED 需求）
+@@ -360,21 +360,21 @@ python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
+ 派发 Archive 子代理**之前**、change 目录仍在原位时，主 session 直接跑一次终态快照（纯机械、无需子代理）：
+ 
+ ```bash
+ python3 ~/.sdflow/hack/token_snapshot.py --step done-final || true
+ ```
+ 
+ - 采集成功即在 `{change_dir}/token-log.jsonl` 追加一行 `step="done-final"` 的 `anchor=true` 记录，随后随 archive 一起搬进归档目录；失败（transcript 不可读、非 claude 宿主等）显式降级为 `anchor=false` 行，与 checkpoint 侧同口径——`|| true` 确保**任何采集失败都不得阻挡收尾流程**。
+ - 覆盖范围 = Verify（收尾最重步）+ hand-off 累计用量；archive/commit/merge 自身用量不在覆盖内，是已声明的残余盲区（见 `openspec/specs/token-snapshot-anchor/spec.md`），MUST NOT 表述为「收尾用量已全量覆盖」。
+ - 已知边界：若本 change 收尾跨 session 重试（如 archive 失败后新会话重跑），该行会被记作新 session 的分组首行、其累计用量全额计入——token 统计可能重复计入，这是 view-only 精度边界，非阻断项。
+ 
+-派发 Agent（model: `$SDFLOW_TIER_MID`——第零步 0.4 已 eval 出的中档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
++派发 Agent（model: `$SDFLOW_TIER_MID`——第零步 0.4 已 eval 出的中档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖；`$SDFLOW_EFFORT_MID` 非空时另附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`，为空则不带），prompt：
+ 
+ ```
+ 你是 OpenSpec 归档助手。工作目录：{项目根目录}。语言中文。
+ 任务：归档 change `{change_name}` 并把它的 delta 同步进主 specs。
+ 
+ ## 0. 先查 specs artifact 状态（判断 skip_specs 是否正常）
+ openspec status --change {change_name} --json
+ - 若 specs artifact 的 status 为 `skipped`：本 change 无 delta 可同步——这是**正常**情况，
+   **MUST NOT** 把「没有 delta」当成异常、也 **MUST NOT** 因此判走第 2 节 fallback。
+   归档命令（第 1 节）照常执行；CLI 对无 delta 的 change 会正常完成同步（等价于空操作）。
+@@ -425,21 +425,21 @@ MUST 段之后或行内。
+ ```
+ 
+ 子代理报告里若出现「核心 delta 与代码严重不符无法判定」之类 BLOCKED，停止并交回用户。
+ 
+ ---
+ 
+ ## 第四步：Git Commit（弱档子 agent）
+ 
+ > 用弱档：本步纯机械（git add + 从 diff 生成 message），独立子代理无干扰、失败也就重生成 message。verify 用强档、archive 用中档是因它们是门禁/判断步（凭本步性质，非"统一"）。详见「模型选择」。
+ 
+-派发 Agent（model: `$SDFLOW_TIER_LIGHT`——第零步 0.4 已 eval 出的弱档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
++派发 Agent（model: `$SDFLOW_TIER_LIGHT`——第零步 0.4 已 eval 出的弱档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖；`$SDFLOW_EFFORT_LIGHT` 非空时另附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_LIGHT`，为空则不带），prompt：
+ 
+ ```
+ 你是 Git 助手。工作目录：{项目根目录}。
+ 任务：暂存并提交本次 OpenSpec change（{change_name}）收尾相关的文件。
+ 
+ 步骤：
+ 1. git status
+ 2. git add openspec/   （归档目录 + INDEX + 同步的主 specs 全部 openspec/ 变更）
+ 3. git add -u          （已追踪实现文件的修改；不暂存无关新增未追踪文件）
+ 4. git diff --staged --name-only（输出供核对）
+@@ -528,25 +528,33 @@ sdflow-done 完成
+ ## 模型选择（按本步性质，逐步定）
+ 
+ > 档位与缺省见规则根 `model-tiers.md`（按机队分列，经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。**取值 MUST 引用第零步 0.4 同一次 `eval "$(resolve-models.sh)"` 导出的 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`**（已按当前宿主机队解析好的具体模型 id）派子代理，**MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。
+ 
+ **关键前提**：本 skill 步骤**固定**（不是运行时动态路由），且每步**独立子代理**（各自上下文）。所以——
+ - **混用 model 无干扰**：弱档-commit 与中档-verify 上下文隔离，互不污染；混用没有耦合代价。
+ - **无运行时误分类**：「误分类风险」是**动态路由**的事（高频循环里运行时按难度挑模型才会挑错）；固定步骤在写 skill 时一次定死，不存在该风险。
+ 
+ 因此 model 就是**纯粹的「这一步配不配」**，逐步独立判：
+ 
+-| 步 | 性质 | 档位 | 理由（本步自证） |
+-|---|---|---|---|
+-| verify | **唯一终门** + grep 代码判 PASS/FAIL | **强档**（`$SDFLOW_TIER_STRONG`） | 中档/弱档假 PASS = 放不完整活进归档；门不能省 |
+-| archive | spec 同步 + 读代码核 delta | **中档**（`$SDFLOW_TIER_MID`） | judgment 活 |
+-| commit | git add + 从 diff 生成 message | **弱档**（`$SDFLOW_TIER_LIGHT`） | 纯机械；失败也就重生成 message；独立上下文无副作用 |
++| 步 | 性质 | model 档位 | effort 档 | 理由（本步自证） |
++|---|---|---|---|---|
++| verify | **唯一终门** + grep 代码判 PASS/FAIL | **强档**（`$SDFLOW_TIER_STRONG`） | `$SDFLOW_EFFORT_STRONG`（MUST NOT 低于 high） | 中档/弱档假 PASS = 放不完整活进归档；门不能省 |
++| archive | spec 同步 + 读代码核 delta | **中档**（`$SDFLOW_TIER_MID`） | `$SDFLOW_EFFORT_MID` | judgment 活 |
++| commit | git add + 从 diff 生成 message | **弱档**（`$SDFLOW_TIER_LIGHT`） | `$SDFLOW_EFFORT_LIGHT` | 纯机械；失败也就重生成 message；独立上下文无副作用 |
++
++**effort 派发构造（`$SDFLOW_EFFORT_*` 为空即回落现行为，前向兼容——host-adaptive-execution delta）**：
++上表每步对应 `$SDFLOW_EFFORT_<档位>` 非空时，该步 dispatch MUST 附带
++`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`（已就地写入上方各步「派发 Agent」行）；为空
++（codex/unknown 宿主、resolver 未升级、`sdflow-effort-*` agent 定义未铺设）时 MUST NOT 带
++`subagent_type` 字段，派发行为与 effort 维引入前完全相同。**verify 是唯一终门，MUST NOT 以低于
++high 的 effort 执行**——与 model 档位「不降档」铁律同构、同源（`model-tiers.md` 的
++`effort-tier-defaults` 机读块）。
+ 
+ 注 **turn 数 > 单 token 价**：弱档在判断味的步上常多花 2-3× turn、总成本反高 → verify 用强档、archive 用中档不只为质量、也常更省。commit 机械、弱档不会 flail。
+ 
+ > 混用在固定步骤里唯一的**软成本**：分类会**过期**——若日后给某步加复杂逻辑（如 commit 加冲突处理），它不再机械、但 model 还写着弱档。低风险，留注释提醒即可。
+ >
+ > 对比 subagent-driven-development 的实现循环（高频、动态、上百任务）：那里「弱档转写实现 + 强档评审」是对的，但它**会**有运行时误分类风险（要靠评审兜底）。**规则随场景变。**
+ 
+ ## 附：实战踩坑速记（来自首次执行）
+ 
+ | 坑 | 现象 | 对策 |
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index 69584e9..6876371 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -164,23 +164,37 @@ tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出
+ adr/0042 supersede adr/0033）；frontmatter marker 为文件格式契约（无路由读取方，memo D3）。
+ 
+ ## 第零步：宿主/档位解析（两入口共用、无条件执行）
+ 
+ `mode=tickets-plan`（出票）与 `mode=tickets-exec`（执行）**均**在起手先跑本步，且**无条件执行**——
+ 出票模式同样消费档位：全 ticket 语义一致性自扫遇到粒度争议时的 `T10-choice` 仲裁步要派 **strong**
+ 对抗镜（见 tasks.md §2），本步只负责把 `$SDFLOW_TIER_*` 解析出来供该仲裁步与执行模式各处派子代理
+ 引用，不是空转步〔spec-review-amendment M8/L9〕。
+ 
+ <!-- sdflow:tier-resolution:start v1 -->
+-**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（claude 机队按档位推导的 effort 值，供下方派发子代理时选配 `subagent_type`；codex/unknown 宿主或旧版 resolver 未导出时为空串，空值即回落不带 `subagent_type`，行为与引入前一致，MUST NOT 视为异常）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+ <!-- sdflow:tier-resolution:end -->
+ 
++**effort 派发（下方各 dispatch 点共用，`$SDFLOW_EFFORT_*` 为空即回落现行为，前向兼容——host-adaptive-execution delta）**：
++
++| dispatch 点 | model 档位 | effort 档 |
++|---|---|---|
++| implementer（每 ticket） | 中档 = `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
++| Standards 轴 / Spec 轴（双轴审） | 中档 = `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
++| fix 子代理（Critical/Important 修复） | 中档 = `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
++
++对应 `$SDFLOW_EFFORT_MID` 非空时，上表三处 dispatch MUST 附带 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；
++为空（codex/unknown 宿主、resolver 未升级、`sdflow-effort-*` agent 定义未铺设）时 MUST NOT 带 `subagent_type`
++字段，派发行为与 effort 维引入前完全相同。`T10-choice` 三级协议与 `review-loop-breaker` 熔断仲裁点用的
++**strong 档**对抗镜/fix 子代理不在本表覆盖范围内（design 组件清单未点名，沿用现行 model 派发不变，
++effort 亦不新增，避免范围外加宽）。
++
+ **`$SDFLOW_HOST="codex"`：能力探针 + 不可用则硬停（不缩 roster）**〔spec-review-amendment H10〕：
+ 
+ - 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，不做任何实质工作）；
+   派不出/机制报错 → **fail-loud 硬停**「Codex 宿主下子代理机制不可用——请在受支持宿主（Claude Code
+   或另一个可用的 Codex 环境）下重新运行 `sdflow-implement`」，**MUST NOT** 由主 session 顶替
+   implementer/双轴审继续跑 ticket；派出且收到哨兵 → 正常进入下一步。
+ - **诚实边界**：探针结果由主 session 自己观察并落锚——「是否真派出了一次子代理、是否真收到回复」
+   无可信脚本捕获路径，MUST NOT 声称这是机械门（同 `sdflow-code-review`/`sdflow-spec-review` 的
+   能力探针诚实边界）。
+ - **与 `sdflow-code-review`/`sdflow-spec-review` 的降级路径不同构**：那两者判 `subagents="unavailable"`
+@@ -511,21 +525,22 @@ impl-pipeline: tickets
+ 
+ 派发前先机械抠出该票原文（附录 B 有出处说明）：
+ 
+ ```
+ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/tickets.md --task {N}
+ ```
+ 
+ 默认落盘 `{change_dir}/impl-reports/task<N>-brief.md`。
+ 
+ **派发 Agent（model: `$SDFLOW_TIER_MID`——第零步已 eval 出的中档模型 id；config.yaml model-tiers 段
+-已在 resolve-models.sh 内按机队分键覆盖），MUST NOT 内联具体模型 id**，dispatch prompt 必含：
++已在 resolve-models.sh 内按机队分键覆盖），MUST NOT 内联具体模型 id；`$SDFLOW_EFFORT_MID` 非空时另附
++`subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`，为空则不带（见上「effort 派发」表）**，dispatch prompt 必含：
+ 
+ - 上一步脚本产出的 brief 文件路径（implementer 自己 Read；**编排层 MUST NOT 手动复制该
+   `### Task N:` 段落文本进 prompt**）；
+ - plan 头部 `## Global Constraints` 节全文（逐字，implementer 与 reviewer 共享同一份注意力透镜）；
+ - **🔴 本 SKILL.md 顶部的「四条通则」区块全文**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——
+   子代理是 fresh context，**看不见本 SKILL.md，也看不见 CLAUDE.md**。漏带 ⇒ implementer 眼前只有现状代码，
+   **必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。**双轴审的两个 reviewer 子代理同样必带。**
+ - **🔴 信号权威表**（必填槽，**原文携带**，非可省的 prose 叮嘱）——子代理是 fresh context，
+   **未声明即等同未约束**。正面陈述归属（不是禁令清单：禁令只挡列举到的那一种越界形态，
+   权威表挡的是整个范畴）：
+@@ -650,21 +665,22 @@ git log --oneline | grep "checkpoint({change}:task<N>-"
+     起点以来全部 diff，见上「熔断规则」节），(b) 优先于本条。
+ - reviewer 报出的 `⚠️ cannot-verify-from-diff` 项（需求活在未改动代码里，或要跨 ticket 才能验证）
+   由**编排层亲自消解**：直接从盘面（design.md / specs/ / ticket 文本）核验。**预算上界**——需触碰
+   **超过 3 个文件**，或盘面**不可直接解答** → 按「确认缺口退回 implementer」处理，**MUST NOT**
+   无限深挖下去〔F7〕。
+ 
+ ## 每 ticket 双轴审
+ 
+ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代理（各 **<400 词**封顶，
+ **均派发 Agent model: `$SDFLOW_TIER_MID`**——同一次第零步 eval 出的中档模型 id，MUST NOT 内联具体
+-模型 id）：
++模型 id；`$SDFLOW_EFFORT_MID` 非空时均另附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`，为空
++则不带，见上「effort 派发」表）：
+ 
+ > **🔴 两个评审子代理的 prompt（以及 implementer / fix 子代理的 prompt）MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**
+ > （`sdflow:principles` 从 start 到 end，整段复制，不转述、不摘要）——**子代理是 fresh context，看不见本 SKILL.md**。
+ > **Spec 轴尤其吃通则 ③**：它的判据是「**ticket 声明的目标态**做到没有」，**不是**「现有代码本来就是这样，那就算了」。
+ >
+ > **🔴 fix 子代理的 dispatch prompt 同样 MUST 原文携带上文「每 ticket 派 fresh implementer」节的
+ > 信号权威表**——fix 轮次同为 fresh context，其完成信号与设计工件的权威归属与首轮完全一致
+ > （fix 也 MUST NOT 自行勾框 / 打完成标签 / 改四件套）。
+ 
+ **权威表缺席不得静默降级**：若因 SKILL 裁剪、模板漂移或上下文预算取舍导致某次 dispatch 未携带
+@@ -706,21 +722,22 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代
+ - **不重跑 implementer 已经跑过的测试**——只在读代码生出具体怀疑、且现有跑法答不了那个疑问时，
+   才跑一个聚焦测试；不重跑整套件。
+ - **输出零寒暄**——最终消息就是报告本身，不写开场白/过程叙述/收尾总结。
+ - **反预判**——dispatch prompt 里 MUST NOT 出现"这条不用标""顶多算 Minor""这么写是故意的别管"
+   这类提前定性的措辞。
+ 
+ 裁决处置：
+ 
+ - Critical / Important 发现 → 派 fix 子代理修复（**fix 子代理无独立 dispatch 段，就地在此声明**：
+   model: `$SDFLOW_TIER_MID`——同一次第零步解析结果，与上文 implementer/双轴审共用同一档位，不重复
+-  计数）+ re-review，循环直至通过；**不带着未修的
++  计数；`$SDFLOW_EFFORT_MID` 非空时同样另附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`，为空
++  则不带，见上「effort 派发」表）+ re-review，循环直至通过；**不带着未修的
+   Critical/Important 推进下一 ticket**。
+ 
+   **熔断规则 `review-loop-breaker`**〔impl-review-fix；本规则独立定义，MUST NOT 引用 `T10-choice`
+   标签——本场景语义为「同一发现反复未消解」，与 `T10-choice`「≥2 方案自动选」触发条件不同〕：
+ 
+   - **触发（两条判据并列，命中任一即停）**：
+     - **(a) 同指纹判据**：同一发现连续 2 轮 re-review 仍未消解 → 停止循环。
+     - **(b) 与指纹无关的硬上限**〔curb-rework-loop-cost · adr/0035〕：**同一文件累计被
+       Critical/Important 发现命中 ≥3 轮**时，无论各轮问题指纹是否相同 → 停止循环。此时仲裁的
+       命题是「**这个门 / 这段实现本身该不该存在**」，而非「这一条 finding 是否成立」。
+diff --git a/sdflow-init/assets/snippets/claude-section.md b/sdflow-init/assets/snippets/claude-section.md
+index d77bce6..51fb77e 100644
+--- a/sdflow-init/assets/snippets/claude-section.md
++++ b/sdflow-init/assets/snippets/claude-section.md
+@@ -114,10 +114,23 @@ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权
+   （主 session 综合裁决）禁止降档是硬约束、非偏好，`sdflow-spec-review`/`sdflow-code-review`/
+   `sdflow-implement` 引用 `$SDFLOW_TIER_STRONG` / `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理
+   时直接以此为由，不必另编说辞。
+ - **能力探针（语义核验，非机械门）**：评审 SKILL 在 fan-out 前先派一个 trivial 探针子代理判定
+   「子代理机制活着没」——探针值是主 session 自报，无可信脚本捕获路径，MUST NOT 被当作机械保证。
+   子代理不可用 ⇒ **缩 roster 到主 session 实际独立完成的镜**，报告显著标注「单镜降级」，MUST NOT
+   为未独立跑过的镜落锚。
+ - **`sdflow-implement` 的降级路径不同构**：它同样先派一个 trivial 探针子代理核验「机制活着没」
+   （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
+   跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
++
++## effort 派发（Claude 宿主专属，与上方 model-tiers/Codex 授权是正交维度）
++
++四个编排 SKILL（`/sdflow-spec-review`、`/sdflow-code-review`、`/sdflow-implement`、`/sdflow-done`）
++的子代理派发在 `model` 档位之外另有一维 **effort**（`$SDFLOW_EFFORT_STRONG`/`MID`/`LIGHT`，经
++`model-tiers.md` 的 `effort-tier-defaults` 机读块推导，缺省 strong→high / mid→medium / light→low）。
++效果落在 **Claude Code Agent 定义层**（`subagent_type: sdflow-effort-<值>` 选用全局
++`~/.claude/agents/sdflow-effort-*.md` 定义，其 frontmatter 携 `effort: <值>`），**仅 claude 机队有
++对应物**——codex 无 effort 原语，`$SDFLOW_EFFORT_*` 在 codex/unknown 宿主上为空串，派发不带
++`subagent_type`，行为与 effort 维引入前完全相同（前向兼容，非本节上方「Codex 子代理授权」的一部分，
++两者互不依赖）。项目可选在 `openspec/config.yaml` 加 `effort-tiers.claude.{strong,mid,light}` 段覆盖
++（值域 `{low,medium,high,xhigh,max}`，同 model-tiers 段覆盖语义：非法值忽略并告警回落缺省）。带门禁、
++无人逐条复核的步（如 verify 终门、Step3 主审裁决）MUST NOT 低于 high。
+diff --git a/sdflow-init/assets/workflow/config.template.yaml b/sdflow-init/assets/workflow/config.template.yaml
+index 41c62de..8c8b223 100644
+--- a/sdflow-init/assets/workflow/config.template.yaml
++++ b/sdflow-init/assets/workflow/config.template.yaml
+@@ -67,20 +67,30 @@ rules:
+ #     strong: <codex-model-id>
+ #     mid: <codex-model-id>
+ #     light: <codex-model-id>
+ #
+ # 扁平旧格式（历史遗留，兼容读作 Claude 机队覆盖，不推荐新写）：
+ # model-tiers:
+ #   strong: <claude-model-id>
+ #   mid: <claude-model-id>
+ #   light: <claude-model-id>
+ 
++# effort-tiers（可选覆盖段）——真相源 = 规则根 model-tiers.md 的 effort-tier-defaults 机读块
++# （strong→high / mid→medium / light→low）。此段仅 per-repo 覆盖"档位→effort"映射，仅 claude
++# 机队有对应物（codex 无 effort 原语，不写键即 n/a，MUST NOT 引入空值语义）。值域固定
++# {low,medium,high,xhigh,max}，非法值忽略覆盖回落缺省并告警（与 model-tiers 段同语义）。缺省请勿填。
++# effort-tiers:
++#   claude:
++#     strong: high
++#     mid: medium
++#     light: low
++
+ # test-suites（可选段）——sdflow-implement「聚合套件发现契约」的命令来源，优先于该票
+ # implementer 运行时判定。缺省请勿填（未配置层由该票 implementer 依仓内既有约定判定）。
+ # 具体命令因项目而异，由 sdflow-devenv 运行时调研测试基础设施后推荐写入（已有配置时保留不覆盖），
+ # 本模版只示范两种合法形状；旧形状（字符串）是新形状（映射）的子集，未分档的消费仓行为不变。
+ #
+ # 形状一：字符串——quick 与 full 两档同命令（今日形状，继续有效）：
+ # test-suites:
+ #   unit: "go test ./..."
+ #   integration: "make integration"
+ #   e2e: "make e2e"
+diff --git a/sdflow-init/scripts/init.py b/sdflow-init/scripts/init.py
+index 200d935..1e24b5a 100644
+--- a/sdflow-init/scripts/init.py
++++ b/sdflow-init/scripts/init.py
+@@ -653,20 +653,22 @@ def _marker_schema(marker):
+ # 新顶层键，故 100% 存量消费仓 config 无这些块，缺块是正常态、不是违规）；绝不裸
+ # `cfg["k"]["j"]` 式取键，坏了是 KeyError 裸 traceback，不是人可读 reason。
+ #
+ # 〔与旧版行级扫描器的诊断精度差异，见 impl-report〕整份文档语法错误（如 `model-tiers:` 块内
+ # 一处漏冒号）此前能被旧扫描器局部容错、精确点名哪一行；yq 是真解析器，会让**整份文件**判定
+ # 解析失败，`lint_config` 只能报一条笼统的「解析失败」reason（含 yq 原始诊断）。这是 yq 委托
+ # 的既定代价（spec-review F9/decision-memo），不是本次改动引入的新缺陷。
+ 
+ TIER_ALLOWED_SUBKEYS = {"strong", "mid", "light"}
+ TIER_FLEET_KEYS = {"claude", "codex"}          # add-codex-host-support ADR-8：按机队分键
++EFFORT_FLEET_KEYS = {"claude"}                 # host-adaptive-execution delta：仅 claude 机队有 effort 原语
++EFFORT_ALLOWED_VALUES = {"low", "medium", "high", "xhigh", "max"}
+ RULES_REQUIRED_SUBKEYS = ("proposal", "specs", "design", "tasks")
+ 
+ 
+ def _valid_model_id(v):
+     """model-tiers 值的合法字符集校验（与 resolve-models.sh::_valid_model_id 同一有界口径，
+     跨语言各自本地重实现——add-codex-host-support D5/D10：值只准 [A-Za-z0-9._-]、首字符字母
+     数字、非空，拒绝换行/控制字符/shell 元字符，防 eval 注入面的值经消费仓 config 回灌到
+     resolve-models.sh 的输出。"""
+     if not v:
+         return False
+@@ -705,20 +707,54 @@ def _model_tiers_from_dict(raw):
+                     entries[f"{k}.{tk}"] = "" if tv is None else str(tv)
+                 else:
+                     bad.add(f"{k}.{tk}")
+         elif k in TIER_ALLOWED_SUBKEYS:
+             entries[f"flat.{k}"] = "" if v is None else str(v)
+         else:
+             bad.add(k)
+     return entries, bad, bad_headers
+ 
+ 
++def _valid_effort_value(v):
++    """effort-tiers 值域校验：封闭集合 {low,medium,high,xhigh,max}（与
++    resolve-models.sh::_valid_effort_value 同口径——effort 是封闭域，比 model-tiers 的自由字符集
++    校验更严；implement-workflow-optimization-2026-08-p4 design「effort-tiers 新 config 键 SHALL
++    同步接入 init.py lint_config……与 resolver 解析同口径」）。"""
++    return v in EFFORT_ALLOWED_VALUES
++
++
++def _effort_tiers_from_dict(raw):
++    """effort-tiers 顶层块的业务校验，口径同 `_model_tiers_from_dict` 但两处收窄：
++    ① 唯一合法机队键 = `claude`（`codex` 越域——codex 无 effort 原语，'不写键即 n/a'，写了
++    `codex:` 属显式误用而非合法降级，MUST 报违规而非静默忽略）；
++    ② **无扁平旧格式**——effort-tiers 是本 change 新引入的键、无历史遗留包袱，
++    MUST NOT 复用 model-tiers 那条为迁移期旧配置保留的扁平兼容分支（顶层非 `claude` 的其余键，
++    包括看似「扁平」的 `strong`/`mid`/`light` 顶层键，一律计入越域，而非归 `flat.*`）。
++    返回同 `_model_tiers_from_dict` 的三元组语义：entries/bad_subkeys/bad_headers。"""
++    entries, bad, bad_headers = {}, set(), []
++    if not isinstance(raw, dict):
++        return entries, bad, bad_headers
++    for k, v in raw.items():
++        if k in EFFORT_FLEET_KEYS:
++            if not isinstance(v, dict):
++                bad_headers.append(f"{k}: {v}")   # 机队名当标量误用（如 `claude: rogue`）
++                continue
++            for tk, tv in v.items():
++                if tk in TIER_ALLOWED_SUBKEYS:
++                    entries[f"{k}.{tk}"] = "" if tv is None else str(tv)
++                else:
++                    bad.add(f"{k}.{tk}")
++        else:
++            bad.add(k)   # 含 "codex"（越域机队）与其余任意顶层拼写错误，无扁平兼容分支
++    return entries, bad, bad_headers
++
++
+ def _detect_duplicate_top_keys(cfg_path):
+     """行级扫描 YAML 顶层键（缩进=0 的 key: 行），返回重复键列表。"""
+     seen = {}
+     try:
+         with open(cfg_path, encoding="utf-8-sig") as f:
+             for lineno, line in enumerate(f, 1):
+                 if line and not line[0].isspace() and not line.startswith("#"):
+                     m = re.match(r"([A-Za-z_][\w-]*):", line)
+                     if m:
+                         key = m.group(1)
+@@ -727,21 +763,24 @@ def _detect_duplicate_top_keys(cfg_path):
+         return []
+     return [f"{k}（行 {','.join(map(str, lns))}）" for k, lns in seen.items() if len(lns) > 1]
+ 
+ 
+ def lint_config(root):
+     """校验 <root>/openspec/config.yaml 的结构，返回 reason 字符串列表（空 = 干净）。
+     校验项：① 顶层 `schema:` 键存在 ② 顶层 `rules:` 块存在且含 proposal/specs/design/tasks
+     四子键（无条件必填） ③ 顶层 `model-tiers:`（若存在）——机队分键 `{claude,codex}.{strong,mid,
+     light}` 或扁平旧格式 `{strong,mid,light}`（ADR-8），二级键须 ⊆ {claude,codex,strong,mid,light}，
+     且叶子键的**值**须为合法模型 ID（add-codex-host-support D5：拒绝空值/非法字符，防 eval 注入面
+-    经消费仓 config 回灌） ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false}。
++    经消费仓 config 回灌） ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false} ⑤ 顶层
++    `effort-tiers:`（若存在，implement-workflow-optimization-2026-08-p4）——**仅** `claude.{strong,
++    mid,light}`（`codex` 越域，无扁平旧格式），叶子键的**值**须 ∈ {low,medium,high,xhigh,max}
++    （封闭域，与 resolve-models.sh 解析同口径）。
+ 
+     yq 不可用（未装/非 mikefarah）→ `_check_yq()` 前置门给出一条带安装指引的 reason（不崩溃/
+     不退出，`lint_config` 的公开契约就是「返回 reason 列表」）。config.yaml 缺失/不可读/整份
+     语法错误（含非 UTF-8）→ 单条 reason（`_yq()` 的原始诊断，不再是精确定位到哪一行/哪个标量
+     的手搓诊断）。"""
+     ok, reason = _check_yq()
+     if not ok:
+         return [reason]
+ 
+     cfg_path = os.path.join(root, "openspec", "config.yaml")
+@@ -785,20 +824,34 @@ def lint_config(root):
+         bad_values = [f"{k}={v!r}" for k, v in sorted(entries.items()) if not _valid_model_id(v)]
+         if bad_values:
+             reasons.append(f"model-tiers: 值非法模型ID {bad_values}（须为 [A-Za-z0-9._-]+，首字符字母数字）")
+ 
+     metrics = cfg.get("metrics")
+     if metrics is not None:  # 条件化：块整段缺失 → 跳过（放行）
+         enabled = metrics.get("enabled") if isinstance(metrics, dict) else None
+         if not isinstance(enabled, bool):
+             reasons.append("metrics: enabled 值非法或缺失（须为 true|false）")
+ 
++    if cfg.get("effort-tiers") is not None:  # 条件化：块整段缺失 → 跳过（放行）
++        entries, bad, bad_headers = _effort_tiers_from_dict(cfg["effort-tiers"])
++        if bad:
++            reasons.append(
++                f"effort-tiers: 子键越域 {sorted(bad)}"
++                f"（顶层须 ⊆ {{claude}}——codex 无 effort 原语、无扁平旧格式，机队子块叶子键须 ⊆ {{strong,mid,light}}）")
++        if bad_headers:
++            reasons.append(
++                f"effort-tiers: 机队头带尾随内容 {sorted(bad_headers)}"
++                f"（`claude:` 须为空的嵌套块头，值另起 strong/mid/light 缩进行；纯注释头合法）")
++        bad_values = [f"{k}={v!r}" for k, v in sorted(entries.items()) if not _valid_effort_value(v)]
++        if bad_values:
++            reasons.append(f"effort-tiers: 值非法 {bad_values}（须 ∈ {{low,medium,high,xhigh,max}}）")
++
+     return reasons
+ 
+ 
+ def cmd_config_lint(root):
+     """跑 lint_config 并落 stdout/stderr + 退出码：干净 0，违规非零、reason 逐条 stderr。"""
+     reasons = lint_config(root)
+     if reasons:
+         for r in reasons:
+             print(f"[config-lint] VIOLATION: {r}", file=sys.stderr)
+         return 1
+diff --git a/sdflow-init/tests/test_config_lint.py b/sdflow-init/tests/test_config_lint.py
+index 812d180..efced4f 100644
+--- a/sdflow-init/tests/test_config_lint.py
++++ b/sdflow-init/tests/test_config_lint.py
+@@ -256,20 +256,163 @@ class TestConfigLintMetrics:
+         KeyError/误判违规。"""
+         _write_config(tmp_path, """schema: spec-driven
+ context: |
+   ## 本项目
+   consumer repo, unrelated tech stack context prose.
+ """ + VALID_RULES_BLOCK.split("\n", 1)[1])
+         r = _run_lint(tmp_path)
+         assert r.returncode == 0, r.stderr
+ 
+ 
++class TestConfigLintEffortTiers:
++    """implement-workflow-optimization-2026-08-p4：effort-tiers 顶层块——**仅** `claude.{strong,
++    mid,light}`（codex 无 effort 原语、无扁平旧格式），叶子值须 ∈ {low,medium,high,xhigh,max}。"""
++
++    def test_no_effort_tiers_block_passes(self, tmp_path):
++        """条件化放行：无 effort-tiers 块 → 0（消费仓正常态，非违规）。"""
++        _write_config(tmp_path, VALID_RULES_BLOCK)
++        r = _run_lint(tmp_path)
++        assert r.returncode == 0, r.stderr
++
++    def test_valid_claude_block_passes(self, tmp_path):
++        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
++  claude:
++    strong: high
++    mid: medium
++    light: low
++""")
++        r = _run_lint(tmp_path)
++        assert r.returncode == 0, r.stderr
++
++    def test_all_domain_values_accepted(self, tmp_path):
++        for val in ("low", "medium", "high", "xhigh", "max"):
++            root = tmp_path / val
++            _write_config(root, VALID_RULES_BLOCK + f"""effort-tiers:
++  claude:
++    mid: {val}
++""")
++            r = _run_lint(root)
++            assert r.returncode == 0, f"{val}: {r.stderr}"
++
++    def test_codex_key_is_out_of_domain(self, tmp_path):
++        """codex 无 effort 原语——`effort-tiers.codex.*` MUST 报越域，不得像 model-tiers 那样
++        被当成合法机队键静默接受。"""
++        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
++  codex:
++    strong: high
++""")
++        r = _run_lint(tmp_path)
++        assert r.returncode != 0
++        assert "effort-tiers" in r.stderr
++        assert "codex" in r.stderr
++
++    def test_flat_legacy_format_is_out_of_domain(self, tmp_path):
++        """effort-tiers 无扁平旧格式（与 model-tiers 不同，无历史遗留包袱）——顶层直接写
++        `strong:`/`mid:`/`light:`（无 `claude:` 机队头）MUST 报越域，不得被静默接受为 flat 覆盖。"""
++        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
++  strong: high
++""")
++        r = _run_lint(tmp_path)
++        assert r.returncode != 0
++        assert "effort-tiers" in r.stderr
++        assert "strong" in r.stderr
++
++    def test_fleet_leaf_out_of_domain_subkey_nonzero(self, tmp_path):
++        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
++  claude:
++    strong: high
++    bogus: nope
++""")
++        r = _run_lint(tmp_path)
++        assert r.returncode != 0
++        assert "claude.bogus" in r.stderr
++
++    def test_invalid_effort_value_nonzero(self, tmp_path):
++        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
++  claude:
++    mid: turbo
++""")
++        r = _run_lint(tmp_path)
++        assert r.returncode != 0
++        assert "effort-tiers" in r.stderr
++        assert "claude.mid" in r.stderr
++
++    def test_model_id_style_value_rejected(self, tmp_path):
++        """effort-tiers 值域是封闭集合，不是 model-tiers 那种自由字符集——一个合法的 model-id
++        字符集字符串（如 `sonnet`）不在 effort 值域内，MUST 被拒绝，不得因两者校验函数
++        混用而误放行。"""
++        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
++  claude:
++    strong: sonnet
++""")
++        r = _run_lint(tmp_path)
++        assert r.returncode != 0
++        assert "claude.strong" in r.stderr
++
++    def test_empty_value_nonzero(self, tmp_path):
++        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
++  claude:
++    light:
++""")
++        r = _run_lint(tmp_path)
++        assert r.returncode != 0
++        assert "claude.light" in r.stderr
++
++    def test_scalar_fleet_header_nonzero(self, tmp_path):
++        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
++  claude: rogue
++""")
++        r = _run_lint(tmp_path)
++        assert r.returncode != 0
++        assert "effort-tiers" in r.stderr
++
++
++class TestEffortTiersFromDict:
++    """白盒锁（直测 `_effort_tiers_from_dict` 的 entries/bad/bad_headers 归属），同
++    `TestModelTiersFromDict` 的测法——语法层交给 yq，本函数只处理已解析出的 dict。"""
++
++    @staticmethod
++    def _parse(raw):
++        import init  # scripts/ 已在 sys.path（本文件顶部）
++        return init._effort_tiers_from_dict(raw)
++
++    def test_claude_entries_attributed_correctly(self):
++        entries, bad, bad_headers = self._parse({"claude": {"strong": "high", "mid": "medium"}})
++        assert entries == {"claude.strong": "high", "claude.mid": "medium"}
++        assert not bad and not bad_headers
++
++    def test_codex_key_goes_to_bad_not_entries(self):
++        """与 `_model_tiers_from_dict` 的关键差异：`codex` 不在 `EFFORT_FLEET_KEYS` 里，
++        整个 `codex: {...}` 块须落 `bad`（越域顶层键），MUST NOT 产生任何 `codex.*` entries。"""
++        entries, bad, bad_headers = self._parse(
++            {"claude": {"strong": "high"}, "codex": {"strong": "high"}})
++        assert entries == {"claude.strong": "high"}
++        assert "codex" in bad
++        assert not bad_headers
++
++    def test_flat_top_level_keys_go_to_bad_not_entries(self):
++        """与 `_model_tiers_from_dict` 的关键差异：无扁平兼容分支——顶层 `strong`/`mid`/`light`
++        （无 `claude:` 头）MUST NOT 落进 `entries["flat.*"]`，而是落 `bad`。"""
++        entries, bad, bad_headers = self._parse({"strong": "high", "mid": "medium"})
++        assert entries == {}
++        assert bad == {"strong", "mid"}
++
++    def test_scalar_fleet_header_is_bad_header_no_crosstalk(self):
++        entries, bad, bad_headers = self._parse({"claude": "rogue"})
++        assert entries == {}
++        assert any("claude: rogue" in h for h in bad_headers), bad_headers
++
++    def test_none_leaf_value_maps_to_empty_string(self):
++        entries, bad, bad_headers = self._parse({"claude": {"light": None}})
++        assert entries == {"claude.light": ""}
++
++
+ class TestConfigLintRegressionBaseline:
+     def test_real_repo_config_yaml_passes(self):
+         """回归基线：本仓真实 openspec/config.yaml（含 metrics: enabled: true，注释掉的
+         model-tiers）必须 lint 通过。"""
+         r = _run_lint(REPO_ROOT)
+         assert r.returncode == 0, r.stderr
+ 
+ 
+ class TestConfigLintEncodingError:
+     """[impl-review-fix] F2：`lint_config` 此前只 `except OSError`——非 UTF-8 config.yaml
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index f1a0c20..3182a50 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -169,21 +169,21 @@ description: >
+ 
+ ---
+ 
+ ## 第零步：确认对象 + 读规则
+ 
+ 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
+ 2. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用评审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用评审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/spec-review.md`（方法论）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现两步链。
+ 3. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：
+ 
+ <!-- sdflow:tier-resolution:start v1 -->
+-**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（claude 机队按档位推导的 effort 值，供下方派发子代理时选配 `subagent_type`；codex/unknown 宿主或旧版 resolver 未导出时为空串，空值即回落不带 `subagent_type`，行为与引入前一致，MUST NOT 视为异常）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+ <!-- sdflow:tier-resolution:end -->
+ 
+ （与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、第一步能力探针同类；空值/unknown 分家同样遵循 fail-loud 精神——均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
+ 
+ ## 第一步：能力探针 + 规划镜头 + 单批 dispatch（广审双镜 + 领域镜 + 对抗镜 + 接地镜 + design-voice）
+ 
+ DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**——广审（strategy/plan-eng）不再是
+ 外部工具原生执行 + 落盘 amendment 再等领域/对抗镜跟进的两段结构，而是本 skill **自持**的两个 fresh 子
+ 代理镜，与领域镜/对抗镜/接地镜/design-voice 同批一条消息内并行派出，互不依赖（旧「串行纪律〔T20〕
+ 分治」——领域/对抗镜须等外部广审产出的 amendment 落盘——一并退役：新广审镜只回结构化 findings、不
+@@ -283,34 +283,51 @@ DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**
+   ├─ strategy 镜(中档)   ──┐
+   ├─ plan-eng 镜(中档)   ──┤ raw 名 strategy/plan-eng，报告合并时按 fold 表折叠归 canonical lens="broad"
+   ├─ 领域镜 ×N(中档,按 TG 命中)
+   ├─ 对抗镜 ×2-3(中档)
+   ├─ 接地镜 ×1(弱档)
+   └─ design-voice(按 $SDFLOW_VOICE_RUNNER,恒自跑;async 协议见「outside-voice helper 调用协议」节,结果在 Step3 barrier 处 collect)
+   ▼
+ Step3 合并去重 + 对抗裁决 ──▶ Step4 报告 + amendment
+ ```
+ 
+-| 镜 | 数量 | 干什么 | 建议档位 |
+-|----|------|--------|-----------|
+-| **领域镜** | 每命中领域 1 个 | 读 `{change_dir}` design/specs + 相关真实代码，逐条过 `spec-checklists/domains/<栈>` 的 **R 项**，列违反/存疑项（带文件:行证据） | 中档（判断） |
+-| **对抗镜** | 2-3 | 各从一个**不同角度**「证明这份 spec 会在实现期爆炸」：隐藏假设 / 失败模式 / 乐观估计与边界。默认 refuted=true，找不到爆点才放过 | 中档（对抗推理） |
+-| **接地镜** | 1 | grep/读真实代码，核验 spec 里**所有代码事实**（函数名/字段/API 路径/schema）是否真实存在且一致，列不符项 | 弱档（机械） |
+-
+-> 档位与缺省见「模型选择」节。上表只列领域/对抗/接地三镜的职责/档位；广审双镜见上方专节。
+-
+-> 每个子代理 prompt 必须自带：`{change_dir}` 路径、它负责的清单/角度、"返回**结构化** findings 列表（每条带：
+-> 问题 / 证据 **`{file, line, quote}` 或 `evidence_pack`**〔DD4，机械引用核消费字段，MUST 结构化、MUST NOT
+-> 只写散文引用〕/ **置信度(高/中/低，仅供报告排序，不作裁决判据)** / 严重度 / 建议），**不要 AskUserQuestion**"。
+->
+-> **🔴 每个子代理 prompt MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——见传播纪律。
+-> **设计审是通则 ③ 的最高发区**：子代理眼前只有「现在的代码/现在的设计」，漏带这三条，它**必然**把「现状不是这么做的」当成「这个设计该缩水」。**评审的基准是目标态。**
++| 镜 | 数量 | 干什么 | 建议档位 | effort 档 |
++|----|------|--------|-----------|-----------|
++| **领域镜** | 每命中领域 1 个 | 读 `{change_dir}` design/specs + 相关真实代码，逐条过 `spec-checklists/domains/<栈>` 的 **R 项**，列违反/存疑项（带文件:行证据） | 中档（判断） | `$SDFLOW_EFFORT_MID` |
++| **对抗镜** | 2-3 | 各从一个**不同角度**「证明这份 spec 会在实现期爆炸」：隐藏假设 / 失败模式 / 乐观估计与边界。默认 refuted=true，找不到爆点才放过 | 中档（对抗推理） | `$SDFLOW_EFFORT_MID` |
++| **接地镜** | 1 | grep/读真实代码，核验 spec 里**所有代码事实**（函数名/字段/API 路径/schema）是否真实存在且一致，列不符项 | 弱档（机械） | `$SDFLOW_EFFORT_LIGHT` |
++
++> 档位与缺省见「模型选择」节。上表只列领域/对抗/接地三镜的职责/档位 + effort 档；广审双镜见上方专节
++> （其 prompt 契约在独立管理块 `sdflow:broad-mirror-def` 内，effort 同取 `$SDFLOW_EFFORT_MID`，见「模型选择」节表格）。
++> `$SDFLOW_EFFORT_<对应档位>` 非空时 dispatch MUST 附带 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<对应档位>`；
++> 为空时 MUST NOT 带 `subagent_type`，行为与引入前完全相同——构造规则统一写在「模型选择」节，不逐镜重复。
++
++**三段组装序（spec-workflow delta：稳定前缀 byte-stable）**——领域镜/对抗镜/接地镜三者的 dispatch prompt
++MUST 按固定三段拼接，MUST NOT 打散顺序或把段①内容手工重述：
++
++1. **段①（稳定前缀，跨轮跨镜 byte-stable）**：调 `~/.sdflow/hack/render-review-prefix.sh --layer spec-review`，
++   把其 **stdout 原文整体**作为 dispatch prompt 的开头——已固定含通则区块全文 + 评审子代理通用契约
++   （结构化 findings schema、引文纪律、输出封顶句「回传目标 ≤2k token，超出按严重度截优先」、不问人）+
++   `spec-checklists/spec-quality-base.md` 全文（base R 项，供领域/对抗/接地镜参照全局判据）。**非零退出
++   ⇒ fail-loud**：显式提示「render-review-prefix.sh 报错——先在运行 checkout 跑 `bash setup.sh`，或按
++   stderr 的 problem/cause/fix 处置」，**MUST NOT** 用半段前缀继续。**MUST NOT 再手工复制粘贴「四条通则」
++   区块或重述结构化 findings schema/引文纪律/不问人**——唯一源在脚本，本 SKILL 正文只保留这一句引用。
++2. **段②（半稳定，per-镜、change 内稳定）**：该镜的角色声明 + `{change_dir}` 路径 + 负责的清单/角度
++   （领域镜：命中的 `spec-checklists/domains/<栈>` R 项；对抗镜：本镜负责的角度之一——隐藏假设 / 失败
++   模式 / 乐观估计与边界；接地镜：核验代码事实一致性指令）+ **置信度自报字段**（高/中/低，仅供报告
++   排序，不作裁决判据，本层专属于段①通用契约的补充）。
++3. **段③（动态）**：`{change_dir}` 下 proposal/design/specs/tasks 四件套当前内容（+ 领域/对抗镜需要的
++   相关真实代码路径）。
++
++> **代码审是通则 ③ 的最高发区（设计审同理）**：段①已含四条通则原文；子代理眼前只有「现在的代码/现在
++> 的设计」，漏带段①（如脚本调用失败仍继续 fan-out）它**必然**把「现状不是这么做的」当成「这个设计该
++> 缩水」。**评审的基准是目标态。**
+ 
+ **design-voice 恒自跑（DD3：回落路径转正，旧「outside-voice 复用守卫」——`outside_voice_guard.py` 调用 /
+ 广审产物落盘复用判定——整体退役）**：本步单批 dispatch 内一并派出（按下方「outside-voice
+ helper 调用协议」，site="design-voice"，context=proposal「What Changes」+ design「Decisions」全文）——
+ context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下 fan-out 工作，结果在
+ Step3 barrier 处 collect。
+ 
+ ## 第三步：机械引用核 + 综合裁决 → 决策登记进报告（主 session · 强档）
+ 
+ - 🔴 **进合并去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的合并去重。
+@@ -418,25 +435,33 @@ frontmatter 是机判锚，人读行仍留在正文供人阅读、不因迁移
+ 不知晓某行锚是"草稿"还是"已最终化"，主 session 漏执行本步不会被任何机制发现；采纳率/独立率的门后复评可能悄悄
+ 停留在 pre-gate 的临时值上。与本节前述"数值一致性是主 session 信任边界、非机械门"口径一致——此局限已知且不新增
+ `ship_gate` 兜底（超本 change scope）。
+ 
+ ---
+ 
+ ## 模型选择（按本步性质，逐步定）
+ 
+ 档位与缺省见规则根 `model-tiers.md`（按机队分列，经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。**取值 MUST 引用第零步同一次 `eval "$(resolve-models.sh)"` 导出的 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`**（已按当前宿主机队 + config.yaml 覆盖解析好的具体模型 id）派子代理，**MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason**〔host-adaptive-execution · 模型档位按机队分列〕一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
+ 
+-```
+-  主 session（协调/对抗裁决/决策登记/出报告）  强档 = $SDFLOW_TIER_STRONG ← 这是门禁,弱档=假绿
+-  领域镜 / 对抗镜（判断、对抗推理）             中档 = $SDFLOW_TIER_MID
+-  接地镜（grep/读码核验，机械）                 弱档 = $SDFLOW_TIER_LIGHT
+-```
++| 角色 | model 档位 | effort 档 |
++|---|---|---|
++| 主 session（协调/对抗裁决/决策登记/出报告） | 强档 = `$SDFLOW_TIER_STRONG` ← 这是门禁，弱档=假绿 | `$SDFLOW_EFFORT_STRONG`（门禁步 MUST NOT 低于 high；主 session 自身不经 `subagent_type` 派发，此列仅供对照） |
++| 广审双镜（strategy / plan-eng） | 中档 = `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
++| 领域镜 / 对抗镜（判断、对抗推理） | 中档 = `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
++| 接地镜（grep/读码核验，机械） | 弱档 = `$SDFLOW_TIER_LIGHT` | `$SDFLOW_EFFORT_LIGHT` |
++
++**effort 派发构造（`$SDFLOW_EFFORT_*` 为空即回落现行为，前向兼容——host-adaptive-execution delta）**：
++上表每个子代理 dispatch，对应 `$SDFLOW_EFFORT_<档位>` 非空时 MUST 附带
++`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；为空（codex/unknown 宿主、resolver 未升级、
++`sdflow-effort-*` agent 定义未铺设）时 MUST NOT 带 `subagent_type` 字段，派发行为与 effort 维引入前
++完全相同。**带门禁、无人逐条复核的步（主 session 综合裁决）MUST NOT 以低于 high 的 effort 执行**——
++与 model 档位「不降档」铁律同构、同源（`model-tiers.md` 的 `effort-tier-defaults` 机读块）。
+ 
+ 依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读码可下放弱档。
+ **不要**把综合判断委派给弱档子代理。中途不 AskUserQuestion（决策进报告，G2）。
+ 
+ ## outside-voice helper 调用协议（契约单一源 = `~/.sdflow/hack/outside-voice.sh` 头注释，此处只给分支决策，不转述接口细节）
+ 
+ ```
+ HELPER=~/.sdflow/hack/outside-voice.sh
+ [ -x "$HELPER" ] 不成立 → 显式提示「outside-voice.sh 未安装——先跑 bash setup.sh」+ 直接派 fallback 子代理（不静默）
+ 版本核对：$HELPER version 输出与本 SKILL 预期主版本(1.x)不符 → 告警"helper 疑似陈旧，重跑 setup.sh"后继续
