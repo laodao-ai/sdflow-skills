@@ -184,12 +184,12 @@ def test_verify_state_malformed_unclosed(tmp_path):
 
 def test_verify_state_malformed_duplicate_key(tmp_path):
     _write(tmp_path, "verify-report.md",
-           "---\nverify: PASS\nverify: FAIL\n---\n")
+           "---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n")
     assert rwd.read_verify_state(tmp_path) == ("malformed", None)
 
 
 def test_verify_state_malformed_bad_enum(tmp_path):
-    _write(tmp_path, "verify-report.md", "---\nverify: MAYBE\n---\n")
+    _write(tmp_path, "verify-report.md", "---\nship-gate:\n  verify: MAYBE\n---\n")
     assert rwd.read_verify_state(tmp_path) == ("malformed", None)
 
 
