@@ -1,7 +1,7 @@
 ---
 ship-gate:
   code_review: pass
-  reviewed_sha: c671b50645681cd862d3ee406ad36fc8ebdc2635
+  reviewed_sha: 1ac1c322f335dc1f495dff244a182066bba56573
 ---
 
 ## code-review 报告 — implement-workflow-optimization-2026-08-p5
