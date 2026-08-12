@@ -30,11 +30,11 @@ impl-pipeline: tickets
 
 起手做 A1 最小实测：手工临时放一个 `effort: low` 探针 agent 定义到 `~/.claude/agents/`，派探针子代理对比 token 用量/耗时/输出规模多信号确认 effort 经 subagent_type 生效；结论记入 impl-report；失效 ⇒ 止损按 ADR 0043 备选重估。
 
-- [ ] A1 探针实测通过，effort 经 subagent_type 全链生效（结论记入 impl-report）
-- [ ] model-tiers 文档新增 `effort-tier-defaults` 机读块（仅 claude 三键），与上方表格两处不漂移
-- [ ] resolver 导出 `SDFLOW_EFFORT_{STRONG,MID,LIGHT}`（claude 宿主 high/medium/low；codex/unknown 空串不阻断）
-- [ ] config `effort-tiers.claude.*` 覆盖生效 + 非法值回落告警
-- [ ] 测试覆盖：三宿主态导出 × 覆盖生效 × 非法值回落 × eval 契约 × codex/unknown 空串无告警噪声
+- [x] A1 探针实测通过，effort 经 subagent_type 全链生效（结论记入 impl-report）
+- [x] model-tiers 文档新增 `effort-tier-defaults` 机读块（仅 claude 三键），与上方表格两处不漂移
+- [x] resolver 导出 `SDFLOW_EFFORT_{STRONG,MID,LIGHT}`（claude 宿主 high/medium/low；codex/unknown 空串不阻断）
+- [x] config `effort-tiers.claude.*` 覆盖生效 + 非法值回落告警
+- [x] 测试覆盖：三宿主态导出 × 覆盖生效 × 非法值回落 × eval 契约 × codex/unknown 空串无告警噪声
 
 ### Task 2: effort agent 定义铺设与 install_agents 验证
 
@@ -55,14 +55,14 @@ impl-pipeline: tickets
 
 在 ship_gate 既有 code-review 报告消费点新增两道机械门：① 锚存在门——`metrics.enabled=true` 时 code-review 报告 MUST 含 `sdflow:lens-metric layer="code-review"` 锚行与 `sdflow:ref-check` 结构化锚；缺任一 ⇒ STEP_IN_PROGRESS + 修复指引；config 缺省/false/文件不存在 = 放行，yq 非零 = fail-closed。② defer 对账门——台账行（表格数据行，id 取专用 id 列，单元格全内容=单 id）携 `T\d+|B\d+` id 且对应池文件文件系统存在且 `source_change` = 当前 change；不满足 ⇒ STEP_IN_PROGRESS。fence-aware 口径复用既有解析。spec-review 报告在 design 门加同款锚存在检查（含转换态指引）。
 
-- [ ] 锚存在门：metrics 开启 + 报告缺锚 ⇒ 被拦（STEP_IN_PROGRESS + 修复指引）
-- [ ] 锚存在门：metrics 缺省/false/config 文件不存在 ⇒ 放行
-- [ ] 锚存在门：config 不可解析 ⇒ fail-closed 报 problem+cause+fix
-- [ ] defer 对账门：台账行无 id / 池文件缺失 / source_change 属另一 change ⇒ 被拦
-- [ ] defer 对账门：fence 内锚样例不触发判定（负例）
-- [ ] defer 对账门：台账窄化——描述列旧票号不误抓 + 聚合摘要句不假阳（负例）
-- [ ] spec-review 报告 design 门同款锚存在检查 + 转换态指引
-- [ ] 测试矩阵：双向 config 态 × 缺锚/缺 ref-check/defer 无 id/池文件缺失/change 不符/窄化负例/fence 负例
+- [x] 锚存在门：metrics 开启 + 报告缺锚 ⇒ 被拦（STEP_IN_PROGRESS + 修复指引）
+- [x] 锚存在门：metrics 缺省/false/config 文件不存在 ⇒ 放行
+- [x] 锚存在门：config 不可解析 ⇒ fail-closed 报 problem+cause+fix
+- [x] defer 对账门：台账行无 id / 池文件缺失 / source_change 属另一 change ⇒ 被拦
+- [x] defer 对账门：fence 内锚样例不触发判定（负例）
+- [x] defer 对账门：台账窄化——描述列旧票号不误抓 + 聚合摘要句不假阳（负例）
+- [x] spec-review 报告 design 门同款锚存在检查 + 转换态指引
+- [x] 测试矩阵：双向 config 态 × 缺锚/缺 ref-check/defer 无 id/池文件缺失/change 不符/窄化负例/fence 负例
 
 ### Task 4: render-review-prefix.sh 与部署链
 
@@ -71,11 +71,11 @@ impl-pipeline: tickets
 
 新建 `render-review-prefix.sh`（落 `sdflow-init/assets/hack/`，setup 装 `~/.sdflow/hack/`）：接受 `--layer code-review|spec-review` 参数；按固定序 cat 通则区块（`~/.sdflow/hack/skill-principles.md`）+ 内嵌通用契约段 heredoc（含 T103 输出封顶句「回传目标 ≤2k token，超出按严重度截优先」）+ base checklist（`$RULES_ROOT` 解析到的对应层 base checklist 全文）。任一源缺失 ⇒ fail-loud 非零退出 + stderr 含 problem+cause+fix。byte-stable 可测试（同规则集连续两跑逐字节同）。setup.sh 布署链验证：脚本随 hack 拷贝就位。
 
-- [ ] `render-review-prefix.sh --layer code-review` 按固定序输出通则 + 通用契约段 + base checklist
-- [ ] `render-review-prefix.sh --layer spec-review` 同构输出对应层
-- [ ] 任一源缺失 ⇒ 非零退出 + stderr 含 problem+cause+fix（MUST NOT 输出半段前缀）
-- [ ] byte-stable golden 测试：连续两跑逐字节同 + 源缺失非零退出
-- [ ] setup.sh 部署链：脚本随 hack 拷贝到 `~/.sdflow/hack/`
+- [x] `render-review-prefix.sh --layer code-review` 按固定序输出通则 + 通用契约段 + base checklist
+- [x] `render-review-prefix.sh --layer spec-review` 同构输出对应层
+- [x] 任一源缺失 ⇒ 非零退出 + stderr 含 problem+cause+fix（MUST NOT 输出半段前缀）
+- [x] byte-stable golden 测试：连续两跑逐字节同 + 源缺失非零退出
+- [x] setup.sh 部署链：脚本随 hack 拷贝到 `~/.sdflow/hack/`
 
 ### Task 5: 四编排 SKILL 全面适配 + B25 诊断修复 + bundle 同步
 
