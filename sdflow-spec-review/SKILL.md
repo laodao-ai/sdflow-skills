@@ -393,7 +393,7 @@ Step3 barrier 处 collect。
 - 据此更新四件套中需要修订的产物（proposal / design / specs / tasks），改动处标 `[spec-review-amendment]`。
   原则：an edit to a later artifact may require revising an earlier one, not only the other way around
   （引自 `/opsx:update` 1.6.0）。最常见场景：评审发现 design 问题但根因在 proposal 的 Non-Goals 划错了。
-- **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → writing-plans）。人工过这一份报告拍板，即阶段二唯一人类门。
+- **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → `/sdflow-ship`）。人工过这一份报告拍板，即阶段二唯一人类门。
   🔴 **拍板前流程纪律〔harden-gate-git-layer 1.7〕**：镜子审的是拍板**当时**的四件套（C1）；人读报告后要求修改会产出新盘面（C2）。
   拍板批准的是 C2、锚也写 C2（拍板批准的就是它），但报告里的 findings 只针对 C1 ⇒ **拍板前若四件套相对镜子审过的提交有实质改动，
   MUST 先跑一次窄复核（只审增量）再拍板**。gate 看不出「这次改动有没有被审过」，此纪律在流程层兜、不由 gate 管。
