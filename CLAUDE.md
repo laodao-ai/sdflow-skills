@@ -138,10 +138,17 @@ pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
 
 **第三个安装目的地：`~/.claude/agents/`（全局 agent 定义 · `install_agents()`）**
 
-- `sdflow-spec/agents/*.md` 的三个定义（`sdflow-local-researcher` / `sdflow-web-researcher` /
-  `sdflow-spec-writer`）逐文件 `ln -snf` 到 `~/.claude/agents/`。**不是** `install_into` 那条路径
+- `sdflow-spec/agents/*.md` 逐文件 `ln -snf` 到 `~/.claude/agents/`。**不是** `install_into` 那条路径
   （它只认含 `SKILL.md` 的顶层目录），所有权守卫也**更严**：只接管软链**且** `readlink` 命中
   `*/sdflow-spec/agents/<同名>` 才覆盖，其余一律 skip 进汇总。
+  🔴 **该目录混装两类定义**（`implement-workflow-optimization-2026-08-p4` 设计门拍板 Q2=C，
+  见 `sdflow-spec/agents/README`）：三个 sdflow-spec 角色定义（`sdflow-local-researcher` /
+  `sdflow-web-researcher` / `sdflow-spec-writer`）+ 五个 effort 档位定义
+  （`sdflow-effort-{low,medium,high,xhigh,max}`，供各编排 SKILL 以
+  `subagent_type: sdflow-effort-<档位>` 派发选用，不承载角色语义）——两类共用同一套铺设/
+  守卫/孤儿清理/manifest 逻辑（目录下全部 `.md` 自动纳入，新增/删除定义零改 `setup.sh`）。
+  目录内说明文件命名为 `README`（**无 `.md` 后缀**，故意落在 `*.md` glob 匹配面之外，
+  否则会被当成第 9 个 agent 定义误铺出去）。
 - 🔴 **`~/.claude/agents/` 是全局命名空间，不是本工具独占的**——这是它与 `~/.claude/skills/`
   最实质的差别：任何插件都可能放同名定义，覆盖即数据丢失。改这段守卫前先读
   `hack/tests/test_install_agents.py`（全仓首个 setup.sh 测试；**用例数不写死在这里**——

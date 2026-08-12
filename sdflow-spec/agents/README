@@ -1,0 +1,16 @@
+本目录铺给全局 `~/.claude/agents/`（`setup.sh` `install_agents()`），混装两类定义：
+
+- **sdflow-spec 角色定义**（`sdflow-local-researcher` / `sdflow-web-researcher` / `sdflow-spec-writer`）——
+  各自持有角色语义与工具面，仅由 `/sdflow-spec` 编排派发。
+- **effort 档位定义**（`sdflow-effort-{low,medium,high,xhigh,max}`）——不承载角色语义，仅供各编排 SKILL
+  以 `subagent_type: sdflow-effort-<档位>` 派发时选用档位，值来自 `model-tiers.md` 的
+  `effort-tier-defaults` 机读块（经 `resolve-models.sh` 导出 `SDFLOW_EFFORT_*`）。
+
+两类共用同一套 `install_agents()` 铺设/所有权守卫/孤儿清理/manifest 逻辑（目录下全部 `.md` 自动纳入，
+新增/删除定义无需改 `setup.sh`）——目录语义因此不再是单一的"sdflow-spec 角色"，是设计门已拍板接受的代价
+（复用既有源目录，零改守卫，见 `design.md` Q2=C）。
+
+🔴 本文件刻意**不带 `.md` 后缀**：`install_agents()` 无条件把 `sdflow-spec/agents/*.md` 的每一份文件都
+当作要铺去 `~/.claude/agents/` 的 agent 定义（零改守卫是设计门的硬约束，见 design.md Q2=C）——
+若这份说明文件叫 `README.md`，会被同一条 glob 当作第 9 个"agent 定义"误铺出去。取 `README`
+（无扩展名）刚好落在 glob 匹配面之外，不需要改任何铺设/测试逻辑。

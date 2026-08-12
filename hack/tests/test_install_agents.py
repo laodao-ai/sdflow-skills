@@ -425,6 +425,129 @@ def test_rerun_is_idempotent(fake_home):
     assert "agents/" not in _cleaned_section(second.stdout), "幂等重跑不该清掉自己刚铺的链"
 
 
+EFFORT_VALUES = ("low", "medium", "high", "xhigh", "max")
+
+
+def _effort_names():
+    return [f"sdflow-effort-{v}.md" for v in EFFORT_VALUES]
+
+
+def test_effort_definitions_have_correct_frontmatter_and_are_not_confused_with_role_defs():
+    """0️⃣ 静态断言（不跑 setup）：5 个 effort 定义各自 frontmatter 正确，且与既有三个角色
+    定义共存于同一 `_expected_names()` 投放面——`implement-workflow-optimization-2026-08-p4`
+    task2（design Q2=C）新增的资产必须先在源头上就是对的，铺设逻辑才有意义可测。
+    """
+    names = _expected_names()
+    for value, name in zip(EFFORT_VALUES, _effort_names()):
+        assert name in names, f"{name} 不在源目录 _expected_names() 投放面里"
+        text = (SRC_DIR / name).read_text(encoding="utf-8")
+        assert text.startswith("---\n"), f"{name} frontmatter 缺失"
+        fm = text.split("---\n", 2)[1]
+        assert f"name: sdflow-effort-{value}\n" in fm, f"{name} name 字段不对"
+        assert "model: inherit\n" in fm, f"{name} 缺 model: inherit"
+        assert f"effort: {value}\n" in fm, f"{name} effort 字段不对"
+        assert "仅由 sdflow 编排 SKILL 派发选用" in fm, f"{name} description 缺排他式声明"
+    # 既有三个角色定义仍在同一投放面里，未被挤掉
+    for legacy in ("sdflow-local-researcher.md", "sdflow-web-researcher.md", "sdflow-spec-writer.md"):
+        assert legacy in names, f"{legacy} 从源目录消失了"
+
+
+def test_readme_note_is_not_swept_into_agent_installation(fake_home):
+    """0️⃣b 目录内说明文件（`README`，无 `.md` 后缀）MUST NOT 被当成第 9 个 agent 定义铺出去
+    ——它专门取了非 `.md` 命名以落在铺设 glob 匹配面之外（见文件内自述），这里机械钉死。
+    """
+    assert (SRC_DIR / "README").is_file(), "目录内说明文件缺失"
+    assert "README.md" not in _expected_names(), "README 不该被 _expected_names() 当成 agent 定义"
+
+    r = _run_setup(fake_home)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+    dest = _agents_dir(fake_home)
+    assert not (dest / "README").exists(), "README（无后缀）被当成 agent 定义铺了出去"
+    assert not (dest / "README.md").exists(), "README 以 .md 形态被铺了出去"
+
+
+def test_effort_definitions_are_symlinked_and_rerun_stays_idempotent(fake_home):
+    """① effort 专项：5 个 `sdflow-effort-*.md` 各自铺出软链、指向本仓源文件；重跑幂等
+    （链不变、不产生 skip/cleaned）。"""
+    first = _run_setup(fake_home)
+    assert first.returncode == 0, first.stdout + first.stderr
+
+    dest = _agents_dir(fake_home)
+    for name in _effort_names():
+        link = dest / name
+        assert link.is_symlink(), f"{name} 不是软链"
+        assert os.readlink(link) == str(SRC_DIR / name)
+        assert link.is_file(), f"{name} 软链悬空"
+        assert f"agents/{name} @ {dest}" in first.stdout
+
+    before = {n: os.readlink(dest / n) for n in _effort_names()}
+    second = _run_setup(fake_home)
+    assert second.returncode == 0, second.stdout + second.stderr
+    after = {n: os.readlink(dest / n) for n in _effort_names()}
+    assert after == before, "effort 定义重跑后链指向变了"
+    skipped = _skipped_section(second.stdout)
+    cleaned = _cleaned_section(second.stdout)
+    for name in _effort_names():
+        assert name not in skipped, f"{name} 幂等重跑不该被 skip"
+        assert name not in cleaned, f"{name} 幂等重跑不该被当孤儿清掉"
+
+
+def test_effort_definition_foreign_same_name_is_never_clobbered(fake_home):
+    """② effort 专项：`~/.claude/agents/sdflow-effort-low.md` 已被非本仓文件占用 ⇒
+    不覆盖 + 进 `skipped[]`（同既有角色定义的所有权守卫，effort 定义无特例）。"""
+    dest = _agents_dir(fake_home)
+    dest.mkdir(parents=True)
+    victim = "sdflow-effort-low.md"
+    (dest / victim).write_text("third party content\n", encoding="utf-8")
+
+    r = _run_setup(fake_home)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+    assert (dest / victim).read_text(encoding="utf-8") == "third party content\n"
+    assert not (dest / victim).is_symlink()
+    assert "已存在真实文件，非本仓软链，未接管" in r.stdout
+    assert f"agents/{victim} @ {dest}" in r.stdout
+    assert f"✓ agents/{victim} @ {dest}" not in r.stdout
+
+
+def test_effort_definition_removed_from_source_is_orphan_cleaned(fake_home, tmp_path):
+    """③ effort 专项：一个 effort 定义从源目录被删除（如 Migration Plan 回滚 / 拍板改值域）
+    后重跑 setup ⇒ 全局名册里对应的悬空链被孤儿清理撤下，其余 effort 定义与角色定义原样保留。
+
+    用替身仓（`_symlink_farm`）而非真删本仓源文件——同 `test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone`
+    的既有手法，避免测试污染真仓。
+    """
+    farm = _symlink_farm(tmp_path)
+    env = dict(os.environ)
+    env["HOME"] = str(fake_home)
+    env.pop("SDFLOW_HOME", None)
+
+    first = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], cwd=str(farm), env=env,
+                           capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
+    assert first.returncode == 0, first.stdout + first.stderr
+    dest = _agents_dir(fake_home)
+    for name in _effort_names():
+        assert (dest / name).is_symlink(), f"{name} 没铺出来，前提就不成立"
+
+    removed = "sdflow-effort-xhigh.md"
+    (farm / "sdflow-spec" / "agents" / removed).unlink()
+
+    second = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], cwd=str(farm), env=env,
+                            capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
+    assert second.returncode == 0, second.stdout + second.stderr
+
+    assert not (dest / removed).is_symlink() and not (dest / removed).exists(), \
+        "从源删除的 effort 定义没被孤儿清理撤下"
+    assert f"agents/{removed} @ {dest}" in second.stdout, "撤下动作没进汇总"
+    for name in _effort_names():
+        if name == removed:
+            continue
+        assert (dest / name).is_symlink() and (dest / name).is_file(), f"{name} 被误撤"
+    for legacy in ("sdflow-local-researcher.md", "sdflow-web-researcher.md", "sdflow-spec-writer.md"):
+        assert (dest / legacy).is_symlink() and (dest / legacy).is_file(), f"{legacy} 被误撤"
+
+
 def _section(stdout, header):
     """取 setup.sh 汇总里某一段（`skipped (N):` / `cleaned orphans (N):`）的正文。"""
     lines = stdout.splitlines()

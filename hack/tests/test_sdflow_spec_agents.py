@@ -1,4 +1,10 @@
-"""三个 agent 定义的契约 + SA-12 信任边界（add-sdflow-spec · tasks 6.1-6.4 / 7.4）。
+"""三个 sdflow-spec 角色定义的契约 + SA-12 信任边界（add-sdflow-spec · tasks 6.1-6.4 / 7.4）。
+
+同目录自 `implement-workflow-optimization-2026-08-p4` task2（design Q2=C）起还混装 5 个
+effort 档位定义（`sdflow-effort-{low,medium,high,xhigh,max}.md`）——S1（tools 行形态）与
+S5（排他式 description）两组用 `AGENT_DIR.glob("*.md")` 扫全目录的用例已分家兼顾两类；
+本文件其余用例（工具集合精确匹配 / canonical 诚实声明 / S2-S4 / 派发协议）仍只针对三个
+角色定义，effort 定义不承载这些角色语义、不适用。
 
 【本文件守什么 · 锚强度分级（核心诚实声明）】
 
@@ -121,9 +127,16 @@ def test_no_agent_def_uses_scoped_tool_syntax():
     （主 session 与 `general-purpose` 子代理的工具清单里都没有），检索走 `Bash`。
 
     用 glob 扫**全部**定义（不写死三个名字）：新增第四个定义写了括号，这里同样会红。
+
+    🔴 effort 档位定义（`implement-workflow-optimization-2026-08-p4` task2，design Q2=C
+    起同目录混装）**没有** `tools` 字段——design 决策原文「无 tools 限制（工具面由派发 prompt
+    约束，与现行镜派发一致）」，故本门对缺字段的定义跳过（不是本门管辖范围），
+    对**存在**的 `tools` 字段仍强制无括号。
     """
     for p in sorted(AGENT_DIR.glob("*.md")):
-        raw, _ = tools_of(p)
+        raw = frontmatter(p).get("tools")
+        if not raw:
+            continue
         assert "(" not in raw and ")" not in raw, (
             f"{p.name} 的 tools 行带了作用域括号：{raw!r} —— 实测会静默丢工具"
         )
@@ -182,17 +195,28 @@ def test_bash_holders_carry_the_canonical_honest_disclaimer():
 # S5 全局名册 —— 排他式 description
 # ══════════════════════════════════════════════════════════════════════════════
 
+# effort 档位定义（design Q2=C 起同目录混装）的排他式措辞与三个角色定义不同——
+# 角色定义讲「仅由 /sdflow-spec 编排派发」，effort 定义讲「仅由 sdflow 编排 SKILL 派发选用」
+# （它被多个编排 SKILL 共用，不专属 sdflow-spec 一家）。两者都是「在场锚 · 有界」判据。
+EFFORT_EXCLUSIVE_PHRASE = "仅由sdflow编排SKILL派发选用"
+
+
 def test_every_definition_has_an_exclusive_description():
-    """三个 description 都写成排他式（`disable-model-invocation` 挡不到 agent 定义）。
+    """全部定义（三个角色 + 五个 effort 档位）的 description 都写成排他式
+    （`disable-model-invocation` 挡不到 agent 定义）。
 
     【在场锚 · 有界】判的是 **frontmatter 字段**的精确子串（比正文散文更有界：字段边界由
-    `frontmatter()` 结构化取出）。**不保证**别的项目的宿主真的没选中这三个定义 —— 那取决于
+    `frontmatter()` 结构化取出）。**不保证**别的项目的宿主真的没选中这些定义 —— 那取决于
     宿主的 agent 选择行为，无确定性信号。
     """
     for p in sorted(AGENT_DIR.glob("*.md")):
         desc = _squash(frontmatter(p).get("description", ""))
-        assert "仅由`/sdflow-spec`编排派发" in desc, f"{p.name} 的 description 不是排他式"
-        assert "其它场景MUSTNOT选用" in desc, f"{p.name} 的 description 缺「其它场景禁用」"
+        if p.name.startswith("sdflow-effort-"):
+            assert EFFORT_EXCLUSIVE_PHRASE in desc, f"{p.name} 的 description 不是排他式（effort 措辞）"
+            assert "勿手动使用" in desc, f"{p.name} 的 description 缺「勿手动使用」"
+        else:
+            assert "仅由`/sdflow-spec`编排派发" in desc, f"{p.name} 的 description 不是排他式"
+            assert "其它场景MUSTNOT选用" in desc, f"{p.name} 的 description 缺「其它场景禁用」"
 
 
 def test_frontmatter_tiers_match_the_design():
