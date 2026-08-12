@@ -5,8 +5,6 @@
 | ID | Pool | Status | Date | Module | Summary |
 |----|------|--------|------|--------|---------|
 | [B24](open/bug/B24.md) | bug | OPEN | 2026-08-06 | hack/tests/test_subprocess_encoding_contract.py | 扫描口径受 .claude worktree 污染 + 硬编码阈值 200 已失真(实测189,当前即红)。两个缺陷叠加导致同一 commit 可既绿又红：_python_files() 排除清单不含 .claude，本机存在 agent worktree 时 3 份仓库副本被一并扫入、sites 计数约翻 4 倍越过阈值判绿；worktree 清理后暴露真实值 189 < 200 判红。实证(refactor-roadmap-internalize-deps Task 6 编排层亲跑)：worktree 在→4 passed，git worktree remove 后→1 failed。修法：①排除清单补 .claude（治口径漂移）②删掉硬编码 200、改为让脚本自报数量或锚定不变量（治阈值失真，同 CLAUDE.md「硬编码数量修法=删掉数字让脚本自己报」）。非本 change 引入：merge-base..HEAD 的 .py 改动为 0。 |
-| [B25](open/bug/B25.md) | bug | OPEN | 2026-08-12 | `评审编排` | code-review 报告机械层落盘自 08-07 起静默缺失：lens-metric 锚 6 个 change 连续为 0（metrics.enabled=true、SKILL 条款在、无 emitter 报错记载，rsp 报告自印 enabled=true 却无锚），机械引用核（findings_ref_check）亦无落盘痕迹（spec-review 侧两者均正常）；聚合③ code-review 镜数据自此冻结，影响未来 roster 复评判据 |
-| [B26](open/bug/B26.md) | bug | OPEN | 2026-08-12 | `评审编排` | code-review defer 项入池未执行且报告自述与事实不符：p3 两条（advance 绑定强度、superpowers 采集器噪声）标「待入 todolist」未入，rsp 一条（spec-review SKILL 收敛口 writing-plans 残留）报告结论写「已入 todolist」实未入——defer 通道 3/3 断，残差全靠本次窗口判读人工补录（T278-T280） |
 | [T7](open/todo/T7.md) | todo | PROPOSED | 2026-07-01 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 |
 | [T9](open/todo/T9.md) | todo | PROPOSED | 2026-07-01 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 |
 | [T23](open/todo/T23.md) | todo | PROPOSED | 2026-07-01 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） |
@@ -25,11 +23,7 @@
 | [T90](open/todo/T90.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | frontmatter 解析与 ship_gate.py 全量 parity 缺口：BOM/tab缩进/YAML行尾注释未处理（nested-key 已 FIX-3 修） |
 | [T91](open/todo/T91.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | PREFIX_RE 贪婪 .+ 对含 -pN- 样式 roadmap 名/描述性尾缀的 change 名有命名固有歧义（取最后 -pN） |
 | [T92](open/todo/T92.md) | todo | PROPOSED | 2026-07-01 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 |
-| [T98](open/todo/T98.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2） |
-| [T101](open/todo/T101.md) | todo | PROPOSED | 2026-07-01 | `spec-review` | 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1） |
-| [T103](open/todo/T103.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 每镜 effort scaling 预算+输出封顶：四要素 prompt 槽+1-2k 回传目标（04 提案 §2.5） |
 | [T104](open/todo/T104.md) | todo | PROPOSED | 2026-07-01 | `retro` | retro 补 token 维度量：checkpoint 落 token 快照锚+join（04 提案 §2.6） |
-| [T105](open/todo/T105.md) | todo | PROPOSED | 2026-07-01 | `model-tiers` | thinking/effort 预算按步分档：model-tiers 加第二维（04 提案 §2.7） |
 | [T107](open/todo/T107.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 位置去偏：HIGH 级裁决换序重跑+fan-out 输入顺序打散（04 提案 §4.2） |
 | [T108](open/todo/T108.md) | todo | PROPOSED | 2026-07-01 | `retro` | 镜价值指标升级 resolution rate+假阳模式沉淀回 checklist（04 提案 §4.3） |
 | [T109](open/todo/T109.md) | todo | PROPOSED | 2026-07-01 | `code-checklists` | 测试大改=红旗 硬规则+intake diff 体积提示（04 提案 §4.4） |
@@ -43,7 +37,6 @@
 | [T121](open/todo/T121.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 大产物文件交接：镜报告超阈值写文件、返回只带路径（04 提案 §5.7） |
 | [T122](open/todo/T122.md) | todo | PROPOSED | 2026-07-01 | `skills` | done/ship/init 加 disable-model-invocation 触发层硬开关（04 提案 §5.4） |
 | [T123](open/todo/T123.md) | todo | PROPOSED | 2026-07-01 | `issues` | 动作抽象层：recorder tracker 后端可插拔，仅当需求出现（04 提案 §5.5） |
-| [T124](open/todo/T124.md) | todo | PROPOSED | 2026-07-01 | `bundle` | 规则注入策略分界落地：小而稳定且每镜必用的核心 rubric 运行时读一次全文贴入（可缓存稳定前缀），大部头/高频演进 delta 保持引用+anchor_lint；SKILL.md 禁静态内联不变（04 提案 §4.8，2026-07-10 拍板） |
 | [T129](open/todo/T129.md) | todo | PROPOSED | 2026-07-01 | `sdflow-roadmap` | 存量 wco/mlh 两包 requirements.md 并入 design.md 迁移（tasks 5.1-5.3 受控延后项，Q-C 拍板前置②）——触发条件：首个新流程 roadmap SHIPPED 且目标包无在飞 change；操作序列以归档 change rebuild-sdflow-roadmap-v2 的 tasks.md 5.1-5.3 + design Migration step3 为准（全节清点表/考古注记四要素/头部章不占编号序列/清点表落盘随 commit/per 包 maintain_scan） |
 | [T141](open/todo/T141.md) | todo | OPEN | 2026-07-01 | `workflow bundle (roadmap/ff/spec-review/implement/code-review)` | 把「拆分标准=一个change一个完整阶段结果」融入 workflow 三处触发 |
 | [T143](open/todo/T143.md) | todo | PROPOSED | 2026-07-01 | `sdflow-architecture` | frozen-diff lint：frozen contract 有 diff 无新 ADR 关联报错（需 git 对比，超 v1 纯文件断言） |
@@ -78,7 +71,6 @@
 | [T272](open/todo/T272.md) | todo | OPEN | 2026-08-07 | sdflow-init/assets/hack/resolve-workflow.sh | resolve-workflow.sh 补 --help（X5，spec-review A8 DEFER）——现仅支持 --root/--explain/SDFLOW_HOME，无 usage 输出；与 fix-probe-scan-precision 本次目标（消灭双链）正交，DEFER 记 todo 单独处理。 |
 | [T273](open/todo/T273.md) | todo | OPEN | 2026-08-07 | setup.sh | setup.sh 关键项 skipped 应非零退出（X-7，spec-review 裁掉记 todo）——如 install_agents() 因所有权守卫跳过关键条目时，当前只落 skipped[] 汇总、退出码仍 0，调用方（如 CI）无法据退出码判定装成没装全；改失败语义属独立 change（超本 change scope）。 |
 | [T274](open/todo/T274.md) | todo | OPEN | 2026-08-07 | .github/workflows/windows-recorder-smoke.yml | 补 Windows 失鲜 CI 回归用例（Q5 备选，spec-review-report.md Q5）——验证「旧 SKILL（cp -r 快照）× 新 canonical tools」场景：checkout 旧版→setup→checkout 新版但不重跑 setup→断言评审失败是响的（非静默）。当前四件套已订正措辞为「运行时自检不可能、CI 层面可测但目前未测」，本条补上那条缺的 CI 用例；按通则④五问（概率低×失败形态已是响的）暂不在 fix-probe-scan-precision 内做。 |
-| [T275](open/todo/T275.md) | todo | OPEN | 2026-08-10 | `SKILL.md` | SKILL.md DOC-1 审计：14 个 SKILL.md 落实 doc-authoring.md（正文即最终态，演进史进附录），7/14 超 500 行，修订锚保留界线需人拍板 |
 | [T276](open/todo/T276.md) | todo | OPEN | 2026-08-10 | `评审编排` | 评审编排大改条件更新：宿主已有 Workflow 确定性编排原语 + Stop hook 四级 gate 阶梯；触发条件=下次评审编排必须动刀时一并重估 |
 | [T277](open/todo/T277.md) | todo | OPEN | 2026-08-11 | sdflow-ship + sdflow-implement + sdflow-init assets | 删除 impl-pipeline superpowers 旧管线分支（writing-plans→subagent-driven-development 路由），tickets 成唯一实现管线：sdflow-ship 路由分支、config.yaml 键语义、CLAUDE.md/workflow 托管文案、相关 docs 一并收口（用户 2026-08-11 拍板「以后只走 tickets」） |
 | [T278](open/todo/T278.md) | todo | OPEN | 2026-08-12 | `sdflow-upstream-watch` | advance 报告/facts 绑定强度改进：run_id/facts digest 校验、拒绝旧 facts 重放（p3 code-review defer D1，来源 code-voice+hr-tg；设计定的是零解析子串校验，改进超当时 scope） |

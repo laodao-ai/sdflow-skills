@@ -331,38 +331,57 @@ add-sdflow-spec / codex-host）降至 38–79 min（remove-superpowers / p4）�
 - [x] 阶段 2 改造后设计门报告的实际形态稳定（摘要头设计依赖报告结构稳定）
       **✅**（p4 + remove-superpowers 两个归档样本结构一致：执行摘要 → 决策登记区
       〔需拍板/自动决策/低置信上抛/已裁掉〕→ findings 总表）
-- [ ] 1.A.2 考古层修订锚保留界线的人工拍板 → **移入 change 相位 B 拷问**（「只在人脑子里」
+- [x] 1.A.2 考古层修订锚保留界线的人工拍板 → **移入 change 相位 B 拷问**（「只在人脑子里」
       的问题，非 roadmap 前置；候选界线：带 adr/decision-memo 编号的指路锚保留、纯
       「此前是 X 现改为 Y」叙述删除——DOC-1 判据「只有读过上一版的人才需要的句子不属正文」）
+      **✅ 2026-08-12**（decision-memo D1 拍板：尽量删，确需保留者迁 `references/` 旁文件；
+      Task 4 已按此界线逐文件执行）
 
 ### 子任务（change `implement-workflow-optimization-2026-08-p5`）
 
-- [ ] 5.1 T275 主力：14 个 SKILL.md 落实 DOC-1 审计（7 个超 500 行优先：implement 821 /
+- [x] 5.1 T275 主力：15 个 SKILL.md 落实 DOC-1 审计（7 个超 500 行优先：implement 821 /
       code-review 771 / roadmap 715 / spec-review 593 / done 567 / architecture 562 /
       spec 528，行数为 2026-08-12 实测），修订锚保留界线经相位 B 拍板后统一执行；
       清理 MUST NOT 动 `sdflow:principles` 托管块，`sync_principles.py --check` 与全部
       SKILL lint 测试保持绿
-- [ ] 5.2 T101 残余：spec-review SKILL Step3 报告模版补拍板三问 + anchor_lint 拍板层
+      **✅ 2026-08-12**（Task 4 交付，实测 15 个非 14 个——`find . -maxdepth 2 -name SKILL.md`
+      实测数；证据锚 `openspec/changes/implement-workflow-optimization-2026-08-p5/audit/
+      skill-doc1-audit.md`，15 节逐文件审计留档）
+- [x] 5.2 T101 残余：spec-review SKILL Step4 报告模版补拍板三问 + anchor_lint 拍板层
       存在性机验 + bundle 同步（`sdflow-init/assets/workflow/` 权威源先改）
-- [ ] 5.3 T256 评估收口：先答闸门问题（逐项列阶段三「只活在对话里」的状态；先读 T26
-      结项结论，别重走撞红线路）；按五问收敛为「做 / 明确不做并记因」——若答案只有
-      merge 意图 ⇒ 不做 hook，ship 摘要一句提示即最省路径；全局 hook 命名空间代价 MUST 计入
-- [ ] 5.4 实现验证收尾（全仓 pytest 绿）
+      **✅ 2026-08-12**（原「Step3」措辞过时已修正为「Step4」——adr/0041 裁决协议改造后
+      产出条款在 Step4「产出」而非 Step3「机械引用核 + 综合裁决」；Task 1 交付 anchor_lint
+      `sdflow:gate-questions` 机验 + Task 3 交付 `sdflow-spec-review/SKILL.md` Step4 三问
+      小节模版与锚行）
+- [x] 5.3 T256 调研记录 + 保持 OPEN（memo D4 修正措辞，原「评估收口」预判「做/WONTDO」二元
+      收敛未成立）：先答闸门问题（逐项列阶段三「只活在对话里」的状态；已读 T26 结项结论，
+      未重走撞红线路）；实际收敛 = 第三种结果——**人 2026-08-12 拍板「不能只以当前 repo
+      状态判断，先调研、先记录、本 change 不做」**（宿主不对称：Codex 侧 auto-compact
+      @90% 阈值是现实概率，不能用 Claude 1M context 现状否定该需求）。调研记录已追加进
+      `openspec/issues/open/todo/T256.md`（双宿主 PreCompact 机械落点核实 + 未来方向推荐：
+      merge 意图落盘化优先于 hook），issue 保持 OPEN（非终态，符合人工拍板）
+- [ ] 5.4 实现验证收尾（全仓 pytest 绿）——**待 Task 6**（本 task5 backfill 不含验证收尾）
 
 ### 验收标准
 
-- [ ] 14 个 SKILL.md 审计结论逐文件留档，7 个超 500 行者完成清理（正文即最终态）
-- [ ] T101 / T275 / T256 三条 issue 全部到达终态（DONE 或 WONTDO，理由与事实一致）
+- [x] 15 个 SKILL.md 审计结论逐文件留档，7 个超 500 行者完成清理（正文即最终态）
+      **✅**（`audit/skill-doc1-audit.md`）
+- [x] T101 / T275 二条 issue 到达终态（DONE，理由与事实一致，evidence 见 issues set-status）；
+      T256 按 D4 拍板**调研记录、保持 OPEN**（非终态——原「全部到达终态」表述已被 D4 拍板
+      修正，OPEN 是本条的正确最终状态，非未完成）
 - [ ] 拍板三问在下一轮真实 spec-review 报告出现（本 change 自身 spec-review 即首个 dogfood）
-      + anchor_lint 机验绿
-- [ ] 全仓 pytest 绿
-- [ ] change 归档（code-review → sdflow-done → merge）
+      + anchor_lint 机验绿 —— **时序性未达成**：本 change 自身的 `spec-review-report.md`
+      产出于 Task 1/3（拍板三问 + anchor_lint 落地）之前，无法自证，已挂 hand-off-notes.md
+      待下一次设计审首验
+- [ ] 全仓 pytest 绿 —— 待 Task 6 出证据
+- [ ] change 归档（code-review → sdflow-done → merge）—— 待 Task 6 之后
 
 ### 交付物
 
-- 14 个 SKILL.md 考古层清理（DOC-1 落实，审计留档）
-- spec-review 报告拍板三问条款 + 拍板层 anchor_lint 机验
-- T256 评估结论（闭环关闭，理由可复核）
+- 15 个 SKILL.md 考古层清理（DOC-1 落实，审计留档）
+- spec-review 报告拍板三问条款（Step4）+ 拍板层 anchor_lint 机验
+- T256 调研结论（决定本 change 不实现、issue 保持 OPEN，理由已记入 issue 与 decision-memo D4，
+  可复核）
 
 ---
 
@@ -384,7 +403,7 @@ add-sdflow-spec / codex-host）降至 38–79 min（remove-superpowers / p4）�
 | 阶段 2 | 5（2.A×5） | **✅ 5/5 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12） |
 | 阶段 3 | 5（tickets 管线 Task1–5） | **✅ 5/5 完成 2026-08-11**（含 code-review 修复，归档 SHA `c4b8c6f`） |
 | 阶段 4 | 8（tickets 管线 Task1–6 + CR + B25/B26） | **✅ 8/8 完成 2026-08-12**（verify PASS 2639 tests，归档 SHA `e202feb`） |
-| 阶段 5 | 4（5.1–5.4） | 已细化 2026-08-12，待执行 |
+| 阶段 5 | 4（5.1–5.4） | 5.1–5.3 完成 2026-08-12（T275/T101/T256 三条 issue 回填），5.4 待 Task 6 验证收尾 |
 | **合计** | **22** | — |
 
 ## 附录 C · 未来 OpenSpec 变更映射
