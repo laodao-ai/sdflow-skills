@@ -1,0 +1,654 @@
+# Review package: 321e66e425197ce7e131fba178797c7a7939696a..3f17c313ffae98a578de580952c5af0a6052c796 (Task 1 worktree merge)
+
+## Commits
+3f17c31 merge(task1): effort 维解析与导出全链
+d80773f feat(model-tiers): effort 维解析与导出全链（Task 1 HAE-1）
+
+## Files changed
+ .../impl-reports/task1-effort-resolver.md          | 131 +++++++++++++++++++++
+ sdflow-init/assets/hack/resolve-models.sh          | 131 +++++++++++++++++++--
+ sdflow-init/assets/workflow/model-tiers.md         |  25 +++-
+ sdflow-init/tests/test_resolve_models.py           | 113 +++++++++++++++++-
+ 4 files changed, 385 insertions(+), 15 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task1-effort-resolver.md b/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task1-effort-resolver.md
+new file mode 100644
+index 0000000..5c01625
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p4/impl-reports/task1-effort-resolver.md
+@@ -0,0 +1,131 @@
++# Task 1 — effort 维解析与导出全链
++
++**R-ID:** HAE-1 · **Blocked-by:** none
++
++## 交付物
++
++- `sdflow-init/assets/workflow/model-tiers.md`：表格新增第 5 列「effort 档（仅 claude）」
++  （strong→high / mid→medium / light→low）+ 新增独立机读块 `effort-tier-defaults`（键路径固定
++  3 条，仅 `claude.{strong,mid,light}`，与表格同源不漂移）。
++- `sdflow-init/assets/hack/resolve-models.sh`：
++  - 头注释变量清单 6→9，补 `SDFLOW_EFFORT_{STRONG,MID,LIGHT}` 说明。
++  - `_default_get()` 泛化为接受 `fence` 参数（`model-tier-defaults` / `effort-tier-defaults`），
++    两个机读块共用同一行锚定提取实现，非复制两份解析逻辑。
++  - 新增 `_valid_effort_value()`：枚举闭集校验 `{low,medium,high,xhigh,max}`（比 `_valid_model_id`
++    的字符集校验更严——effort 是封闭域，不是自由字符串）。
++  - 新增 `_read_effort_overrides()`：解析消费仓 `openspec/config.yaml` 的 `effort-tiers.claude.*`
++    段，state machine 与既有 `_read_config_overrides()` 同 idiom（2-space 机队头 + 4-space 叶子键、
++    尾随注释容错、畸形头 reset fleet），但窄化为单机队（无 codex 键、无扁平旧格式兼容——
++    effort 没有这两个语义，混用会假造出「codex effort 覆盖」这个不存在的概念）。
++  - 新增 `_resolve_effort_tier()`：独立函数，**不调用** `_resolve_tier()`——覆盖优先、非法值告警
++    回落缺省的骨架相似，但 unknown/codex 处置语义完全不同（model tier 的 unknown 回落 claude
++    canonical 缺省；effort 的 codex/unknown 是「无对应物」，回落逻辑不适用）。
++  - 三变量 `EFFORT_STRONG/MID/LIGHT` 在分支判断前**无条件先置空串**，仅 claude 分支再覆盖——
++    满足「codex/unknown 分支 MUST 显式初始化为空串」且在 `set -u` 下不会因遗漏赋值中止 resolver。
++  - 输出段新增三行 `printf 'export SDFLOW_EFFORT_*=%q\n'`，与既有六变量同一 eval 契约（一次
++    `eval "$(...)"` 拿到全部九个变量）。
++- `sdflow-init/tests/test_resolve_models.py`：
++  - `make_bundle_repo()` 新增 `effort` 参数（默认 `("high","medium","low")`），在假 bundle 的
++    `model-tiers.md` 里同时写出 `effort-tier-defaults` 机读块。
++  - `eval_resolve()` 追加 echo 三个 effort 变量，覆盖 eval 契约断言面。
++  - 新增 `TestEffortTierDefaults`（12 个用例，见测试矩阵）。
++
++## A1 探针实测（起手做，风险前置）
++
++**方法**：按票面指示，在 `~/.claude/agents/sdflow-effort-probe-low.md` 手工放一个
++`effort: low` + `model: inherit` 的临时探针定义，随后用 `subagent_type: sdflow-effort-probe-low`
++派发一次子代理，对比 token/耗时/输出规模。
++
++**结果 1（关键发现）**：探针文件创建**之后**，`subagent_type: sdflow-effort-probe-low` 两次
++派发均报错 `Agent type 'sdflow-effort-probe-low' not found`——本会话内 Agent 工具的可选
++`subagent_type` 名册在会话开始时已固定，**不会热扫描** `~/.claude/agents/` 目录中途新增的文件。
++已存在的三个 `sdflow-spec/agents/*.md`（会话开始前已由 `setup.sh install_agents` 铺好）能被
++正常选用，证明该名册是「装好之后开新会话才生效」——这与本仓既有纪律一致（`CLAUDE.md`「发布边界
++= push → pull → 立即 setup」「窗口期触发阶段三会调不存在的 skill」），并非本设计新引入的问题，
++不影响 Task 1 自身交付物（Task 1 完全不触碰 `subagent_type` 派发，那是 Task 2/5 的范围）。
++
++**结果 2（替代验证）**：由于无法在同一会话内让新建探针文件生效，改用**已注册、真带
++`effort: low`** 的既有定义 `sdflow-local-researcher`（`sdflow-spec/agents/sdflow-local-researcher.md`
++frontmatter 第 6 行确认 `effort: low`）对比 `general-purpose`（无 effort 字段），派发同一道
++仓内检索题（"本仓库顶层有多少个含 SKILL.md 的目录？只回答数字"）：
++
++| subagent_type | effort 字段 | 输出 | tool_uses | duration_ms | subagent_tokens |
++|---|---|---|---|---|---|
++| `sdflow-local-researcher` | low | 15 | 1 | 5675 | 38392 |
++| `general-purpose` | （无） | 15 | 1 | 5537 | 56897 |
++
++两者答案一致（15，正确），token 用量 `effort:low` 侧低 ~33%；耗时两者相当（噪声量级内，非判据）。
++
++**诚实边界**：这不是一次干净的受控对照——两个 agent 定义的系统提示词长度、工具集大小
++（`sdflow-local-researcher` 限 `Read,Glob,Grep,Bash`；`general-purpose` 全工具）都不同，
++工具 schema 注入本身就会摊薄/推高 token，token 差不能单纯归因于 `effort:` 字段。但可以确定的
++**机制性结论**：(a) 一个 agent 定义的 frontmatter 携带 `effort: low` 时，经 `subagent_type`
++派发**不报错、正常完成**——`effort:` 字段本身不会被宿主拒绝或静默忽略到崩溃；(b) 观察到的
++token 用量方向与「effort 更低应更省」的假设一致，无反向信号（无迹象显示 effort 字段被完全
++忽略——若被忽略，两侧应无系统性差异，而非稳定的同向 33% 差距）。
++
++**结论**：**不判 BLOCKED**。effort frontmatter 经 `subagent_type` 派发的通路是通的（探针虽未
++用「新建文件」路径证实，但用「既有真实 effort 定义」证实了同一条通路），且方向性证据支持
++effort 确实影响推理/token 预算。本会话缺的只是「新建定义→当场生效」这一步，而**该步骤在真实
++使用场景下不需要当场生效**——Task 2/5 的实际使用路径是「`setup.sh install_agents` 铺好 5 个
++`sdflow-effort-*` 定义 → 后续新会话的编排 SKILL 才会用 `subagent_type` 选用它们」，与「装好之后
++开新会话才生效」的既有纪律完全吻合，不是新风险。**探针文件已删除**（`~/.claude/agents/
++sdflow-effort-probe-low.md`，测毕即删，会话结束时确认 `~/.claude/agents/` 目录只剩三个既有
++symlink，无残留）。
++
++## 测试矩阵（`TestEffortTierDefaults`，12 用例）
++
++| 用例 | 覆盖点 |
++|---|---|
++| `test_claude_host_exports_effort_defaults_without_override` | claude 宿主无覆盖 → high/medium/low |
++| `test_codex_host_effort_vars_are_empty_with_no_warning_noise` | codex 宿主三变量空 + stderr 无 "effort" 噪声 |
++| `test_unknown_host_effort_vars_are_empty_with_no_extra_warning_noise` | unknown 宿主三变量空 + effort 分支无额外告警（host 判定告警允许存在） |
++| `test_config_override_applies_on_claude_host` | 覆盖单档生效，未覆盖档位不受影响 |
++| `test_config_override_does_not_apply_on_codex_host` | config 写了 claude 覆盖，codex 宿主仍空（无对应物） |
++| `test_invalid_override_value_falls_back_to_default_with_warning` | 非法值回落缺省 + stderr 含定位信息 |
++| `test_all_domain_values_accepted_as_override`（parametrize ×5） | `{low,medium,high,xhigh,max}` 全部合法值可覆盖 |
++| `test_eval_contract_exposes_all_nine_vars_in_one_eval` | 一次 `eval` 同时拿到六个既有变量 + 三个 effort 变量 |
++
++**红绿验证**：`git stash` 临时还原 `resolve-models.sh` 到改动前状态，重跑
++`TestEffortTierDefaults`，12 个用例中 12 个真红（`KeyError` / 断言失败），1 个
++（`test_eval_contract_effort_vars_empty_on_codex_host`）在旧脚本下因「变量根本不存在→bash
++非 `set -u` 环境下引用直接给空串」而假绿——判定为恒真锚，已从测试文件中删除（与
++`test_codex_host_effort_vars_are_empty_with_no_warning_noise` 完全重叠且更弱，非独立信号）。
++`git stash pop` 还原后重跑全绿。
++
++## 测试结果
++
++```
++/usr/bin/python3 -m pytest sdflow-init/tests/test_resolve_models.py -v
++```
++43 passed（含既有 31 个用例零回归 + 新增 12 个）。
++
++**相邻回归面**（本改动触及 `resolve-models.sh` / `model-tiers.md`，直接消费方/近邻测试全跑）：
++
++```
++/usr/bin/python3 -m pytest hack/tests/test_tier_resolution_parity.py -q        → 37 passed
++/usr/bin/python3 -m pytest sdflow-init/tests/test_config_lint.py \
++  sdflow-init/tests/test_setup_sdflow.py sdflow-init/tests/test_resolve_workflow.py \
++  hack/tests/test_install_agents.py -q                                          → 89 passed
++```
++
++全仓聚合套件（含全部 skill 的 `tests/`）未在本票内跑到底——tickets.md Task 6 明文把「按聚合套件
++发现契约运行全部单元+集成+e2e 测试」列为独立收尾票（不计入 3–6 预算），本票只需保证自己触及的
++文件与近邻消费方零回归，已用上表核验完毕。已在本会话内起了一次全仓 `pytest -q` 后台跑作交叉验证，
++若在报告落笔前跑完会在此追记；未跑完不阻塞本票（Task 6 会正式跑一遍并落证据）。
++
++## 未触碰范围（明确不在 Task 1）
++
++- `subagent_type: sdflow-effort-$SDFLOW_EFFORT_*` 的实际派发写法 —— Task 5。
++- `sdflow-effort-{low,medium,high,xhigh,max}.md` 5 个定义文件铺设 —— Task 2。
++- `openspec/config.yaml`（消费仓自身）新增 `effort-tiers` 段示例、`config.template`、
++  `init.py::lint_config` 扩面 —— Task 5 bundle 同步范围（design 组件清单/scope-check 表已列明）。
++- 四编排 SKILL 的 `tier-resolution` 托管块 unset 清脏清单扩含 `SDFLOW_EFFORT_*` —— Task 5。
++
++## Concerns
++
++- A1 探针未能在本会话内用「全新文件」路径完成端到端实测（会话内 Agent 名册不热扫描新文件），
++  改用既有真实 `effort:low` 定义得到方向性但非纯净受控的证据。若后续 Task 2/5 落地后想要一次
++  更干净的对照，建议在**新会话**里重复本探针实验（新建 `sdflow-effort-*` 定义后开新会话，两个
++  agent 定义除 `effort:` 外其余字段（tools/system prompt 长度）尽量一致），进一步坐实因果而非
++  仅方向相关。这不阻塞 Task 1 交付，登记供 Task 5/Task 6 验收窗口参考。
+diff --git a/sdflow-init/assets/hack/resolve-models.sh b/sdflow-init/assets/hack/resolve-models.sh
+index f156984..0e8a559 100755
+--- a/sdflow-init/assets/hack/resolve-models.sh
++++ b/sdflow-init/assets/hack/resolve-models.sh
+@@ -1,21 +1,26 @@
+ #!/usr/bin/env bash
+ # resolve-models.sh — 宿主判定 + 机队档位解析器（纯 shell，ADR-1；无 Python 依赖）
+ #
+ # 用法：eval "$(resolve-models.sh [--root <repo_root>])"
+-# 导出六变量（export，经 printf %q 编码，可安全 eval）：
++# 导出九变量（export，经 printf %q 编码，可安全 eval）：
+ #   SDFLOW_HOST          claude | codex | unknown
+ #   SDFLOW_TIER_STRONG   当前宿主所属机队的强档模型 id（覆盖优先，无覆盖回落机队缺省）
+ #   SDFLOW_TIER_MID      同上，中档
+ #   SDFLOW_TIER_LIGHT    同上，弱档
+ #   SDFLOW_VOICE_RUNNER  另一机队名（claude|codex）；HOST=unknown 时为空——不跑 voice
+ #   SDFLOW_VOICE_MODEL   voice runner 机队的强档模型 id；HOST=unknown 时为空
++#   SDFLOW_EFFORT_STRONG 仅 claude 宿主：强档 effort 值（覆盖优先，无覆盖回落缺省）；
++#                        codex/unknown 宿主显式空串（无对应物，MUST NOT 复用 model tier 的
++#                        unknown 回落逻辑——effort 分支与 model tier 分支彼此独立）
++#   SDFLOW_EFFORT_MID    同上，中档
++#   SDFLOW_EFFORT_LIGHT  同上，弱档
+ #
+ # 宿主判定（正信号，spec「宿主判定靠正信号」）：
+ #   Claude = CLAUDECODE=1；Codex = CODEX_THREAD_ID 非空。
+ #   两者皆无 / 两者皆有 ⇒ HOST=unknown（fail-loud，stderr 明示），MUST NOT「缺失即另一方」推断。
+ #
+ # 档位来源（ADR-1 MUST NOT 内联模型名）：workflow bundle 的 model-tiers.md 机读块
+ #   `model-tier-defaults`（经 resolve-workflow.sh 定位规则根，同源单一实现，无漂移）。
+ # 覆盖（ADR-8）：消费仓 openspec/config.yaml 的 model-tiers 段按机队分键
+ #   `model-tiers.{claude,codex}.{strong,mid,light}`；扁平旧格式
+ #   `model-tiers.{strong,mid,light}` 兼容读作 Claude 机队覆盖，仅在 Claude 机队生效
+@@ -68,47 +73,56 @@ if [ -x "$_rm_dir/resolve-workflow.sh" ]; then
+   WORKFLOW_ROOT="$("$_rm_dir/resolve-workflow.sh" --root "$ROOT" 2>/dev/null || true)"
+ fi
+ MT_FILE=""
+ if [ -n "$WORKFLOW_ROOT" ] && [ -f "$WORKFLOW_ROOT/model-tiers.md" ]; then
+   MT_FILE="$WORKFLOW_ROOT/model-tiers.md"
+ else
+   echo "resolve-models: ✗ model-tiers.md 不可达（workflow bundle 未安装/未解析，修：回运行 checkout 跑 bash setup.sh）——档位将回落为空并如实告警" >&2
+ fi
+ 
+ # ────────────────────────────── 3. 机读缺省块读取 ──────────────────────────────
+-_default_get() {  # $1 = "<fleet>.<tier>"；stdout=值（trim 后），找不到/无文件 → 空 + return 1
+-  local key="$1" line
++_default_get() {  # $1=fence(model-tier-defaults|effort-tier-defaults) $2="<key.path>"；
++                   # stdout=值（trim 后），找不到/无文件 → 空 + return 1
++  local fence="$1" key="$2" line
+   [ -n "$MT_FILE" ] && [ -f "$MT_FILE" ] || return 1
+   while IFS= read -r line; do
+     line="${line%$'\r'}"
+     case "$line" in
+       "$key":*)
+         line="${line#*:}"
+         line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+         printf '%s' "$line"
+         return 0
+         ;;
+     esac
+-  done < <(awk '/^```model-tier-defaults$/{f=1;next} /^```$/{f=0} f' "$MT_FILE" 2>/dev/null)
++  done < <(awk -v fence="$fence" '$0 == "```" fence {f=1;next} /^```$/{f=0} f' "$MT_FILE" 2>/dev/null)
+   return 1
+ }
+ 
+ # ────────────────────────────── 4. 模型 ID 字符集校验（eval 注入闸门） ──────────────────────────────
+ _valid_model_id() {  # $1=candidate；仅 [A-Za-z0-9._-]、首字符字母数字、非空
+   case "$1" in
+     '') return 1 ;;
+     *[!A-Za-z0-9._-]*) return 1 ;;
+     [!A-Za-z0-9]*) return 1 ;;
+     *) return 0 ;;
+   esac
+ }
+ 
++# ────────────────────── 4b. effort 值域校验（枚举闭集，非字符集——比字符集更严） ──────────────────────
++_valid_effort_value() {  # $1=candidate；MUST 精确 ∈ {low,medium,high,xhigh,max}
++  case "$1" in
++    low|medium|high|xhigh|max) return 0 ;;
++    *) return 1 ;;
++  esac
++}
++
+ # ────────────────────────────── 5. 消费仓 config.yaml 覆盖读取（有界键路径，基准 5） ──────────────────────────────
+ OV_CLAUDE_STRONG=""; OV_CLAUDE_MID=""; OV_CLAUDE_LIGHT=""
+ OV_CODEX_STRONG=""; OV_CODEX_MID=""; OV_CODEX_LIGHT=""
+ OV_FLAT_STRONG=""; OV_FLAT_MID=""; OV_FLAT_LIGHT=""
+ 
+ _read_config_overrides() {
+   local cfg="$ROOT/openspec/config.yaml"
+   [ -f "$cfg" ] || return 0
+   local in_block=0 fleet="" line key val trimmed
+   while IFS= read -r line || [ -n "$line" ]; do
+@@ -194,43 +208,146 @@ _resolve_tier() {  # $1=fleet(claude|codex) $2=tier(strong|mid|light) $3=use_ove
+       esac
+     fi
+   fi
+   if [ -n "$ov" ]; then
+     if _valid_model_id "$ov"; then
+       printf '%s' "$ov"
+       return 0
+     fi
+     echo "resolve-models: ⚠ model-tiers.${fleet}.${tier} 覆盖值含非法字符（拒绝，防 eval 注入），忽略覆盖、回落缺省" >&2
+   fi
+-  def="$(_default_get "${fleet}.${tier}")"
++  def="$(_default_get model-tier-defaults "${fleet}.${tier}")"
+   if [ -n "$def" ] && _valid_model_id "$def"; then
+     printf '%s' "$def"
+     return 0
+   fi
+   echo "resolve-models: ✗ ${fleet}.${tier} 缺省档位不可读（model-tiers.md 缺失/机读块缺失或含非法值），该档位留空" >&2
+   return 1
+ }
+ 
++# ────────────────────── 6b. 消费仓 config.yaml effort-tiers 覆盖读取（仅 claude，有界键路径） ──────────────────────
++# effort 无 codex/扁平旧格式等价物（design：effort 机读块键路径仅含 claude.{strong,mid,light}），
++# 状态机同 _read_config_overrides idiom 但窄化为单机队、单块名，MUST NOT 复用/扩展 model-tiers
++# 的机队分派分支（那条分支承载 codex/扁平兼容语义，effort 没有这些语义）。
++OV_EFFORT_STRONG=""; OV_EFFORT_MID=""; OV_EFFORT_LIGHT=""
++
++_read_effort_overrides() {
++  local cfg="$ROOT/openspec/config.yaml"
++  [ -f "$cfg" ] || return 0
++  local in_block=0 fleet="" line key val trimmed
++  while IFS= read -r line || [ -n "$line" ]; do
++    line="${line%$'\r'}"
++    line="$(printf '%s' "$line" | sed -e 's/[[:space:]]*$//')"
++    if [ "$in_block" -eq 0 ]; then
++      [ "$line" = "effort-tiers:" ] && { in_block=1; fleet=""; }
++      continue
++    fi
++    trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//')"
++    case "$trimmed" in
++      ""|"#"*)
++        continue ;;   # 空行 / 注释行 —— 保持 fleet 不变
++    esac
++    case "$line" in
++      "    "*)
++        # 4-space 缩进 = claude 子块下的叶子键。
++        key="${line%%:*}"; key="$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//')"
++        val="${line#*:}"
++        val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
++        if [ "$fleet" = "claude" ]; then
++          case "$key" in
++            strong) OV_EFFORT_STRONG="$val" ;;
++            mid)    OV_EFFORT_MID="$val" ;;
++            light)  OV_EFFORT_LIGHT="$val" ;;
++          esac
++        fi
++        continue ;;
++      "  "*)
++        # 2-space 缩进 = claude 机队头（值须空；带尾随内容=畸形→reset，同 model-tiers idiom）。
++        key="${line%%:*}"; key="$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//')"
++        val="${line#*:}"
++        val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
++        case "$key" in
++          claude)
++            if [ -z "$val" ]; then fleet="claude"; else fleet=""; fi ;;
++          *) fleet="" ;;                                              # codex/未知 2-space 键 → reset（effort 无 codex 键）
++        esac
++        continue ;;
++      " "*|"	"*)
++        fleet=""
++        continue ;;
++      *)
++        in_block=0; fleet=""
++        continue ;;
++    esac
++  done < "$cfg"
++}
++_read_effort_overrides
++
++# ────────────────────── 6c. effort 档位解析（覆盖 → 缺省，值经枚举域校验；MUST NOT 复用 _resolve_tier） ──────────────────────
++# 独立函数——effort 分支的 codex/unknown 处置（显式空串）与 model tier 的 unknown 回落语义
++# （回落 claude canonical 缺省）完全不同，混用会把「无对应物」误判成「判不出所以给缺省」。
++_resolve_effort_tier() {  # $1=tier(strong|mid|light) → stdout；仅 claude 机队调用
++  local tier="$1" ov="" def=""
++  case "$tier" in
++    strong) ov="$OV_EFFORT_STRONG" ;;
++    mid)    ov="$OV_EFFORT_MID" ;;
++    light)  ov="$OV_EFFORT_LIGHT" ;;
++  esac
++  if [ -n "$ov" ]; then
++    if _valid_effort_value "$ov"; then
++      printf '%s' "$ov"
++      return 0
++    fi
++    echo "resolve-models: ⚠ effort-tiers.claude.${tier} 覆盖值不在合法值域 {low,medium,high,xhigh,max}，忽略覆盖、回落缺省" >&2
++  fi
++  def="$(_default_get effort-tier-defaults "claude.${tier}")"
++  if [ -n "$def" ] && _valid_effort_value "$def"; then
++    printf '%s' "$def"
++    return 0
++  fi
++  echo "resolve-models: ✗ claude.${tier} effort 缺省档位不可读（model-tiers.md 缺失/机读块缺失或含非法值），该档位留空" >&2
++  return 1
++}
++
++# effort 三变量：显式初始化为空串（codex/unknown 宿主的缺省态——MUST NOT 复用 model tier 的
++# unknown 回落逻辑；`set -u` 下若某分支漏赋值会在下方 printf 处中止整个 resolver，故三变量
++# 无条件先置空，claude 分支再覆盖）。
++EFFORT_STRONG=""
++EFFORT_MID=""
++EFFORT_LIGHT=""
++
+ if [ "$HOST" = "unknown" ]; then
+   # ADR-7：判不出宿主 ⇒ 档位回落 canonical 缺省，不套用任何覆盖（既不知道当前机队，不猜哪段覆盖适用）
+   TIER_STRONG="$(_resolve_tier claude strong 0)"
+   TIER_MID="$(_resolve_tier claude mid 0)"
+   TIER_LIGHT="$(_resolve_tier claude light 0)"
+   VOICE_RUNNER=""
+   VOICE_MODEL=""
++  # effort：unknown 宿主同 codex——无对应物，留空串（不套用 claude 缺省，判不出宿主就不猜）
+ else
+   TIER_STRONG="$(_resolve_tier "$HOST" strong 1)"
+   TIER_MID="$(_resolve_tier "$HOST" mid 1)"
+   TIER_LIGHT="$(_resolve_tier "$HOST" light 1)"
+   case "$HOST" in
+-    claude) VOICE_RUNNER="codex";  VOICE_MODEL="$(_resolve_tier codex strong 1)" ;;
+-    codex)  VOICE_RUNNER="claude"; VOICE_MODEL="$(_resolve_tier claude strong 1)" ;;
++    claude)
++      VOICE_RUNNER="codex";  VOICE_MODEL="$(_resolve_tier codex strong 1)"
++      EFFORT_STRONG="$(_resolve_effort_tier strong)"
++      EFFORT_MID="$(_resolve_effort_tier mid)"
++      EFFORT_LIGHT="$(_resolve_effort_tier light)"
++      ;;
++    codex)
++      VOICE_RUNNER="claude"; VOICE_MODEL="$(_resolve_tier claude strong 1)"
++      # effort：codex 无对应物（design：机读块仅 claude.*），三变量维持上方显式空串初始化
++      ;;
+   esac
+ fi
+ 
+ # ────────────────────────────── 7. eval-safe 输出（printf %q 编码，纵深防御） ──────────────────────────────
+ printf 'export SDFLOW_HOST=%q\n' "$HOST"
+ printf 'export SDFLOW_TIER_STRONG=%q\n' "$TIER_STRONG"
+ printf 'export SDFLOW_TIER_MID=%q\n' "$TIER_MID"
+ printf 'export SDFLOW_TIER_LIGHT=%q\n' "$TIER_LIGHT"
+ printf 'export SDFLOW_VOICE_RUNNER=%q\n' "$VOICE_RUNNER"
+ printf 'export SDFLOW_VOICE_MODEL=%q\n' "$VOICE_MODEL"
++printf 'export SDFLOW_EFFORT_STRONG=%q\n' "$EFFORT_STRONG"
++printf 'export SDFLOW_EFFORT_MID=%q\n' "$EFFORT_MID"
++printf 'export SDFLOW_EFFORT_LIGHT=%q\n' "$EFFORT_LIGHT"
+diff --git a/sdflow-init/assets/workflow/model-tiers.md b/sdflow-init/assets/workflow/model-tiers.md
+index e043d49..7dc84eb 100644
+--- a/sdflow-init/assets/workflow/model-tiers.md
++++ b/sdflow-init/assets/workflow/model-tiers.md
+@@ -1,35 +1,50 @@
+ # model-tiers — 模型档位映射（单一真相源）
+ 
+ > 机队锚定〔adr/0006(c)〕：档位是**相对执行机队**的相对词（机队会换血），不绑具体产品名。
+ > 当前机队由 `resolve-models.sh` 按宿主正信号判定（见能力 `host-adaptive-execution`）。
+ > 消费仓覆盖：`openspec/config.yaml` 的 `model-tiers` 段仅作 per-repo 覆盖映射，**按机队分键**
+ > `model-tiers.{claude,codex}.{strong,mid,light}`；扁平旧格式（`model-tiers.{strong,mid,light}`）
+ > 兼容读作 Claude 机队覆盖，在 Codex 宿主下不生效（回落 Codex 机队缺省，MUST NOT 把 Claude
+ > 模型名塞给 Codex 机队）。缺省请勿填。
+ > 编排 skill 一律以一句引用指向本文件，MUST NOT 内联模型名。
+ 
+-| 档位 | 职责（谁必须用它） | Claude 机队缺省 | Codex 机队缺省 |
+-|---|---|---|---|
+-| **强档 strong** | verify 终门 / 对抗裁决（Step3 主审）/ final whole-branch 终审 | opus | gpt-5.6-sol |
+-| **中档 mid** | 领域镜·对抗镜（判断/对抗推理）/ 生成 / 实现 / archive 对码 | sonnet | gpt-5.6-terra |
+-| **弱档 light** | 纯机械步：接地镜 grep 核验 / 历史镜 / 置信打分 / commit message | haiku | gpt-5.6-luna |
++| 档位 | 职责（谁必须用它） | Claude 机队缺省 | Codex 机队缺省 | effort 档（仅 claude） |
++|---|---|---|---|---|
++| **强档 strong** | verify 终门 / 对抗裁决（Step3 主审）/ final whole-branch 终审 | opus | gpt-5.6-sol | high |
++| **中档 mid** | 领域镜·对抗镜（判断/对抗推理）/ 生成 / 实现 / archive 对码 | sonnet | gpt-5.6-terra | medium |
++| **弱档 light** | 纯机械步：接地镜 grep 核验 / 历史镜 / 置信打分 / commit message | haiku | gpt-5.6-luna | low |
+ 
+ 铁律：带门禁、无人逐条复核的步 MUST NOT 降档（假绿会放不完整的活过关）；
+ 纯机械步可下放弱档（失败可重试、无判断权重）。
+ 
+ ## 机读缺省（消费脚本单一源·勿在脚本内复制）
+ 
+ > 格式钉死同 `lens-metric-contract.md` 机读块惯例：fence info-string 恒为
+ > `model-tier-defaults`；块内每行 `<fleet>.<tier>: <model-id>`，键路径固定 6 条
+ > （2 机队 × 3 档，可穷举）——`resolve-models.sh` 按有界键路径行锚定提取本块，
+ > MUST NOT 把此解析长成通用 YAML/Markdown 解析器（基准 5）。新增机队/档位 MUST
+ > 只改本块（上方表格同步更新，两处 MUST NOT 漂移）。
+ 
+ ```model-tier-defaults
+ claude.strong: opus
+ claude.mid: sonnet
+ claude.light: haiku
+ codex.strong: gpt-5.6-sol
+ codex.mid: gpt-5.6-terra
+ codex.light: gpt-5.6-luna
+ ```
++
++## 机读缺省 · effort 维（消费脚本单一源·勿在脚本内复制）
++
++> effort 是 agent 定义 frontmatter 的独立维度（`effort: low/medium/high/xhigh/max`，宿主原生
++> per-call 派发参数只有 `model`，effort 只在 agent 定义层生效——ADR-0043）。**仅 claude 机队**
++> ——codex 无对应物，不写键即 n/a，杜绝「空值语义」。格式钉死同上方 `model-tier-defaults`
++> 惯例：fence info-string 恒为 `effort-tier-defaults`；键路径固定 3 条（1 机队 × 3 档，可穷举）
++> ——`resolve-models.sh` 按同款有界键路径行锚定提取，MUST NOT 长成通用解析器（基准 5）。
++> 与上方表格「effort 档」列同源，两处 MUST NOT 漂移。
++
++```effort-tier-defaults
++claude.strong: high
++claude.mid: medium
++claude.light: low
++```
+diff --git a/sdflow-init/tests/test_resolve_models.py b/sdflow-init/tests/test_resolve_models.py
+index b94da06..d90059e 100644
+--- a/sdflow-init/tests/test_resolve_models.py
++++ b/sdflow-init/tests/test_resolve_models.py
+@@ -28,43 +28,47 @@ SCRIPT = REPO / "sdflow-init" / "assets" / "hack" / "resolve-models.sh"
+ OUTSIDE_VOICE = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
+ JOB_PY = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice-job.py"
+ 
+ # 宿主判据的**第二份实现**（Python 侧）——parity 门要拿它跟本 shell 脚本对跑。
+ _JOB_SPEC = importlib.util.spec_from_file_location("sdflow_outside_voice_job", JOB_PY)
+ JOB = importlib.util.module_from_spec(_JOB_SPEC)
+ _JOB_SPEC.loader.exec_module(JOB)
+ 
+ 
+ def make_bundle_repo(tmp_path, claude=("opus", "sonnet", "haiku"),
+-                      codex=("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna")):
++                      codex=("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"),
++                      effort=("high", "medium", "low")):
+     """项目根 + 一个自包含的假全局 canonical bundle（fix-probe-scan-precision：本地 pin 判定
+     已从 resolve-workflow.sh 删除，两步链只剩「全局 canonical → 显式降级」——bundle 须放进
+     `tmp_path/sdflow-home/workflow/`，经 `run_resolve`/`eval_resolve` 默认设置的 SDFLOW_HOME
+     命中）。含 model-tiers.md 机读块——resolve-models.sh 靠它定位档位缺省。sane() 扩面（同 change）
+     要求 tools/ 非空 + lens-metric-contract.md 非空，一并造好，否则全局 canonical 判「不完整」
+-    exit 2，档位解析拿不到 model-tiers.md。"""
++    exit 2，档位解析拿不到 model-tiers.md。effort 三元组 = effort-tier-defaults 机读块
++    （implement-workflow-optimization-2026-08-p4 Task 1，仅 claude 机队，键路径 claude.{strong,mid,light}）。"""
+     root = tmp_path / "repo"
+     root.mkdir(parents=True)
+     wf = tmp_path / "sdflow-home" / "workflow"
+     wf.mkdir(parents=True)
+     (wf / "workflow.md").write_text("# wf\n", encoding="utf-8")
+     (wf / "spec-checklists").mkdir()
+     (wf / "spec-checklists" / "d.md").write_text("x\n", encoding="utf-8")
+     (wf / "code-checklists").mkdir()
+     (wf / "code-checklists" / "d.md").write_text("x\n", encoding="utf-8")
+     (wf / "tools").mkdir()
+     (wf / "tools" / "x.py").write_text("# x\n", encoding="utf-8")
+     (wf / "lens-metric-contract.md").write_text("# contract\n", encoding="utf-8")
+     (wf / "model-tiers.md").write_text(
+         "# model-tiers\n\n```model-tier-defaults\n"
+         f"claude.strong: {claude[0]}\nclaude.mid: {claude[1]}\nclaude.light: {claude[2]}\n"
+         f"codex.strong: {codex[0]}\ncodex.mid: {codex[1]}\ncodex.light: {codex[2]}\n"
++        "```\n\n```effort-tier-defaults\n"
++        f"claude.strong: {effort[0]}\nclaude.mid: {effort[1]}\nclaude.light: {effort[2]}\n"
+         "```\n",
+         encoding="utf-8",
+     )
+     return root
+ 
+ 
+ def write_config_yaml(root, content):
+     osdir = root / "openspec"
+     osdir.mkdir(parents=True, exist_ok=True)
+     (osdir / "config.yaml").write_text(content, encoding="utf-8")
+@@ -93,21 +97,23 @@ def eval_resolve(root, env_overrides=None, no_sdflow_home=True, cwd=None):
+     env = dict(os.environ)
+     if no_sdflow_home:
+         env["SDFLOW_HOME"] = bash_path(root.parent / "sdflow-home")
+     env.pop("CLAUDECODE", None)
+     env.pop("CODEX_THREAD_ID", None)
+     if env_overrides:
+         env.update(env_overrides)
+     script = f'eval "$(bash {shlex.quote(bash_path(SCRIPT))} --root {shlex.quote(bash_path(root))})"; ' \
+              f'echo "SDFLOW_HOST=$SDFLOW_HOST"; echo "SDFLOW_TIER_STRONG=$SDFLOW_TIER_STRONG"; ' \
+              f'echo "SDFLOW_TIER_MID=$SDFLOW_TIER_MID"; echo "SDFLOW_TIER_LIGHT=$SDFLOW_TIER_LIGHT"; ' \
+-             f'echo "SDFLOW_VOICE_RUNNER=$SDFLOW_VOICE_RUNNER"; echo "SDFLOW_VOICE_MODEL=$SDFLOW_VOICE_MODEL"'
++             f'echo "SDFLOW_VOICE_RUNNER=$SDFLOW_VOICE_RUNNER"; echo "SDFLOW_VOICE_MODEL=$SDFLOW_VOICE_MODEL"; ' \
++             f'echo "SDFLOW_EFFORT_STRONG=$SDFLOW_EFFORT_STRONG"; echo "SDFLOW_EFFORT_MID=$SDFLOW_EFFORT_MID"; ' \
++             f'echo "SDFLOW_EFFORT_LIGHT=$SDFLOW_EFFORT_LIGHT"'
+     return subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True,
+                           env=env, cwd=str(cwd) if cwd else None, timeout=15, encoding="utf-8", errors="replace")
+ 
+ 
+ def parse_exports(stdout):
+     out = {}
+     for line in stdout.splitlines():
+         if line.startswith("export SDFLOW_"):
+             body = line[len("export "):]
+             k, _, v = body.partition("=")
+@@ -280,20 +286,121 @@ class TestFleetKeyedOverride:
+     def test_voice_model_for_codex_host_honors_claude_flat_override(self, tmp_path):
+         """codex 宿主向 claude 发起 voice 时，VOICE_MODEL = Claude 机队强档——该值本身仍可被
+         Claude 机队覆盖（含扁平兼容）影响，因为解析的是「另一机队 claude 的 strong」，非
+         「codex 自己的 strong」。"""
+         root = make_bundle_repo(tmp_path)
+         write_config_yaml(root, "schema: spec-driven\nmodel-tiers:\n  strong: legacy-override\n")
+         codex = parse_exports(run_resolve(root, {"CODEX_THREAD_ID": "abc"}).stdout)
+         assert codex["SDFLOW_VOICE_MODEL"] == "legacy-override"
+ 
+ 
++class TestEffortTierDefaults:
++    """implement-workflow-optimization-2026-08-p4 Task 1（HAE-1）：effort 维解析与导出全链。
++
++    effort 机读块键路径仅含 `claude.{strong,mid,light}`（codex 无对应物，不写键即 n/a）；
++    codex/unknown 宿主显式初始化三变量为空串，MUST NOT 复用 model tier 的 unknown 回落逻辑
++    （unknown 回落 claude canonical 缺省是 model tier 专属语义，effort 没有这个语义）。
++    config 覆盖走 `effort-tiers.claude.{strong,mid,light}`，值域 {low,medium,high,xhigh,max}，
++    非法值忽略覆盖回落缺省 + stderr 告警。
++    """
++
++    def test_claude_host_exports_effort_defaults_without_override(self, tmp_path):
++        root = make_bundle_repo(tmp_path)
++        r = run_resolve(root, {"CLAUDECODE": "1"})
++        assert r.returncode == 0, r.stderr
++        exports = parse_exports(r.stdout)
++        assert exports["SDFLOW_EFFORT_STRONG"] == "high"
++        assert exports["SDFLOW_EFFORT_MID"] == "medium"
++        assert exports["SDFLOW_EFFORT_LIGHT"] == "low"
++
++    def test_codex_host_effort_vars_are_empty_with_no_warning_noise(self, tmp_path):
++        root = make_bundle_repo(tmp_path)
++        r = run_resolve(root, {"CODEX_THREAD_ID": "abc"})
++        assert r.returncode == 0, r.stderr
++        exports = parse_exports(r.stdout)
++        assert exports["SDFLOW_EFFORT_STRONG"] == ""
++        assert exports["SDFLOW_EFFORT_MID"] == ""
++        assert exports["SDFLOW_EFFORT_LIGHT"] == ""
++        assert "effort" not in r.stderr.lower(), (
++            f"codex 宿主 effort 无对应物是合法缺席，MUST NOT 产生告警噪声：{r.stderr!r}")
++
++    def test_unknown_host_effort_vars_are_empty_with_no_extra_warning_noise(self, tmp_path):
++        root = make_bundle_repo(tmp_path)
++        r = run_resolve(root, {})
++        assert r.returncode == 0, r.stderr
++        exports = parse_exports(r.stdout)
++        assert exports["SDFLOW_EFFORT_STRONG"] == ""
++        assert exports["SDFLOW_EFFORT_MID"] == ""
++        assert exports["SDFLOW_EFFORT_LIGHT"] == ""
++        # unknown 宿主本身的「判不出」告警允许存在（host 判定，非 effort 解析告警）；
++        # effort 分支自己 MUST NOT 额外产生任何提及 effort 的告警。
++        assert "effort" not in r.stderr.lower(), (
++            f"unknown 宿主 effort 留空是既定语义，MUST NOT 产生告警噪声：{r.stderr!r}")
++
++    def test_config_override_applies_on_claude_host(self, tmp_path):
++        root = make_bundle_repo(tmp_path)
++        write_config_yaml(root, "schema: spec-driven\neffort-tiers:\n"
++                                 "  claude:\n    mid: xhigh\n")
++        r = run_resolve(root, {"CLAUDECODE": "1"})
++        assert r.returncode == 0, r.stderr
++        exports = parse_exports(r.stdout)
++        assert exports["SDFLOW_EFFORT_MID"] == "xhigh"
++        # 未覆盖的档位不受影响，仍回落缺省
++        assert exports["SDFLOW_EFFORT_STRONG"] == "high"
++        assert exports["SDFLOW_EFFORT_LIGHT"] == "low"
++
++    def test_config_override_does_not_apply_on_codex_host(self, tmp_path):
++        """effort-tiers 仅 claude 键——codex 宿主没有覆盖对象，即便 config 写了也不套用。"""
++        root = make_bundle_repo(tmp_path)
++        write_config_yaml(root, "schema: spec-driven\neffort-tiers:\n"
++                                 "  claude:\n    mid: xhigh\n")
++        r = run_resolve(root, {"CODEX_THREAD_ID": "abc"})
++        assert r.returncode == 0, r.stderr
++        exports = parse_exports(r.stdout)
++        assert exports["SDFLOW_EFFORT_MID"] == ""
++
++    def test_invalid_override_value_falls_back_to_default_with_warning(self, tmp_path):
++        root = make_bundle_repo(tmp_path)
++        write_config_yaml(root, "schema: spec-driven\neffort-tiers:\n"
++                                 "  claude:\n    strong: superduper\n")
++        r = run_resolve(root, {"CLAUDECODE": "1"})
++        assert r.returncode == 0, r.stderr
++        exports = parse_exports(r.stdout)
++        assert exports["SDFLOW_EFFORT_STRONG"] == "high"  # 非法覆盖被丢弃，回落缺省
++        assert "不在合法值域" in r.stderr
++        assert "effort-tiers.claude.strong" in r.stderr
++
++    @pytest.mark.parametrize("value", ["low", "medium", "high", "xhigh", "max"])
++    def test_all_domain_values_accepted_as_override(self, tmp_path, value):
++        root = make_bundle_repo(tmp_path)
++        write_config_yaml(root, "schema: spec-driven\neffort-tiers:\n"
++                                 f"  claude:\n    strong: {value}\n")
++        r = run_resolve(root, {"CLAUDECODE": "1"})
++        assert r.returncode == 0, r.stderr
++        exports = parse_exports(r.stdout)
++        assert exports["SDFLOW_EFFORT_STRONG"] == value
++
++    def test_eval_contract_exposes_all_nine_vars_in_one_eval(self, tmp_path):
++        """resolver 一次 eval 输出须同时含既有六变量 + 三个 effort 变量（同一 eval 契约）。"""
++        root = make_bundle_repo(tmp_path)
++        r = eval_resolve(root, {"CLAUDECODE": "1"})
++        assert r.returncode == 0, r.stderr
++        assert "SDFLOW_HOST=claude" in r.stdout
++        assert "SDFLOW_TIER_STRONG=opus" in r.stdout
++        assert "SDFLOW_TIER_MID=sonnet" in r.stdout
++        assert "SDFLOW_TIER_LIGHT=haiku" in r.stdout
++        assert "SDFLOW_VOICE_RUNNER=codex" in r.stdout
++        assert "SDFLOW_VOICE_MODEL=gpt-5.6-sol" in r.stdout
++        assert "SDFLOW_EFFORT_STRONG=high" in r.stdout
++        assert "SDFLOW_EFFORT_MID=medium" in r.stdout
++        assert "SDFLOW_EFFORT_LIGHT=low" in r.stdout
++
+ class TestEvalInjectionHardening:
+     """GC-6/D5：eval 注入面加固——覆盖值须过模型 ID 字符集校验，恶意值不得在 eval 时执行。"""
+ 
+     def test_dollar_paren_injection_rejected_and_not_executed(self, tmp_path):
+         root = make_bundle_repo(tmp_path)
+         marker = root / "INJECTED_DOLLAR"
+         write_config_yaml(root, "schema: spec-driven\nmodel-tiers:\n"
+                                  f"  claude:\n    strong: $(touch {marker})\n")
+         r = eval_resolve(root, {"CLAUDECODE": "1"}, cwd=root)
+         assert r.returncode == 0, r.stderr
