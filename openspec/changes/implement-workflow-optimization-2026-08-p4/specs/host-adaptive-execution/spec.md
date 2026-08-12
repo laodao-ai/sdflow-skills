@@ -12,6 +12,13 @@ resolver SHALL 按有界键路径行锚定提取并导出 `SDFLOW_EFFORT_{STRONG
 `effort-tiers.claude.{strong,mid,light}` 段覆盖，解析复用 model-tiers 段的有界键路径
 口径；非法值 SHALL 忽略覆盖回落缺省并告警。缺省映射 strong→high / mid→medium /
 light→low；带门禁、无人逐条复核的步 MUST NOT 低于 high（「不降档」铁律的 effort 延伸）。
+effort 分支 MUST NOT 复用 model tier 的 unknown 宿主回落逻辑（后者回落 claude 缺省，
+effort 语义相反 = 空串）；codex/unknown 分支 MUST 显式初始化三变量为空串（脚本 `set -u`
+下漏初始化会中止整个 resolver、殃及既有六变量导出），且 MUST NOT 复用 `_resolve_tier`
+的「缺省档位不可读」告警路径（codex 侧无键属预期态，恒告警即违反下方 Scenario
+`[spec-review-amendment]`）。`effort-tiers` 新 config 键 SHALL 同步接入 `init.py`
+`lint_config` 结构与值域校验（与 model-tiers 段同口径，错拼/坏形不静默放行
+`[spec-review-amendment]`）。
 
 #### Scenario: claude 宿主导出 effort 三变量
 

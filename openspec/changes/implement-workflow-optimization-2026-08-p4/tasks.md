@@ -15,32 +15,44 @@
       复用既有解析〔IO-1〕
 - [ ] 1.3 ship_gate defer 对账门：defer 台账行 `T\d+|B\d+` id + 池文件**文件系统**存在性
       判定；spec-review 报告 design 门同款锚存在检查〔IO-1〕
-- [ ] 1.4 gate 测试群：双向 config 态（缺省放行/开启拦截/坏值 fail-closed）× 缺锚/缺引用核
-      段/defer 无 id/池文件缺失/fence 假阳负例矩阵〔IO-1〕
+- [ ] 1.4 gate 测试群：双向 config 态（缺省放行/开启拦截/坏值 fail-closed/**config.yaml
+      文件整体不存在=放行** `[spec-review-amendment]`）× 缺锚/缺 `sdflow:ref-check` 锚/defer
+      无 id/池文件缺失/**id 存在但池文件 `change` 属另一 change**/**描述列旧票号不误抓
+      （窄化提取负例）**/**聚合摘要句不假阳**/fence 假阳负例矩阵 `[spec-review-amendment]`〔IO-1〕
 - [ ] 1.5 sdflow-code-review SKILL：Step4 defer 改「当场 recorder add（显式
-      `source_change`）+ 返回 id 写台账」；Step5 引用核落盘段义务措辞与门对齐；recorder
-      失败 fail-loud 条款〔SW-3〕
+      `source_change`）+ 返回 id 写台账」；台账改机读结构（表格行 + 专用 id 列，单元格全内容 =
+      单 id）+ 聚合摘要句改写移出 gate 检测范围 `[spec-review-amendment]`；Step3 引用核结果
+      落 `sdflow:ref-check` 结构化锚（含全通过/零 findings 轮次）、Step5 义务措辞与门对齐
+      `[spec-review-amendment]`；recorder 失败 fail-loud 条款〔SW-3〕
 - [ ] 1.6 按 1.1 结论修复 emitter 落盘直接成因（若为条款缺陷则改 SKILL Step5，若为
       调用失败则修脚本/路径）；本 change 自身 code-review 即为门的首个 dogfood〔IO-1/SW-3〕
 
 ## 2. 面 A · effort 分档（P1）
 
-- [ ] 2.1 A1 最小实测：以 frontmatter `effort: low` 定义派一个探针子代理对比缺省派发的
-      输出规模，确认 effort 经 subagent_type 生效；失效 ⇒ 停下按 memo K1 备选重估
-      （止损点，不带病继续）〔HAE-2 前置〕
+- [ ] 2.1 A1 最小实测：探针定义**手工临时放置** `~/.claude/agents/`（不经 install_agents，
+      验证完删除；结论对官方定义外推有效——两者均纯 frontmatter 声明 `[spec-review-amendment]`）；
+      以 frontmatter `effort: low` 派探针子代理，生效信号用 **token 用量/耗时 + 输出规模多信号**
+      对比（输出规模单独作判据假阴/假阳皆易 `[spec-review-amendment]`），确认 effort 经
+      subagent_type 生效；失效 ⇒ 停下按 `adr/0043` Considered Options 备选重估
+      （止损点，不带病继续；原「memo K1 备选」指引有误——K1 无备选内容 `[spec-review-amendment]`）
+      〔HAE-2 前置〕
 - [ ] 2.2 `model-tiers.md` 加 effort 表列 + `effort-tier-defaults` 机读块（仅 claude 三键；
       表格与机读块两处不漂移）；`resolve-models.sh` 提取/导出 `SDFLOW_EFFORT_*` +
       `effort-tiers.claude.*` config 覆盖（有界键路径、值域校验、非法回落告警）+
-      头注释变量清单 6→9〔HAE-1〕
+      头注释变量清单 6→9；⚠️ effort 分支 MUST NOT 复用 model tier 的 unknown 回落/
+      `_resolve_tier` 告警路径，codex/unknown 显式初始化空串（`set -u`），负例测试先行
+      `[spec-review-amendment]`〔HAE-1〕
 - [ ] 2.3 resolver 测试：三宿主态（claude 导出/codex 空值/unknown 空值）× 覆盖生效 ×
       非法值回落 × eval 契约〔HAE-1〕
 - [ ] 2.4 4 个 `sdflow-effort-*` agent 定义（排他 description + `model: inherit`）+
       `setup.sh` install_agents 扩面；假 HOME 测试：铺设幂等/不覆盖他人/孤儿清理/
       Windows skip〔HAE-2〕
 - [ ] 2.5 四个编排 SKILL 派发条款接 effort（表格加档列 + subagent_type 构造 + 空值回落 +
-      门禁步不低于 high 铁律句）；`sdflow-done` 三步子代理同步〔SW-2, IO-2〕
+      门禁步不低于 high 铁律句 + tier-resolution unset 清单扩含 `SDFLOW_EFFORT_*` 三变量
+      `[spec-review-amendment]`）；`sdflow-done` 三步子代理同步〔SW-2, IO-2〕
 - [ ] 2.6 bundle 同步：config.template `effort-tiers` 段示例 + claude-section 说明 +
-      scope-check 表全组复查（防部署副本漂移）〔HAE-1〕
+      `init.py lint_config` 扩 `effort-tiers` 结构/值域校验（与 resolver 同口径 + 测试
+      `[spec-review-amendment]`）+ scope-check 表全组复查（防部署副本漂移）〔HAE-1〕
 
 ## 3. 面 B · dispatch prompt 构造（P2）
 
@@ -54,11 +66,17 @@
 
 ## 4. 实现验证收尾
 
+- [ ] 4.0 自审窗口 `[spec-review-amendment]`：触发本 change 自身 code-review/verify **之前**，
+      在开发 checkout 跑 `bash setup.sh`（全局窗口层，时间盒）——否则自审调用运行 checkout
+      的旧 gate/旧 SKILL，dogfood 自证不成立（对抗镜机器实测软链指向）；自审完毕回运行
+      checkout 重跑 setup 还原，还原动作记入 impl-report
 - [ ] 4.1 全仓 `/usr/bin/python3 -m pytest -q` 绿（新增测试群全数纳入）
 - [ ] 4.2 retro 再生冒烟：`retro_report.py` 跑通、本 change token-log 锚在列；anchor_lint
       对既有报告语料 CLEAN（gate 新门不破坏度量链路）
 - [ ] 4.3 roadmap 阶段 4 回填（子任务表 + 快照行）+ task-log 里程碑；B25/B26 池状态按
-      实况 set-status（FIXED + evidence）
+      实况 set-status（FIXED + evidence）；T105/T103（面 A）、T98/T124（面 B）机制层交付后
+      同步 set-status DONE + evidence 指向实现/测试（p3 6.2 先例；观察性验收②③继续走
+      D4「不阻塞归档」路径不冲突 `[spec-review-amendment]`）
 
 ## 测试覆盖图（TG-18）
 

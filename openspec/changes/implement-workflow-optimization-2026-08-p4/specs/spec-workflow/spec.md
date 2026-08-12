@@ -22,7 +22,9 @@ diff 范围与 diff。脚本任一源文件缺失 SHALL fail-loud 非零退出�
 #### Scenario: 前缀源缺失 fail-loud
 
 - **WHEN** base checklist 在规则根不可达
-- **THEN** 脚本非零退出且 stderr 说明缺失源，MUST NOT 输出部分前缀
+- **THEN** 脚本非零退出且 stderr 说明缺失源并含修复动作指引（与既有 hack 脚本同风格，
+  如「回运行 checkout 跑 bash setup.sh」——problem+cause+fix 三段俱全 `[spec-review-amendment]`），
+  MUST NOT 输出部分前缀
 
 ### Requirement: 评审镜派发按档位 × effort 二维，空值回落现行为
 
@@ -30,7 +32,16 @@ diff 范围与 diff。脚本任一源文件缺失 SHALL fail-loud 非零退出�
 `subagent_type: sdflow-effort-<值>`；`$SDFLOW_EFFORT_*` 为空（codex/unknown 宿主、
 resolver 未升级、agent 定义未铺设）时 SHALL 不带 subagent_type 派发，行为与 effort 维
 引入前完全相同（前向兼容，pull/setup 窗口零破坏）。主 session 综合裁决与 verify 终门
-等门禁步 MUST NOT 以低于 high 的 effort 执行。
+等门禁步 MUST NOT 以低于 high 的 effort 执行。四个编排 SKILL 的 tier-resolution 托管块
+unset 清脏清单 SHALL 同步扩含 `SDFLOW_EFFORT_STRONG/MID/LIGHT` 三变量——否则旧 resolver
+不导出 effort 时，同 shell 上一轮残留的脏值会击穿空值回落（与既有 V1 清脏条款同因
+`[spec-review-amendment]`）。
+
+#### Scenario: 脏 effort 残留被清脏拦截 `[spec-review-amendment]`
+
+- **WHEN** 同 shell 预置脏 `SDFLOW_EFFORT_MID=xhigh` 后 eval 一个不导出 effort 的旧版
+  resolver 输出
+- **THEN** 清脏步已 unset 该变量，派发不带 subagent_type（空值回落），MUST NOT 误用陈旧值
 
 #### Scenario: effort 空值时派发不带 subagent_type
 
@@ -48,6 +59,11 @@ sdflow-code-review 的 Step4 defer 处置 SHALL 当场调用 recorder add（显�
 `source_change` 为当前 change 名）并把返回的 issue id 写入报告「修复 / defer 台账」
 对应行；报告 MUST NOT 出现无 id 的 defer 声明（「已入 / 待入 todolist」类散文承诺）。
 台账行 id 与池文件的对账由 gate 侧机械门执行（见 impl-orchestration delta）。
+台账 SHALL 采用与 gate 提取规则对齐的机读结构（表格行 + 专用 id 列，单元格全部内容 =
+单个 id）；现有报告模板的聚合摘要句（含 "defer" 字面、无 id）SHALL 同步改写至不落入
+gate 检测范围 `[spec-review-amendment]`。Step3 机械引用核结果 SHALL 以结构化锚行
+`sdflow:ref-check`（status + pass/fail/uncheckable 计数）落盘报告——包括全部通过与
+零 findings 的轮次，作为锚存在门 ① 的机读对象 `[spec-review-amendment]`。
 
 #### Scenario: defer 行携真实 id
 

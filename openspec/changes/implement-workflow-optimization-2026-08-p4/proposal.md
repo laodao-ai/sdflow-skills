@@ -52,6 +52,14 @@ code-review 报告机械层落盘自 08-07 起静默缺失、B26 defer 入池通
 - **P1**：面 A effort 分档（T105/T103，本阶段主目标）
 - **P2**：面 B prompt 构造（T98/T124，收益靠 cc/cr 趋势长期显形）
 
+## 成本估算（TG-24）`[spec-review-amendment]`
+
+本 change 不新增 LLM 调用类型，是对既有评审/实现管线调用量的结构调整：面 A（effort 分档）
+预期降低强档外子代理的平均推理 token 支出；面 B（byte-stable 前缀）预期提升 prompt cache
+命中率、降低 cache_creation 支出。量级为方向性（对照 4-change 基线 p1 out 161k/cr 52.5M ·
+p2 out 856k/cr 104.2M · p3 out 941k/cr 107.3M），随后续窗口 cc/cr 判读，不设 $ 硬指标；
+本 change 自身的一次性成本 = 一次 A1 探针实测（单子代理级）。
+
 ## 假设列表（TG-22）
 
 - **A1**：frontmatter `effort:` 对 `subagent_type` 派发的子代理全链生效（本仓
@@ -83,8 +91,10 @@ code-review 报告机械层落盘自 08-07 起静默缺失、B26 defer 入池通
 - 机械落地层：全仓 pytest 绿，新增测试覆盖——install_agents 4 定义（假 HOME）、
   resolve-models effort 导出+覆盖、render-review-prefix byte-stable golden、ship_gate
   B25/B26 门「缺省=放行/存在坏=fail-closed」双向、defer id 对账契约。
-- 断链止血：本 change 自身的 code-review 报告即含 lens-metric 锚 + 引用核落盘段 + defer
-  id 对账（dogfood 自证，gate 强制）。
+- 断链止血：本 change 自身的 code-review 报告即含 lens-metric 锚 + `sdflow:ref-check` 锚 +
+  defer id 对账（dogfood 自证，gate 强制——**前提 = tasks 4.0 自审窗口**：自审前须在开发
+  checkout 开全局窗口 `bash setup.sh`，否则自审调的是运行 checkout 旧 gate、本项不可核验
+  `[spec-review-amendment]`）。
 - 成本方向信号：后续 change 的 cc/cr 比例趋势对照 4-change 基线记档观察（不设硬阈值，
   不阻塞归档）；质量不退沿用 p2 hand-off D4 判读指标随后续窗口累积（事后锚，本 change 内
   显式标注不可核验，随后续 change 判读）。
