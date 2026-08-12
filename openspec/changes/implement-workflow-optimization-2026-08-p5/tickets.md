@@ -78,10 +78,10 @@ impl-pipeline: tickets
 
 grep bundle 内 spec-review 规则文件（经 `~/.sdflow/hack/resolve-workflow.sh` 解析取得规则根）是否另有报告结构描述，有则同步（design scope-check 表逐行核对）。
 
-- [ ] 三问小节模版加入 Step4 报告条款（决策登记区顶部）
-- [ ] 锚行加入（紧邻三问小节）
-- [ ] 自检步报错文案含 problem/cause/fix 指引
-- [ ] bundle 内规则文件报告结构描述已同步（或确认无需同步）
+- [x] 三问小节模版加入 Step4 报告条款（决策登记区顶部）
+- [x] 锚行加入（紧邻三问小节）
+- [x] 自检步报错文案含 problem/cause/fix 指引
+- [x] bundle 内规则文件报告结构描述已同步（或确认无需同步）
 
 ### Task 4: 考古层审计清理（15 个 SKILL.md）
 
