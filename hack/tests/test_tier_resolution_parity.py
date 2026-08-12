@@ -251,10 +251,16 @@ def _segments():
     return [(rel, P.interior(P.extract(REPO / rel))) for rel in P.SITES]
 
 
-def test_unset_clears_all_six_vars():
-    """(a) 步 MUST 清脏全部六个变量——漏一个就可能拿上一轮的脏值继续跑。"""
+def test_unset_clears_all_nine_vars():
+    """(a) 步 MUST 清脏全部九个变量（六个既有 + 三个 effort）——漏一个就可能拿上一轮的脏值继续跑。
+
+    implement-workflow-optimization-2026-08-p4：effort 维引入后 unset 清脏清单扩含
+    `SDFLOW_EFFORT_STRONG/MID/LIGHT`，否则旧 resolver 不导出 effort 时，同 shell 上一轮
+    残留的脏值会击穿空值回落（与既有六变量清脏同因）。
+    """
     needle = ("先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID "
-              "SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏")
+              "SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL "
+              "SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏")
     for rel, seg in _segments():
         assert needle in seg, f"{rel}: 清脏步骤缺失或变量集不全"
 

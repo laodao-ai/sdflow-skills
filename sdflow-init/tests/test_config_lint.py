@@ -263,6 +263,149 @@ context: |
         assert r.returncode == 0, r.stderr
 
 
+class TestConfigLintEffortTiers:
+    """implement-workflow-optimization-2026-08-p4：effort-tiers 顶层块——**仅** `claude.{strong,
+    mid,light}`（codex 无 effort 原语、无扁平旧格式），叶子值须 ∈ {low,medium,high,xhigh,max}。"""
+
+    def test_no_effort_tiers_block_passes(self, tmp_path):
+        """条件化放行：无 effort-tiers 块 → 0（消费仓正常态，非违规）。"""
+        _write_config(tmp_path, VALID_RULES_BLOCK)
+        r = _run_lint(tmp_path)
+        assert r.returncode == 0, r.stderr
+
+    def test_valid_claude_block_passes(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  claude:
+    strong: high
+    mid: medium
+    light: low
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode == 0, r.stderr
+
+    def test_all_domain_values_accepted(self, tmp_path):
+        for val in ("low", "medium", "high", "xhigh", "max"):
+            root = tmp_path / val
+            _write_config(root, VALID_RULES_BLOCK + f"""effort-tiers:
+  claude:
+    mid: {val}
+""")
+            r = _run_lint(root)
+            assert r.returncode == 0, f"{val}: {r.stderr}"
+
+    def test_codex_key_is_out_of_domain(self, tmp_path):
+        """codex 无 effort 原语——`effort-tiers.codex.*` MUST 报越域，不得像 model-tiers 那样
+        被当成合法机队键静默接受。"""
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  codex:
+    strong: high
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "effort-tiers" in r.stderr
+        assert "codex" in r.stderr
+
+    def test_flat_legacy_format_is_out_of_domain(self, tmp_path):
+        """effort-tiers 无扁平旧格式（与 model-tiers 不同，无历史遗留包袱）——顶层直接写
+        `strong:`/`mid:`/`light:`（无 `claude:` 机队头）MUST 报越域，不得被静默接受为 flat 覆盖。"""
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  strong: high
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "effort-tiers" in r.stderr
+        assert "strong" in r.stderr
+
+    def test_fleet_leaf_out_of_domain_subkey_nonzero(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  claude:
+    strong: high
+    bogus: nope
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "claude.bogus" in r.stderr
+
+    def test_invalid_effort_value_nonzero(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  claude:
+    mid: turbo
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "effort-tiers" in r.stderr
+        assert "claude.mid" in r.stderr
+
+    def test_model_id_style_value_rejected(self, tmp_path):
+        """effort-tiers 值域是封闭集合，不是 model-tiers 那种自由字符集——一个合法的 model-id
+        字符集字符串（如 `sonnet`）不在 effort 值域内，MUST 被拒绝，不得因两者校验函数
+        混用而误放行。"""
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  claude:
+    strong: sonnet
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "claude.strong" in r.stderr
+
+    def test_empty_value_nonzero(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  claude:
+    light:
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "claude.light" in r.stderr
+
+    def test_scalar_fleet_header_nonzero(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  claude: rogue
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "effort-tiers" in r.stderr
+
+
+class TestEffortTiersFromDict:
+    """白盒锁（直测 `_effort_tiers_from_dict` 的 entries/bad/bad_headers 归属），同
+    `TestModelTiersFromDict` 的测法——语法层交给 yq，本函数只处理已解析出的 dict。"""
+
+    @staticmethod
+    def _parse(raw):
+        import init  # scripts/ 已在 sys.path（本文件顶部）
+        return init._effort_tiers_from_dict(raw)
+
+    def test_claude_entries_attributed_correctly(self):
+        entries, bad, bad_headers = self._parse({"claude": {"strong": "high", "mid": "medium"}})
+        assert entries == {"claude.strong": "high", "claude.mid": "medium"}
+        assert not bad and not bad_headers
+
+    def test_codex_key_goes_to_bad_not_entries(self):
+        """与 `_model_tiers_from_dict` 的关键差异：`codex` 不在 `EFFORT_FLEET_KEYS` 里，
+        整个 `codex: {...}` 块须落 `bad`（越域顶层键），MUST NOT 产生任何 `codex.*` entries。"""
+        entries, bad, bad_headers = self._parse(
+            {"claude": {"strong": "high"}, "codex": {"strong": "high"}})
+        assert entries == {"claude.strong": "high"}
+        assert "codex" in bad
+        assert not bad_headers
+
+    def test_flat_top_level_keys_go_to_bad_not_entries(self):
+        """与 `_model_tiers_from_dict` 的关键差异：无扁平兼容分支——顶层 `strong`/`mid`/`light`
+        （无 `claude:` 头）MUST NOT 落进 `entries["flat.*"]`，而是落 `bad`。"""
+        entries, bad, bad_headers = self._parse({"strong": "high", "mid": "medium"})
+        assert entries == {}
+        assert bad == {"strong", "mid"}
+
+    def test_scalar_fleet_header_is_bad_header_no_crosstalk(self):
+        entries, bad, bad_headers = self._parse({"claude": "rogue"})
+        assert entries == {}
+        assert any("claude: rogue" in h for h in bad_headers), bad_headers
+
+    def test_none_leaf_value_maps_to_empty_string(self):
+        entries, bad, bad_headers = self._parse({"claude": {"light": None}})
+        assert entries == {"claude.light": ""}
+
+
 class TestConfigLintRegressionBaseline:
     def test_real_repo_config_yaml_passes(self):
         """回归基线：本仓真实 openspec/config.yaml（含 metrics: enabled: true，注释掉的

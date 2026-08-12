@@ -74,6 +74,16 @@ rules:
 #   mid: <claude-model-id>
 #   light: <claude-model-id>
 
+# effort-tiers（可选覆盖段）——真相源 = 规则根 model-tiers.md 的 effort-tier-defaults 机读块
+# （strong→high / mid→medium / light→low）。此段仅 per-repo 覆盖"档位→effort"映射，仅 claude
+# 机队有对应物（codex 无 effort 原语，不写键即 n/a，MUST NOT 引入空值语义）。值域固定
+# {low,medium,high,xhigh,max}，非法值忽略覆盖回落缺省并告警（与 model-tiers 段同语义）。缺省请勿填。
+# effort-tiers:
+#   claude:
+#     strong: high
+#     mid: medium
+#     light: low
+
 # test-suites（可选段）——sdflow-implement「聚合套件发现契约」的命令来源，优先于该票
 # implementer 运行时判定。缺省请勿填（未配置层由该票 implementer 依仓内既有约定判定）。
 # 具体命令因项目而异，由 sdflow-devenv 运行时调研测试基础设施后推荐写入（已有配置时保留不覆盖），

@@ -121,3 +121,16 @@ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权�
 - **`sdflow-implement` 的降级路径不同构**：它同样先派一个 trivial 探针子代理核验「机制活着没」
   （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
   跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
+
+## effort 派发（Claude 宿主专属，与上方 model-tiers/Codex 授权是正交维度）
+
+四个编排 SKILL（`/sdflow-spec-review`、`/sdflow-code-review`、`/sdflow-implement`、`/sdflow-done`）
+的子代理派发在 `model` 档位之外另有一维 **effort**（`$SDFLOW_EFFORT_STRONG`/`MID`/`LIGHT`，经
+`model-tiers.md` 的 `effort-tier-defaults` 机读块推导，缺省 strong→high / mid→medium / light→low）。
+效果落在 **Claude Code Agent 定义层**（`subagent_type: sdflow-effort-<值>` 选用全局
+`~/.claude/agents/sdflow-effort-*.md` 定义，其 frontmatter 携 `effort: <值>`），**仅 claude 机队有
+对应物**——codex 无 effort 原语，`$SDFLOW_EFFORT_*` 在 codex/unknown 宿主上为空串，派发不带
+`subagent_type`，行为与 effort 维引入前完全相同（前向兼容，非本节上方「Codex 子代理授权」的一部分，
+两者互不依赖）。项目可选在 `openspec/config.yaml` 加 `effort-tiers.claude.{strong,mid,light}` 段覆盖
+（值域 `{low,medium,high,xhigh,max}`，同 model-tiers 段覆盖语义：非法值忽略并告警回落缺省）。带门禁、
+无人逐条复核的步（如 verify 终门、Step3 主审裁决）MUST NOT 低于 high。

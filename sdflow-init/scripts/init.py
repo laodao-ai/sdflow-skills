@@ -660,6 +660,8 @@ def _marker_schema(marker):
 
 TIER_ALLOWED_SUBKEYS = {"strong", "mid", "light"}
 TIER_FLEET_KEYS = {"claude", "codex"}          # add-codex-host-support ADR-8：按机队分键
+EFFORT_FLEET_KEYS = {"claude"}                 # host-adaptive-execution delta：仅 claude 机队有 effort 原语
+EFFORT_ALLOWED_VALUES = {"low", "medium", "high", "xhigh", "max"}
 RULES_REQUIRED_SUBKEYS = ("proposal", "specs", "design", "tasks")
 
 
@@ -712,6 +714,40 @@ def _model_tiers_from_dict(raw):
     return entries, bad, bad_headers
 
 
+def _valid_effort_value(v):
+    """effort-tiers 值域校验：封闭集合 {low,medium,high,xhigh,max}（与
+    resolve-models.sh::_valid_effort_value 同口径——effort 是封闭域，比 model-tiers 的自由字符集
+    校验更严；implement-workflow-optimization-2026-08-p4 design「effort-tiers 新 config 键 SHALL
+    同步接入 init.py lint_config……与 resolver 解析同口径」）。"""
+    return v in EFFORT_ALLOWED_VALUES
+
+
+def _effort_tiers_from_dict(raw):
+    """effort-tiers 顶层块的业务校验，口径同 `_model_tiers_from_dict` 但两处收窄：
+    ① 唯一合法机队键 = `claude`（`codex` 越域——codex 无 effort 原语，'不写键即 n/a'，写了
+    `codex:` 属显式误用而非合法降级，MUST 报违规而非静默忽略）；
+    ② **无扁平旧格式**——effort-tiers 是本 change 新引入的键、无历史遗留包袱，
+    MUST NOT 复用 model-tiers 那条为迁移期旧配置保留的扁平兼容分支（顶层非 `claude` 的其余键，
+    包括看似「扁平」的 `strong`/`mid`/`light` 顶层键，一律计入越域，而非归 `flat.*`）。
+    返回同 `_model_tiers_from_dict` 的三元组语义：entries/bad_subkeys/bad_headers。"""
+    entries, bad, bad_headers = {}, set(), []
+    if not isinstance(raw, dict):
+        return entries, bad, bad_headers
+    for k, v in raw.items():
+        if k in EFFORT_FLEET_KEYS:
+            if not isinstance(v, dict):
+                bad_headers.append(f"{k}: {v}")   # 机队名当标量误用（如 `claude: rogue`）
+                continue
+            for tk, tv in v.items():
+                if tk in TIER_ALLOWED_SUBKEYS:
+                    entries[f"{k}.{tk}"] = "" if tv is None else str(tv)
+                else:
+                    bad.add(f"{k}.{tk}")
+        else:
+            bad.add(k)   # 含 "codex"（越域机队）与其余任意顶层拼写错误，无扁平兼容分支
+    return entries, bad, bad_headers
+
+
 def _detect_duplicate_top_keys(cfg_path):
     """行级扫描 YAML 顶层键（缩进=0 的 key: 行），返回重复键列表。"""
     seen = {}
@@ -734,7 +770,10 @@ def lint_config(root):
     四子键（无条件必填） ③ 顶层 `model-tiers:`（若存在）——机队分键 `{claude,codex}.{strong,mid,
     light}` 或扁平旧格式 `{strong,mid,light}`（ADR-8），二级键须 ⊆ {claude,codex,strong,mid,light}，
     且叶子键的**值**须为合法模型 ID（add-codex-host-support D5：拒绝空值/非法字符，防 eval 注入面
-    经消费仓 config 回灌） ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false}。
+    经消费仓 config 回灌） ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false} ⑤ 顶层
+    `effort-tiers:`（若存在，implement-workflow-optimization-2026-08-p4）——**仅** `claude.{strong,
+    mid,light}`（`codex` 越域，无扁平旧格式），叶子键的**值**须 ∈ {low,medium,high,xhigh,max}
+    （封闭域，与 resolve-models.sh 解析同口径）。
 
     yq 不可用（未装/非 mikefarah）→ `_check_yq()` 前置门给出一条带安装指引的 reason（不崩溃/
     不退出，`lint_config` 的公开契约就是「返回 reason 列表」）。config.yaml 缺失/不可读/整份
@@ -791,6 +830,20 @@ def lint_config(root):
         enabled = metrics.get("enabled") if isinstance(metrics, dict) else None
         if not isinstance(enabled, bool):
             reasons.append("metrics: enabled 值非法或缺失（须为 true|false）")
+
+    if cfg.get("effort-tiers") is not None:  # 条件化：块整段缺失 → 跳过（放行）
+        entries, bad, bad_headers = _effort_tiers_from_dict(cfg["effort-tiers"])
+        if bad:
+            reasons.append(
+                f"effort-tiers: 子键越域 {sorted(bad)}"
+                f"（顶层须 ⊆ {{claude}}——codex 无 effort 原语、无扁平旧格式，机队子块叶子键须 ⊆ {{strong,mid,light}}）")
+        if bad_headers:
+            reasons.append(
+                f"effort-tiers: 机队头带尾随内容 {sorted(bad_headers)}"
+                f"（`claude:` 须为空的嵌套块头，值另起 strong/mid/light 缩进行；纯注释头合法）")
+        bad_values = [f"{k}={v!r}" for k, v in sorted(entries.items()) if not _valid_effort_value(v)]
+        if bad_values:
+            reasons.append(f"effort-tiers: 值非法 {bad_values}（须 ∈ {{low,medium,high,xhigh,max}}）")
 
     return reasons
 
