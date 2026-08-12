@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 3f555e5a6b04aa8f5986694b4db2396529fd9427
+---
+
 # Spec Review Report · implement-workflow-optimization-2026-08-p4
 
 - 评审对象：`openspec/changes/implement-workflow-optimization-2026-08-p4/` 四件套（proposal / design / specs×3 / tasks）+ decision-memo + adr/0043
@@ -116,7 +122,11 @@
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="2" 采纳="1" 裁掉="1" defer="0" 独立="1" sev="致0/高0/中0/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="3" sev="致0/高3/中2/低0" -->
 
-（拍板前草稿值；per〔SR-M〕，设计门拍板回写时如需拍板项改向将原地最终化。）
+（已随设计门拍板最终化〔SR-M〕：拍板未翻改任何裁决——采纳 21 / defer 1 / 裁掉 1 与 Step3 一致，锚值即最终值。）
+
+## 拍板记录
+
+**设计门已拍板批准，日期 2026-08-12。** Q1 = 选项 B（补第 5 个 `sdflow-effort-max` 定义，值域与资产一致）；Q2 = 选项 C（effort 定义放进既有 `sdflow-spec/agents/`，install_agents 零改动）。拍板前二次修订（Q1/Q2 落盘四件套 + 第一性原理复核修正）已按 ADR-7(b) 单独 checkpoint：`8f782bc` + `3f555e5`；`reviewed_sha` = `3f555e5a6b04aa8f5986694b4db2396529fd9427`（批准的盘面）。
 
 ## 收敛口（1.6）
 
