@@ -24,8 +24,8 @@ artifacts:
       **BREAKING**.
 
       - **Capabilities**: Identify which specs will be created or modified:
-        - **New Capabilities**: List capabilities being introduced. Each becomes a new `specs/<name>/spec.md`. Use kebab-case names (e.g., `user-auth`, `data-export`).
-        - **Modified Capabilities**: List existing capabilities whose REQUIREMENTS are changing. Only include if spec-level behavior changes (not just implementation details). Each needs a delta spec file. Check `openspec/specs/` for existing spec names. Leave empty if no requirement changes.
+        - **New Capabilities**: List capabilities being introduced. Each becomes a new `specs/<capability-path>/spec.md`. Use kebab-case for path segments you introduce (e.g., `user-auth` or `identity/user-auth`) and follow the project's existing spec organization.
+        - **Modified Capabilities**: List existing capabilities whose REQUIREMENTS are changing. Only include if spec-level behavior changes (not just implementation details). Each needs a delta spec file. Use the exact existing path under `openspec/specs/`. Leave empty if no requirement changes.
       - **Impact**: Affected code, APIs, dependencies, or systems.
 
 
@@ -102,14 +102,18 @@ artifacts:
 
 
       Create one spec file per capability listed in the proposal's Capabilities
-      section.
+      section. `<capability-path>` is the spec directory relative to `specs/`
+      (for example, `user-auth` or `identity/user-auth`). Preserve the full path:
 
-      - New capabilities: use the exact kebab-case name from the proposal
-      (specs/<capability>/spec.md).
+      - New capabilities: use the exact path from the proposal at
+      `specs/<capability-path>/spec.md`. Any path segment newly introduced in
+      the proposal must be kebab-case. Follow the project's existing
+      organization; do not add a new domain level when the project uses a flat
+      layout.
 
-      - Modified capabilities: use the existing spec folder name from
-      openspec/specs/<capability>/ when creating the delta spec at
-      specs/<capability>/spec.md.
+      - Modified capabilities: use the exact existing path from
+      `openspec/specs/<capability-path>/` when creating the delta at
+      `specs/<capability-path>/spec.md`. Do not move or rename the capability.
 
 
       There must be at least one spec file unless the change's `.openspec.yaml`
@@ -165,12 +169,12 @@ artifacts:
 
       existing capability's Purpose - including a leftover `TBD` placeholder -
 
-      edit `openspec/specs/<capability>/spec.md` directly.
+      edit `openspec/specs/<capability-path>/spec.md` directly.
 
 
       MODIFIED requirements workflow:
 
-      1. Locate the existing requirement in openspec/specs/<capability>/spec.md
+      1. Locate the existing requirement in openspec/specs/<capability-path>/spec.md
 
       2. Copy the ENTIRE requirement block (from `### Requirement:` through all
       scenarios)
