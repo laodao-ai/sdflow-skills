@@ -63,7 +63,7 @@ def _python_files(root: Path):
     """Yield authored Python, including tests but excluding generated/local trees."""
     for path in root.rglob("*.py"):
         relative = path.relative_to(root)
-        if relative.parts[0] in {".git", ".worktrees", "openspec"}:
+        if relative.parts[0] in {".git", ".worktrees", ".claude", "openspec"}:
             continue
         yield path
 

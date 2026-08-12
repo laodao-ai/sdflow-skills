@@ -417,7 +417,7 @@ add-sdflow-spec / codex-host）降至 38–79 min（remove-superpowers / p4）�
 | 阶段 2 | `implement-workflow-optimization-2026-08-p2` **✅ 归档 2026-08-11**（2.A 五项全交付，verify PASS；验收 3 窗口判读 ✅ 2026-08-12 双 PASS） | spec-workflow（评审编排 Requirement） |
 | 阶段 3 | `implement-workflow-optimization-2026-08-p3` **✅ 归档 2026-08-11**（5/5 ticket + code-review 修复，verify PASS 2607 passed，SHA `c4b8c6f`） | — |
 | 阶段 4 | `implement-workflow-optimization-2026-08-p4` **✅ 归档 2026-08-12**（6 tickets + CR 零 findings + B25/B26 断链修复，verify PASS 2639 tests，SHA `e202feb`） | spec-workflow（host-adaptive-execution 等 3 delta） |
-| 阶段 5 | `implement-workflow-optimization-2026-08-p5`（已细化，待执行） | spec-workflow（评审编排 Requirement，如涉及） |
+| 阶段 5 | `implement-workflow-optimization-2026-08-p5` **✅ 归档 2026-08-12**（4/4 子任务，verify PASS 2169 tests，SHA `9d37457`） | spec-workflow（评审编排 Requirement，如涉及） |
 
 每个实施变更的 proposal 引用本文件对应阶段作为背景，design 复用
 `openspec/roadmaps/workflow-optimization-2026-08/design.md`，specs 扩展
