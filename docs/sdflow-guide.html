@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sdflow 工作流指南</title>
+</head>
+<body>
+<style>
+  :root {
+    --ground: #F7F8F6;
+    --surface: #FFFFFF;
+    --ink: #1E2924;
+    --muted: #5C6862;
+    --faint: #8B968F;
+    --accent: #17685A;
+    --accent-soft: #E3EFEA;
+    --gate: #A66A1E;
+    --gate-soft: #F5EBDC;
+    --line: #DDE3DE;
+    --code-bg: #EFF2EF;
+    --shadow: 0 1px 2px rgba(30, 41, 36, 0.06), 0 4px 16px rgba(30, 41, 36, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101512;
+      --surface: #182019;
+      --ink: #DCE5DE;
+      --muted: #9AA79E;
+      --faint: #6E7A72;
+      --accent: #52BFA0;
+      --accent-soft: #1C2E27;
+      --gate: #D9A050;
+      --gate-soft: #2E2517;
+      --line: #2A342C;
+      --code-bg: #1F2921;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101512;
+    --surface: #182019;
+    --ink: #DCE5DE;
+    --muted: #9AA79E;
+    --faint: #6E7A72;
+    --accent: #52BFA0;
+    --accent-soft: #1C2E27;
+    --gate: #D9A050;
+    --gate-soft: #2E2517;
+    --line: #2A342C;
+    --code-bg: #1F2921;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  h1, h2, h3 { font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif; text-wrap: balance; line-height: 1.35; }
+  code, pre { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+
+  .page { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem 6rem; }
+
+  /* ---------- header ---------- */
+  header.masthead { padding: 4.5rem 0 2.5rem; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    display: inline-block; font-size: 0.78rem; letter-spacing: 0.18em; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 2px; padding: 0.1rem 0.55rem; margin-bottom: 1.2rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  header.masthead h1 { font-size: 2.3rem; font-weight: 700; margin-bottom: 0.9rem; }
+  .standfirst { color: var(--muted); max-width: 38em; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 0.4rem 1.4rem; margin-top: 1.8rem; }
+  nav.toc a { color: var(--accent); text-decoration: none; font-size: 0.92rem; border-bottom: 1px solid transparent; }
+  nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- sections ---------- */
+  section { padding-top: 3.2rem; }
+  .kicker {
+    font-size: 0.78rem; letter-spacing: 0.16em; color: var(--faint); margin-bottom: 0.4rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  section > h2 { font-size: 1.65rem; margin-bottom: 1.1rem; }
+  section h3 { font-size: 1.18rem; margin: 2rem 0 0.7rem; }
+  p { margin-bottom: 0.9rem; max-width: 42em; }
+  p.lead { font-size: 1.05rem; }
+  ul, ol { margin: 0 0 1rem 1.4em; max-width: 40em; }
+  li { margin-bottom: 0.45rem; }
+  strong { font-weight: 650; }
+  em { font-style: normal; color: var(--accent); }
+  code {
+    background: var(--code-bg); border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.86em;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+    padding: 1rem 1.2rem; overflow-x: auto; margin-bottom: 1.1rem; line-height: 1.7; font-size: 0.84rem;
+  }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  .comment { color: var(--faint); }
+
+  /* ---------- principle cards ---------- */
+  .principles { display: grid; grid-template-columns: 1fr; gap: 0.9rem; margin: 1.4rem 0; }
+  .principle {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1.1rem 1.3rem; box-shadow: var(--shadow);
+  }
+  .principle h4 { font-size: 1rem; font-weight: 650; margin-bottom: 0.4rem; }
+  .principle h4 .tag {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem; color: var(--accent);
+    letter-spacing: 0.08em; margin-right: 0.5rem;
+  }
+  .principle p { font-size: 0.92rem; color: var(--muted); margin-bottom: 0.3rem; max-width: none; }
+  .principle p:last-child { margin-bottom: 0; }
+  .principle p strong { color: var(--ink); }
+
+  /* ---------- pipeline diagram ---------- */
+  .pipeline { margin: 1.8rem 0; display: flex; flex-direction: column; gap: 0; }
+  .stage {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1.1rem 1.3rem; box-shadow: var(--shadow);
+  }
+  .stage .stage-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.74rem; letter-spacing: 0.14em;
+    color: var(--accent); margin-bottom: 0.35rem;
+  }
+  .stage h4 { font-size: 1.05rem; font-weight: 650; margin-bottom: 0.45rem; }
+  .stage p { font-size: 0.92rem; color: var(--muted); margin-bottom: 0.2rem; max-width: none; }
+  .stage .cmd { color: var(--ink); }
+  .connector {
+    display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0 0.55rem 1.3rem;
+  }
+  .connector .arrow { color: var(--faint); font-size: 1.05rem; line-height: 1; }
+  .connector .note {
+    font-size: 0.82rem; color: var(--muted);
+    background: var(--code-bg); border-radius: 4px; padding: 0.15rem 0.6rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .gate-node {
+    border-color: var(--gate); background: var(--gate-soft);
+  }
+  .gate-node .stage-label { color: var(--gate); }
+  .gate-node p { color: var(--ink); }
+  .badge-human {
+    display: inline-block; font-size: 0.74rem; letter-spacing: 0.1em; color: var(--gate);
+    border: 1px solid var(--gate); border-radius: 999px; padding: 0.05rem 0.6rem; margin-left: 0.5rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; vertical-align: 2px;
+  }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 1.2rem 0 1.6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.78rem; letter-spacing: 0.08em; color: var(--faint); font-weight: 600; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td:first-child { white-space: nowrap; }
+  .type-pill {
+    display: inline-block; font-size: 0.72rem; border-radius: 999px; padding: 0.05rem 0.55rem;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; white-space: nowrap;
+  }
+  .type-data { color: var(--accent); background: var(--accent-soft); }
+  .type-md { color: var(--muted); background: var(--code-bg); }
+  .group-row td {
+    font-size: 0.78rem; letter-spacing: 0.1em; color: var(--faint);
+    background: var(--code-bg); padding-top: 0.4rem; padding-bottom: 0.4rem;
+  }
+
+  /* ---------- callout ---------- */
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 0.9rem 1.2rem; margin: 1.2rem 0;
+    box-shadow: var(--shadow); font-size: 0.94rem;
+  }
+  .callout.warn { border-left-color: var(--gate); }
+  .callout p { margin-bottom: 0.3rem; max-width: none; }
+  .callout p:last-child { margin-bottom: 0; }
+
+  footer {
+    margin-top: 4.5rem; padding-top: 1.4rem; border-top: 1px solid var(--line);
+    font-size: 0.85rem; color: var(--faint);
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+
+  /* ---------- side table of contents ---------- */
+  aside.side-toc { display: none; }
+  @media (min-width: 1280px) {
+    aside.side-toc {
+      display: block; position: fixed; top: 6rem;
+      left: max(1.5rem, calc(50% - 38rem)); width: 12rem;
+    }
+    nav.toc { display: none; }  /* 宽屏下由侧栏目录接管 */
+  }
+  .side-toc .side-toc-title {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem; letter-spacing: 0.16em; color: var(--faint); margin-bottom: 0.7rem;
+  }
+  .side-toc ol { list-style: none; margin: 0; border-left: 2px solid var(--line); }
+  .side-toc li { margin: 0; }
+  .side-toc a {
+    display: block; padding: 0.32rem 0 0.32rem 0.9rem; margin-left: -2px;
+    border-left: 2px solid transparent;
+    color: var(--muted); text-decoration: none; font-size: 0.85rem; line-height: 1.4;
+  }
+  .side-toc a:hover, .side-toc a:focus-visible { color: var(--ink); }
+  .side-toc a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+  .side-toc .side-toc-num {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.72rem;
+    color: var(--faint); margin-right: 0.45rem;
+  }
+  .side-toc a.active .side-toc-num { color: var(--accent); }
+
+  @media (min-width: 720px) {
+    body { font-size: 17px; }
+    header.masthead h1 { font-size: 2.7rem; }
+  }
+</style>
+
+<aside class="side-toc" aria-label="侧栏目录">
+  <div class="side-toc-title">目录</div>
+  <ol>
+    <li><a href="#why"><span class="side-toc-num">01</span>为什么存在</a></li>
+    <li><a href="#principles"><span class="side-toc-num">02</span>设计思想</a></li>
+    <li><a href="#pipeline"><span class="side-toc-num">03</span>三阶段流程</a></li>
+    <li><a href="#skills"><span class="side-toc-num">04</span>Skills 全景</a></li>
+    <li><a href="#usage"><span class="side-toc-num">05</span>实战用法</a></li>
+    <li><a href="#install"><span class="side-toc-num">06</span>安装机制</a></li>
+  </ol>
+</aside>
+
+<div class="page">
+
+<header class="masthead">
+  <span class="eyebrow">SDFLOW-SKILLS</span>
+  <h1>sdflow 工作流指南</h1>
+  <p class="standfirst">一套围绕 OpenSpec 的规格驱动开发（SDD）闭环：从「铺工作流」到「生成变更 → 设计审 → 实现 → 代码审 → 归档 merge」，
+  全程只保留一个人类决策点。本文讲清它的原理、设计思路，以及在实际项目里怎么用、怎么灵活裁剪。</p>
+  <nav class="toc" aria-label="目录">
+    <a href="#why">为什么存在</a>
+    <a href="#principles">设计思想</a>
+    <a href="#pipeline">三阶段流程</a>
+    <a href="#skills">Skills 全景</a>
+    <a href="#usage">实战用法</a>
+    <a href="#install">安装机制</a>
+  </nav>
+</header>
+
+<section id="why">
+  <div class="kicker">01 · WHY</div>
+  <h2>为什么存在：把「写对」从运气变成结构</h2>
+  <p class="lead">LLM 写代码的瓶颈从来不是打字速度，而是<strong>方向错了也跑得飞快</strong>。
+  sdflow 的答案是把质量问题拆成两半，分别用不同的手段处理：</p>
+  <ul>
+    <li><strong>Prevention（生成期防住）</strong>——能用结构固化的，写进 config 模版槽；能用约束固化的，写进生成硬约束（D 约束）与触发目录（TG）；
+    唯一固化不了的「生成过程」，用 <code>/sdflow-spec</code> 的「拷问前置于成文」流程兜住。</li>
+    <li><strong>Detection（评审期抓漏）</strong>——评审<em>只做 prevention 焊不住的残差</em>：语义校验、对抗攻击、接地读码。
+    不重复检查机械层已经防住的东西。</li>
+  </ul>
+  <p>另一条贯穿始终的信念：<strong>能机械判定的一致性绝不交给模型的自觉</strong>。
+  ID 不撞号、步序不乱、引用真实存在、报告锚点可核验——这些全部由脚本与 gate 把守；
+  模型的算力只花在真正需要判断的地方（方案取舍、语义评审、拷问澄清）。</p>
+</section>
+
+<section id="principles">
+  <div class="kicker">02 · PRINCIPLES</div>
+  <h2>核心设计思想</h2>
+  <p>以下十条是整套体系反复出现的骨架。理解了它们，每个 skill 的行为都能推导出来。</p>
+
+  <div class="principles">
+    <div class="principle">
+      <h4><span class="tag">P1</span>机械化优先：脚本 owns 一致性，模型只做判断</h4>
+      <p>凡有确定性信号的一致性（撞号、步序、双写一致、引用存在性），一律脚本化守住——<code>ship_gate.py</code> 判步序、
+      <code>issues_v2.py</code> 保台账不变量、评审 <code>tools/</code> 做引用核与锚点 lint。只有「无确定性信号」的残余才留给语义规则。
+      诚实边界是合法的残余划分，不是弱点。</p>
+      <p>推论：<strong>无界语法面不手搓解析器</strong>。想知道 make target 能不能跑，就真跑一遍让 make 自己回答；
+      「每轮 review 都在同一个函数里补一个新语法分支」的信号说明这个函数本来就不该存在。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P2</span>单一源 + 全量生成，不做互引文档的局部修补</h4>
+      <p>阶段一先拷问、把每条承重约束落进 <code>decision-memo.md</code>（单一源），再由它<strong>全量生成</strong>四件套
+      （proposal / design / specs / tasks）。修改一组互相引用的文档比从单一源整体重生成更容易出错——这是工程事实，不是概率论据。
+      同样的模式贯穿全仓：触发目录 <code>trigger-catalog.md</code> 是 TG 唯一源，<code>model-tiers.md</code> 是档位唯一源，
+      workflow bundle 的权威源只有 <code>sdflow-init/assets/workflow/</code> 一处。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P3</span>独立性来自 fresh 子代理，不靠 /clear</h4>
+      <p>评审的独立性由「fan-out 到全新上下文的子代理」结构性提供——它们看不到作者的推理过程，天然没有作者偏置。
+      <code>/clear</code> 全流程只出现在两处阶段交界（一→二、二→三），理由是 cache 按模型隔离与盘面纪律，
+      与独立性无关；阶段内部一律禁 <code>/clear</code>。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P4</span>对抗式多镜评审 + 跨模型第二意见</h4>
+      <p>单镜自审无效（瑞士奶酪模型），所以评审是并行多镜：领域镜按清单查、<strong>对抗镜不问「这对吗」而是派人「证明它会炸」</strong>、
+      接地镜读真实代码核对事实。此外默认开一路跨模型 outside-voice——实测多轮里，跨模型视角的独家产出常常碾压同族温镜。</p>
+      <p>设计侧与代码侧刻意不对称：<strong>设计审优化召回</strong>（判断分歧一律上抛人门，不自动丢弃）；
+      <strong>代码审优化精度</strong>（强档二元裁决，能修的当场自动修）。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P5</span>全流程唯一人类门</h4>
+      <p>人的注意力只花在一个地方：设计审报告出来后的 <strong>HARD-GATE 拍板</strong>。评审中途不打断提问——
+      ≥2 方案、核验不了的事实，全部写进报告的「决策登记区」（选项 + 推荐 + 三面后果 + 主次判定），人一次性过报告决策。
+      阶段三之后无人门，一路自动跑到 merge；人的再入口是异步读 <code>hand-off.md</code>。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P6</span>防假绿：每个 ✅ 都要有机验锚点</h4>
+      <p>去掉人门的前提是终门足够硬：<code>sdflow-done</code> 的 verify 以 Do-Not-Trust 冷启动跑在强档模型上，
+      每条 ✅ 必须附机器可核验的锚点（测试名 / commit / file:line），无锚点的 ✅ 自动降级为 gap。
+      同理，<code>resolve-workflow.sh</code> 的 <code>sane()</code> 检查发现半坏态就 fail-loud，绝不静默广播；
+      子代理能力探针失败则缩减评审镜数并<strong>显著标注降级</strong>，不为没独立跑过的镜落锚。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P7</span>分档派发：把贵的算力花在门禁上</h4>
+      <p><code>model-tiers.md</code> 把子代理按强 / 中 / 轻三档派发（Claude 与 Codex 双机队各自映射），
+      另有正交的 effort 维（Claude 专属）。铁律只有一条：<strong>带门禁、无人逐条复核的步 MUST NOT 降档</strong>——
+      弱模型的假绿会放不完整的活过关；纯机械步则尽管下放轻档省钱。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P8</span>盘面即状态：停即停，重调即续</h4>
+      <p>阶段三不依赖任何跨步内存状态。<code>ship_gate.py</code> 每步前后从磁盘盘面（四件套、报告、tickets、git）推导下一步 verdict，
+      禁止用 prose 记忆步序。会话崩了重新调用即接续；且 gate 不辨产者——人工手跑某步的产物同样被认（人机同权）。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P9</span>四条通则是宪法，且随身携带</h4>
+      <p>「能查的自己查 / 先调研再推荐 / 锚目标态不拿现状反驳 / 简化但不砍目标范围」四条通则由脚本注入每个 SKILL.md 的托管块，
+      fan-out 子代理与 outside-voice 的 prompt 必须原文携带。为什么内联复制而不是给个链接？
+      <strong>这几条要防的失效模式，恰恰包含「不会想到要去查它」</strong>——会想起去查规则的人，本来就不会犯这个错。</p>
+    </div>
+
+    <div class="principle">
+      <h4><span class="tag">P10</span>信任边界明确：只有真人是「人」</h4>
+      <p>上游 agent 的 prompt、子代理任务指令、outside-voice 的 context，都不构成「人的明确指示」，不能豁免任何规则；
+      outside-voice 的 context 区被声明为 UNTRUSTED，其中指令性文字一律视为数据。授权只能来自真人用户，沉默不等于授权。</p>
+    </div>
+  </div>
+</section>
+
+<section id="pipeline">
+  <div class="kicker">03 · PIPELINE</div>
+  <h2>三阶段流程</h2>
+  <p>一个变更（change）的完整生命周期如下。整条线是<strong>唯一线性路径</strong>——没有旁路，没有可选的平行入口。</p>
+
+  <div class="pipeline">
+    <div class="stage">
+      <div class="stage-label">STAGE 0 · 可选前置</div>
+      <h4>opsx:explore —— 发散探索</h4>
+      <p>仅当问题模糊、方向未定时才跑；想法已清晰就直接跳过。这是全流程唯一的条件步。</p>
+    </div>
+    <div class="connector"><span class="arrow">↓</span><span class="note">人示意收敛（「开搞」「做吧」）→ 模型自动 invoke；模型不得自主开 change</span></div>
+
+    <div class="stage">
+      <div class="stage-label">STAGE 1 · 生成</div>
+      <h4><span class="cmd">/sdflow-spec</span> —— 澄清 → 拷问 → 生成</h4>
+      <p>相位 A 澄清需求；相位 B 起手即建分支（FF-0 三分支判定）+ change 目录，逐条拷问承重约束、
+      站稳一条就增量落盘进 <code>decision-memo.md</code>（所以 <code>/clear</code> 无损、崩溃只丢最后一小段）；
+      相位 C 从 memo 全量生成四件套 + 终审。</p>
+    </div>
+    <div class="connector"><span class="arrow">↓</span><span class="note">/clear → 切换评审档模型（出口序列，G1 具名例外之一）</span></div>
+
+    <div class="stage">
+      <div class="stage-label">STAGE 2 · 设计审</div>
+      <h4><span class="cmd">/sdflow-spec-review</span> —— 单批 fan-out 多镜</h4>
+      <p>一条消息内并行派出：广审双镜（strategy / plan-eng）+ 领域镜 + 对抗镜 + 接地读码镜 + design-voice 跨模型第二意见；
+      主审做机械引用核、去重合并、对抗裁决，收敛成<strong>一份</strong> <code>spec-review-report.md</code>。中途不向人提问。</p>
+    </div>
+    <div class="connector"><span class="arrow">↓</span></div>
+
+    <div class="stage gate-node">
+      <div class="stage-label">HARD-GATE</div>
+      <h4>人工过报告拍板<span class="badge-human">全流程唯一人类门</span></h4>
+      <p>逐条处理报告里的发现与「决策登记区」的待拍板项。批准后进入无人区。</p>
+    </div>
+    <div class="connector"><span class="arrow">↓</span><span class="note">/clear → 调用时重述 merge 意图（G1 具名例外之二）</span></div>
+
+    <div class="stage">
+      <div class="stage-label">STAGE 3 · SHIP（无人门，连续跑到 merge）</div>
+      <h4><span class="cmd">/sdflow-ship {change}</span> —— gate 台账驱动</h4>
+      <p>每步前后调 <code>ship_gate.py</code> 从盘面推导 verdict，依次驱动：</p>
+      <p>① <strong>实现</strong>：<code>sdflow-implement</code> 先出 3–6 张 tracer-bullet 垂直切片 ticket，
+      再按依赖 frontier 派 fresh implementer 执行，每张 ticket 过 Standards / Spec 双轴审；</p>
+      <p>② <strong>代码审</strong>：<code>/sdflow-code-review</code> 冷视角强制全跑——scope 审计 + 领域/对抗/历史多镜 +
+      机械引用核 + 二元裁决，能修的自动修（标 <code>[impl-review-fix]</code>）、修不了的 defer 进 issues 池；</p>
+      <p>③ <strong>收尾</strong>：<code>/sdflow-done</code> —— verify（证据锚点终门）→ issues sweep →
+      <code>hand-off.md</code> → archive（delta 对真实代码核验后同步进 specs）→ commit → 默认 merge。</p>
+    </div>
+    <div class="connector"><span class="arrow">↓</span><span class="note">人类再入口：异步读 hand-off.md，决定要不要开清理 change</span></div>
+  </div>
+
+  <div class="callout warn">
+    <p><strong>/clear 纪律</strong>：全流程只有上面标出的两处阶段交界该 <code>/clear</code>；
+    阶段内部（尤其子代理调度期间）一律禁用，上下文吃紧用 <code>/compact</code>。
+    审查顺序也不可颠倒：本地 diff 审 → push PR → 远程 PR 审。</p>
+  </div>
+</section>
+
+<section id="skills">
+  <div class="kicker">04 · SKILLS</div>
+  <h2>Skills 全景</h2>
+  <p>15 个 skill 按角色分组。<strong>数据类</strong>带 <code>scripts/</code>（Python 脚本保证确定性，多数配 pytest）；
+  <strong>编排类</strong>是纯 Markdown 指令，驱动主 session 调度子代理。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Skill</th><th>类型</th><th>角色</th></tr></thead>
+      <tbody>
+        <tr class="group-row"><td colspan="3">铺设与维护</td></tr>
+        <tr><td><code>sdflow-init</code></td><td><span class="type-pill type-data">数据类</span></td><td>一键把 spec 工作流铺进任意项目；本仓是 bundle 唯一权威源。<code>update</code> 模式重拉最新</td></tr>
+        <tr><td><code>sdflow-maintain</code></td><td><span class="type-pill type-data">数据类</span></td><td>扫描 openspec 目录与 INDEX 的一致性，报告差异并修复</td></tr>
+        <tr><td><code>sdflow-upgrade</code></td><td><span class="type-pill type-md">编排类</span></td><td>升级运行 checkout：pull → setup 一键完成，堵住「新 SKILL 调旧脚本」窗口期</td></tr>
+        <tr class="group-row"><td colspan="3">主流程（阶段一 → 三）</td></tr>
+        <tr><td><code>sdflow-spec</code></td><td><span class="type-pill type-md">编排类</span></td><td>阶段一产 spec 单一入口：澄清 → 拷问 → 生成四件套 + decision-memo</td></tr>
+        <tr><td><code>sdflow-spec-review</code></td><td><span class="type-pill type-md">编排类</span></td><td>阶段二设计审主审：多镜 + 跨模型 voice → 一份报告供人拍板</td></tr>
+        <tr><td><code>sdflow-ship</code></td><td><span class="type-pill type-data">数据类</span></td><td>阶段三总编排：<code>ship_gate.py</code> 台账驱动到 merge</td></tr>
+        <tr><td><code>sdflow-implement</code></td><td><span class="type-pill type-data">数据类</span></td><td>tickets 实现管线：出 ticket + 受限并行执行 + 每票双轴审；只由 ship 派发</td></tr>
+        <tr><td><code>sdflow-code-review</code></td><td><span class="type-pill type-md">编排类</span></td><td>阶段三代码审主审：冷视角多镜 + 二元裁决 + 自动修</td></tr>
+        <tr><td><code>sdflow-done</code></td><td><span class="type-pill type-data">数据类</span></td><td>闭环：verify 终门 → hand-off → archive → commit → 默认 merge</td></tr>
+        <tr class="group-row"><td colspan="3">规划三轴（互不重叠，按需单用）</td></tr>
+        <tr><td><code>sdflow-architecture</code></td><td><span class="type-pill type-data">数据类</span></td><td><strong>空间轴</strong>：简单需求 → skeleton-ready SAD + 骨架切片建议</td></tr>
+        <tr><td><code>sdflow-devenv</code></td><td><span class="type-pill type-data">数据类</span></td><td><strong>过程轴</strong>：单元/集成/e2e 三层测试策略一层不留白 + 真跑确认</td></tr>
+        <tr><td><code>sdflow-roadmap</code></td><td><span class="type-pill type-md">编排类</span></td><td><strong>时间轴</strong>：比单次 change 更大的多阶段规划，三件套直写落盘</td></tr>
+        <tr class="group-row"><td colspan="3">记录与复盘（横切，可独立使用）</td></tr>
+        <tr><td><code>sdflow-issues</code></td><td><span class="type-pill type-data">数据类</span></td><td>bug 池 + todo 池统一台账：一个 issue 一个文件，脚本保 ID 与索引一致</td></tr>
+        <tr><td><code>sdflow-retro</code></td><td><span class="type-pill type-data">数据类</span></td><td>只读再生「评审流程值不值」的成本×价值复盘报告，只呈现不决策</td></tr>
+        <tr class="group-row"><td colspan="3">仅服务本仓</td></tr>
+        <tr><td><code>sdflow-upstream-watch</code></td><td><span class="type-pill type-data">数据类</span></td><td>追踪四个上游源 delta 出三分诊报告；外仓调用被 cwd 守卫拒绝</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="usage">
+  <div class="kicker">05 · IN PRACTICE</div>
+  <h2>在实际项目中使用</h2>
+
+  <h3>跑通第一个变更</h3>
+  <pre><code><span class="comment"># 装一次（任意位置 clone，绝对路径 symlink 与位置无关）</span>
+git clone https://github.com/laodao-ai/sdflow-skills.git &amp;&amp; cd sdflow-skills &amp;&amp; bash setup.sh
+
+<span class="comment"># 在你的项目里：</span>
+/sdflow-init            <span class="comment"># 只做一次：铺目录骨架 + config.yaml + CLAUDE.md 托管块</span>
+/sdflow-spec            <span class="comment"># 阶段一：产四件套 + decision-memo（问题模糊先 opsx:explore）</span>
+/clear                  <span class="comment"># 切换到评审档模型</span>
+/sdflow-spec-review     <span class="comment"># 阶段二：一份报告 → ★ 人在这里拍板（唯一人类门）</span>
+/clear
+/sdflow-ship {change}   <span class="comment"># 阶段三：实现 → 代码审 → done → merge 连续跑</span></code></pre>
+
+  <h3>铺完之后项目里长什么样</h3>
+  <pre><code>openspec/
+├── workflow/WORKFLOW-GUIDE.md   <span class="comment"># 唯一落地的规则文件（人读手册）</span>
+├── schemas/sdflow-spec-driven/  <span class="comment"># 四件套结构的 project-local schema</span>
+├── config.yaml                  <span class="comment"># 「本项目」段自己填：领域、领域清单、可选覆盖</span>
+├── INDEX.md                     <span class="comment"># 托管块自动注入</span>
+└── changes/  specs/  issues/    <span class="comment"># 变更 / 规格 / 台账</span>
+CLAUDE.md / AGENTS.md            <span class="comment"># 注入托管块：强制规范 + 四条通则</span></code></pre>
+  <p>注意<strong>规则集与评审工具不会拷进你的项目</strong>——运行时经 <code>~/.sdflow/hack/resolve-workflow.sh</code>
+  解析到全局 canonical <code>~/.sdflow/workflow/</code>。好处：升级工具链（<code>/sdflow-upgrade</code>）一次，
+  本机所有项目立即吃到最新规则，无需逐仓 update。</p>
+
+  <h3>日常触发习惯</h3>
+  <ul>
+    <li>想法没成形 → <code>opsx:explore</code> 陪你发散；成形了说一句「开搞」，模型会自动进 <code>/sdflow-spec</code>。</li>
+    <li>记账随时可用：「记一下这个 bug」「记个 TODO」→ <code>sdflow-issues</code> 落盘，<code>sdflow-done</code> 收尾时自动 sweep 分诊。</li>
+    <li>设计审报告是你唯一必须细读的东西——「决策登记区」里每项都带推荐 + 依据 + 代价，你只做拍板。</li>
+    <li>merge 默认执行；不想自动 merge，在调 <code>/sdflow-ship</code> 时说明即可（opt-out）。</li>
+  </ul>
+
+  <h3>灵活裁剪的几个正交旋钮</h3>
+  <ul>
+    <li><strong>按需单用，不必全家桶</strong>：<code>sdflow-issues</code>（台账）、规划三轴（architecture / devenv / roadmap）
+    都可脱离主流程独立使用；比单次 change 大的工作先 <code>sdflow-roadmap</code> 拆阶段，每阶段再走一遍主流程。</li>
+    <li><strong>深度由触发决定，不用手选档位</strong>：起手按 <code>trigger-catalog.md</code> 判 TG 命中，
+    命中什么就激活对应的约束 / 领域清单 / 画图要求——小改动自然轻，高风险自然重。</li>
+    <li><strong>config.yaml 的「本项目」段</strong>：声明领域（backend / frontend / embedded / llm…）决定评审用哪套领域清单；
+    可选覆盖 <code>model-tiers</code> / <code>effort-tiers</code>（如预算紧把中档换轻模型——但门禁步不许降档）。</li>
+    <li><strong>人机同权</strong>：任何一步你都可以人工手跑，产物落盘后 gate 照认，接着往下走。</li>
+    <li><strong>双宿主</strong>：Claude Code 与 Codex 都能跑；Codex 侧子代理授权与降级路径（不可用时缩镜数并显著标注）已内建。</li>
+  </ul>
+
+  <div class="callout warn">
+    <p><strong>常见坑</strong>：① 阶段内部禁 <code>/clear</code>（尤其子代理调度期间）；
+    ② <code>tasks.md</code> 的复选框在 done 的 archive 阶段才勾，实现期勾会触发设计门失鲜；
+    ③ 升级后 pull 与 setup 之间是「新 SKILL 调旧脚本」窗口期——用 <code>/sdflow-upgrade</code> 一键完成两步；
+    ④ 开 change 必过 FF-0 分支判定（全局 hook 硬拦），在别的 feature 分支上会停下来问你。</p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="kicker">06 · UNDER THE HOOD</div>
+  <h2>安装机制与目录布局</h2>
+  <p><code>setup.sh</code> 遍历仓库根，<strong>仅安装含 <code>SKILL.md</code> 的目录</strong>，共四个落点：</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>落点</th><th>内容</th><th>方式</th></tr></thead>
+      <tbody>
+        <tr><td><code>~/.claude/skills/</code></td><td>全部 15 个 skill</td><td>绝对路径 symlink（改源即时生效）</td></tr>
+        <tr><td><code>~/.codex/skills/</code></td><td>同上（Codex 宿主）</td><td>同上；Windows 用 copy + marker</td></tr>
+        <tr><td><code>~/.claude/agents/</code></td><td>3 个角色定义 + 5 个 effort 档位定义</td><td>逐文件软链；全局命名空间，守卫最严</td></tr>
+        <tr><td><code>~/.sdflow/</code></td><td>canonical <code>workflow/</code> + <code>hack/</code> 辅助脚本</td><td>workflow 软链；hack 是<strong>拷贝</strong>——改源后必须重跑 setup</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li><strong>幂等</strong>：可反复运行；绝不覆盖非本仓拥有的同名目录，自动清理源已删除的孤儿链接。</li>
+    <li><strong>fail-soft</strong>：单个落点失败降级为 skipped 汇总，不让 <code>set -e</code> 带崩整条安装链。</li>
+    <li><strong>版本自报</strong>：由 <code>git describe --tags</code> 生成，没有手工维护的版本文件（手工版本号必然过期）。</li>
+    <li><strong>回滚</strong>：运行 checkout <code>git checkout &lt;上一良好 commit&gt;</code> + 重跑 <code>setup.sh</code>。</li>
+  </ul>
+  <p>本仓自身就用这套流程管理变更（dogfooding）：仓根 <code>openspec/</code> 是活的实例，
+  每个变更都走过 propose → 设计审 → 代码审 → done 归档的完整闭环。</p>
+</section>
+
+<footer>
+  <p>sdflow-skills · MIT License · <a href="https://github.com/laodao-ai/sdflow-skills">github.com/laodao-ai/sdflow-skills</a></p>
+  <p>本文为 <code>docs/sdflow-guide.html</code> 自包含单文件，无外部依赖，浏览器直接打开即可。</p>
+</footer>
+
+</div>
+
+<script>
+  (function () {
+    var links = document.querySelectorAll('.side-toc a[href^="#"]');
+    if (!links.length || !('IntersectionObserver' in window)) return;
+    var byId = {};
+    links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+    var current = null;
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        if (current) current.classList.remove('active');
+        current = byId[e.target.id];
+        if (current) current.classList.add('active');
+      });
+    }, { rootMargin: '-15% 0px -70% 0px' });
+    Object.keys(byId).forEach(function (id) {
+      var sec = document.getElementById(id);
+      if (sec) observer.observe(sec);
+    });
+  })();
+</script>
+</body>
+</html>

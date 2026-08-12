@@ -103,9 +103,10 @@ pytest sdflow-issues/tests/                             # 单个 skill
 pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
 ```
 
-带脚本+测试的 skill 仅这几个：`sdflow-issues`、
-`sdflow-init`、`sdflow-retro`、`sdflow-maintain`、`sdflow-architecture`、`sdflow-devenv`。其余为纯 Markdown 编排类，无自动化测试。
-<!-- [impl-review-fix] C8：清单失鲜补 sdflow-architecture（已有 scripts/ + tests/，此前遗漏） -->
+带 `scripts/` 的数据类 skill 共 10 个：`sdflow-init`、`sdflow-issues`、`sdflow-retro`（无 tests/）、
+`sdflow-maintain`、`sdflow-implement`、`sdflow-ship`、`sdflow-done`、`sdflow-architecture`、
+`sdflow-devenv`、`sdflow-upstream-watch`。其余 5 个（`sdflow-spec`、`sdflow-spec-review`、
+`sdflow-code-review`、`sdflow-roadmap`、`sdflow-upgrade`）为纯 Markdown 编排类，无自动化测试。
 
 ## 架构
 
