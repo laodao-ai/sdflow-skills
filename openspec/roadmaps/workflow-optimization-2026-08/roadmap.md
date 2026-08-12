@@ -25,7 +25,7 @@
 | **阶段 2** · 镜 roster 复评 + 裁决地基改造 | 阶段 1 后 1-2 周 | 13 面待复评镜逐一处置；置信硬滤被替代方案取代 | **✅ 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12，双 PASS） |
 | **阶段 3** · 上游套件吸收机制 | 无依赖，随时 | 四源有锚、watch 跑通一轮 delta 分诊 | **✅ 完成 2026-08-11**（5/5 ticket + code-review 修复，归档 SHA `c4b8c6f`） |
 | **阶段 4** · 成本工程剩余 | 阶段 1 数据到位后 | effort/thinking 按步分档落地 | **✅ 完成 2026-08-12**（6 tickets, verify PASS 2639 tests, 归档 SHA `e202feb`） |
-| **阶段 5** · 人类门减负与 context 工程 | 阶段 4 后 | SKILL 考古层清理（主力）+ 拍板三问补全 + T256 评估收口 | **已细化 2026-08-12**（4 子任务） |
+| **阶段 5** · 人类门减负与 context 工程 | 阶段 4 后 | SKILL 考古层清理（主力）+ 拍板三问补全 + T256 调研记录 | **✅ 完成 2026-08-12**（4/4 子任务，verify PASS） |
 
 （时长预估仅取定性口径，与本仓既有 roadmap 惯例一致；小时级数字无历史推导基础，不写。）
 
@@ -359,7 +359,9 @@ add-sdflow-spec / codex-host）降至 38–79 min（remove-superpowers / p4）�
       @90% 阈值是现实概率，不能用 Claude 1M context 现状否定该需求）。调研记录已追加进
       `openspec/issues/open/todo/T256.md`（双宿主 PreCompact 机械落点核实 + 未来方向推荐：
       merge 意图落盘化优先于 hook），issue 保持 OPEN（非终态，符合人工拍板）
-- [ ] 5.4 实现验证收尾（全仓 pytest 绿）——**待 Task 6**（本 task5 backfill 不含验证收尾）
+- [x] 5.4 实现验证收尾（全仓 pytest 绿）
+      **✅ 2026-08-12**（Task 6 交付，2169 passed / 16 failed 均为 Windows 环境预存问题；
+      证据锚 `impl-reports/task6-verify.md`）
 
 ### 验收标准
 
@@ -372,8 +374,10 @@ add-sdflow-spec / codex-host）降至 38–79 min（remove-superpowers / p4）�
       + anchor_lint 机验绿 —— **时序性未达成**：本 change 自身的 `spec-review-report.md`
       产出于 Task 1/3（拍板三问 + anchor_lint 落地）之前，无法自证，已挂 hand-off-notes.md
       待下一次设计审首验
-- [ ] 全仓 pytest 绿 —— 待 Task 6 出证据
-- [ ] change 归档（code-review → sdflow-done → merge）—— 待 Task 6 之后
+- [x] 全仓 pytest 绿
+      **✅ 2026-08-12**（2169 passed / 16 failed 均为 Windows 环境预存，证据锚 `impl-reports/task6-verify.md`）
+- [x] change 归档（code-review → sdflow-done → merge）
+      **✅ 2026-08-12**（code-review pass 零 findings → verify PASS → archive happy path specs 24/24 validated → ff merge to main）
 
 ### 交付物
 
@@ -402,7 +406,7 @@ add-sdflow-spec / codex-host）降至 38–79 min（remove-superpowers / p4）�
 | 阶段 2 | 5（2.A×5） | **✅ 5/5 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12） |
 | 阶段 3 | 5（tickets 管线 Task1–5） | **✅ 5/5 完成 2026-08-11**（含 code-review 修复，归档 SHA `c4b8c6f`） |
 | 阶段 4 | 8（tickets 管线 Task1–6 + CR + B25/B26） | **✅ 8/8 完成 2026-08-12**（verify PASS 2639 tests，归档 SHA `e202feb`） |
-| 阶段 5 | 4（5.1–5.4） | 5.1–5.3 完成 2026-08-12（T275/T101/T256 三条 issue 回填），5.4 待 Task 6 验证收尾 |
+| 阶段 5 | 4（5.1–5.4） | **✅ 4/4 完成 2026-08-12**（verify PASS 2169 tests，归档 SHA `9d37457`） |
 | **合计** | **22** | — |
 
 ## 附录 C · 未来 OpenSpec 变更映射
