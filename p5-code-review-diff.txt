@@ -1,0 +1,741 @@
+diff --git a/hack/tests/test_sdflow_spec_resident_contract.py b/hack/tests/test_sdflow_spec_resident_contract.py
+index fe46f468..6d3bde5e 100644
+--- a/hack/tests/test_sdflow_spec_resident_contract.py
++++ b/hack/tests/test_sdflow_spec_resident_contract.py
+@@ -25,7 +25,7 @@ RESIDENT_CONTRACT = {
+         "<!-- sdflow:principles:end -->",
+     ),
+     "phase-0": ("## 第零步", "openspec --version", "openspec list", "### 0.3 重入探测"),
+-    "phase-a": ("## 相位 A", "一次只问一个问题", "收束进的是 B，不是 C"),
++    "phase-a": ("## 相位 A", "MUST NOT 借批量甩开放题", "收束进的是 B，不是 C"),
+     "phase-b": ("## 相位 B", "## 承重约束", "sdflow-spec-grill"),
+     "phase-c": (
+         "## 相位 C",
+diff --git a/sdflow-architecture/SKILL.md b/sdflow-architecture/SKILL.md
+index 3c82e336..d44ea75c 100644
+--- a/sdflow-architecture/SKILL.md
++++ b/sdflow-architecture/SKILL.md
+@@ -167,9 +167,6 @@ description: >
+ ## 路径与调用约定（先读）
+ 
+ 本 SKILL 出现的每条命令都用下列变量，运行前先在会话里定死其字面值。
+-<!-- [impl-review-fix] C1：SKILL_DIR 改双宿主字面推导（原抽象占位 `<本 SKILL.md 所在目录>` 无推导命令，
+-     模型易连引号一起误抄成 "~/..." 不展开，对抗镜实测 65% 命中率）——比照 sdflow-retro 惯例给出可直接
+-     复制执行的字面路径，仅 SKILL_DIR 改写，$SKILL_DIR 的 15 处既有引用不动。 -->
+ 
+ ```
+ REPO="$(git rev-parse --show-toplevel)"                # 消费仓根（分家/SAD 落位都在其 openspec/ 下）
+@@ -190,12 +187,10 @@ SAD="$REPO/openspec/architecture/sad.md"                # SAD 单例
+ - **references（按名引用，不复述其内容）**：`references/intake-questionnaire.md`（①三问）·
+   `references/decomposition-rules.md`（②R1–R11 + AP1–AP4）· `references/review-lenses.md`（④走查/升档信号表）·
+   `references/quality-criteria.md`（S 编号真相源，人门清单源）· `references/sad-template.md`（十节骨架，scaffold
+-  写入）· `references/checklists/`（①问②/第3节 外部依赖典型集 <!-- [impl-review-fix] C4②：原标签「R1」
+-  误指——external-deps-typical.md 实际挂在步骤①三问②与 SAD 第3节外边界，不在 decomposition-rules R1 --> /
+-  R4 变化类别表 / 横切模板 / 质量属性候选库）。
++  写入）· `references/checklists/`（①问②/第3节 外部依赖典型集（挂在步骤①三问②与 SAD 第3节外边界，不在
++  decomposition-rules R1）/ R4 变化类别表 / 横切模板 / 质量属性候选库）。
+ 
+ ## 信任边界（三条原文级声明，每次跑到相关步都显式陈述一行）
+-<!-- [impl-review-fix] C6①：补第三条（与 B 波 _precheck_walkthrough_logs 行为同步），原「两条」改「三条」 -->
+ 
+ - **「lint 通过 = 结构性通过 ≠ 内容已审」**——`sad_lint.py` v1 只断言结构（十节存在性 / 假设集合对账 /
+   排序 / frontmatter 枚举 / 组合不变式 / 建议节分支），通过码 `structure-ok-SEMANTICS-UNCHECKED` 的尾缀即诚实
+@@ -242,7 +237,7 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" init --root "$REPO"
+ 
+ **一仓多系统**：操作者声明消费仓是「一仓多系统」时，**显式提示**「v1 仅支持单系统单例（演进路径
+ `openspec/architecture/{system}/` 已预留，v1 未启用）」并留痕（`log --root "$REPO" --line "多系统声明：按 v1 单例处理"`），
+-MUST NOT 硬造多系统目录布局。<!-- [impl-review-fix] C6⑤：L88 log --line 简写补全 --root "$REPO" -->
++MUST NOT 硬造多系统目录布局。
+ 
+ > **回写与回落（既定后续动作，不经 continue/replan 分流）**——见文末「状态迁移速查」，此处不重复。
+ 
+@@ -334,7 +329,6 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "step=2 r
+ 
+ **时序纪律（加粗强制，与步骤 ① 同款）**：**MUST 实际呈现选择题并获得操作者拍板之后，才允许把定稿方案写入
+ SAD 正文；MUST NOT 自行代答、MUST NOT 同轮自问自答。**
+-<!-- [impl-review-fix] C2：补步骤③时序纪律双句，对齐步骤①强度 -->
+ 
+ 拍板后：把定稿方案写入 SAD 正文（第 1/2/3/4/5/7/8/9 节 + 附录假设清单，按 `references/sad-template.md` 骨架，
+ 每节「有内容 或 显式 `N/A — <理由>`」），并留痕候选快照 + 步骤到位：
+@@ -396,8 +390,6 @@ S11 演进可维护性镜，按命中风险取镜）。**MUST NOT 整体调用 `
+ S8 目标态）。调用经 `~/.sdflow/hack/outside-voice.sh`（**契约单一源 = 脚本头注释，此处只给分支决策，不转述
+ 接口细节**）：
+ 
+-<!-- [impl-review-fix] C5：preflight 恒 exit 0（按 stdout 值判定，非退出码）改准确；补 exit 2 分支 +
+-     catch-all 未列非零兜底（Task7 审留遗，已核 wrapper 头注释） -->
+ ```
+ HELPER=~/.sdflow/hack/outside-voice.sh
+ [ -x "$HELPER" ] 不成立（不可执行/不存在）           → 显式降级 Claude 镜（与 preflight 非 ready 同一降级出口，不静默）
+@@ -416,7 +408,6 @@ exec --context-file <f>：
+ **升档前 MUST 提示操作者确认消费仓无敏感明文**——codex read-only 沙箱防写不防读、不防出境；wrapper 的 secret
+ 扫描只覆盖显式喂入的 context 文件，仓内其他敏感文件不在其保护面。降级一律**显式提示不静默**，并留痕
+ `log --root "$REPO" --line "升档镜阵：outside-voice reason_code=<…> → 降级 Claude 镜"`。
+-<!-- [impl-review-fix] C6⑤：L242 log --line 简写补全 --root "$REPO" -->
+ 
+ ### 4.4 人门（固定议程，位置钉死 = 走查洞处置后、scaffold 迁移前）
+ 
+@@ -426,7 +417,6 @@ exec --context-file <f>：
+ 2. **假设逐条处置**——每条 `[假设-N]` 由操作者「显式接受 或 标待校准」，处置经 scaffold 落盘（发生在操作者
+    逐条确认之后）。**时序纪律（加粗强制，与步骤 ① 同款）**：**MUST 实际由操作者对每条假设逐条显式处置
+    （接受/待校准）之后，才允许调 `set-assumption` 落盘；MUST NOT 自行代答、MUST NOT 同轮自问自答。**
+-   <!-- [impl-review-fix] C2：补 4.4 假设处置时序纪律双句，对齐步骤①强度 -->
+    ```
+    python3 "$SKILL_DIR/scripts/sad_scaffold.py" set-assumption --root "$REPO" --assumption 1=接受
+    python3 "$SKILL_DIR/scripts/sad_scaffold.py" set-assumption --root "$REPO" --assumption 2=待校准
+@@ -436,7 +426,6 @@ exec --context-file <f>：
+ 
+ **走查轮次与升档判定的 log 留痕是 `transition --to skeleton-ready` 的机械前置**：缺失（sad-log 无「走查」
+ 或「升档判定」字样的留痕行）→ scaffold fail-closed `exit 5`，不进步骤⑤。
+-<!-- [impl-review-fix] C6②：与 B 波 _precheck_walkthrough_logs 行为同步 -->
+ 
+ ---
+ 
+@@ -477,7 +466,6 @@ lint 通过码 `structure-ok-SEMANTICS-UNCHECKED`——复述信任边界：**li
+ **迁移前置全量结构复检（B 波新增行为）**：`transition` 在落盘前会对**迁移后的候选全文**跑一次完整结构不变式
+ 复检，命中违规 → `exit 5` 并列出违规 codes、不写盘；**含回落路径**（如 skeleton-ready→draft）——回落若仍
+ 残留 `contract[validated/frozen]` 标签会被拦截，须先把标签降回 `planned/draft` 再重跑迁移。
+-<!-- [impl-review-fix] C6④：与 B 波 _lint_candidate_or_die 行为同步 -->
+ 
+ **对话收尾行（原文级，交棒不得只埋在文件里）**：
+ 
+@@ -511,9 +499,8 @@ SAD**（environments/testing-strategy 是相邻文档，写进 SAD 违反 `quali
+ ## 分家指令（ADR / 术语单一真相源；SAD 只引用不复述）
+ 
+ 分家写入**编号分配与骨架机械化**，**正文由模型用 Edit 补写**，SAD 本体只索引/引用，**MUST NOT 复述**其
+-内容（复述必双写发散）。
+-<!-- [impl-review-fix] C3①：原「全部机械化」措辞不准确——adr-new 只机械化编号扫描+骨架文件生成，
+-     Context/Decision/Consequences 三节正文仍需模型手写 -->
++内容（复述必双写发散）——adr-new 只机械化编号扫描+骨架文件生成，Context/Decision/Consequences 三节正文
++仍需模型手写。
+ 
+ - **ADR → `openspec/adr/`**（不可变 + supersession 链），编号由 scaffold 机械分配：
+   ```
+@@ -523,7 +510,6 @@ SAD**（environments/testing-strategy 是相邻文档，写进 SAD 违反 `quali
+   `--number <N>` 越过扫描。第一条分解 ADR（步骤 ② 判据）即经此产出。**adr-new 产出骨架后 MUST 用 Edit
+   把步骤 ② 的判据/被否切法/AP 自检三行痕写入该 ADR 文件的 Context/Decision/Consequences 三节，MUST NOT
+   留空骨架。**
+-  <!-- [impl-review-fix] C3②：补 adr-new 后必须补写正文的显式指示 -->
+ - **术语 → `openspec/CONTEXT.md`**（生态既有 home），并入 `## Language` 段末尾：
+   ```
+   python3 "$SKILL_DIR/scripts/sad_scaffold.py" context-add --root "$REPO" --term "<术语>" --definition "<定义>"
+@@ -559,4 +545,5 @@ MUST NOT 改写既有行）：单方案声明 / 升档判定（含未命中）/
+ 
+ **log 纪律**：`--line` / `--reason` 的值须**单行**——含换行符（`\n`/`\r`）会被 `sad_scaffold.py` 拒绝
+ （`exit 2`），防伪造 append-only 审计行；多行内容自行拼成一行摘要再传入。
+-<!-- [impl-review-fix] C6③：与 B 波 _reject_newline 行为同步 -->
++
++历史取舍不进入默认运行；仅在审计历史依据时读取 references/evolution-notes.md。
+diff --git a/sdflow-architecture/references/evolution-notes.md b/sdflow-architecture/references/evolution-notes.md
+new file mode 100644
+index 00000000..9face042
+--- /dev/null
++++ b/sdflow-architecture/references/evolution-notes.md
+@@ -0,0 +1,10 @@
++# 演进依据与历史取舍
++
++> 仅在审计历史取舍时读取。本文不参与默认执行。
++
++## 1. impl-review-fix 内联审校注释清理（P5 T275 doc1 审计）
++
++正文此前散布多条 `<!-- [impl-review-fix] Cx：... -->` HTML 注释，逐条记录某轮代码审校对某处措辞的
++修订理由（如「原抽象占位改字面路径」「补时序纪律双句」「与某脚本内部函数行为同步」）。这些注释是
++review-diff 期间的编辑说明，服务于比对上一版与本版差异的审校者，对使用本 skill 无操作意义——已删除，
++其中携带真实操作语义的片段（如 adr-new 只机械化编号扫描、正文仍需模型手写）已并入正文对应位置。
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index a6dab9e5..469bc18c 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -387,10 +387,9 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「
+      阈值常量取值不强制求注释 / 无害冗余不标（Suppressions 既有口径不变）；理由落「已裁掉」区（不标
+      `[ref-check]`，与机械裁掉来源可辨）。
+    - **defer**：真实但拿不准优先级/方案 → 进 Step4 defer 台账（buglist/todolist）。
+-   **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**——旧「被 `anchor_lint` 合法组合矩阵判
+-   「跨模型」即跳过数值滤直通对抗裁决」的豁免条款随数值滤一并废止：数值滤门槛已不存在，「豁免于该门槛」
+-   这一概念随之消失，跨模型 finding 不再需要任何特殊通道；矩阵本身（`host-adaptive-execution` 单一源）
+-   继续供其余用途（如 anchor 校验、declared-sites 完整性）引用，未被删除。
++   **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**，无特殊通道（历史沿革见
++   `references/evolution-notes.md` §2）；`host-adaptive-execution` 单一源矩阵继续供其余用途（如
++   anchor 校验、declared-sites 完整性）引用，未被删除。
+ 4. **置信仅排序**：Step2 各镜自报置信（0–100）**只用于报告内 Findings 区展示排序**，**MUST NOT** 作为
+    采纳/裁掉/defer 的判据或任何数值门槛——门槛判断已收窄为上方机械三态 + 二元裁决两层。
+ 5. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
+@@ -476,7 +475,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「
+    本步顺带调用 emitter 或顺带省略下一步**。
+ 7. **度量锚落锚 + 锚行自检〔B25，impl-orchestration delta〕**——**本步是本轮 code-review 输出
+    lens-metric / ref-check 锚的唯一途径，是一个具体、不可省略的工具调用，MUST NOT 被当作「写报告」
+-   那句散文里可以顺带略过的细节**（拆成独立编号正是为此，见下方历史注记）：
++   那句散文里可以顺带略过的细节**（拆成独立编号正是为此）：
+    - **度量锚落锚〔impl-review-fix mlh-p4〕**：`metrics.enabled=false` → 本段不落、**不调 emitter**；`true` → 用 Step4「裁决计数」
+      构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --host "$SDFLOW_HOST" --input <构造的f>`
+      （`--host` 取第零步同一次 `resolve-models.sh` 导出值；roster 中非 outside-voice 普通镜行 `runner` MUST 等于 `--host`；
+@@ -491,7 +490,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「
+      计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。
+      **此自检由同一执行落锚的主 session 自行运行、非独立外部门**（与 `ship-gate.code_review` 锚由 `ship_gate.py` 外部
+      拦截不同）——诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"（该残余缺口现已由
+-     `ship_gate.py` 的 B25 锚存在门在消费点兜底，见下方历史注记）。
++     `ship_gate.py` 的 B25 锚存在门在消费点兜底）。
+      **保留信任边界声明**：数值一致性（`findings`/`采纳`/`独立`等是否与合并池实收数吻合）**是主 session 信任
+      边界、非机械可验**，脚本 MUST NOT 谎称能机械保证数值正确。
+      **config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
+@@ -505,15 +504,10 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「
+      的机械显著提示由 `/sdflow-retro` 聚合（跑 `sdflow-retro/scripts/lens_metric_aggregate.py` 只读聚合所有归档报告）；
+      是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
+      不含评审架构本身的取舍）。
+-   - 🔴 **历史注记（B25，diagnosis 见 `impl-reports/task5-skill-adaptation.md`）**：2026-08-07 ~ 08-12
+-     六轮归档 `code-review-report.md`（`metrics.enabled=true` 全程未变）**100% 缺 `sdflow:lens-metric`
+-     锚**——诊断为「本步被系统性跳过，而非 emitter 调用失败」：独立冒烟测试证实 `lens_metric_emit.py`
+-     本身工作正常（合法输入 exit 0 正确产锚、非法输入 exit 1 正确拒收）；其中一份报告甚至已写出
+-     「### 度量锚」标题 + 「metrics.enabled=true」说明，却仍未真正调用脚本、也未运行上方锚行自检
+-     （若真跑过自检，脚本会因缺 lens-metric 锚判违规、阻塞本步——而报告照常归档说明自检同样被跳过）。
+-     `ship_gate.py` 现已加 B25 锚存在门（外部机械兜底，见 impl-orchestration delta「ship_gate 评审报告
+-     机械层门」）——未来即便本步再被跳过，`ship_gate` 也会判「该步进行中，重跑」而非放行归档；但
+-     SKILL 侧不应只靠外部门兜底，仍 MUST 把度量锚落锚当具体、不可省略的动作执行。
++   - **本步不可省略**：`ship_gate.py` 已加 B25 锚存在门（外部机械兜底，见 impl-orchestration delta
++     「ship_gate 评审报告机械层门」）——即便本步被跳过，`ship_gate` 也会判「该步进行中，重跑」而非
++     放行归档；但 SKILL 侧不应只靠外部门兜底，仍 MUST 把度量锚落锚当具体、不可省略的动作执行
++     （历史诊断见 `references/evolution-notes.md` §1）。
+ 8. **checkpoint 提交（第二段，report-only）**：
+    🔴 **工作树纪律〔1.6b〕**：`checkpoint-commit.sh` 用 `git add -A` 全量暂存 ⇒ 跑本步**前** MUST 先
+    `git status --porcelain` 确认工作树**只剩报告文件**（`code-review-report.md` 及其 `.outside-voice/` 等评审产物），
+@@ -769,3 +763,5 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆
+ - **代码即 ground truth**：直接读 diff 与真实代码，不设接地镜（与 sdflow-spec-review 的唯一结构差异，换历史镜 + 机械引用核）。
+ - checkpoint 脚本 = `~/.sdflow/hack/checkpoint-commit.sh`（setup.sh 全局安装）；缺失则先跑 setup，或退化为普通 `git add -A && git commit`。
+ - 项目无关：规则路径一律经 `~/.sdflow/hack/resolve-workflow.sh` 解析（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`。
++
++历史取舍不进入默认运行；仅在审计历史依据时读取 references/evolution-notes.md。
+diff --git a/sdflow-code-review/references/evolution-notes.md b/sdflow-code-review/references/evolution-notes.md
+new file mode 100644
+index 00000000..6c897d66
+--- /dev/null
++++ b/sdflow-code-review/references/evolution-notes.md
+@@ -0,0 +1,23 @@
++# 演进依据与历史取舍
++
++> 仅在审计历史取舍时读取。本文不参与默认阶段三执行。
++
++## 1. 度量锚曾被系统性跳过的诊断（B25）
++
++2026-08-07 ~ 08-12 六轮归档 `code-review-report.md`（`metrics.enabled=true` 全程未变）100% 缺
++`sdflow:lens-metric` 锚。诊断（详见 `impl-reports/task5-skill-adaptation.md`）为「本步被系统性
++跳过，而非 emitter 调用失败」：独立冒烟测试证实 `lens_metric_emit.py` 本身工作正常（合法输入
++exit 0 正确产锚、非法输入 exit 1 正确拒收）；其中一份报告甚至已写出「### 度量锚」标题 +
++「metrics.enabled=true」说明，却仍未真正调用脚本、也未运行锚行自检（若真跑过自检，脚本会因缺
++lens-metric 锚判违规、阻塞该步——而报告照常归档说明自检同样被跳过）。
++
++结论已固化进正文：`ship_gate.py` 加了 B25 锚存在门（外部机械兜底）；SKILL 正文把「度量锚落锚 +
++锚行自检」拆成独立编号步骤，不再是「写报告」这句散文里可以顺带略过的细节。
++
++## 2. 跨模型 finding 豁免条款随数值置信滤一并废止
++
++旧版存在「被 `anchor_lint` 合法组合矩阵判定为『跨模型』的 finding，跳过数值置信滤直通对抗裁决」
++的豁免条款。数值置信滤（旧版按 0-100 自报置信设门槛）本身已被机械引用核 + 二元裁决（DD4/adr/0041）
++取代，门槛概念消失，「豁免于该门槛」这一说法随之失去意义。当前行为：跨模型 finding 与同族 finding
++走同一条二元裁决，无特殊通道。`host-adaptive-execution` 单一源矩阵本身未删除，继续供 anchor 校验 /
++declared-sites 完整性等其余用途引用。
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index e9218c09..334158e5 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -162,8 +162,6 @@ description: >
+ 
+ 将 reconcile → verify → **hand-off** → archive → git commit → merge 串成一条收尾流水线。各步独立子代理、按本步性质选 model（见「模型选择」）：**verify → 强档**（唯一终门），**archive → 中档**（判断），**commit → 弱档**（机械）；**merge** 留主 session（单向 git，缺省执行、调用时可 opt-out）。
+ 
+-> **核心改进（v3，基于实战）**：① 归档**必须**走 `openspec archive` CLI 以**同步 delta 到主 specs**（旧版手动 `mv` 漏了这步，新能力永远进不了 `openspec/specs/`），遇中文遗留 spec 用 `--skip-specs` + 手动同步；② 默认分支自动检测（勿假设 main）；③ **merge 缺省执行**（ff），不想合并就在调用时明说；④ verify 必产 `verify-report.md` 存 change 目录（随归档留档）；⑤ 步骤固定 + 各步独立子代理 → 按本步性质选 model（verify=强档、archive=中档、commit=弱档）。
+-
+ ---
+ 
+ ## 第零步：确认 change + 检测默认分支 + 复选框对账
+@@ -555,13 +553,4 @@ high 的 effort 执行**——与 model 档位「不降档」铁律同构、同
+ >
+ > 对比 subagent-driven-development 的实现循环（高频、动态、上百任务）：那里「弱档转写实现 + 强档评审」是对的，但它**会**有运行时误分类风险（要靠评审兜底）。**规则随场景变。**
+ 
+-## 附：实战踩坑速记（来自首次执行）
+-
+-| 坑 | 现象 | 对策 |
+-|---|---|---|
+-| 手动归档漏 spec 同步 | 新能力不进 `openspec/specs/` | 用 `openspec archive` CLI |
+-| 中文遗留主 spec | CLI rebuild 报 `must have Purpose section` → Abort | `--skip-specs` + 手动同步 |
+-| 复选框 stale | CLI 警告 "23/24 incomplete" | 第 0.3 步先对账勾选 |
+-| blockquote 在 MUST 前 | validate 报 `must contain SHALL or MUST` | 注记放 MUST 段之后 |
+-| 照搬旧 delta | spec 与终审后实况不符 | 同步按当前代码真正做的写 |
+-| 硬编码 main / --no-ff | 仓库是 master、用户偏好 ff | 检测分支 + ff-only |
++历史取舍不进入默认运行；仅在审计历史依据时读取 references/evolution-notes.md。
+diff --git a/sdflow-done/references/evolution-notes.md b/sdflow-done/references/evolution-notes.md
+new file mode 100644
+index 00000000..98aae4aa
+--- /dev/null
++++ b/sdflow-done/references/evolution-notes.md
+@@ -0,0 +1,19 @@
++# 演进依据与历史取舍
++
++> 仅在审计历史取舍时读取。本文不参与默认收尾执行。
++
++## 1. v3 改进摘要（相对更早版本）
++
++早期版本的归档步用手动 `mv` 搬迁 change 目录，漏掉了 delta 同步这一步，导致新能力永远进不了
++`openspec/specs/`；也未做默认分支自动检测（容易误假设 `main`）、未强制 merge 缺省执行、未强制
++verify 产出 `verify-report.md`、model 选择未按步骤性质区分档位。这些改进已直接固化进正文各步骤
++（第三步「归档必须用 openspec archive CLI」、0.2 节默认分支检测、第五步 merge 缺省执行、第一步
++verify-report.md 硬性可交付、模型选择章节按步定档位），此处仅作历史存档，不再是独立指令。
++
++## 2. 首次执行踩坑速记
++
++以下踩坑记录来自本 skill 首次实际执行时的复盘，条目均已提炼固化进正文对应步骤（手动归档漏 spec
++同步 → 第三步「归档必须用 openspec archive CLI」；中文遗留主 spec → 第三步 fallback 「坑（手动同步
++必看）」；复选框 stale → 0.3 节；blockquote 在 MUST 前 → 第三步「坑（手动同步必看）」；照搬旧 delta
++→ 第三步 fallback b 步「以代码为准改写」；硬编码 main/--no-ff → 0.2 节 + 第五步），保留在此仅作历史
++参考，正文不重复引用。
+diff --git a/sdflow-init/assets/workflow/generation-process.md b/sdflow-init/assets/workflow/generation-process.md
+index 25dd5ac3..87922c03 100644
+--- a/sdflow-init/assets/workflow/generation-process.md
++++ b/sdflow-init/assets/workflow/generation-process.md
+@@ -72,8 +72,8 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
+ ② 用户描述需求且判断需要开 change 时。
+ 
+ **模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发；explore 讨论仍在发散、用户
+-未表达收敛信号时，MUST NOT 自动跳转。触发方式的改变**不影响**相位 B 的拷问协议（一次一问、承重
+-约束逐条站稳、停止信号需证据锚）——见 spec-authoring 的 SA-01。
++未表达收敛信号时，MUST NOT 自动跳转。触发方式的改变**不影响**相位 B 的拷问协议（呈现与拍板
++分离协议提问、承重约束逐条站稳、停止信号需证据锚）——见 spec-authoring 的 SA-01。
+ 
+ ### 何时跳过 explore
+ 
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index a6d4e358..43afff6c 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -74,6 +74,7 @@ ANCHOR_PREFIXES = {
+     "<!-- sdflow:lens-metric v1": "lens-metric",
+     "<!-- sdflow:fanout-capability v1": "fanout-capability",   # add-codex-host-support：会话级探针锚，always-on 一致性 lint 判据源
+     "<!-- sdflow:declared-sites v1": "declared-sites",         # async-outside-voice：本层「应有锚站点集」声明，per-site 完整性核判据源
++    "<!-- sdflow:gate-questions v1": "gate-questions",         # implement-workflow-optimization-2026-08-p5：拍板三问声明锚（design Db）
+ }
+ _KV = re.compile(r'([^\s=]+)="([^"]*)"')                    # 受限 kv：key="value"
+ _FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')               # CommonMark fence：0-3 空格 + ≥3 marker
+@@ -674,6 +675,47 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
+     return v
+ 
+ 
++# --- implement-workflow-optimization-2026-08-p5（GQ）：拍板三问声明锚机验（design Db） -----------
++# 决策登记区顶部「拍板三问」小节紧邻锚行 `<!-- sdflow:gate-questions v1 q="scope,deps,risk" -->`，
++# 校验对象是**拍板层声明锚**本身（存在 + q 值逐字），不是三问正文小节是否真实在场（那属 SKILL Step4
++# 模版契约 + 人读层，机械够不着，design Db 明令收窄声明范围）。
++
++GATE_QUESTIONS_Q_VALUE = "scope,deps,risk"        # design Db：q 值须逐字等于此串，有序、无增减
++
++
++def check_gate_questions(report_text, layer, findings):
++    """`sdflow:gate-questions` 锚机验（GQ · design Db）：layer=spec-review 时 always-on（不受
++    metrics_on 门控，沿 check_fanout_consistency「不接受 metrics_on」先例）；layer=code-review
++    早返回、不查（D2）。MUST 接收 layer 参数并在函数体内按 layer 早返回——沿 check_declared_sites
++    的 layer-conditional 模式，MUST NOT 照抄 check_fanout_consistency「无 layer 签名、main() 无
++    条件调用」的形态（否则对 code-review 报告也生效）。MUST NOT 复用/扩展 check_existence/MANDATORY
++    （该列表的 layer 参数是死参，从不真按 layer 分流）。
++    校验：fence 外存在性恒须（missing-gate-questions）；fence 外 ≥2 条判重复违规 fail-closed
++    （duplicate-gate-questions-anchor，沿 check_fanout_consistency 的 duplicate-fanout-anchor 先例）；
++    缺 `q=` 属性同判违规（missing-field）；`q` 值须逐字等于 "scope,deps,risk"（有序无增减，
++    q-value-mismatch）。fence 内锚不算（复用既有 fence_outside_lines 口径）。
++    findings 为调用方传入的可变 list，本函数就地 append（非 return——签名照 design/tickets 锚定的
++    check_gate_questions(report_text, layer, findings) 形，与其余 check_* 的 return-list 惯例不同，
++    调用侧不做 `violations += check_gate_questions(...)`）。"""
++    if layer != "spec-review":
++        return
++    anchors = [ln.strip() for ln in fence_outside_lines(report_text) if anchor_prefix(ln) == "gate-questions"]
++    if not anchors:
++        findings.append({"kind": "missing-gate-questions", "detail": "报告须落 sdflow:gate-questions 锚"})
++        return
++    if len(anchors) > 1:
++        findings.append({"anchor": "gate-questions", "kind": "duplicate-gate-questions-anchor"})
++        return
++    ln = anchors[0]
++    anchor = ln[:80]
++    kv = parse_kv(ln)
++    if "q" not in kv:
++        findings.append({"anchor": anchor, "field": "q", "kind": "missing-field"})
++        return
++    if kv["q"] != GATE_QUESTIONS_Q_VALUE:
++        findings.append({"anchor": anchor, "field": "q", "kind": "q-value-mismatch"})
++
++
+ _FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # dead-fanout-multi-mirror 去重计数域（不含 broad——
+                                                                                   # broad 有主 session 亲做的合法降级路径，机制死却报 broad 不构成自相矛盾）
+ _MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # `mirrors=` 合法 token 集（供 skew 探测信号读此常量名，
+@@ -885,6 +927,8 @@ def main(argv=None):
+     violations += check_fanout_consistency(report_text)
+     # async-outside-voice §3.5：per-site 完整性核 always-on（同上，判据源锚由 SKILL 直接落、不经 emitter）
+     violations += check_declared_sites(report_text, args.layer, hr_tg_subset)
++    # implement-workflow-optimization-2026-08-p5（GQ）：拍板三问声明锚 always-on，layer=spec-review 内分治
++    check_gate_questions(report_text, args.layer, violations)
+     if metrics_on:
+         violations += check_lens_metric(report_text, args.layer, enums)
+     if violations:
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+index d51bf106..490cd1a3 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+@@ -1370,3 +1370,119 @@ def test_ds_cli_end_to_end_clean(tmp_path):
+     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+     r = _run(rpt_path, "code-review", root)
+     assert r.returncode == 0, r.stderr
++
++
++# --- implement-workflow-optimization-2026-08-p5（GQ · design Db）：拍板三问声明锚机验 --------------
++# 七组契约测试（tasks.md task 1.2）：正例 / 缺锚 / q 值变异（缺项·增项·乱序）/ 缺 `q=` 属性 /
++# 重复锚 / fence 内示范不算 / code-review layer 不查。签名 check_gate_questions(report_text, layer,
++# findings) 就地 append 到调用方传入的可变 list（design/tickets 锚定形，非 return-list 惯例）。
++
++def _gq(q="scope,deps,risk"):
++    return f'<!-- sdflow:gate-questions v1 q="{q}" -->'
++
++
++def test_gq_positive_no_violation():
++    """正例：spec-review 层 + q 值逐字等于 "scope,deps,risk" → 零违规。"""
++    al = _mod()
++    findings = []
++    al.check_gate_questions(_gq() + "\n", "spec-review", findings)
++    assert findings == []
++
++
++def test_gq_missing_anchor_violation():
++    """缺锚：spec-review 层报告完全无 gate-questions 锚 → missing-gate-questions。"""
++    al = _mod()
++    findings = []
++    al.check_gate_questions("# 报告正文，无锚\n", "spec-review", findings)
++    assert any(x["kind"] == "missing-gate-questions" for x in findings)
++
++
++def test_gq_q_value_variants_all_mismatch():
++    """q 值变异（缺项·增项·乱序）均须判 q-value-mismatch——design Db「有序、无增减」逐字比对。"""
++    al = _mod()
++    for bad_q in ("scope,deps", "scope,deps,risk,extra", "deps,scope,risk"):
++        findings = []
++        al.check_gate_questions(_gq(bad_q) + "\n", "spec-review", findings)
++        assert any(x["kind"] == "q-value-mismatch" and x["field"] == "q" for x in findings), bad_q
++
++
++def test_gq_missing_q_attribute_violation():
++    """整个缺 `q=` 属性（锚行在场但无 q= kv）→ missing-field，非 q-value-mismatch（两者互斥）。"""
++    al = _mod()
++    findings = []
++    al.check_gate_questions('<!-- sdflow:gate-questions v1 -->\n', "spec-review", findings)
++    assert any(x["kind"] == "missing-field" and x["field"] == "q" for x in findings)
++    assert not any(x["kind"] == "q-value-mismatch" for x in findings)
++
++
++def test_gq_duplicate_anchor_fail_closed():
++    """fence 外 ≥2 条 gate-questions 锚 → duplicate-gate-questions-anchor（fail-closed，
++    沿 check_fanout_consistency 的 duplicate-fanout-anchor 先例）。"""
++    al = _mod()
++    findings = []
++    report = _gq() + "\n" + _gq() + "\n"
++    al.check_gate_questions(report, "spec-review", findings)
++    assert any(x["kind"] == "duplicate-gate-questions-anchor" for x in findings)
++
++
++def test_gq_fence_inside_anchor_not_counted():
++    """fence 内示范锚不算：唯一一条锚落在代码围栏内 → 视同缺锚（missing-gate-questions），
++    复用既有 fence_outside_lines 口径（非另起裸 grep 解析路径）。"""
++    al = _mod()
++    findings = []
++    report = "示范：\n```\n" + _gq() + "\n```\n"
++    al.check_gate_questions(report, "spec-review", findings)
++    assert any(x["kind"] == "missing-gate-questions" for x in findings)
++
++
++def test_gq_code_review_layer_not_checked():
++    """layer=code-review 恒早返回、不查（D2）——即便报告完全无锚、或锚本身畸形（缺 q=），
++    code-review 层也零违规。"""
++    al = _mod()
++    findings = []
++    al.check_gate_questions("# 无任何锚的报告\n", "code-review", findings)
++    assert findings == []
++    findings2 = []
++    al.check_gate_questions('<!-- sdflow:gate-questions v1 -->\n', "code-review", findings2)
++    assert findings2 == []
++
++
++# --- main() 接线核验：spec-review 层缺 gate-questions 锚 → CLI 端到端 VIOLATION（回归锁，防漏调用）--
++
++def test_gq_cli_end_to_end_violation_spec_review(tmp_path):
++    """端到端：spec-review 层完整报告（其余锚齐全）但缺 gate-questions 锚 → returncode 1 +
++    JSON 含 missing-gate-questions（证明 main() 真接了 check_gate_questions，非只单测覆盖）。"""
++    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
++    rpt = (_ov(site="design-voice") + "\n"
++           + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
++           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
++           + _ds("design-voice") + "\n")
++    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
++    r = _run(rpt_path, "spec-review", root)
++    assert r.returncode == 1, r.stderr
++    assert any(x["kind"] == "missing-gate-questions" for x in json.loads(r.stdout)["violations"])
++
++
++def test_gq_cli_end_to_end_clean_spec_review(tmp_path):
++    """端到端正例：spec-review 层报告补齐 gate-questions 锚（q 值正确）→ CLEAN（exit 0）。"""
++    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
++    rpt = (_ov(site="design-voice") + "\n"
++           + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
++           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
++           + _ds("design-voice") + "\n"
++           + _gq() + "\n")
++    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
++    r = _run(rpt_path, "spec-review", root)
++    assert r.returncode == 0, r.stderr
++
++
++def test_gq_cli_code_review_layer_no_gate_questions_needed(tmp_path):
++    """回归锁：code-review 层完整报告（既有 fixture，无 gate-questions 锚）仍 CLEAN——
++    确认新 always-on 检查不误伤既有 code-review 端到端正例。"""
++    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
++    rpt = (_OV_XM + '\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
++           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
++           '<!-- sdflow:declared-sites v1 declared="code-voice" -->\n')
++    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
++    r = _run(rpt_path, "code-review", root)
++    assert r.returncode == 0, r.stderr
+diff --git a/sdflow-issues/SKILL.md b/sdflow-issues/SKILL.md
+index ba34260f..6ff7f5da 100644
+--- a/sdflow-issues/SKILL.md
++++ b/sdflow-issues/SKILL.md
+@@ -333,8 +333,7 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py reindex
+ ### 历史迁移工具（`migrate`，一次性，本仓已执行过）
+ 
+ `migrate` 是 v1（`buglist/`+`todolist/` 双格式）→ v2（`open/`+`closed/` 单文件）一次性转换工具。
+-本仓已迁移完成（287 个 issue 全部迁移，v1 数据文件/脚本已删除），日常使用不再需要调用；仅供其它
+-仍在 v1 格式的仓库迁移用：`python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py migrate`（无需额外参数，`--root` 缺省当前
++本仓日常使用不再需要调用；仅供其它仍在 v1 格式的仓库迁移用：`python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py migrate`（无需额外参数，`--root` 缺省当前
+ git 根；幂等，已存在的目标文件按 ID 跳过）。
+ 
+ ---
+diff --git a/sdflow-maintain/SKILL.md b/sdflow-maintain/SKILL.md
+index 016d235d..9a755d77 100644
+--- a/sdflow-maintain/SKILL.md
++++ b/sdflow-maintain/SKILL.md
+@@ -195,7 +195,7 @@ metadata:
+      - 对于新 rule：添加到「设计强制规范」表格
+    - 已删未清理的条目：从 INDEX.md 所有表格中移除
+    - 修复后显示变更摘要："已更新 INDEX.md：+N -M"，**继续执行步骤 5**（提示跑 `/sdflow-retro`
+-     复盘——与 INDEX 是否修复无关，见下）。[impl-review-fix CF-3]
++     复盘——与 INDEX 是否修复无关，见下）。
+ 
+    **如果用户拒绝**：输出 "跳过修复"，**继续执行步骤 5**（提示跑 `/sdflow-retro` 复盘——与用户是否
+    同意修复 INDEX 无关，见下）。
+diff --git a/sdflow-roadmap/SKILL.md b/sdflow-roadmap/SKILL.md
+index 410ebb61..1a701a5d 100644
+--- a/sdflow-roadmap/SKILL.md
++++ b/sdflow-roadmap/SKILL.md
+@@ -195,7 +195,7 @@ review：恒跑 strategy/plan-eng 双镜 + sync-only outside voice（不分档
+ 
+ ## 判定留痕总则
+ 
+-全流程有两个判定点：**①三态路由**（直接生成 / 裁剪至维度① / 按类型裁剪七维，三选一）**②收尾 checklist**（四项通过与否）。两处判定 MUST 在对话中显式陈述一行（不是内心判断），并在 task-log.md 留痕——判定点①因相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，SHALL 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记。**跳过类判定必须显著呈现**——单独一行、不埋进长消息——不允许静默略过。原判定点②（review 按商业化信号分档）已退役：review 现恒跑同一套 strategy/plan-eng 双镜、不再按信号分档，故不再占用判定点序号（见下方「review」节）。
++全流程有两个判定点：**①三态路由**（直接生成 / 裁剪至维度① / 按类型裁剪七维，三选一）**②收尾 checklist**（四项通过与否）。两处判定 MUST 在对话中显式陈述一行（不是内心判断），并在 task-log.md 留痕——判定点①因相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，SHALL 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记。**跳过类判定必须显著呈现**——单独一行、不埋进长消息——不允许静默略过。review 恒跑同一套 strategy/plan-eng 双镜、不按商业化信号分档（见下方「review」节），不占用判定点序号。
+ 
+ ## 必须遵守的硬性规则
+ 
+@@ -392,7 +392,7 @@ B 相位 **SHALL** 以「**最小充分条件**」收敛，**MUST NOT** 用形
+ 
+ 全部选入维度均有终态时方可进入相位 C；终态逐条记入 memo.md。
+ 
+-**`## 未决项` 小节**：memo.md **SHALL** 含一个 `## 未决项` 小节，承接被删除的 wayfinder frontier 的**清单职能**——凡① 维度终态为「显式延后」者、② 拷问中冒出但本次不解决的问题，**SHALL** 逐条落入该小节并附**再触发条件**（什么信息到位 / 什么时点应重新处理它）。该小节 **MUST NOT** 因「三件套已写完」而被清空，它随包长期存在、跨 session 可读。**承接边界（如实声明）**：本小节承接的是「当前还剩什么没决定」的**清单**，**MUST NOT** 被表述为等价于 wayfinder 票据模型——后者的 `Blocked-by` 依赖图与 `claimed` 并发语义**本 skill 明确不承接**（roadmap 为单人操作场景，不需要）。
++**`## 未决项` 小节**：memo.md **SHALL** 含一个 `## 未决项` 小节，承接「当前还剩什么没决定」的**清单职能**——凡① 维度终态为「显式延后」者、② 拷问中冒出但本次不解决的问题，**SHALL** 逐条落入该小节并附**再触发条件**（什么信息到位 / 什么时点应重新处理它）。该小节 **MUST NOT** 因「三件套已写完」而被清空，它随包长期存在、跨 session 可读。**边界（如实声明）**：本小节只是清单，**MUST NOT** 被表述为等价于票据依赖模型——`Blocked-by` 依赖图与并发「claimed」语义**本 skill 明确不承接**（roadmap 为单人操作场景，不需要）。
+ 
+ ### 重入协议
+ 
+diff --git a/sdflow-ship/SKILL.md b/sdflow-ship/SKILL.md
+index 7a3b63b4..a79c7453 100644
+--- a/sdflow-ship/SKILL.md
++++ b/sdflow-ship/SKILL.md
+@@ -156,11 +156,9 @@ description: 阶段三编排器——对已过设计门的 OpenSpec change 一
+   ```
+   路径缺失时按 sibling 约定兜底：`python3 ~/.codex/skills/sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"`，
+   再兜底仓内路径 `sdflow-ship/scripts/ship_gate.py`（相对仓根，即 `python3 sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"`），三处均找不到才停下问用户。
+-  <!-- [impl-review-fix] 裁决项10：兜底句原用省略号"…"，改写全三处显式路径，防止照抄时脑补错命令 -->
+   步前问"NEXT 是谁 + 前置缺什么"，步后问"产物落了吗 + 门禁结论"。首行人读摘要照抄进对话，JSON 供判定。
+ - **ship 零 git 写操作〔D8〕**：全程不 commit/merge/push（各子 skill 的 checkpoint 归其自身；ship 无产物故无自身 checkpoint）；**不自动 push**。
+ - **merge 意图透传**：调用语含 merge opt-out 意图时，ship 归一化为 sdflow-done 词表短语（如「不要 merge」「skip merge」）转述给 done——勿原样转述词表外措辞（git 单向操作只在 done 一处）。
+-  <!-- [impl-review-fix] 裁决项10：原"原样转述"允许词表外自由措辞传给 done，改为归一化到 done 认识的固定词表短语 -->
+ - **决策协议（`T10-choice` 三级，替换"有把握自动选"；"T10" 保留为历史别名）**：阶段三遇 ≥2 方案——①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过才自动选（复核记录写进该步报告）；③复核不过/无从复核 → defer 进 buglist/todolist + hand-off。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。** 复核记录格式：写入该步 code-review-report.md 的「修复 / defer 台账」区，行格式 = 「`T10-choice`复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」。
+ - 模型档位与缺省见规则根 `model-tiers.md`（按机队分列，经 ~/.sdflow/hack/resolve-workflow.sh 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。取值经各被链序调度的子 skill（spec-review/code-review/done/implement）各自 `eval "$(~/.sdflow/hack/resolve-models.sh)"` 解出 `$SDFLOW_TIER_*`；本 skill 自身零 git 写操作、不直接派子代理（无需 spawn_agent 理由声明），此处仅转述覆盖入口，MUST NOT 内联模型名。
+ 
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index 3182a505..1bfd6153 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -158,8 +158,7 @@ description: >
+ `spec-checklists/spec-quality-base.md`（base R 项，广审双镜的职责源）+ `spec-checklists/domains/`（领域 R 项）
+ 操作化为一次**连续跑的编排评审**：第零步规则/档位解析 → Step1 能力探针 + 单批 dispatch（一条消息内并行
+ 派出广审双镜 strategy/plan-eng + 领域镜 + 对抗镜 + 接地镜 + design-voice，均为 fresh context）→ Step3
+-合并去重 + 对抗裁决 → Step4 产出**一份** `spec-review-report.md`。取代旧"外部广审工具 + spec-review
+-各出报告 + 人工手动合并"，也取代旧「Step1 广审 → Step2 多镜」两段串行 dispatch（T20 分治退役）。
++合并去重 + 对抗裁决 → Step4 产出**一份** `spec-review-report.md`（历史沿革见 `references/evolution-notes.md` §1）。
+ 
+ > **两条连续性铁律（阶段二自动流的前提）**：
+ > - **不依赖 `/clear`（G1）**：评审 fan-out 到 fresh-context 子代理，独立性由"子代理冷上下文"给，不由 `/clear` 给。
+@@ -183,11 +182,9 @@ description: >
+ 
+ ## 第一步：能力探针 + 规划镜头 + 单批 dispatch（广审双镜 + 领域镜 + 对抗镜 + 接地镜 + design-voice）
+ 
+-DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**——广审（strategy/plan-eng）不再是
+-外部工具原生执行 + 落盘 amendment 再等领域/对抗镜跟进的两段结构，而是本 skill **自持**的两个 fresh 子
+-代理镜，与领域镜/对抗镜/接地镜/design-voice 同批一条消息内并行派出，互不依赖（旧「串行纪律〔T20〕
+-分治」——领域/对抗镜须等外部广审产出的 amendment 落盘——一并退役：新广审镜只回结构化 findings、不
+-改盘面，等待理由消失）。
++DD1：广审（strategy/plan-eng）是本 skill **自持**的两个 fresh 子代理镜，与领域镜/对抗镜/接地镜/
++design-voice 同批一条消息内**单批全并行 dispatch**，互不依赖，只回结构化 findings、不改盘面
++（历史沿革见 `references/evolution-notes.md` §1）。
+ 
+ **能力探针（本步开始时跑一次；语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：本轮全程只探测这一次，探针结果对本步单批 dispatch 的全部镜（broad/domain/adversarial/grounding）共用。
+ 
+@@ -218,7 +215,7 @@ DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**
+   `subagents="unavailable"` 时 `mode="main-session"`（主 session 亲做两镜判断，`mirrors=` 仍计入 `broad`
+   token，合法降级、不进 dead-fanout 计数集，`anchor_lint.py:674-676` 现行为已支持）。**诚实边界**：mode
+   值为主 session 自报，`anchor_lint` 对本锚只验族存在性（前缀匹配），不校验 mode 枚举值，MUST NOT 声称有
+-  机械保证。（旧 `mode="native|simulated"` 枚举与广审产物独立落盘、复用判定机制整体删除。）
++  机械保证。
+ 
+ **规划镜头（主 session）**：
+ 
+@@ -322,8 +319,7 @@ MUST 按固定三段拼接，MUST NOT 打散顺序或把段①内容手工重述
+ > 的设计」，漏带段①（如脚本调用失败仍继续 fan-out）它**必然**把「现状不是这么做的」当成「这个设计该
+ > 缩水」。**评审的基准是目标态。**
+ 
+-**design-voice 恒自跑（DD3：回落路径转正，旧「outside-voice 复用守卫」——`outside_voice_guard.py` 调用 /
+-广审产物落盘复用判定——整体退役）**：本步单批 dispatch 内一并派出（按下方「outside-voice
++**design-voice 恒自跑（DD3，历史沿革见 `references/evolution-notes.md` §2）**：本步单批 dispatch 内一并派出（按下方「outside-voice
+ helper 调用协议」，site="design-voice"，context=proposal「What Changes」+ design「Decisions」全文）——
+ context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下 fan-out 工作，结果在
+ Step3 barrier 处 collect。
+@@ -344,17 +340,29 @@ Step3 barrier 处 collect。
+   裁决，报告本段**显著标注**「⚠️ 机械引用核未生效」。
+ - **对抗裁决**：对每条通过机械前置的 finding 判"是否真的会在实现期出问题"——对抗镜的反驳若 ≥ 多数成立则采信；存疑的降级或标"需人确认"。
+ - **反静默压制（escalate-not-drop，Q3 铁律）**：热主 session 裁决对 reviewer 子代理的 finding **只能降级 / 批注、不得静默丢弃**。判"不成立"的也须连理由落入报告「已裁掉」区（原始发现 + 裁掉理由；机械裁掉项标 `[ref-check]`，与对抗裁决裁掉的来源可辨），供人类设计门复核"裁得对不对"。
+-- **置信分流（与置信数字脱钩，仅供报告排序/展示，MUST NOT 作裁决门槛）**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值门槛**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。**「拿不准 → 决策登记区」这条路由由是否真拿不准决定，不由任何置信数字决定**——本层从未有过数值滤，此处只是显式重申决策登记区路由与置信度脱钩这一既有事实，与 sdflow-code-review 同期把数值滤/跨模型豁免矩阵一并退役对齐。
++- **置信分流（与置信数字脱钩，仅供报告排序/展示，MUST NOT 作裁决门槛）**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值门槛**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。**「拿不准 → 决策登记区」这条路由由是否真拿不准决定，不由任何置信数字决定**（历史沿革见 `references/evolution-notes.md` §3）。
+ - **outside-voice findings 直通〔R4〕**：被 `anchor_lint` 合法组合矩阵判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`，非固定 `runner=codex`——Codex 宿主下跨模型 runner 恰是 `claude`）的 voice findings 同走上方机械引用核 + 对抗裁决，与各镜 findings 同池、不享任何特殊通道；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
+ - **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、第四步对应自检项跳过、**不调 emitter**（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按第四步「度量锚」描述构造 roster+findings 并调 `lens_metric_emit.py`（**采纳/裁掉/defer 为设计门拍板前的临时裁决，MUST 在拍板回写时最终确定，见〔SR-M〕**）。
+-- **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调 `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/spec-review-report.md --layer spec-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚存在性 + lens-metric 字段/枚举/sev/layer==--layer/计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。**保留信任边界声明**：`findings=N` 与合并池实收数的**数值一致性**仍是主 session 信任边界、非机械可验——脚本不谎称保证数值正确。config `metrics.enabled` 关/无 metrics 块时 lens-metric 一类跳过（脚本内门控）。**此门只挡「同一会话内忘记跑这步」，挡不住「整段跳过本步」**（诚实拦截力）。
++- **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调 `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/spec-review-report.md --layer spec-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚存在性（layer=spec-review 时另加 `gate-questions` 拍板层声明锚，恒须、不受 `metrics.enabled` 门控，design Db）+ lens-metric 字段/枚举/sev/layer==--layer/计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。**保留信任边界声明**：`findings=N` 与合并池实收数的**数值一致性**仍是主 session 信任边界、非机械可验——脚本不谎称保证数值正确。config `metrics.enabled` 关/无 metrics 块时 lens-metric 一类跳过（脚本内门控）。**此门只挡「同一会话内忘记跑这步」，挡不住「整段跳过本步」**（诚实拦截力）。
++  - **`gate-questions` 违规的 problem/cause/fix 转译**〔implement-workflow-optimization-2026-08-p5 task 1.3〕：lint 本身沿用既有 `[anchor_lint] VIOLATION` 结构化格式原样输出（`missing-gate-questions` / `duplicate-gate-questions-anchor` / `missing-field` / `q-value-mismatch`），本条补人读转译——**problem**＝报告缺该锚 / 锚出现 ≥2 条（fence 外）/ 锚行缺 `q=` 属性 / `q` 值与 `scope,deps,risk` 不逐字相等；**cause**＝出报告时决策登记区顶部漏放「拍板三问」小节 + 锚行、或复制模版时改动/重复了锚行、或 `q` 值手误；**fix**＝回到下方「报告决策登记区格式」的「拍板三问」小节模版，在决策登记区**最顶端**、`[需拍板]` 条目之前补齐三问 + 紧邻的唯一一条 `<!-- sdflow:gate-questions v1 q="scope,deps,risk" -->`（`q` 值逐字，fence 外仅此一条），改完重跑本步锚行自检确认退出码为 0。
+ - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
+ - 按 `design-diagrams.md`：命中触发的图**只验证存在/正确/未过时**，缺失/过时标记，不重画。
+ - **checkpoint 提交（P2c 唯一一次，DD1：旧广审子步的独立 checkpoint 已随单批 dispatch 合并退役）**：产出报告 + amendments 后 → `~/.sdflow/hack/checkpoint-commit.sh spec-review "并行多镜审 + 合并报告 + spec-review-amendment"`。
+ 
+-**报告决策登记区格式**：
++**报告决策登记区格式**（顶端先放「拍板三问」小节，`[需拍板]` 条目之前；design Da/Db）：
+ 
+ ```
++  spec-review-report.md · 拍板三问（决策登记区最顶端，人在设计 HARD-GATE 逐项勾选认/不认）
++  ┌───────────────────────────────────────────────────────────────────┐
++  │ Q-scope 范围划界认不认？                                              │
++  │   自答：锚 proposal Non-Goals/Out-of-scope ——<一句话，指回具体条目位置>  │  [ ] 认  [ ] 不认
++  │ Q-deps  依赖/顺序认不认？                                             │
++  │   自答：锚 tasks 任务边界与 Blocked-by ——<一句话，指回具体条目位置>      │  [ ] 认  [ ] 不认
++  │ Q-risk  风险赌注与对策认不认？                                         │
++  │   自答：锚 sdflow:hr-tg 的 hit/declared 判定 + 对策条目 ——<一句话>      │  [ ] 认  [ ] 不认
++  └───────────────────────────────────────────────────────────────────┘
++<!-- sdflow:gate-questions v1 q="scope,deps,risk" -->
++
+   spec-review-report.md · 决策登记区
+   ┌─────────────────────────────────────────────────────┐
+   │ [自动决策] D1  某镜发现,裁决已定,附理由,默认接受可覆盖  │  高置信 → 默认采纳
+@@ -365,6 +373,11 @@ Step3 barrier 处 collect。
+   └─────────────────────────────────────────────────────┘
+ ```
+ 
++三问只落本报告（spec-review），code-review 报告 MUST NOT 被要求含三问（无人门的报告不加拍板结构）。
++锚行独占一行、紧邻三问小节、fence 外仅此唯一一条，`q` 值 MUST 逐字等于 `scope,deps,risk`（有序、无增减）。
++**本机验为拍板层声明锚机验**（锚存在 + `q` 值逐字）——三问正文小节是否真实在场属本模版契约 + 设计门
++人读层，无机械保证，MUST NOT 声称三问内容本身已被机械兜底（design Db）。
++
+ ## 第四步：产出
+ 
+ - 写 `{change_dir}/spec-review-report.md`：**决策登记区**（自动决策 / 需拍板 / 已裁掉）+ 各镜 findings（带置信/严重度，低置信项一行带过、可审计不静默丢）+ 裁决。
+@@ -591,3 +604,5 @@ fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout
+ - **必须读真实代码**，不得只验 spec 自洽（接地镜专司此事）。
+ - 项目无关：规则路径一律经 `~/.sdflow/hack/resolve-workflow.sh` 解析（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`。
+ - checkpoint 脚本 = `~/.sdflow/hack/checkpoint-commit.sh`（setup.sh 全局安装）；缺失则先跑 setup，或退化为普通 `git add -A && git commit`。
++
++历史取舍不进入默认运行；仅在审计历史依据时读取 references/evolution-notes.md。
+diff --git a/sdflow-spec-review/references/evolution-notes.md b/sdflow-spec-review/references/evolution-notes.md
+new file mode 100644
+index 00000000..1499f2f5
+--- /dev/null
++++ b/sdflow-spec-review/references/evolution-notes.md
+@@ -0,0 +1,27 @@
++# 演进依据与历史取舍
++
++> 仅在审计历史取舍时读取。本文不参与默认阶段二执行。
++
++## 1. 单批全并行 dispatch 取代两段串行（DD1/T20）
++
++旧版评审流程分两段：外部广审工具产出 amendment 落盘，再由 spec-review 各自出报告、人工手动合并；
++之后演进为「Step1 广审 → Step2 多镜」两段串行 dispatch——领域镜/对抗镜须等外部广审产出的 amendment
++落盘才能起跑（旧「串行纪律〔T20〕分治」）。
++
++当前设计（DD1）：广审（strategy/plan-eng）不再是外部工具原生执行，而是本 skill 自持的两个 fresh
++子代理镜，与领域镜/对抗镜/接地镜/design-voice 同批一条消息内并行派出，互不依赖——新广审镜只回结构化
++findings、不改盘面，等待理由随之消失。旧串行纪律与旧两段独立 checkpoint 一并退役。旧广审锚枚举
++`mode="native|simulated"` 与广审产物独立落盘、复用判定机制随之整体删除，现枚举收窄为
++`mode="subagent|main-session"`。
++
++## 2. design-voice 复用守卫退役（DD3）
++
++旧版 design-voice 是否触发经 `outside_voice_guard.py` 判定——调用广审产物落盘状态决定是否复用上一轮
++结果，避免重复调用。DD3 将该回落路径转正：design-voice 现恒自跑（本步单批 dispatch 内一并派出），
++复用守卫机制整体退役，不再需要额外的复用判定环节。
++
++## 3. 数值置信滤退役对齐（与 sdflow-code-review 同期）
++
++本层（spec-review）历史上从未有过数值置信滤门槛——决策登记区的路由判据一直是「是否真拿不准」而非
++任何置信数字。该结论与 `sdflow-code-review` 同期把其自身的数值滤 + 跨模型豁免矩阵一并退役对齐，
++此处只是显式重申既有事实，不代表本层曾经存在过、后又移除的门槛。
+diff --git a/sdflow-spec/SKILL.md b/sdflow-spec/SKILL.md
+index 83fbee7c..49bca746 100644
+--- a/sdflow-spec/SKILL.md
++++ b/sdflow-spec/SKILL.md
+@@ -158,7 +158,7 @@ description: >
+ 三相位一次连续跑，**中途只与人对话、不派子代理做判断**：
+ 
+ ```
+-A 澄清（一次一问）──共识初成──▶ B 拷问（起手即建分支 + change 目录 + 草稿纪要，约束站稳即落盘）
++A 澄清──共识初成──▶ B 拷问（起手即建分支 + change 目录 + 草稿纪要，约束站稳即落盘）
+ ──共识+承重约束全站稳──▶ C 生成（逐产物，读强制阅读清单，写后双判）──▶ 终审 ──▶ 出口序列
+ ```
+ 
+@@ -244,8 +244,10 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
+ 
+ ### A.1 节奏
+ 
+-- **一次只问一个问题**，问完等回答再问下一个。MUST NOT 一口气抛问题清单。
+-- **每问附主 session 的推荐答案**（推荐 + 依据 + 代价 + 备选），人只负责拍板。
++- 独立问题 MAY 批呈现（≤4/批），每问附推荐，MUST NOT 借批量甩开放题。
++- 依赖链问题 SHALL 整链呈现（链结构+每环推荐+整链路径），人 MAY 拍整链或链头。改判⇒下游按
++  新前提重提；只拍链头⇒下游仍待逐项拍板（含同意推荐）——**MUST NOT 把沉默当授权**；组合
++  爆炸时 MAY 呈现链头+预告下游影响。
+ - **能自查的事实不问人**——先查后给结论。三分判据见顶部通则①②。
+ 
+ ### A.2 提前收束的**禁止清单**（命中任一 ⇒ MUST NOT 收束进相位 B）
+@@ -327,7 +329,7 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话
+ 
+ ### B.3 拷问技法
+ 
+-- **一次一问，每问附推荐**（同 A.1）。
++- **呈现与拍板分离**（同 A.1）。
+ - **优先攻承重约束** —— 支撑多个候选的前提性约束先打。它被证伪 ⇒ 依赖它的候选**整体重估**，
+   能省掉一整轮逐候选比较。**后于该约束的派生候选，在它站稳前不逐一深究。**
+ - **事实类疑问自查** —— 从仓内/公开资料可核验的，主 session 自查（阶段二派对应 researcher，**当前未启用**），
+diff --git a/sdflow-upstream-watch/SKILL.md b/sdflow-upstream-watch/SKILL.md
+index afa4f977..175db378 100644
+--- a/sdflow-upstream-watch/SKILL.md
++++ b/sdflow-upstream-watch/SKILL.md
+@@ -292,8 +292,7 @@ schema drift（对比基线 = 已安装版 `<installed_version>`，非 registry
+ 
+ **证据不足条款**：仅凭 commit subject 看不出实质影响时，MUST 标「观望/待核查」，不得硬判
+ 吸收或不吸——可对候选 commit 在 bare 缓存里按需取内容辅助判断（blobless clone 按需拉
+-blob，git 自己回答，不是手搓解析）。<!-- [impl-review-fix] 缓存路径按源分别列出，不用不存在的 <source>.git 模板 -->
+-两个 bare 缓存源的真实路径：
++blob，git 自己回答，不是手搓解析）。两个 bare 缓存源的真实路径：
+ - matt：`git -C ~/.cache/sdflow-upstream/matt.git show <sha>`
+ - superpowers：`git -C ~/.cache/sdflow-upstream/superpowers-marketplace.git show <sha>`
+ 
