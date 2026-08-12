@@ -90,8 +90,8 @@
 | `effort-tier-defaults` 机读块 | 新 | `sdflow-init/assets/workflow/model-tiers.md` | resolve-models.sh |
 | `SDFLOW_EFFORT_*` 导出 | 改 | `sdflow-init/assets/hack/resolve-models.sh` | 4 个编排 SKILL |
 | `effort-tiers` config 段 | 新 | 消费仓 `openspec/config.yaml`（模板：bundle config.template） | resolve-models.sh |
-| `sdflow-effort-{low,medium,high,xhigh}.md` | 新 | 源目录随 Q2 拍板（推荐复用 `sdflow-spec/agents/`，见 Open Questions `[spec-review-amendment]`）→ `~/.claude/agents/` | 宿主 subagent_type |
-| `install_agents` 扩面 | 改 | `setup.sh`（多源扩容方案待 Q2 拍板——现函数四处硬编码 `sdflow-spec/agents` + manifest 单文件覆盖写，直接二次调用会冲掉既有清单 `[spec-review-amendment]`） | 布署链 |
+| `sdflow-effort-{low,medium,high,xhigh,max}.md` | 新 | `sdflow-spec/agents/`（设计门拍板 Q2=C：复用既有源目录，铺设/守卫/孤儿清理/manifest/测试自动覆盖新增 `.md`，零改守卫 `[spec-review-amendment]`）→ `~/.claude/agents/` | 宿主 subagent_type |
+| `install_agents` | 不改 | `setup.sh` 守卫/manifest 零改动（Q2=C）；仅 `hack/tests/` 加 effort 定义专项断言 + CLAUDE.md/design 对该目录的描述同步 + 目录内一行注记 `[spec-review-amendment]` | 布署链 |
 | `render-review-prefix.sh` | 新 | `sdflow-init/assets/hack/` → `~/.sdflow/hack/` | 两评审 SKILL 段① |
 | ship_gate B25/B26 门 | 改 | `sdflow-ship/scripts/ship_gate.py` | ship 链 / Stop hook |
 | 派发条款（effort 列 + 三段组装序 + defer 当场入池） | 改 | 4 个编排 SKILL.md | 运行时 |
@@ -186,16 +186,14 @@ model-tiers 机读契约扩维牵连的文档组（改一处必查全组，防 [
 
 - Q1（同 proposal）：B25 直接成因（emitter 未调用 vs 调用失败未记录）——修复票内诊断定案；
   门的设计对两种成因同等有效，故可安全后置，不影响 specs/任务拆分。
-- Q2 `[spec-review-amendment]`（评审报告「需拍板」Q2，设计门勾选）：effort agent 定义源
-  目录与 install_agents 扩容方案。**推荐（复核修订）= 选项 C：直接放进既有
-  `sdflow-spec/agents/`**——铺设/守卫/孤儿清理/manifest/测试全按「目录下全部 .md」工作
-  （`test_install_agents.py:39` 明示新增定义自动纳入），零改 🔴 守卫段；代价 = 目录语义
-  错位（文档同步 + 目录内注记）与 sdflow-spec 退役时的回滚耦合。备选 A：泛化多源 +
-  manifest union（未来第三组定义出现时再付）。**拍板前 tasks 2.4 不可开工**。
-- Q3 `[spec-review-amendment]`（评审报告「需拍板」Q1）：`max` 值域处置。**推荐（复核修订）
-  = 补第 5 个 `sdflow-effort-max` 定义**——memo D1 拍板明确 max 进值域留逃生口，收窄值域
-  实为砍拍板；宿主 effort 枚举确含 max；Q2 选 C 时边际成本一个文件。备选：值域收窄为
-  {low,medium,high,xhigh}（与 D1 有张力）。现状「值合法但资产未铺」是无文案第三态，派发即断链。
+- Q2 **已拍板（设计门 2026-08-12，选项 C）**`[spec-review-amendment]`：effort agent 定义
+  直接放进既有 `sdflow-spec/agents/`——铺设/守卫/孤儿清理/manifest/测试全按「目录下全部
+  .md」工作（`test_install_agents.py:39` 明示新增定义自动纳入），零改 🔴 守卫段；已接受
+  代价 = 目录语义错位（文档同步 + 目录内注记，随 tasks 2.4）与 sdflow-spec 退役时的回滚
+  耦合（低概率，删前挪走即可）。备选 A（泛化多源 + manifest union）留待未来第三组定义出现。
+- Q3 **已拍板（设计门 2026-08-12，选项 B）**`[spec-review-amendment]`：补第 5 个
+  `sdflow-effort-max` 定义，值域 {low,medium,high,xhigh,max} 与资产一致，消除「值合法但
+  资产未铺」的无文案第三态——与 memo D1「max 进值域留逃生口」拍板一致；max 仍不进缺省映射。
 
 ## Compliance
 

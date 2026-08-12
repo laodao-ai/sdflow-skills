@@ -44,9 +44,11 @@
       `[spec-review-amendment]`〔HAE-1〕
 - [ ] 2.3 resolver 测试：三宿主态（claude 导出/codex 空值/unknown 空值）× 覆盖生效 ×
       非法值回落 × eval 契约〔HAE-1〕
-- [ ] 2.4 4 个 `sdflow-effort-*` agent 定义（排他 description + `model: inherit`）+
-      `setup.sh` install_agents 扩面；假 HOME 测试：铺设幂等/不覆盖他人/孤儿清理/
-      Windows skip〔HAE-2〕
+- [ ] 2.4 5 个 `sdflow-effort-{low,medium,high,xhigh,max}` agent 定义（排他 description +
+      `model: inherit`）放进既有 `sdflow-spec/agents/`（设计门拍板 Q2=C/Q1=B：install_agents
+      守卫/manifest **零改动**，新增 `.md` 自动纳入 `[spec-review-amendment]`）；假 HOME 测试
+      加 effort 定义专项断言（铺设幂等/不覆盖他人/孤儿清理/Windows skip 沿既有骨架）；
+      同步 CLAUDE.md/design 对该目录的描述 + 目录内一行注记〔HAE-2〕
 - [ ] 2.5 四个编排 SKILL 派发条款接 effort（表格加档列 + subagent_type 构造 + 空值回落 +
       门禁步不低于 high 铁律句 + tier-resolution unset 清单扩含 `SDFLOW_EFFORT_*` 三变量
       `[spec-review-amendment]`）；`sdflow-done` 三步子代理同步〔SW-2, IO-2〕

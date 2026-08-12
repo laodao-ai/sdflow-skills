@@ -13,8 +13,9 @@ code-review 报告机械层落盘自 08-07 起静默缺失、B26 defer 入池通
 - **面 A · effort 分档（T105 + T103）**：`model-tiers.md` 加 effort 第二维机读块（claude
   机队 strong→high / mid→medium / light→low；codex 侧如实 n/a）；`resolve-models.sh` 导出
   `$SDFLOW_EFFORT_{STRONG,MID,LIGHT}`（含 config.yaml per-repo 覆盖，机制与 model 同构）；
-  `setup.sh install_agents` 扩面铺 4 个全局 effort-keyed agent 定义
-  `sdflow-effort-{low,medium,high,xhigh}`（frontmatter 仅 `effort:`，`model: inherit`）；
+  铺 5 个全局 effort-keyed agent 定义 `sdflow-effort-{low,medium,high,xhigh,max}`
+  （frontmatter 仅 `effort:`，`model: inherit`；放既有 `sdflow-spec/agents/`，install_agents
+  零改动——设计门拍板 Q1=B/Q2=C `[spec-review-amendment]`）；
   四个编排 SKILL（sdflow-spec-review / sdflow-code-review / sdflow-implement / sdflow-done）
   派发条款接 `subagent_type` 选 effort 档；T103 输出封顶句（回传目标 ≤2k token）进稳定前缀段。
   机制取舍全文见 `openspec/adr/0043`。
@@ -44,7 +45,8 @@ code-review 报告机械层落盘自 08-07 起静默缺失、B26 defer 入池通
 - `impl-orchestration`: ship_gate 新增两道报告机械层门（B25 lens-metric 锚存在性 +
   B26 defer id 对账）；sdflow-implement 派发接 effort 档。
 - `host-adaptive-execution`: 档位解析扩 effort 第二维（`$SDFLOW_EFFORT_*` 导出 + config
-  覆盖 + codex 机队 n/a 降级）；install_agents 铺 4 个 effort-keyed 全局 agent 定义。
+  覆盖 + codex 机队 n/a 降级）；经 `sdflow-spec/agents/` 铺 5 个 effort-keyed 全局 agent
+  定义（设计门拍板 Q1=B/Q2=C `[spec-review-amendment]`）。
 
 ## 需求优先级（TG-19）
 
@@ -84,7 +86,8 @@ p2 out 856k/cr 104.2M · p3 out 941k/cr 107.3M），随后续窗口 cc/cr 判读
   四个编排 SKILL.md、对应 pytest 测试群。
 - **下游消费仓**：model-tiers 机读块扩维与 config 覆盖键扩展随下次 `sdflow-init update`
   生效；未 update 的仓行为不变（effort 缺省仅在新 SKILL + 新 resolver 同时就位时生效）。
-- **全局命名空间**：`~/.claude/agents/` +4 定义（install_agents 既有守卫/孤儿清理覆盖）。
+- **全局命名空间**：`~/.claude/agents/` +5 定义（install_agents 既有守卫/孤儿清理覆盖，
+  源目录复用 `sdflow-spec/agents/`——设计门拍板 `[spec-review-amendment]`）。
 
 ## Success Metrics
 

@@ -41,8 +41,9 @@ effort 语义相反 = 空串）；codex/unknown 分支 MUST 显式初始化三�
 
 ### Requirement: effort-keyed 全局 agent 定义经 install_agents 铺设
 
-工具链 SHALL 提供 4 个全局 agent 定义 `sdflow-effort-{low,medium,high,xhigh}`
-（frontmatter 仅 `name`/`description`（含「仅由 sdflow 编排 SKILL 派发选用」排他声明）/
+工具链 SHALL 提供 5 个全局 agent 定义 `sdflow-effort-{low,medium,high,xhigh,max}`
+（设计门拍板 Q1=B：值域全量铺资产，消除「值合法但资产未铺」第三态 `[spec-review-amendment]`；
+frontmatter 仅 `name`/`description`（含「仅由 sdflow 编排 SKILL 派发选用」排他声明）/
 `model: inherit`/`effort: <值>`），由 `setup.sh` install_agents 铺至 `~/.claude/agents/`，
 沿用既有所有权守卫（只接管 readlink 命中自有源的软链）、孤儿清理与失败降级
 （外部命令失败 SHALL 降级 `skipped[]` + 汇总，MUST NOT 中止整个 setup）。Windows 沿用
