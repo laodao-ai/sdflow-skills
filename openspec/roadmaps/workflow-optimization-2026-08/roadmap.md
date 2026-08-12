@@ -347,12 +347,11 @@ add-sdflow-spec / codex-host）降至 38–79 min（remove-superpowers / p4）�
       **✅ 2026-08-12**（Task 4 交付，实测 15 个非 14 个——`find . -maxdepth 2 -name SKILL.md`
       实测数；证据锚 `openspec/changes/implement-workflow-optimization-2026-08-p5/audit/
       skill-doc1-audit.md`，15 节逐文件审计留档）
-- [x] 5.2 T101 残余：spec-review SKILL Step4 报告模版补拍板三问 + anchor_lint 拍板层
-      存在性机验 + bundle 同步（`sdflow-init/assets/workflow/` 权威源先改）
-      **✅ 2026-08-12**（原「Step3」措辞过时已修正为「Step4」——adr/0041 裁决协议改造后
-      产出条款在 Step4「产出」而非 Step3「机械引用核 + 综合裁决」；Task 1 交付 anchor_lint
-      `sdflow:gate-questions` 机验 + Task 3 交付 `sdflow-spec-review/SKILL.md` Step4 三问
-      小节模版与锚行）
+- [x] 5.2 T101 残余：spec-review SKILL Step3 报告决策登记区模版补拍板三问 + anchor_lint
+      拍板层存在性机验 + bundle 同步（`sdflow-init/assets/workflow/` 权威源先改）
+      **✅ 2026-08-12**（三问小节与 `sdflow:gate-questions` 锚行落在 Step3「机械引用核 +
+      综合裁决」的报告决策登记区格式段（SKILL.md:352-364）；Task 1 交付 anchor_lint 机验 +
+      Task 3 交付三问小节模版与锚行）
 - [x] 5.3 T256 调研记录 + 保持 OPEN（memo D4 修正措辞，原「评估收口」预判「做/WONTDO」二元
       收敛未成立）：先答闸门问题（逐项列阶段三「只活在对话里」的状态；已读 T26 结项结论，
       未重走撞红线路）；实际收敛 = 第三种结果——**人 2026-08-12 拍板「不能只以当前 repo
