@@ -15,7 +15,7 @@
 > **进度快照（2026-08-12）**：阶段 1–4 全部完成归档。阶段 4 归档 SHA `e202feb`（6 tickets,
 > verify PASS 2639 tests, zero code-review findings；effort 分档全链 + B25/B26 机械门 +
 > render-review-prefix + 四 SKILL 全面适配）。B25/B26→FIXED、T105/T103/T98/T124→DONE。
-> 阶段 5 仍待 frontier 到达后补细。
+> 阶段 5 已于 2026-08-12 探索补细（frontier 三缺口核清，见阶段 5 节）。
 
 五阶段演进，每阶段独立可交付；阶段 3 与阶段 1/2 无依赖关系，可并行或提前。
 
@@ -25,7 +25,7 @@
 | **阶段 2** · 镜 roster 复评 + 裁决地基改造 | 阶段 1 后 1-2 周 | 13 面待复评镜逐一处置；置信硬滤被替代方案取代 | **✅ 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12，双 PASS） |
 | **阶段 3** · 上游套件吸收机制 | 无依赖，随时 | 四源有锚、watch 跑通一轮 delta 分诊 | **✅ 完成 2026-08-11**（5/5 ticket + code-review 修复，归档 SHA `c4b8c6f`） |
 | **阶段 4** · 成本工程剩余 | 阶段 1 数据到位后 | effort/thinking 按步分档落地 | **✅ 完成 2026-08-12**（6 tickets, verify PASS 2639 tests, 归档 SHA `e202feb`） |
-| **阶段 5** · 人类门减负与 context 工程 | 远期 | 设计门报告摘要头 + SKILL 考古层清理 | 雾区（目标句 + 备注） |
+| **阶段 5** · 人类门减负与 context 工程 | 阶段 4 后 | SKILL 考古层清理（主力）+ 拍板三问补全 + T256 评估收口 | **已细化 2026-08-12**（4 子任务） |
 
 （时长预估仅取定性口径，与本仓既有 roadmap 惯例一致；小时级数字无历史推导基础，不写。）
 
@@ -311,11 +311,58 @@ delta 分诊机制（`sdflow-upstream-watch`，数据类 skill），一次运行
 
 ## 阶段 5 · 人类门减负与 context 工程
 
-**阶段目标**：压设计门人读墙钟（重分诊后的 T101 三层摘要头 + 拍板三问为主力候选）+
-SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact 落盘（T256 同题合并）。
+**阶段目标**：T275 SKILL.md DOC-1 考古层审计清理（**主力**，1.A.2 入池项的执行）+
+T101 残余补全（拍板三问 + 拍板层机验）+ T256 PreCompact 落盘评估收口（同题合并，
+预判收敛为「明确不做并记因」）。
 
-**雾区备注**：缺三件事——1.A.1 对 T101/T102 的重分诊结论、1.A.2 考古层保留界线的人工
-拍板、阶段 2 改造后设计门报告的实际形态（摘要头设计依赖报告结构稳定）。到 frontier 补细。
+**关键发现（2026-08-12 探索，修正原阶段目标的主力排序）**：T101「三层摘要头」已被阶段 2
+裁决协议改造（`adr/0041`）隐性交付大半——对照 04 提案 §3.1 三层结构，层 2 裁决层
+（自动决策表 + 已裁掉可审计）与层 3 证据层（findings 总表 + 机械引用核）均已存在，层 1
+的「需拍板」条目也已存在且更强（三面后果 + 主次判定 > 一句话后果）；**残余缺口仅 =
+拍板三问（①范围认不认 ②依赖/顺序认不认 ③风险赌注/HR-TG 对策认不认）+ anchor_lint
+拍板层存在性机验**。方向性佐证：spec-rev 阶段墙钟 p2 改造后从 148–260 min（absorb-gstack /
+add-sdflow-spec / codex-host）降至 38–79 min（remove-superpowers / p4），样本 confounded
+（change 大小不同）但方向一致 ⇒ T101 从「主力候选」降为顺带补全，主力让位 T275。
+
+### 前置条件（原雾区三缺口，2026-08-12 核清）
+
+- [x] 1.A.1 对 T101/T102 的重分诊结论
+      **✅**（T101→PROPOSED 排入本阶段 2026-08-10；T102→WONTDO 2026-08-12 窗口判读后关闭）
+- [x] 阶段 2 改造后设计门报告的实际形态稳定（摘要头设计依赖报告结构稳定）
+      **✅**（p4 + remove-superpowers 两个归档样本结构一致：执行摘要 → 决策登记区
+      〔需拍板/自动决策/低置信上抛/已裁掉〕→ findings 总表）
+- [ ] 1.A.2 考古层修订锚保留界线的人工拍板 → **移入 change 相位 B 拷问**（「只在人脑子里」
+      的问题，非 roadmap 前置；候选界线：带 adr/decision-memo 编号的指路锚保留、纯
+      「此前是 X 现改为 Y」叙述删除——DOC-1 判据「只有读过上一版的人才需要的句子不属正文」）
+
+### 子任务（change `implement-workflow-optimization-2026-08-p5`）
+
+- [ ] 5.1 T275 主力：14 个 SKILL.md 落实 DOC-1 审计（7 个超 500 行优先：implement 821 /
+      code-review 771 / roadmap 715 / spec-review 593 / done 567 / architecture 562 /
+      spec 528，行数为 2026-08-12 实测），修订锚保留界线经相位 B 拍板后统一执行；
+      清理 MUST NOT 动 `sdflow:principles` 托管块，`sync_principles.py --check` 与全部
+      SKILL lint 测试保持绿
+- [ ] 5.2 T101 残余：spec-review SKILL Step3 报告模版补拍板三问 + anchor_lint 拍板层
+      存在性机验 + bundle 同步（`sdflow-init/assets/workflow/` 权威源先改）
+- [ ] 5.3 T256 评估收口：先答闸门问题（逐项列阶段三「只活在对话里」的状态；先读 T26
+      结项结论，别重走撞红线路）；按五问收敛为「做 / 明确不做并记因」——若答案只有
+      merge 意图 ⇒ 不做 hook，ship 摘要一句提示即最省路径；全局 hook 命名空间代价 MUST 计入
+- [ ] 5.4 实现验证收尾（全仓 pytest 绿）
+
+### 验收标准
+
+- [ ] 14 个 SKILL.md 审计结论逐文件留档，7 个超 500 行者完成清理（正文即最终态）
+- [ ] T101 / T275 / T256 三条 issue 全部到达终态（DONE 或 WONTDO，理由与事实一致）
+- [ ] 拍板三问在下一轮真实 spec-review 报告出现（本 change 自身 spec-review 即首个 dogfood）
+      + anchor_lint 机验绿
+- [ ] 全仓 pytest 绿
+- [ ] change 归档（code-review → sdflow-done → merge）
+
+### 交付物
+
+- 14 个 SKILL.md 考古层清理（DOC-1 落实，审计留档）
+- spec-review 报告拍板三问条款 + 拍板层 anchor_lint 机验
+- T256 评估结论（闭环关闭，理由可复核）
 
 ---
 
@@ -337,8 +384,8 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 | 阶段 2 | 5（2.A×5） | **✅ 5/5 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12） |
 | 阶段 3 | 5（tickets 管线 Task1–5） | **✅ 5/5 完成 2026-08-11**（含 code-review 修复，归档 SHA `c4b8c6f`） |
 | 阶段 4 | 8（tickets 管线 Task1–6 + CR + B25/B26） | **✅ 8/8 完成 2026-08-12**（verify PASS 2639 tests，归档 SHA `e202feb`） |
-| 阶段 5 | （雾区——frontier 到达补细后再登记） | — |
-| **合计**（仅计入近期已细化阶段） | **18** | — |
+| 阶段 5 | 4（5.1–5.4） | 已细化 2026-08-12，待执行 |
+| **合计** | **22** | — |
 
 ## 附录 C · 未来 OpenSpec 变更映射
 
@@ -347,8 +394,8 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 | 阶段 1 | `implement-workflow-optimization-2026-08-p1` **✅ 归档 2026-08-10**（1.B 四项交付，verify PASS；1.A 为 recorder 直写操作，待独立执行） | spec-workflow（度量锚相关 Requirement） |
 | 阶段 2 | `implement-workflow-optimization-2026-08-p2` **✅ 归档 2026-08-11**（2.A 五项全交付，verify PASS；验收 3 窗口判读 ✅ 2026-08-12 双 PASS） | spec-workflow（评审编排 Requirement） |
 | 阶段 3 | `implement-workflow-optimization-2026-08-p3` **✅ 归档 2026-08-11**（5/5 ticket + code-review 修复，verify PASS 2607 passed，SHA `c4b8c6f`） | — |
-| 阶段 4 | （雾区——frontier 到达补细后再登记） | — |
-| 阶段 5 | （雾区——frontier 到达补细后再登记） | — |
+| 阶段 4 | `implement-workflow-optimization-2026-08-p4` **✅ 归档 2026-08-12**（6 tickets + CR 零 findings + B25/B26 断链修复，verify PASS 2639 tests，SHA `e202feb`） | spec-workflow（host-adaptive-execution 等 3 delta） |
+| 阶段 5 | `implement-workflow-optimization-2026-08-p5`（已细化，待执行） | spec-workflow（评审编排 Requirement，如涉及） |
 
 每个实施变更的 proposal 引用本文件对应阶段作为背景，design 复用
 `openspec/roadmaps/workflow-optimization-2026-08/design.md`，specs 扩展
