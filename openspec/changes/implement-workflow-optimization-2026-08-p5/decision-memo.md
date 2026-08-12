@@ -2,8 +2,8 @@
 schema_version: 1
 change: implement-workflow-optimization-2026-08-p5
 branch: feat/implement-workflow-optimization-2026-08-p5
-generated_at: 2026-08-12T15:35:36+08:00
-decision_hash: 897d57e8ac14
+generated_at: 2026-08-12T15:38:07+08:00
+decision_hash: 0a03512f44d0
 ---
 
 # 决策纪要 · implement-workflow-optimization-2026-08-p5
@@ -25,10 +25,15 @@ T256 调研记录落盘（保持 OPEN，不实现）。
 - **D2 拍板三问只落设计门（spec-review 报告拍板层）** — 依据：设计 HARD-GATE 是全流程唯一
   人类门；code-review 无人门。**砍掉的候选**：两审都加（给无人读的报告加结构 = 样板税）。
   人 2026-08-12 明确确认（「同意」）。
-- **D3 sdflow-spec 提问分批条款 fold 进本 change** — 形态：修 A.1 + B.3——「互相独立且
-  同主题的问题 MAY 一批问（≤4/批，对齐 AskUserQuestion 上限），每问仍必附推荐；前一答会
-  改写后一问的（依赖链）MUST 串行」。依据：本 change 拷问自身即首个实测样本。**砍掉的
-  候选**：不固化只当 session 习惯（下个 session 即失忆）。人 2026-08-12 明确确认（「同意」）。
+- **D3 sdflow-spec 提问分批条款 fold 进本 change（呈现与拍板分离）** — 形态：修 A.1 + B.3——
+  ① 互相独立且同主题的问题 MAY 一批问（≤4/批，对齐 AskUserQuestion 上限），每问仍必附推荐；
+  ② **有依赖链的问题整链一起呈现**（链结构 + 前因后果 + 每环推荐，给出推荐的整链路径），
+  人可一次拍整链或只拍链头；链头改判 ⇒ 下游按新前提重提（背景不重复）；仅当链头各选项
+  导致完全不同的后续问题集（组合爆炸）时退回「只呈现链头 + 一句话预告各选项下游影响」。
+  依据：本 change 拷问自身即实测样本——Q1 载体子问题因未随链头同呈现多耗一轮（先拍附录、
+  异议 token、再改判）。**砍掉的候选**：① 不固化只当 session 习惯（下个 session 即失忆）；
+  ② 依赖链一律串行（初版形态，被「拍链头时看不见下游影响」的实证推翻，人 2026-08-12
+  提出修正）。人 2026-08-12 明确确认。
 
 - **D4 T256 本 change 不实现，调研记录落盘、issue 保持 OPEN** — 依据：人 2026-08-12 拍板
   「不能只以当前 repo 状态判断——Claude 1M context 需求不迫切，Codex 仅 ~258K 可用、问题
