@@ -113,6 +113,6 @@ bundle 同步：config.template `effort-tiers` 段示例 + claude-section 说明
 
 附加验证：retro 再生冒烟（`retro_report.py` 跑通 + 本 change token-log 锚在列 + anchor_lint CLEAN）；roadmap 阶段 4 回填（子任务表 + 快照行 + task-log 里程碑）；B25/B26 池状态 set-status FIXED + evidence；T105/T103/T98/T124 set-status DONE + evidence。
 
-- [ ] 单元测试证据齐全并通过
-- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] 单元测试证据齐全并通过
+- [x] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
