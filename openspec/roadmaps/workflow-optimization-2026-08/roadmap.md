@@ -12,11 +12,10 @@
 判据补全）的实修率数据，两者交付节奏需同步规划；阶段 3 虽无依赖、可随时提前起手，但其
 机制设计需一次独立 grill，现在预写子任务分解会是假精确，留雾。
 
-> **进度快照（2026-08-12）**：阶段 1、阶段 2、阶段 3 已全部完成归档，阶段 2 验收 3 的
-> dogfood 观察窗口已于 2026-08-12 判读完成（3/3，roster 与裁决协议双 PASS，T102→WONTDO）。
-> 阶段 3 归档 SHA `c4b8c6f`（5/5 ticket + code-review 6 项修复 + verify PASS 2607 passed +
-> 首轮 dogfood T264→DONE）。阶段 4 前置条件（token 基线）已满足——p1/p2/p3/rsp 四个
-> change 全程 token 锚累积完毕，待起手补细；阶段 5 仍待 frontier 到达后补细。
+> **进度快照（2026-08-12）**：阶段 1–4 全部完成归档。阶段 4 归档 SHA `e202feb`（6 tickets,
+> verify PASS 2639 tests, zero code-review findings；effort 分档全链 + B25/B26 机械门 +
+> render-review-prefix + 四 SKILL 全面适配）。B25/B26→FIXED、T105/T103/T98/T124→DONE。
+> 阶段 5 仍待 frontier 到达后补细。
 
 五阶段演进，每阶段独立可交付；阶段 3 与阶段 1/2 无依赖关系，可并行或提前。
 
@@ -25,7 +24,7 @@
 | **阶段 1** · 度量决策端补全 + 池对账 | 本周 | retro 报实修率 + token 快照锚开始累积；四条错关项理由归真 | **✅ 全部完成 2026-08-10** |
 | **阶段 2** · 镜 roster 复评 + 裁决地基改造 | 阶段 1 后 1-2 周 | 13 面待复评镜逐一处置；置信硬滤被替代方案取代 | **✅ 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12，双 PASS） |
 | **阶段 3** · 上游套件吸收机制 | 无依赖，随时 | 四源有锚、watch 跑通一轮 delta 分诊 | **✅ 完成 2026-08-11**（5/5 ticket + code-review 修复，归档 SHA `c4b8c6f`） |
-| **阶段 4** · 成本工程剩余 | 阶段 1 数据到位后 | effort/thinking 按步分档落地 | 雾区（目标句 + 备注） |
+| **阶段 4** · 成本工程剩余 | 阶段 1 数据到位后 | effort/thinking 按步分档落地 | **✅ 完成 2026-08-12**（6 tickets, verify PASS 2639 tests, 归档 SHA `e202feb`） |
 | **阶段 5** · 人类门减负与 context 工程 | 远期 | 设计门报告摘要头 + SKILL 考古层清理 | 雾区（目标句 + 备注） |
 
 （时长预估仅取定性口径，与本仓既有 roadmap 惯例一致；小时级数字无历史推导基础，不写。）
@@ -277,8 +276,36 @@ delta 分诊机制（`sdflow-upstream-watch`，数据类 skill），一次运行
 （每镜 effort 预算 + 输出封顶）+ T124（规则注入分界）+ 重分诊后存活的 T98（前缀缓存）
 落地（见 design.md 决策 1 的度量前置逻辑）。
 
-**雾区备注**：缺阶段 1 的 token 维数据定各项优先序与验收基线（没有 token 基线，
-「省了多少」不可证）；T98 是否进本阶段取决于 1.A.1 重分诊结论。到 frontier 补细。
+### 子任务（tickets 管线，change `implement-workflow-optimization-2026-08-p4`）
+
+- [x] Task 1 effort 维解析与导出全链（model-tiers 机读块 + resolve-models.sh 9 变量 + config 覆盖）
+- [x] Task 2 effort agent 定义铺设（5 个 sdflow-effort-*.md + install_agents 测试）
+- [x] Task 3 ship_gate B25/B26 机械门（锚存在门 + defer 对账门 + 32 测试）
+- [x] Task 4 render-review-prefix.sh 段① 渲染器（byte-stable + fail-loud + 14 测试）
+- [x] Task 5 四编排 SKILL 全面适配 + B25 诊断修复 + bundle 同步（15 lint 测试）
+- [x] Task 6 实现验证收尾（2639 passed, 0 failed）
+- [x] code-review（零 findings）
+- [x] B25/B26 断链修复（诊断=emitter 未调用；修复=SKILL Step7 独立步 + gate 机械门双保险）
+
+### 验收标准
+
+- [x] 全仓 pytest 绿
+      **✅ 2026-08-12**（2639 passed, 10 skipped）
+- [x] effort 全链生效（resolver 导出 + agent 定义 + SKILL 派发接入）
+      **✅ 2026-08-12**（A1 探针方向性确认 + 43 resolver 测试 + 14 install_agents 测试）
+- [x] B25/B26 门机械守住（本 change 自身 code-review 为首个 dogfood）
+      **✅ 2026-08-12**（code-review-report.md 含 lens-metric + ref-check 锚，gate 放行）
+- [x] change 归档（code-review → sdflow-done → merge）
+      **✅ 2026-08-12**（verify PASS → archive → merge main，SHA `e202feb`）
+
+### 交付物
+
+- `model-tiers.md` effort 机读块 + `resolve-models.sh` 9 变量导出
+- 5 个 `sdflow-effort-*.md` 全局 agent 定义
+- `render-review-prefix.sh` 段① 渲染器
+- `ship_gate.py` B25/B26 双门（锚存在 + defer 对账）
+- 四 SKILL effort 派发 + 三段组装序 + defer 当场入池改造
+- `openspec/adr/0043`（effort 分档经全局 effort-keyed agent 定义）
 
 ---
 
@@ -309,7 +336,7 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 | 阶段 1 | 8（1.A×4 + 1.B×4） | **✅ 8/8 完成 2026-08-10** |
 | 阶段 2 | 5（2.A×5） | **✅ 5/5 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12） |
 | 阶段 3 | 5（tickets 管线 Task1–5） | **✅ 5/5 完成 2026-08-11**（含 code-review 修复，归档 SHA `c4b8c6f`） |
-| 阶段 4 | （雾区——frontier 到达补细后再登记） | — |
+| 阶段 4 | 8（tickets 管线 Task1–6 + CR + B25/B26） | **✅ 8/8 完成 2026-08-12**（verify PASS 2639 tests，归档 SHA `e202feb`） |
 | 阶段 5 | （雾区——frontier 到达补细后再登记） | — |
 | **合计**（仅计入近期已细化阶段） | **18** | — |
 

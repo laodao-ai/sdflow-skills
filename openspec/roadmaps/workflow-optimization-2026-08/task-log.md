@@ -29,6 +29,20 @@
 
 ---
 
+## 2026-08-12
+
+### [阶段 4] 成本工程剩余——全部完成
+
+- **状态**: ✅ 完成（change `implement-workflow-optimization-2026-08-p4`，归档 SHA `e202feb`）
+- **交付**：effort 分档全链（model-tiers 机读块 + resolver 9 变量 + 5 agent 定义 + 四 SKILL 派发）、ship_gate B25/B26 双门（锚存在 + defer 对账）、render-review-prefix.sh 段① 渲染器、四 SKILL 三段组装序 + defer 当场入池改造
+- **测试**：2639 passed, 0 failed；新增 89 测试（resolver 12 + gate 32 + prefix 14 + agents 14 + lint 15 + parity 2）
+- **code-review**：零 findings（四镜全清，历史+voice 因上下文预算省略如实降级记录）
+- **B25/B26 断链修复**：诊断=emitter 未调用（SKILL Step5 系统性跳过）；修复=Step7 独立步 + gate 机械门双保险
+- **池状态**：B25→FIXED、B26→FIXED、T105→DONE、T103→DONE、T98→DONE、T124→DONE
+- **备注**：阶段 1-4 全部完成，仅阶段 5（人类门减负）待 frontier
+
+---
+
 ## Review 处置
 
 <!-- review（roadmap 自持双镜 strategy/plan-eng + outside voice）产出的每条 issue 在此逐条追加，
