@@ -53,6 +53,43 @@ voice 留痕：`runner=codex reason_code=ok`（跨模型第二意见，gpt-5.6-s
 
 ---
 
+## 2026-08-12
+
+### [阶段 2 / 验收 3] dogfood 观察窗口判读完成（3/3，roster 与裁决协议双 PASS）
+
+- **状态**: ✅ 完成（阶段 2 最后一个验收框收口；纯读数活，未开 change）
+- **窗口样本**: p2（样本 1）→ p3 → remove-superpowers-pipeline（3/3 齐，p3/rsp 已证实
+  跑在新协议下：报告结构为「已采纳/已裁掉/defer 台账」三段式，rsp spec-review 显式记录
+  `findings_ref_check` 15/15 pass、p3 spec-review 23/23 pass）
+- **判读（按 hand-off D4 预定义指标分别归因）**:
+  - **漏检 → roster**：无——三样本归档后 issues 池零新增缺陷；rsp 68 文件大 diff 正确
+    触发 history 镜条件化派发（fanout 锚 `mirrors="domain,adversarial,history,broad"`）。
+    ⇒ roster 改动（history 降采样等）**PASS，保留**
+  - **采纳率偏移 → 裁决协议**：spec-review 侧 p3 ≈96%（21-22/23）、rsp 100%（15/15，
+    含 4 条 defer 终裁转采纳），≥ 基线 87-93%；code-review 侧表面 43-46%（rsp 3/7、
+    p3 6/13）vs 基线 73%，但**口径不同构**——旧协议置信硬滤在入池前静默丢弃、新协议
+    全量入池显式裁掉；裁掉项逐条复核全部合法（X1 Speculative Generality、X2/X3 实查
+    证伪、X4 非问题），无「该采未采」证据。⇒ 裁决协议 **PASS，无需回滚**
+  - **T102 重判**：按阶段 2 遗留段预定规则 → **WONTDO**（二元裁决已足够压噪；对抗镜
+    为 rsp spec 当轮最高产镜：10 findings 全采纳、独立 5）
+- **附带发现（与 p2 改动无关的既有断链，判读中顺带坐实）**:
+  - **B25**（P1）：code-review 报告机械层落盘自 08-07 起 6 个 change 连续静默缺失——
+    lens-metric 锚为 0（`metrics.enabled=true`、SKILL 条款在、无 emitter 报错记载）、
+    机械引用核亦无落盘痕迹；spec-review 侧两者均正常。聚合③ code-review 镜数据自此
+    冻结，直接威胁未来 roster 复评判据
+  - **B26**（P1）：code-review defer 入池通道 3/3 断——p3 两条标「待入」未入、rsp 一条
+    报告写「已入 todolist」实未入（自述与事实不符）
+  - 漏记 defer 已人工补录：T278（advance 绑定强度）/ T279（superpowers 采集器噪声）/
+    T280（spec-review SKILL 收敛口 writing-plans 残留）
+- **下一步**: 阶段 4 起手（`/sdflow-spec implement-workflow-optimization-2026-08-p4`）——
+  前置条件已满足（token 基线 4 change 累积），窗口已收口故 effort 改动不再有归因混杂；
+  B25/B26 与阶段 4 同属评审编排面，是否 fold 进 p4 由相位 B 拷问定
+- **备注**: T98 重分诊时写的「与 T105 共享验收基线」在探索中已细化为分面归因——
+  面 A（effort 分档）看质量不退（D4 同款指标），面 B（prompt 构造）看 token-log 的
+  cache_creation/cache_read 比例趋势（真机械信号）
+
+---
+
 ## 2026-08-11
 
 ### [阶段 3 / 实现完成] 上游套件吸收机制五票交付（change `implement-workflow-optimization-2026-08-p3`）

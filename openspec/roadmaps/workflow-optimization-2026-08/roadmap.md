@@ -12,17 +12,18 @@
 判据补全）的实修率数据，两者交付节奏需同步规划；阶段 3 虽无依赖、可随时提前起手，但其
 机制设计需一次独立 grill，现在预写子任务分解会是假精确，留雾。
 
-> **进度快照（2026-08-11）**：阶段 1、阶段 2、阶段 3 已全部完成归档（阶段 2 验收 3 的
-> dogfood 观察窗口 1/3，随后续 change 自然累积，不阻塞）。阶段 3 归档 SHA `c4b8c6f`
-> （5/5 ticket + code-review 6 项修复 + verify PASS 2607 passed + 首轮 dogfood T264→DONE）。
-> 阶段 4/5 仍待 frontier 到达后补细。
+> **进度快照（2026-08-12）**：阶段 1、阶段 2、阶段 3 已全部完成归档，阶段 2 验收 3 的
+> dogfood 观察窗口已于 2026-08-12 判读完成（3/3，roster 与裁决协议双 PASS，T102→WONTDO）。
+> 阶段 3 归档 SHA `c4b8c6f`（5/5 ticket + code-review 6 项修复 + verify PASS 2607 passed +
+> 首轮 dogfood T264→DONE）。阶段 4 前置条件（token 基线）已满足——p1/p2/p3/rsp 四个
+> change 全程 token 锚累积完毕，待起手补细；阶段 5 仍待 frontier 到达后补细。
 
 五阶段演进，每阶段独立可交付；阶段 3 与阶段 1/2 无依赖关系，可并行或提前。
 
 | 阶段 | 时长预估 | 里程碑 | 细化程度 |
 |---|---|---|---|
 | **阶段 1** · 度量决策端补全 + 池对账 | 本周 | retro 报实修率 + token 快照锚开始累积；四条错关项理由归真 | **✅ 全部完成 2026-08-10** |
-| **阶段 2** · 镜 roster 复评 + 裁决地基改造 | 阶段 1 后 1-2 周 | 13 面待复评镜逐一处置；置信硬滤被替代方案取代 | **✅ 完成 2026-08-11**（验收 3 观察窗口 1/3 进行中） |
+| **阶段 2** · 镜 roster 复评 + 裁决地基改造 | 阶段 1 后 1-2 周 | 13 面待复评镜逐一处置；置信硬滤被替代方案取代 | **✅ 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12，双 PASS） |
 | **阶段 3** · 上游套件吸收机制 | 无依赖，随时 | 四源有锚、watch 跑通一轮 delta 分诊 | **✅ 完成 2026-08-11**（5/5 ticket + code-review 修复，归档 SHA `c4b8c6f`） |
 | **阶段 4** · 成本工程剩余 | 阶段 1 数据到位后 | effort/thinking 按步分档落地 | 雾区（目标句 + 备注） |
 | **阶段 5** · 人类门减负与 context 工程 | 远期 | 设计门报告摘要头 + SKILL 考古层清理 | 雾区（目标句 + 备注） |
@@ -167,13 +168,17 @@
       **✅ 2026-08-11**（13 面镜逐镜带「已处置: 保留/降采样/不适用」注记）
 - [x] 评审 SKILL 的 Step3 条款与新裁决协议一致，anchor_lint 全绿
       **✅ 2026-08-11**（两评审 SKILL Step3 重写与 adr/0041 一致；anchor_lint CLEAN）
-- [ ] 改造后真实 change 评审 dogfood：按预定义指标**分别判读**——漏检信号归因 roster
+- [x] 改造后真实 change 评审 dogfood：按预定义指标**分别判读**——漏检信号归因 roster
       改动、噪声/采纳率信号归因裁决协议（观察窗口与阈值在该 change 设计相位定；历史
       评审语料重放作为候选验证手段一并评估）
-      **⏳ 观察窗口进行中（1/3）**——历史重放已作为部署门执行（49 条 ③类=0）；前瞻窗口
-      = 3 个真实 change，p2 自身为样本 1；判读指标已定义（hand-off D4：漏检→roster、
-      采纳率偏移→裁决协议，对照基线 code-review ~73% / spec-review ~87-93%）。
-      随后续 change 评审自然累积，不阻塞阶段 3 起手
+      **✅ 2026-08-12 窗口判读完成（3/3：p2/p3/remove-superpowers-pipeline）**——
+      ① 漏检（归因 roster）：无——三样本归档后池内零新增缺陷，rsp 大 diff 正确触发
+      history 镜条件化派发 ⇒ roster 改动 PASS；② 采纳率偏移（归因裁决协议）：spec-review
+      侧 p3 96% / rsp 100%（≥基线 87-93%）；code-review 侧表面 43-46% vs 基线 73%，但
+      口径不同构（旧协议置信硬滤在入池前静默丢弃、新协议全量入池显式裁掉），裁掉项逐条
+      复核全部合法（Speculative Generality / 实查证伪 / 非问题）⇒ 裁决协议 PASS，无需
+      回滚。附带发现两条与 p2 改动无关的既有断链（B25 code-review 报告机械层落盘自
+      08-07 起静默缺失、B26 defer 入池通道 3/3 断），已入池；漏记 defer 补录 T278-T280
 - [x] 全仓 pytest 绿
       **✅ 2026-08-11**（2549 passed, 10 skipped）
 
@@ -187,7 +192,10 @@
 - **T102（对抗镜措辞收紧）fold 计划未执行**：阶段 1 重分诊曾拍板「fold 进阶段 2，随裁决
   协议一起改」，但 p2 实际 scope（decision-memo D2 / tasks.md）未纳入对抗镜 dispatch prompt
   的措辞收紧。处置：挂验收 3 观察窗口结论后重判——若采纳率偏移显示噪声仍高，再收紧措辞
-  源头；若二元裁决已足够压噪，T102 改 WONTDO 记因。池状态保持 PROPOSED。
+  源头；若二元裁决已足够压噪，T102 改 WONTDO 记因。
+  **✅ 2026-08-12 已按预定规则重判 T102 → WONTDO**（窗口 3 样本显示二元裁决足够压噪：
+  spec-review 采纳率 ≥ 基线，对抗镜无高噪声证据——rsp spec 对抗镜 10 findings 全采纳、
+  独立 5，为当轮最高产镜）。
 - hand-off 残项 D1–D5（docs 六处旧协议描述同步、ref-check 路径穿越防护、done-final 降级
   确认、前瞻窗口判读、README 等一行描述）见
   `openspec/changes/archive/2026-08-11-implement-workflow-optimization-2026-08-p2/hand-off.md`。
@@ -299,7 +307,7 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 | 阶段 | 子任务数 | 时长预估（定性） |
 |---|---|---|
 | 阶段 1 | 8（1.A×4 + 1.B×4） | **✅ 8/8 完成 2026-08-10** |
-| 阶段 2 | 5（2.A×5） | **✅ 5/5 完成 2026-08-11**（验收 3 观察窗口随后续 change 累积） |
+| 阶段 2 | 5（2.A×5） | **✅ 5/5 完成 2026-08-11**（验收 3 窗口判读 ✅ 2026-08-12） |
 | 阶段 3 | 5（tickets 管线 Task1–5） | **✅ 5/5 完成 2026-08-11**（含 code-review 修复，归档 SHA `c4b8c6f`） |
 | 阶段 4 | （雾区——frontier 到达补细后再登记） | — |
 | 阶段 5 | （雾区——frontier 到达补细后再登记） | — |
@@ -310,7 +318,7 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 | 阶段 | 建议变更名 | 引用契约 |
 |---|---|---|
 | 阶段 1 | `implement-workflow-optimization-2026-08-p1` **✅ 归档 2026-08-10**（1.B 四项交付，verify PASS；1.A 为 recorder 直写操作，待独立执行） | spec-workflow（度量锚相关 Requirement） |
-| 阶段 2 | `implement-workflow-optimization-2026-08-p2` **✅ 归档 2026-08-11**（2.A 五项全交付，verify PASS；验收 3 观察窗口 1/3 随后续 change 累积） | spec-workflow（评审编排 Requirement） |
+| 阶段 2 | `implement-workflow-optimization-2026-08-p2` **✅ 归档 2026-08-11**（2.A 五项全交付，verify PASS；验收 3 窗口判读 ✅ 2026-08-12 双 PASS） | spec-workflow（评审编排 Requirement） |
 | 阶段 3 | `implement-workflow-optimization-2026-08-p3` **✅ 归档 2026-08-11**（5/5 ticket + code-review 修复，verify PASS 2607 passed，SHA `c4b8c6f`） | — |
 | 阶段 4 | （雾区——frontier 到达补细后再登记） | — |
 | 阶段 5 | （雾区——frontier 到达补细后再登记） | — |

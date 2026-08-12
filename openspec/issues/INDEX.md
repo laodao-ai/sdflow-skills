@@ -5,6 +5,8 @@
 | ID | Pool | Status | Date | Module | Summary |
 |----|------|--------|------|--------|---------|
 | [B24](open/bug/B24.md) | bug | OPEN | 2026-08-06 | hack/tests/test_subprocess_encoding_contract.py | 扫描口径受 .claude worktree 污染 + 硬编码阈值 200 已失真(实测189,当前即红)。两个缺陷叠加导致同一 commit 可既绿又红：_python_files() 排除清单不含 .claude，本机存在 agent worktree 时 3 份仓库副本被一并扫入、sites 计数约翻 4 倍越过阈值判绿；worktree 清理后暴露真实值 189 < 200 判红。实证(refactor-roadmap-internalize-deps Task 6 编排层亲跑)：worktree 在→4 passed，git worktree remove 后→1 failed。修法：①排除清单补 .claude（治口径漂移）②删掉硬编码 200、改为让脚本自报数量或锚定不变量（治阈值失真，同 CLAUDE.md「硬编码数量修法=删掉数字让脚本自己报」）。非本 change 引入：merge-base..HEAD 的 .py 改动为 0。 |
+| [B25](open/bug/B25.md) | bug | OPEN | 2026-08-12 | `评审编排` | code-review 报告机械层落盘自 08-07 起静默缺失：lens-metric 锚 6 个 change 连续为 0（metrics.enabled=true、SKILL 条款在、无 emitter 报错记载，rsp 报告自印 enabled=true 却无锚），机械引用核（findings_ref_check）亦无落盘痕迹（spec-review 侧两者均正常）；聚合③ code-review 镜数据自此冻结，影响未来 roster 复评判据 |
+| [B26](open/bug/B26.md) | bug | OPEN | 2026-08-12 | `评审编排` | code-review defer 项入池未执行且报告自述与事实不符：p3 两条（advance 绑定强度、superpowers 采集器噪声）标「待入 todolist」未入，rsp 一条（spec-review SKILL 收敛口 writing-plans 残留）报告结论写「已入 todolist」实未入——defer 通道 3/3 断，残差全靠本次窗口判读人工补录（T278-T280） |
 | [T7](open/todo/T7.md) | todo | PROPOSED | 2026-07-01 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 |
 | [T9](open/todo/T9.md) | todo | PROPOSED | 2026-07-01 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 |
 | [T23](open/todo/T23.md) | todo | PROPOSED | 2026-07-01 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） |
@@ -25,7 +27,6 @@
 | [T92](open/todo/T92.md) | todo | PROPOSED | 2026-07-01 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 |
 | [T98](open/todo/T98.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2） |
 | [T101](open/todo/T101.md) | todo | PROPOSED | 2026-07-01 | `spec-review` | 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1） |
-| [T102](open/todo/T102.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5） |
 | [T103](open/todo/T103.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 每镜 effort scaling 预算+输出封顶：四要素 prompt 槽+1-2k 回传目标（04 提案 §2.5） |
 | [T104](open/todo/T104.md) | todo | PROPOSED | 2026-07-01 | `retro` | retro 补 token 维度量：checkpoint 落 token 快照锚+join（04 提案 §2.6） |
 | [T105](open/todo/T105.md) | todo | PROPOSED | 2026-07-01 | `model-tiers` | thinking/effort 预算按步分档：model-tiers 加第二维（04 提案 §2.7） |
@@ -70,7 +71,6 @@
 | [T251](open/todo/T251.md) | todo | PROPOSED | 2026-07-01 | sdflow-implement/SKILL.md | 纯 expand-contract 类 change(0 张垂直切片)下「Blocked-by 全部功能票」的语义未定义 |
 | [T256](open/todo/T256.md) | todo | OPEN | 2026-07-01 | sdflow-ship/SKILL.md + ~/.claude/hooks/ | 用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做） |
 | [T258](open/todo/T258.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement/SKILL.md` 文件交接节 · review-package | 双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold |
-| [T264](open/todo/T264.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/schemas/sdflow-spec-driven/ + openspec-1.7.0-followup roadmap | project-local schema 是一次性 fork 快照；上游 spec-driven 更新后没有机械门提醒本仓漂移，当前 change 只记录边界，不实现 drift 检测或自动 rebase。 |
 | [T265](open/todo/T265.md) | todo | OPEN | 2026-08-06 | docs/external-dependencies.md | 跨文件行号引用改为内容锚定或补漂移检测——该表按行号引用 sdflow-roadmap/SKILL.md(:459/:460) 与 sdflow-code-review/SKILL.md(:206-209)，行号引用无机械门守，被引文件一改即静默漂移（本 change Task 5 已实证一次：SKILL.md 重写致 425/426 失效，靠人工 grep 才发现）。修法二选一：①改标题锚点 ②补漂移检测脚本。本 change 不做的理由（Task 5 Standards 轴推荐、编排层采纳）：同表第 76 行是同模式既有约定，只改 2 行会造成半锚点半行号不一致，统一须改造整表、超出本 change scope（通则③不加宽）。 |
 | [T266](open/todo/T266.md) | todo | OPEN | 2026-08-06 | sdflow-roadmap/SKILL.md | 直接生成路径（三态路由第①态）中途发现关键判据缺失时，无「回退相位 B」的转换定义。design 的包与相位状态机图对该路径只有 absent→生成中→三件套就绪 的单向边，SKILL.md 正文同样沉默。触发场景：gate-0 打分时判过、进相位 C 执笔 design.md 头部章时才发现 Non-Goals/验收门槛其实不清楚——此时 agent 只能自由发挥（硬写可能编造判据，或中止转 B 但起手三步是否补跑同样未定义）。严重度 Minor：属指令沉默而非两条 SHALL 矛盾，谨慎 agent 大概率会合理地中止+说明+回退，后果可挽回。修法：在相位 C 或直接生成路径描述处补一句「若生成中发现关键判据缺失，SHALL 中止直接生成、向操作者说明、转入相位 B（按 create 路径补跑起手三步）」。来源：code-review 对抗镜 A 独家。 |
 | [T267](open/todo/T267.md) | todo | OPEN | 2026-08-06 | openspec/workflow/spec-checklists (domains) | 建立 python.md checklist domain 承接 Async/Sync 混用等 Python 专属检查点（gstack Pass-2 剩余条目，absorb-gstack-review 因归属 domain 不存在而 defer） |
@@ -81,3 +81,6 @@
 | [T275](open/todo/T275.md) | todo | OPEN | 2026-08-10 | `SKILL.md` | SKILL.md DOC-1 审计：14 个 SKILL.md 落实 doc-authoring.md（正文即最终态，演进史进附录），7/14 超 500 行，修订锚保留界线需人拍板 |
 | [T276](open/todo/T276.md) | todo | OPEN | 2026-08-10 | `评审编排` | 评审编排大改条件更新：宿主已有 Workflow 确定性编排原语 + Stop hook 四级 gate 阶梯；触发条件=下次评审编排必须动刀时一并重估 |
 | [T277](open/todo/T277.md) | todo | OPEN | 2026-08-11 | sdflow-ship + sdflow-implement + sdflow-init assets | 删除 impl-pipeline superpowers 旧管线分支（writing-plans→subagent-driven-development 路由），tickets 成唯一实现管线：sdflow-ship 路由分支、config.yaml 键语义、CLAUDE.md/workflow 托管文案、相关 docs 一并收口（用户 2026-08-11 拍板「以后只走 tickets」） |
+| [T278](open/todo/T278.md) | todo | OPEN | 2026-08-12 | `sdflow-upstream-watch` | advance 报告/facts 绑定强度改进：run_id/facts digest 校验、拒绝旧 facts 重放（p3 code-review defer D1，来源 code-voice+hr-tg；设计定的是零解析子串校验，改进超当时 scope） |
+| [T279](open/todo/T279.md) | todo | OPEN | 2026-08-12 | `sdflow-upstream-watch` | superpowers 采集器误报其他插件变更为 delta（marketplace.json 共享文件噪声）——分诊层可压噪，采集端改进开 todo（p3 code-review defer D2，来源 code-voice+hr-tg） |
+| [T280](open/todo/T280.md) | todo | OPEN | 2026-08-12 | `sdflow-spec-review` | SKILL.md:366 收敛口仍写「用户批准 → writing-plans」，应改 /sdflow-ship（remove-superpowers-pipeline code-review defer OV1，该文件不在当时 scope） |
