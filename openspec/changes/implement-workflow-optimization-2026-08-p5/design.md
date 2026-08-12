@@ -4,6 +4,10 @@
 
 见 proposal.md「Why」。三条工作流（T275 考古层清理 / T101 拍板三问机验 / D3 分批条款）
 互相独立，无实现顺序依赖；T256 仅调研记录（已落盘，本 change 无实现动作）。
+[spec-review-amendment] 「独立」限定为**语义独立**：T101（task 1.3）与 D3（task 2.1）分别
+与 T275（task 3.2）共享编辑目标文件（`sdflow-spec-review/SKILL.md`、`sdflow-spec/SKILL.md`）
+——两文件上语义编辑（1.3/2.1）MUST 先于该文件的考古层审计（3.2），且同会话内顺序执行、
+不得跨会话并行（tasks.md 现有 1→2→3 编号即安全顺序）。
 
 ## Goals / Non-Goals
 
@@ -40,6 +44,16 @@
   metrics_on」〕：报告结构契约与 metrics 开关无关），layer=code-review 不查（D2）；
   `q` 值必须逐字等于 `scope,deps,risk`（有序、无增减）；fence 内锚不算（复用既有
   fence-aware 口径）。备选（metrics 门控）不取：三问是报告结构不是度量。
+  [spec-review-amendment] 实现模式拍板：新 check 函数 MUST 接收 `layer` 参数并在函数体内
+  按 layer 早返回（沿 `check_declared_sites` 的 layer-conditional 模式，`anchor_lint.py:605`）
+  ——`check_fanout_consistency` 先例只借「不受 metrics_on 门控」属性，其**无 layer 签名、
+  main() 无条件调用**的形态 MUST NOT 照抄（否则对 code-review 报告也生效，违反 D2）；
+  MUST NOT 复用/扩展 `check_existence`/`MANDATORY` 列表（该函数的 `layer` 参数是未使用的
+  死参，从不真按 layer 分流）。重复锚：fence 外出现 ≥2 条 `sdflow:gate-questions` 锚 →
+  判 duplicate fail-closed（沿 `check_fanout_consistency` 的 `duplicate-fanout-anchor`
+  先例）。机验声明收窄：本机验 = **拍板层声明锚机验**（锚存在 + q 值逐字）——三问正文
+  小节是否真实在场属 SKILL Step4 模版契约 + 人读层，无机械保证，MUST NOT 声称「拍板层
+  存在性」已被机械兜底。
 - **Dc 审计留档**：`{change_dir}/audit/skill-doc1-audit.md` 单文件，每 SKILL 一节：
   删/迁/留三计数 + 迁移目标路径 + 边界个案逐条注记（原文引用 + 判定理由）。归档随
   change 目录进 `archive/`，长期可查。备选（每 skill 独立文件）不取：14 个碎片不便冷审通读。
@@ -47,16 +61,24 @@
   文件名统一便于后续机械发现）；SKILL 正文末尾指针统一为一行：
   `历史取舍不进入默认运行；仅在审计历史依据时读取 references/evolution-notes.md。`
   已有该文件的 skill（sdflow-spec）追加不新建。
-- **De 分批条款落点**：`sdflow-spec/SKILL.md` A.1 与 B.3 两处条款重写（D3 全文）+
-  `spec-authoring` spec SA-03 delta 同步。SKILL.md 为仓内顶层资产（symlink 分发），
-  无 bundle 下发面。
+- **De 分批条款落点 [spec-review-amendment]**：`sdflow-spec/SKILL.md` A.1 与 B.3 两处条款
+  重写（D3 全文）+ `spec-authoring` spec SA-03 delta 同步，**外加三处「一次一问」残留
+  规范面**（跨模型 voice 独家发现，主 session 亲验）：① `sdflow-spec/SKILL.md:161` 相位
+  流程图「A 澄清（一次一问）」字样；② `sdflow-init/assets/workflow/generation-process.md:75`
+  （**bundle 权威源，有下发面**——原「无 bundle 下发面」表述仅对 SKILL.md 成立，对本条
+  不成立）；③ `openspec/specs/spec-workflow/spec.md`「阶段一入口」Requirement 的「拷问
+  协议不因触发方式改变」Scenario（经本 change spec-workflow delta MODIFIED 同步）。
+  `docs/` 与 `reference/Spec_Quality_Collaboration.md` 中的描述性提法不属规范面、不改。
+  SA-03 不设废弃警告/迁移文案：SKILL.md 单点全局分发（symlink），无版本共存态，
+  唯一窗口为 setup.sh 前后短暂期（已被 CLAUDE.md「反向窗口」纪律覆盖）——此为显式判断
+  而非疏漏。
 
 ## 组件/依赖图
 
 ```
 T275 清理流                     T101 三问流                          D3 条款流
 ────────────                   ─────────────                        ──────────
-14× SKILL.md ──删──▶ (git)     sdflow-spec-review/SKILL.md          sdflow-spec/SKILL.md
+15× SKILL.md ──删──▶ (git)     sdflow-spec-review/SKILL.md          sdflow-spec/SKILL.md
       │                          Step4 报告模版(+三问小节+锚)          A.1 + B.3
       └─迁─▶ <skill>/references/       │                                  │
              evolution-notes.md        ▼                                  ▼
@@ -79,7 +101,7 @@ T275 清理流                     T101 三问流                          D3 �
 |---|---|---|
 | `sdflow-spec-review/SKILL.md` Step4 报告条款 | emitter（主 session 落锚） | 加三问小节 + 锚行模版 |
 | `sdflow-init/assets/workflow/tools/anchor_lint.py` | checker | `ANCHOR_PREFIXES` + check 函数（always-on, layer=spec-review） |
-| `tools/tests/test_anchor_lint.py` | 契约测试 | 正例 / 缺锚负例 / q 值变异负例 / fence 内不算 / code-review layer 不查 |
+| `sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py` [spec-review-amendment] | 契约测试 | 正例 / 缺锚负例 / q 值变异负例（含缺 `q=` 属性）/ 重复锚负例 / fence 内不算 / code-review layer 不查 |
 | `sdflow-init/assets/workflow/` 内 spec-review 规则文件（若含报告结构描述，实现时 grep 定位） | 人读文档 | 同步三问描述，MUST NOT 与 SKILL 矛盾 |
 | p4 归档 spec-review 报告（只读） | 回放样本 | 手工加段后 lint PASS、原样 lint FAIL（验证检查生效，不改归档文件——副本上做） |
 | `~/.sdflow/workflow/`（软链）+ 消费仓 | 分发面 | setup.sh / `sdflow-init update`，无仓内镜像可漂移（D13 后） |
@@ -89,7 +111,10 @@ T275 清理流                     T101 三问流                          D3 �
 - **[清理误删承重语义]** → 三层兜：audit 留档逐条可复核（Dc）+ 全仓 pytest（memo C2 的
   22 个文本消费测试）+ code-review 冷层抽查；残余为已接受边角（memo「接受的边角」）。
 - **[新 lint 检查误伤旧报告]** → anchor_lint 只在 Step3 对**新生成**报告自检，不回扫归档；
-  回放核验在副本上做；bundle（SKILL + lint）同 change 原子更新，无版本skew窗口。
+  回放核验在副本上做；bundle（SKILL + lint）同 change 原子更新，**本仓项目侧**无版本
+  skew 窗口（双软链同源，D13/adr0039 后无仓内镜像可漂）[spec-review-amendment]；消费仓
+  在 merge 与其下次 `sdflow-init update` 之间存在既有架构通性的 skew 窗口，非本 change
+  新引入（旧 SKILL + 旧 lint 自洽，不误伤）。
 - **[三问 dogfood 时序缺口]** → 结构性事实（spec-review 先于实现），不强行制造；测试 +
   回放为本 change 内验证，真实 dogfood 挂 hand-off 给下一 change 设计审。
 - **[references 外迁后无人再读]** → 可接受：外迁物本就是「审计历史才需要」内容（D1 依据）；

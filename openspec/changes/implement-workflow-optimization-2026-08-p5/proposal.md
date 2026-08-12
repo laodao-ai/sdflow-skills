@@ -9,9 +9,11 @@ roadmap `workflow-optimization-2026-08` 阶段 5（人类门减负与 context �
 
 ## What Changes
 
-- **T275（主力）**：14 个 SKILL.md 落实 DOC-1（`openspec/rules/doc-authoring.md`）考古层
-  审计清理，7 个超 500 行者重点（implement 821 / code-review 771 / roadmap 715 /
-  spec-review 593 / done 567 / architecture 562 / spec 528 行，2026-08-12 实测）。
+- **T275（主力）**：15 个 SKILL.md 落实 DOC-1（`openspec/rules/doc-authoring.md`）考古层
+  审计清理 [spec-review-amendment]（原文误计 14——`find . -maxdepth 2 -name SKILL.md` 实为
+  15，`sdflow-devenv` 464 行与 `sdflow-upstream-watch` 335 行均在册），7 个超 500 行者重点
+  （implement 821 / code-review 771 / roadmap 715 / spec-review 593 / done 567 /
+  architecture 562 / spec 528 行，2026-08-12 实测）。
   界线 = decision-memo D1：尽量删；确需保留者迁该 skill `references/` 旁文件（默认不加载），
   正文末尾只留一行指针。`sdflow:principles` 托管块不动。
 - **T101 残余**：spec-review 报告拍板层补「拍板三问」（①范围划界认不认 ②依赖/顺序认不认
@@ -41,7 +43,7 @@ roadmap `workflow-optimization-2026-08` 阶段 5（人类门减负与 context �
 
 ## Impact
 
-- **SKILL.md（14 个顶层 skill）**：正文考古层删除/外迁；新增若干 `references/evolution-notes.md`
+- **SKILL.md（15 个顶层 skill）[spec-review-amendment]**：正文考古层删除/外迁；新增若干 `references/evolution-notes.md`
   类旁文件。爆破面 = 消费 SKILL.md 文本的测试（hack/tests 11 个 + skill 侧 tests 11 个文件，
   memo C2），全仓 pytest 必须保持绿；`sync_principles.py --check` 门不受影响（托管块不动）。
 - **workflow bundle 权威源**（`sdflow-init/assets/workflow/`）：spec-review 相关规则/清单中
@@ -54,8 +56,10 @@ roadmap `workflow-optimization-2026-08` 阶段 5（人类门减负与 context �
 
 ## Success Metrics
 
-- 7 个超 500 行 SKILL.md 清理后行数显著下降（逐文件审计留档记录删/迁/留三数），
-  14 个全部过 DOC-1 审计（删除测试：「只有读过上一版的人才需要的句子」正文归零）。
+- 7 个超 500 行 SKILL.md 逐文件审计留档记录删/迁/留三数，净变化以 audit 实测数为准、
+  不预设「显著下降」幅度 [spec-review-amendment]（对抗镜抽查显示大文件体量主要来自当前
+  有效指令而非可整删叙事，考古层关键词命中为个位数——「零/小改动」结论同样合法留档）；
+  15 个全部过 DOC-1 审计（删除测试：「只有读过上一版的人才需要的句子」正文归零）。
 - anchor_lint 对含/缺拍板层锚的报告分别 PASS/FAIL（含负例测试）+ 对 p4 归档报告手工
   加段回放核验（时序注记：本 change 自身 spec-review 跑在实现**之前**、用旧版 SKILL，
   结构性无法 dogfood 三问——首个真实 dogfood = 本 change 之后的下一次设计审，挂
@@ -78,7 +82,7 @@ roadmap `workflow-optimization-2026-08` 阶段 5（人类门减负与 context �
 | P0 | T275 考古层清理（7 个大 SKILL） | 主力交付物，context 成本直接受益 |
 | P0 | 拍板三问 + anchor_lint 机验 | 人类门质量结构化，本 change 自审即 dogfood |
 | P1 | sdflow-spec 分批条款 | 已有人工实测样本，条款成文即收益 |
-| P1 | 其余 7 个 SKILL 审计（≤500 行者） | 审计必做，预期改动量小 |
+| P1 | 其余 8 个 SKILL 审计（≤500 行者）[spec-review-amendment] | 审计必做，预期改动量小 |
 | P2 | roadmap/issues 收尾回填 | 书记性，随 done 流程走 |
 
 ## 假设（TG-22）
