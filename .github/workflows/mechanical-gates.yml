@@ -130,4 +130,4 @@ jobs:
         # `-rs` 让 skip 理由**逐条可见**：跨平台泳道上「本地 passed、CI 变 skipped」是
         # 零信号静默降级的经典形态（泳道绿，但那几条根本没跑）。不打印理由就只能靠
         # 数数猜是哪几条——本仓 fix-mechanical-layer-silent-failures 治的正是这类病。
-        run: python -m pytest -q -rs
+        run: python -m pytest -q -rs -W error
