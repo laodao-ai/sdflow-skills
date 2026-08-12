@@ -25,7 +25,7 @@ RESIDENT_CONTRACT = {
         "<!-- sdflow:principles:end -->",
     ),
     "phase-0": ("## 第零步", "openspec --version", "openspec list", "### 0.3 重入探测"),
-    "phase-a": ("## 相位 A", "一次只问一个问题", "收束进的是 B，不是 C"),
+    "phase-a": ("## 相位 A", "MUST NOT 借批量甩开放题", "收束进的是 B，不是 C"),
     "phase-b": ("## 相位 B", "## 承重约束", "sdflow-spec-grill"),
     "phase-c": (
         "## 相位 C",
