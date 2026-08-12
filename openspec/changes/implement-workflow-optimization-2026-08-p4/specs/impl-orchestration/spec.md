@@ -21,8 +21,11 @@ ship_gate 既有 `_yq()` 的非 frontmatter file 模式，MUST NOT 引入 yaml i
 
 ② **defer 对账门**：报告 defer 台账的每一行 MUST 含 `T\d+|B\d+` id 且对应
 `openspec/issues/open/**/<id>.md` **按文件系统存在性**判定（MUST NOT 走 git 跟踪清单）；
-且池文件 frontmatter 的 `change` 字段 MUST 等于当前 change 名（防误抄/复用他 change 既有 id
-假绿 `[spec-review-amendment]`）；不满足 ⇒ 同「该步进行中，重跑」处置。
+且池文件 frontmatter 的 `source_change` 字段（`issues_v2.py` 实际字段名）MUST 等于当前
+change 名（防误抄/复用他 change 既有 id 假绿 `[spec-review-amendment]`）；不满足 ⇒ 同
+「该步进行中，重跑」处置。defer 台账只承载**本轮新入池项**——finding 已被既有票（前序
+change 入池、`source_change` 为旧 change）覆盖时，引用写在裁决说明、MUST NOT 进 defer
+台账（否则 gate 必拒、而重复 add 造重复票 `[spec-review-amendment]`）。
 **台账行判别与 id 提取窄化 `[spec-review-amendment]`**：台账行 = defer 台账表格的数据行，id
 取自专用 id 列且**该单元格全部内容 = 单个 id**（MUST NOT 全行子串搜索——描述列提及的既有票号、
 聚合摘要句的 "defer" 字面均不得触发判定；报告模板的聚合摘要行同步改写使其不落入检测范围，
@@ -53,8 +56,8 @@ MUST NOT 新增 verdict 名（sdflow-ship 熔断按 verdict 字面分治，新�
 
 #### Scenario: defer id 存在但属于另一 change 被拦 `[spec-review-amendment]`
 
-- **WHEN** 报告 defer 台账行携带的 id 对应池文件存在，但其 frontmatter `change` 字段
-  为另一 change 名（误抄/复用既有票号）
+- **WHEN** 报告 defer 台账行携带的 id 对应池文件存在，但其 frontmatter `source_change`
+  字段为另一 change 名（误抄/复用既有票号）
 - **THEN** 判「该步进行中，重跑」，cause 文案指明 change 不符
 
 #### Scenario: defer 行无 id 或池文件缺失被拦

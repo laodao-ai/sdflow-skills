@@ -71,7 +71,8 @@
   gate 检测锚而非段标题/散文——「标题存在」形同虚设、「[ref-check] 行存在」误伤零裁掉报告，
   两头都不可判 `[spec-review-amendment]`）⇒ 判「该步进行中，重跑」；② defer 台账行缺
   `T\d+|B\d+` id、或 `openspec/issues/open/**/<id>.md` 文件系统不存在、或池文件 frontmatter
-  `change` ≠ 当前 change 名（防误抄既有票号假绿 `[spec-review-amendment]`）⇒ 同前处置。
+  `source_change` ≠ 当前 change 名（防误抄既有票号假绿；defer 台账只承载本轮新入池项，
+  既有票引用写裁决说明不入台账 `[spec-review-amendment]`）⇒ 同前处置。
   **台账行判别窄化 `[spec-review-amendment]`**：台账行 = 表格数据行，id 取专用 id 列且单元格
   全部内容 = 单个 id——MUST NOT 全行子串搜索（现模板聚合摘要句含 "defer" 字面无 id 会恒假阳，
   描述列提及的 T105 等真实旧票号会假阴误抓，[[gate-substring-detection-dogfood]] 同族双向坑）；
@@ -89,7 +90,7 @@
 | `effort-tier-defaults` 机读块 | 新 | `sdflow-init/assets/workflow/model-tiers.md` | resolve-models.sh |
 | `SDFLOW_EFFORT_*` 导出 | 改 | `sdflow-init/assets/hack/resolve-models.sh` | 4 个编排 SKILL |
 | `effort-tiers` config 段 | 新 | 消费仓 `openspec/config.yaml`（模板：bundle config.template） | resolve-models.sh |
-| `sdflow-effort-{low,medium,high,xhigh}.md` | 新 | 独立新源目录（名称与扩容方案随评审报告 Q2 拍板，见 Open Questions `[spec-review-amendment]`）→ `~/.claude/agents/` | 宿主 subagent_type |
+| `sdflow-effort-{low,medium,high,xhigh}.md` | 新 | 源目录随 Q2 拍板（推荐复用 `sdflow-spec/agents/`，见 Open Questions `[spec-review-amendment]`）→ `~/.claude/agents/` | 宿主 subagent_type |
 | `install_agents` 扩面 | 改 | `setup.sh`（多源扩容方案待 Q2 拍板——现函数四处硬编码 `sdflow-spec/agents` + manifest 单文件覆盖写，直接二次调用会冲掉既有清单 `[spec-review-amendment]`） | 布署链 |
 | `render-review-prefix.sh` | 新 | `sdflow-init/assets/hack/` → `~/.sdflow/hack/` | 两评审 SKILL 段① |
 | ship_gate B25/B26 门 | 改 | `sdflow-ship/scripts/ship_gate.py` | ship 链 / Stop hook |
@@ -130,7 +131,7 @@ code-review Step4          recorder(issues_v2)         报告文件             
      │                          │                        │                      │
      │                          │      〔gate 在 commit 前跑〕                   │
      │                          │                        │◀── 读台账行 id ──────┤
-     │                          │        池文件文件系统存在 ∧ change 字段对账 ──┤
+     │                          │        池文件文件系统存在 ∧ source_change 对账 ──┤
      │                          │                        │   任一不满足 ⇒ STEP_IN_PROGRESS
 ```
 
@@ -185,13 +186,16 @@ model-tiers 机读契约扩维牵连的文档组（改一处必查全组，防 [
 
 - Q1（同 proposal）：B25 直接成因（emitter 未调用 vs 调用失败未记录）——修复票内诊断定案；
   门的设计对两种成因同等有效，故可安全后置，不影响 specs/任务拆分。
-- Q2 `[spec-review-amendment]`（评审报告「需拍板」Q2，设计门勾选）：install_agents 多源
-  扩容方案（推荐：泛化为源目录列表 + 守卫判据参数化 + manifest 跨源 union 一次覆写；备选：
-  独立函数 + 独立 manifest）与新源目录名。**拍板前 tasks 2.4 不可开工**——现函数四处硬编码
-  单源且 manifest 覆盖写，方案不定则「扩面」不可验证。
-- Q3 `[spec-review-amendment]`（评审报告「需拍板」Q1）：`max` 值域处置（推荐：值域收窄为
-  {low,medium,high,xhigh}，`max` 判非法回落；备选：补第 5 个 `sdflow-effort-max` 定义）——
-  现状「值合法但资产未铺」是介于非法回落与空值回落之间的无文案第三态，派发即断链。
+- Q2 `[spec-review-amendment]`（评审报告「需拍板」Q2，设计门勾选）：effort agent 定义源
+  目录与 install_agents 扩容方案。**推荐（复核修订）= 选项 C：直接放进既有
+  `sdflow-spec/agents/`**——铺设/守卫/孤儿清理/manifest/测试全按「目录下全部 .md」工作
+  （`test_install_agents.py:39` 明示新增定义自动纳入），零改 🔴 守卫段；代价 = 目录语义
+  错位（文档同步 + 目录内注记）与 sdflow-spec 退役时的回滚耦合。备选 A：泛化多源 +
+  manifest union（未来第三组定义出现时再付）。**拍板前 tasks 2.4 不可开工**。
+- Q3 `[spec-review-amendment]`（评审报告「需拍板」Q1）：`max` 值域处置。**推荐（复核修订）
+  = 补第 5 个 `sdflow-effort-max` 定义**——memo D1 拍板明确 max 进值域留逃生口，收窄值域
+  实为砍拍板；宿主 effort 枚举确含 max；Q2 选 C 时边际成本一个文件。备选：值域收窄为
+  {low,medium,high,xhigh}（与 D1 有张力）。现状「值合法但资产未铺」是无文案第三态，派发即断链。
 
 ## Compliance
 

@@ -27,16 +27,16 @@
 
 **Q1 · `max` 进值域但无 agent 定义 —— 派发断链（M3，voice + devex 双路收敛，High）**
 `host-adaptive-execution` delta 值域 ∈ {low,medium,high,xhigh,max}，但只铺 4 个定义（无 `sdflow-effort-max`）；派发规则把非空值直接拼 `subagent_type: sdflow-effort-<值>` ⇒ 消费仓覆盖 `max` 时请求不存在的 agent 定义，且**不走空值回落**（值非空）——介于「非法回落」与「空值回落」之间的未覆盖第三态，无任何错误文案。
-- **选项 A（推荐）**：值域收窄为 {low,medium,high,xhigh}，`max` 判非法回落 + 告警。依据：与 D5「xhigh/max 不进缺省映射」精神一致、零新增机制、逃生口仍有 xhigh。
-- **选项 B**：补第 5 个 `sdflow-effort-max` 定义 + 安装测试。
-- 三面后果：系统镜——A 少一个全局命名空间名额与一份定义资产，B 多一个但值域完整；用户镜——A 下配 `max` 的消费仓收到告警回落（可感知、无断链），B 无感；开发循环镜——A 改一行值域 + 一条负例测试，B 多一份定义 + 测试扩面。**主次判定**：系统镜为主——p4 是成本工程，B 属加宽；A 的唯一代价是「未来真想要 max」时再开一条小 change，可接受。
+- **选项 B（推荐，复核修订）**：补第 5 个 `sdflow-effort-max` 定义 + 一行测试断言。依据：memo D1 人拍板明确「xhigh/max 进值域、留 per-repo 覆盖逃生口」——收窄值域实质砍掉逃生口一半（通则③方向）；宿主 effort 枚举确含 `max`（本机工具契约核实）；Q2 若选 C，边际成本 ≈ 一个 12 行文件。
+- **选项 A（原推荐，降为备选）**：值域收窄为 {low,medium,high,xhigh}，`max` 判非法回落 + 告警。唯一优势（少一份资产）在 Q2-C 下不再显著，且与 D1 拍板存在张力。
+- 三面后果：系统镜——B 全局命名空间 5 名额而非 4（与 D1 三镜已接受代价同质），值域/资产一致无第三态；用户镜——B 无感，A 下配 `max` 的消费仓被告警回落；开发循环镜——B 一份文件 + 一行断言，A 改值域 + 负例测试 + 与 memo 的口径修订。**主次判定**：系统镜为主——消除断链第三态本身，B 是根除、A 是绕开。
 
 **Q2 · install_agents 扩容方案 + 源目录名（M1，6 镜收敛，Critical）**
 `install_agents()` 四处硬编码 `sdflow-spec/agents`（`setup.sh:297/363/420/451`），且 `AGENTS_MANIFEST=".sdflow-agents"` 单文件**覆盖写**（`setup.sh:386-396`）——若对第二源目录再调一遍现函数，后一次 manifest 整体冲掉前一次 ⇒ 既有 3 定义从 manifest 消失、退役检测/孤儿清理对其永久失效（违反本 delta 自己的「源目录删除后孤儿清理」Scenario）。组件清单「源目录名实施定」把架构决策悬空到实现期，而 CLAUDE.md 把这段守卫标为 🔴 最敏感段。
-- **选项 A（推荐）**：`install_agents()` 泛化为遍历源目录列表（`sdflow-spec/agents` + 新目录），所有权判据参数化为 `*/<src-rel>/"$name"` 形状，manifest 改为**跨源 union 后一次性覆写**；孤儿清理同步参数化。依据：保住单 manifest 的既有清理逻辑与测试骨架，改动集中一个函数族。
-- **选项 B**：新独立函数 + 独立 manifest 文件（如 `.sdflow-effort-agents`），两套互不覆盖。依据：隔离彻底、不碰既有守卫；代价：skipped[] 文案/守卫逻辑双份漂移面（devex DX4）。
-- **源目录名（附属拍板）**：推荐新建独立目录（如 `sdflow-agents/agents/` 或 `sdflow-effort/agents/`）——依据：memo D5 明确三个既有角色定义不动，effort 值键定义与 spec 角色键定义混放同目录语义混杂；代价：多一个顶层目录（无 SKILL.md，不会被 install_into 误认）。
-- 三面后果：系统镜——A 单一 manifest 单一逻辑，B 双份平行结构；用户镜——皆无感；开发循环镜——A 须动 🔴 守卫段（`hack/tests/test_install_agents.py` 扩双源矩阵），B 测试独立但翻倍。**主次判定**：系统镜为主——manifest 覆写是数据丢失级失效，A 从根上消除「两份清单」这个失效面本身。
+- **选项 C（推荐，复核新增）**：4 个 `sdflow-effort-*.md` **直接放进既有 `sdflow-spec/agents/`**，不开第二源目录。机械证据：铺设循环/守卫/孤儿清理/manifest 全按「该目录下全部 `.md`」工作，且 `test_install_agents.py:39` 明写「不写死三个名字：新增一个定义就该自动纳入」⇒ **零改 🔴 守卫段、零碰 manifest 语义、既有测试骨架自动覆盖**，M1 的 Critical 失效面就地消失。与 memo D5「三既有定义不动」不冲突（加文件 ≠ 动既有）。代价：目录语义错位（通用 effort 定义住在 sdflow-spec 下，CLAUDE.md/design 对该目录的描述须同步 + 目录内一行注记）；回滚耦合（未来退役 sdflow-spec 删目录会连带 effort 定义——低概率，删前挪走即可）。
+- **选项 A（原推荐，降为备选）**：`install_agents()` 泛化为源目录列表 + 守卫判据参数化 + manifest 跨源 union。留给「未来出现第三组 agent 定义」时再付——现在付是加宽。
+- **选项 B**：新独立函数 + 独立 manifest。双份漂移面（devex DX4），不推荐。
+- 三面后果：系统镜——C 零改最敏感机械层（最大风险消除），A/B 均动 🔴 守卫；用户镜——皆无感；开发循环镜——C 只付文档同步，A 扩双源测试矩阵，B 测试翻倍。**主次判定**：系统镜为主——「必须新目录」唯一依据是语义整洁（非机械约束），不值一次 🔴 守卫改造。
 
 ### 自动决策（高置信采纳，已回流 amendment，默认接受可覆盖）
 
@@ -45,7 +45,7 @@
 | D1 | ship_gate B25 门 config 读取机制钉死：复用 `_yq()` 非 frontmatter file 模式；**config.yaml 文件不存在 = 缺省放行**；`metrics:` 在但 `enabled` 键缺失 = 放行；仅解析失败（yq 非零退出）= fail-closed（M8） | `_yq()` 对缺文件会裸 `raise`（`ship_gate.py:264`），不钉死则「文件缺失」误落 fail-closed；与 `anchor_lint._metrics_enabled` 四态对齐 |
 | D2 | defer 台账行机读 schema 钉死：台账 = 表格行，id 列为独立单元格且**单元格全部内容 = 单个 id**（防描述列旧票号误抓假通过）；现有聚合摘要句（`SKILL.md:659` 含 "defer" 字面无 id）改写移出检测范围（M2） | 假阳（摘要句恒红）+ 假阴（T105 等真实旧票号误抓）双向失效，[[gate-substring-detection-dogfood]] 同族 |
 | D3 | 机械引用核落盘段定义结构化锚 `sdflow:ref-check`（status/checked/pass/fail/uncheckable 计数），gate 检测锚而非段标题/散文（M5） | 「标题存在」形同虚设 vs 「[ref-check] 行存在」误伤零裁掉报告——两头都不可判，只有专用锚可机读 |
-| D4 | B26 门对账升级：id 存在 ∧ 池文件存在 ∧ 池文件 frontmatter `change == 当前 change`（M6） | 不核 source_change 则误抄任意既有 id 即假绿；池文件已有该字段，成本一行 |
+| D4 | B26 门对账升级：id 存在 ∧ 池文件存在 ∧ 池文件 frontmatter `source_change == 当前 change`（字段名按 `issues_v2.py:453-471` 核正）；defer 台账只承载本轮新入池项，既有票引用写裁决说明不入台账（否则 gate 必拒/重复 add 造重复票）（M6 + 复核补） | 不核 source_change 则误抄任意既有 id 即假绿；池文件已有该字段，成本一行 |
 | D5 | 四个编排 SKILL 的 tier-resolution unset 清单同步扩含 `SDFLOW_EFFORT_{STRONG,MID,LIGHT}`（M4） | 旧 resolver + 同 shell 残留脏值 ⇒ 空值回落被击穿；与既有 V1 清脏条款同因 |
 | D6 | 两道新门 verdict **字面复用 `STEP_IN_PROGRESS`**，不新增 verdict 名（M11） | sdflow-ship 熔断按 verdict 字面分治（`SKILL.md:170`），新名绕开熔断 = 无限重跑 |
 | D7 | tasks 新增 4.0：自审（code-review/verify）前在 dev checkout 开全局窗口 `bash setup.sh`（时间盒），完毕后运行 checkout 还原（M9） | 机器实测 `~/.claude/skills/sdflow-ship` 软链运行 checkout ⇒ 不开窗口则自审跑旧 gate，「dogfood 自证」为空话且可能产出第 7 个缺锚样本 |
