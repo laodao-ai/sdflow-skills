@@ -298,6 +298,8 @@ CAUSE_ANCHOR_INVALID = "anchor-invalid"       # reviewed_sha 语法非法（缩�
 CAUSE_ANCHOR_UNRESOLVABLE = "anchor-unresolvable"   # 对象不存在 / 不是 commit（blob/tree）
 CAUSE_READ_FAILED = "read-failed"             # 仓损坏 / 权限（Task3/4 接入）
 CAUSE_YQ_UNAVAILABLE = "yq-unavailable"       # yq 未安装 / 检测到非 mikefarah/yq（身份校验失败）
+CAUSE_CONFIG_UNPARSEABLE = "config-unparseable"  # [implement-workflow-optimization-2026-08-p4 Task3]
+                                               # metrics.enabled 键存在但 yq 解析失败 / 非法布尔值
 
 
 class GateIndeterminate(Exception):
@@ -1647,6 +1649,208 @@ def plan_closing_ticket_check(plan):
 # 对 D3 判定无关（凭 base 树可达仍可 SHIPPED）——旧「detached→UNKNOWN」契约随之废止。
 
 
+# ══════════════════════ [implement-workflow-optimization-2026-08-p4 Task3] B25/B26 机械门 ══════════════════════
+# 挂在既有两个报告消费点（design 门读 spec-review-report.md / step8 读 code-review-report.md）：
+#   ① 锚存在门（B25）：metrics.enabled=true 时报告须含 lens-metric(layer) 锚
+#      （code-review 层另需 sdflow:ref-check 结构化锚——引用核落盘信号，spec-review 层无此产物）；
+#   ② defer 对账门（B26，仅 code-review 层）：defer 台账表格「id」列每格须为单个 T\d+/B\d+ id，
+#      对应 openspec/issues/open/**/<id>.md 文件系统存在，且 frontmatter source_change 等于当前 change。
+# 两门 verdict 一律复用既有 STEP_IN_PROGRESS（Global Constraints：MUST NOT 新增 verdict 名，
+# 新名会绕开 sdflow-ship 熔断造成无限重跑）。
+
+
+def metrics_enabled(root):
+    """读 `openspec/config.yaml` 的 `metrics.enabled`，真四态（与
+    `sdflow-init/assets/workflow/tools/anchor_lint.py::_metrics_enabled` 同口径——两处各自
+    独立实现同一四态语义，design.md scope-check 表要求一致性，见
+    `test_metrics_enabled_parity_with_anchor_lint`，改一处必查另一处）：
+      ① config.yaml 文件整体不存在 → False（先判文件存在性再调 `_yq`——`_yq()` 对缺文件裸 raise，
+         不判则误落 fail-closed）；
+      ② 有文件但 `metrics.enabled` 键缺失（无 `metrics:` 段或段内无 `enabled` 子键）
+         → yq 对该表达式返回 null → `default=False`（消费仓常态放行）；
+      ③ 键存在但 yq 解析失败，或解出的值不是合法布尔（如被 YAML 1.2 解成字符串的 "yes"）
+         → fail-closed（抛 `GateIndeterminate`，main() 唯一映射点转 UNKNOWN(6) + problem/cause/fix）；
+      ④ 合法布尔 → 该值。
+    MUST NOT `import yaml`——取值委托既有 `_yq()`（同 git 外部二进制先例，零依赖不变量）。
+    """
+    cfg = root / "openspec" / "config.yaml"
+    if not cfg.exists():
+        return False                                             # ①
+    try:
+        val = _yq(".metrics.enabled", cfg, default=False)         # ②/④
+    except RuntimeError as exc:
+        raise GateIndeterminate(
+            f"openspec/config.yaml 的 metrics.enabled 解析失败: {exc}",
+            CAUSE_CONFIG_UNPARSEABLE)                              # ③
+    if not isinstance(val, bool):
+        raise GateIndeterminate(
+            f"openspec/config.yaml 的 metrics.enabled 不是合法布尔值: {val!r}",
+            CAUSE_CONFIG_UNPARSEABLE)                              # ③
+    return val
+
+
+def _fence_outside_text_lines(text):
+    """`text` 按行产出 fenced code block 之外的行（str 版）。复用单一源 `FenceTracker`
+    （与 `_line_scoped_hits`/`_normalize_checkbox_lines`/`_parse_plan` 同口径——``` 与 ~~~
+    两族围栏均识别），供下方锚检测 + defer 台账表格解析共用：围栏内的锚样例/表格样例
+    MUST NOT 计入判定。
+    """
+    fence = FenceTracker()
+    for line in text.splitlines():
+        if fence.feed(line) or fence.inside:
+            continue
+        yield line
+
+
+# 锚行前缀判定同 `sdflow-init/assets/workflow/tools/anchor_lint.py::anchor_prefix` 的边界口径
+# （prefix 后须为空白或行尾）——防 `sdflow:lens-metric-foo` 之类前缀重合误判命中。本文件不
+# import anchor_lint（跨 skill import 违反既有约定，见该文件头注释「消费仓无 sdflow-retro」
+# 同族理由）；独立重实现，同 `_line_scoped_hits` 与 anchor_lint 两处历史先例。
+_LENS_METRIC_PREFIX = "<!-- sdflow:lens-metric v1"
+_REF_CHECK_PREFIX = "<!-- sdflow:ref-check v1"
+_LAYER_KV_RE = re.compile(r'\blayer="([^"]*)"')
+
+
+def _anchor_line_hit(line, prefix):
+    s = line.strip()
+    if not s.startswith(prefix):
+        return False
+    rest = s[len(prefix):]
+    return rest == "" or rest[0].isspace()
+
+
+def _lens_metric_layer_present(text, layer):
+    """report 全文（fence 外）是否含 ≥1 行 `sdflow:lens-metric` 锚且 `layer="<layer>"`。"""
+    for line in _fence_outside_text_lines(text):
+        if _anchor_line_hit(line, _LENS_METRIC_PREFIX):
+            m = _LAYER_KV_RE.search(line)
+            if m and m.group(1) == layer:
+                return True
+    return False
+
+
+def _ref_check_present(text):
+    """report 全文（fence 外）是否含 `sdflow:ref-check` 结构化锚行——存在性门，不校验内部
+    字段（status=/pass=/fail=/uncheckable= 等字段级校验属 anchor_lint 的职责；本门只判
+    「Step3 机械引用核有没有落盘」这件事，gate 检测锚而非段标题/散文）。
+    """
+    for line in _fence_outside_text_lines(text):
+        if _anchor_line_hit(line, _REF_CHECK_PREFIX):
+            return True
+    return False
+
+
+def guard_report_anchors(root, report_path, layer, *, require_ref_check):
+    """B25 锚存在门。`metrics.enabled` 缺省/false/config 文件不存在 ⇒ 直接放行（连报告都不读，
+    零额外开销）。开启时报告须含 `layer="<layer>"` 的 lens-metric 锚（code-review 层额外要求
+    `sdflow:ref-check` 结构化锚）；缺任一 ⇒ 返回失败 reason 串（调用方按 STEP_IN_PROGRESS
+    处置）；全齐 ⇒ 返回 None。
+    """
+    if not metrics_enabled(root):
+        return None
+    text = _read_report_text(report_path, f"{layer} 报告")
+    missing = []
+    if not _lens_metric_layer_present(text, layer):
+        missing.append(f'sdflow:lens-metric layer="{layer}"')
+    if require_ref_check and not _ref_check_present(text):
+        missing.append("sdflow:ref-check")
+    if not missing:
+        return None
+    return (f"metrics.enabled=true 但报告缺 {' / '.join(missing)} 锚"
+            "——请确认对应步骤（度量锚落锚 / Step3 引用核落盘）已执行后重新生成报告")
+
+
+# ── defer 台账（GFM 表格，有界子集：仅认本仓报告模板会用的「每行首尾 pipe」形态，不追求
+#    覆盖任意第三方 markdown 的转义 pipe / 无首尾 pipe 等变体——基准 5，只审自家 producer 产物）──
+_TICKET_ID_RE = re.compile(r"^(T\d+|B\d+)$")
+_TABLE_ROW_RE = re.compile(r"^\s*\|(.*)\|\s*$")
+
+
+def _is_table_sep(line):
+    """GFM 表格分隔行判据：整行须是 pipe 行，且去外层 pipe 后只含 `-`/`:`/`|`/空白且含 `-`。"""
+    m = _TABLE_ROW_RE.match(line)
+    if not m:
+        return False
+    inner = m.group(1)
+    return bool(inner) and "-" in inner and set(inner) <= set(" :-|")
+
+
+def _split_table_row(line):
+    return [c.strip() for c in _TABLE_ROW_RE.match(line).group(1).split("|")]
+
+
+def _defer_ledger_id_cells(text):
+    """扫 report 全文（fence 外）全部 GFM 表格，取表头列名（大小写/首尾空白不敏感）=="id"
+    的那一列，产出每条**数据行**该列的原始单元格文本（未做 id 格式校验，交调用方判定）。
+
+    台账行判别窄化：只对**声明了 id 列**的表格数据行生效——无 id 列的表格（如 Findings 表）、
+    普通段落（含聚合摘要句「defer K 项 → buglist/todolist」这类无 pipe 的散文）一律不产出，
+    MUST NOT 全行子串搜索（描述列提及的旧票号、聚合摘要句的 "defer" 字面均不触发本函数）。
+    """
+    lines = list(_fence_outside_text_lines(text))
+    n = len(lines)
+    out = []
+    i = 0
+    while i < n:
+        if _TABLE_ROW_RE.match(lines[i]) and i + 1 < n and _is_table_sep(lines[i + 1]):
+            header = _split_table_row(lines[i])
+            id_col = next((idx for idx, c in enumerate(header) if c.lower() == "id"), None)
+            j = i + 2
+            rows = []
+            while j < n and _TABLE_ROW_RE.match(lines[j]):
+                rows.append(_split_table_row(lines[j]))
+                j += 1
+            if id_col is not None:
+                out.extend(r[id_col].strip() if id_col < len(r) else "" for r in rows)
+            i = j
+        else:
+            i += 1
+    return out
+
+
+def _pool_source_change(path):
+    """读 issues 池文件 frontmatter 的 `source_change` 字段。复用既有 `_yq()` 的通用
+    front-matter 提取（MUST NOT 手搓第二个 frontmatter 解析器——`parse_ship_gate_frontmatter`
+    专认顶层 `ship-gate:` 键，池文件 schema 不同，走 `_yq` 的通用路径而非那个专属解析器）。
+    表达式取整份 frontmatter（`.`）而非 `.source_change` 直接取子字段——`_yq()` 对
+    `front_matter=True` 校验解出结果须为 dict（防坏块被当合法标量采信），子字段表达式解出
+    的是标量（str），会误撞这道校验而 raise；取整 dict 后在 Python 侧 `.get()` 规避。
+    读取/解析失败 → None（调用方与「字段值不等于当前 change」同归一类失败，不单独分诊）。
+    """
+    try:
+        state = _yq(".", file=path, front_matter=True, default={})
+    except RuntimeError:
+        return None
+    if not isinstance(state, dict):
+        return None
+    return state.get("source_change")
+
+
+def guard_defer_ledger(root, change, report_path):
+    """B26 defer 对账门。扫报告全部「id」列表格数据行，逐行校验：id 格式合法（整格恰为单个
+    T<n>/B<n>）→ 对应池文件**文件系统存在**（`Path.glob`，MUST NOT 走 git 跟踪清单——门在
+    commit 前跑，recorder 刚写的池文件可能尚未 `git add`）→ 池文件 frontmatter `source_change`
+    等于当前 change。任一不满足 ⇒ 返回失败 reason 串（调用方按 STEP_IN_PROGRESS 处置）。
+
+    无「id」列表格（旧散文台账/本轮无 defer）⇒ 视为零待对账项，直接放行——本门不判断
+    「有没有 defer」这件事本身，只对账已声明的 id。
+    """
+    text = _read_report_text(report_path, "code-review 报告")
+    for raw in _defer_ledger_id_cells(text):
+        if not _TICKET_ID_RE.match(raw):
+            return (f"defer 台账行 id 列内容非法（{raw!r}，须整格恰为单个 T<n>/B<n> id）"
+                     "——请确认该行 recorder add 已成功并把返回 id 原样写入 id 列")
+        hits = list((root / "openspec" / "issues" / "open").glob(f"**/{raw}.md"))
+        if not hits:
+            return (f"defer 台账 id={raw} 对应池文件 openspec/issues/open/**/{raw}.md "
+                     "文件系统不存在——recorder add 可能失败或未落盘")
+        source_change = _pool_source_change(hits[0])
+        if source_change != change:
+            return (f"defer 台账 id={raw} 池文件 source_change={source_change!r} "
+                     f"≠ 当前 change {change!r}（疑似误抄/复用既有票号，或池文件坏）")
+    return None
+
+
 def decide(root, change):
     # ── git 健全性前置：run_git 吞错会让下游静默失效（D9 等判定悄悄全假）──
     # [impl-review-fix] 先验 git 可用且 --root 确为 git 仓，防止后续所有 run_git
@@ -1702,6 +1906,16 @@ def decide(root, change):
              "须补 design_approved 与 reviewed_sha 两个字段（同一次写入落盘）；"
              "reviewed_sha 记的是被批准的盘面（拍板放行的那个提交），不是写报告的时刻"
              + _unclosed_frontmatter_hint(report))
+    # [implement-workflow-optimization-2026-08-p4 Task3 · B25] 锚存在门①同款：design 门
+    # 每次读取 spec-review-report.md 都核验（不限于 RUN_PLAN/CONTINUE_IMPL 求值窗口——
+    # 本门是报告内容完整性检查，非 git 域失鲜判定，两者判据独立）。metrics.enabled=true
+    # 但 metrics 是在报告写就后才翻开的场景下，旧报告缺锚会在此触发——失败指引显式提示
+    # 该转换态（design.md「spec-review 报告在 design 门读取处加同款①，含转换态指引」）。
+    anchor_problem = guard_report_anchors(root, report, "spec-review", require_ref_check=False)
+    if anchor_problem:
+        emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-spec-review",
+             anchor_problem + "。若 metrics.enabled 是在本报告写就后才翻 true（转换态）："
+             "重跑 sdflow-spec-review 补锚，或按既有人工处置指引显式越权补录")
     # [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5] **求值窗口**：design 域失鲜原本在此处
     # 无条件全阶段求值。现改为只在三个「进入实现期」的分支各自 emit 之前求值
     # （`emit_windowed` 单一实现点）——判据只在它保护的风险真实存在的阶段求值。
@@ -1799,6 +2013,15 @@ def decide(root, change):
         emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-code-review",
              "code-review-report.md 在但无锚行 → 该步进行中，重跑"
              + _unclosed_frontmatter_hint(cr))
+    # [implement-workflow-optimization-2026-08-p4 Task3 · B25/B26] 报告结构 pass（frontmatter
+    # 干净且 code_review=pass）之后、进 git 域陈旧判定之前，加两道报告内容完整性门——
+    # 报告本身不完整（缺锚/defer 未对账）比它是否陈旧更基础，故排在 is_stale 之前。
+    anchor_problem = guard_report_anchors(root, cr, "code-review", require_ref_check=True)
+    if anchor_problem:
+        emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-code-review", anchor_problem)
+    defer_problem = guard_defer_ledger(root, change, cr)
+    if defer_problem:
+        emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-code-review", defer_problem)
     cr_stale, cr_fresh = is_stale(root, str(cr.relative_to(root)), "code", change)
     cr_stale_note = None
     if cr_stale:
@@ -1885,6 +2108,9 @@ _INDETERMINATE_ADVICE = {
     CAUSE_READ_FAILED: "读取失败（仓损坏 / 权限）→ 检查仓完整性",
     CAUSE_YQ_UNAVAILABLE: "yq 未安装或版本不对（须 mikefarah/yq，非 kislyuk/yq）"
                           " → 按错误信息中的安装方式装好后重跑",
+    CAUSE_CONFIG_UNPARSEABLE: "openspec/config.yaml 存在但 metrics.enabled 不可解析"
+                              "（yq 解析失败，或值非合法布尔）"
+                              " → 检查该文件的 YAML 语法与 metrics.enabled 取值（须为 true/false）",
 }
 
 
