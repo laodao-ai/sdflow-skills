@@ -74,6 +74,7 @@ ANCHOR_PREFIXES = {
     "<!-- sdflow:lens-metric v1": "lens-metric",
     "<!-- sdflow:fanout-capability v1": "fanout-capability",   # add-codex-host-support：会话级探针锚，always-on 一致性 lint 判据源
     "<!-- sdflow:declared-sites v1": "declared-sites",         # async-outside-voice：本层「应有锚站点集」声明，per-site 完整性核判据源
+    "<!-- sdflow:gate-questions v1": "gate-questions",         # implement-workflow-optimization-2026-08-p5：拍板三问声明锚（design Db）
 }
 _KV = re.compile(r'([^\s=]+)="([^"]*)"')                    # 受限 kv：key="value"
 _FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')               # CommonMark fence：0-3 空格 + ≥3 marker
@@ -674,6 +675,47 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
     return v
 
 
+# --- implement-workflow-optimization-2026-08-p5（GQ）：拍板三问声明锚机验（design Db） -----------
+# 决策登记区顶部「拍板三问」小节紧邻锚行 `<!-- sdflow:gate-questions v1 q="scope,deps,risk" -->`，
+# 校验对象是**拍板层声明锚**本身（存在 + q 值逐字），不是三问正文小节是否真实在场（那属 SKILL Step4
+# 模版契约 + 人读层，机械够不着，design Db 明令收窄声明范围）。
+
+GATE_QUESTIONS_Q_VALUE = "scope,deps,risk"        # design Db：q 值须逐字等于此串，有序、无增减
+
+
+def check_gate_questions(report_text, layer, findings):
+    """`sdflow:gate-questions` 锚机验（GQ · design Db）：layer=spec-review 时 always-on（不受
+    metrics_on 门控，沿 check_fanout_consistency「不接受 metrics_on」先例）；layer=code-review
+    早返回、不查（D2）。MUST 接收 layer 参数并在函数体内按 layer 早返回——沿 check_declared_sites
+    的 layer-conditional 模式，MUST NOT 照抄 check_fanout_consistency「无 layer 签名、main() 无
+    条件调用」的形态（否则对 code-review 报告也生效）。MUST NOT 复用/扩展 check_existence/MANDATORY
+    （该列表的 layer 参数是死参，从不真按 layer 分流）。
+    校验：fence 外存在性恒须（missing-gate-questions）；fence 外 ≥2 条判重复违规 fail-closed
+    （duplicate-gate-questions-anchor，沿 check_fanout_consistency 的 duplicate-fanout-anchor 先例）；
+    缺 `q=` 属性同判违规（missing-field）；`q` 值须逐字等于 "scope,deps,risk"（有序无增减，
+    q-value-mismatch）。fence 内锚不算（复用既有 fence_outside_lines 口径）。
+    findings 为调用方传入的可变 list，本函数就地 append（非 return——签名照 design/tickets 锚定的
+    check_gate_questions(report_text, layer, findings) 形，与其余 check_* 的 return-list 惯例不同，
+    调用侧不做 `violations += check_gate_questions(...)`）。"""
+    if layer != "spec-review":
+        return
+    anchors = [ln.strip() for ln in fence_outside_lines(report_text) if anchor_prefix(ln) == "gate-questions"]
+    if not anchors:
+        findings.append({"kind": "missing-gate-questions", "detail": "报告须落 sdflow:gate-questions 锚"})
+        return
+    if len(anchors) > 1:
+        findings.append({"anchor": "gate-questions", "kind": "duplicate-gate-questions-anchor"})
+        return
+    ln = anchors[0]
+    anchor = ln[:80]
+    kv = parse_kv(ln)
+    if "q" not in kv:
+        findings.append({"anchor": anchor, "field": "q", "kind": "missing-field"})
+        return
+    if kv["q"] != GATE_QUESTIONS_Q_VALUE:
+        findings.append({"anchor": anchor, "field": "q", "kind": "q-value-mismatch"})
+
+
 _FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # dead-fanout-multi-mirror 去重计数域（不含 broad——
                                                                                   # broad 有主 session 亲做的合法降级路径，机制死却报 broad 不构成自相矛盾）
 _MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # `mirrors=` 合法 token 集（供 skew 探测信号读此常量名，
@@ -885,6 +927,8 @@ def main(argv=None):
     violations += check_fanout_consistency(report_text)
     # async-outside-voice §3.5：per-site 完整性核 always-on（同上，判据源锚由 SKILL 直接落、不经 emitter）
     violations += check_declared_sites(report_text, args.layer, hr_tg_subset)
+    # implement-workflow-optimization-2026-08-p5（GQ）：拍板三问声明锚 always-on，layer=spec-review 内分治
+    check_gate_questions(report_text, args.layer, violations)
     if metrics_on:
         violations += check_lens_metric(report_text, args.layer, enums)
     if violations:

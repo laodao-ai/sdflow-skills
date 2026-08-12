@@ -1370,3 +1370,119 @@ def test_ds_cli_end_to_end_clean(tmp_path):
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
     r = _run(rpt_path, "code-review", root)
     assert r.returncode == 0, r.stderr
+
+
+# --- implement-workflow-optimization-2026-08-p5（GQ · design Db）：拍板三问声明锚机验 --------------
+# 七组契约测试（tasks.md task 1.2）：正例 / 缺锚 / q 值变异（缺项·增项·乱序）/ 缺 `q=` 属性 /
+# 重复锚 / fence 内示范不算 / code-review layer 不查。签名 check_gate_questions(report_text, layer,
+# findings) 就地 append 到调用方传入的可变 list（design/tickets 锚定形，非 return-list 惯例）。
+
+def _gq(q="scope,deps,risk"):
+    return f'<!-- sdflow:gate-questions v1 q="{q}" -->'
+
+
+def test_gq_positive_no_violation():
+    """正例：spec-review 层 + q 值逐字等于 "scope,deps,risk" → 零违规。"""
+    al = _mod()
+    findings = []
+    al.check_gate_questions(_gq() + "\n", "spec-review", findings)
+    assert findings == []
+
+
+def test_gq_missing_anchor_violation():
+    """缺锚：spec-review 层报告完全无 gate-questions 锚 → missing-gate-questions。"""
+    al = _mod()
+    findings = []
+    al.check_gate_questions("# 报告正文，无锚\n", "spec-review", findings)
+    assert any(x["kind"] == "missing-gate-questions" for x in findings)
+
+
+def test_gq_q_value_variants_all_mismatch():
+    """q 值变异（缺项·增项·乱序）均须判 q-value-mismatch——design Db「有序、无增减」逐字比对。"""
+    al = _mod()
+    for bad_q in ("scope,deps", "scope,deps,risk,extra", "deps,scope,risk"):
+        findings = []
+        al.check_gate_questions(_gq(bad_q) + "\n", "spec-review", findings)
+        assert any(x["kind"] == "q-value-mismatch" and x["field"] == "q" for x in findings), bad_q
+
+
+def test_gq_missing_q_attribute_violation():
+    """整个缺 `q=` 属性（锚行在场但无 q= kv）→ missing-field，非 q-value-mismatch（两者互斥）。"""
+    al = _mod()
+    findings = []
+    al.check_gate_questions('<!-- sdflow:gate-questions v1 -->\n', "spec-review", findings)
+    assert any(x["kind"] == "missing-field" and x["field"] == "q" for x in findings)
+    assert not any(x["kind"] == "q-value-mismatch" for x in findings)
+
+
+def test_gq_duplicate_anchor_fail_closed():
+    """fence 外 ≥2 条 gate-questions 锚 → duplicate-gate-questions-anchor（fail-closed，
+    沿 check_fanout_consistency 的 duplicate-fanout-anchor 先例）。"""
+    al = _mod()
+    findings = []
+    report = _gq() + "\n" + _gq() + "\n"
+    al.check_gate_questions(report, "spec-review", findings)
+    assert any(x["kind"] == "duplicate-gate-questions-anchor" for x in findings)
+
+
+def test_gq_fence_inside_anchor_not_counted():
+    """fence 内示范锚不算：唯一一条锚落在代码围栏内 → 视同缺锚（missing-gate-questions），
+    复用既有 fence_outside_lines 口径（非另起裸 grep 解析路径）。"""
+    al = _mod()
+    findings = []
+    report = "示范：\n```\n" + _gq() + "\n```\n"
+    al.check_gate_questions(report, "spec-review", findings)
+    assert any(x["kind"] == "missing-gate-questions" for x in findings)
+
+
+def test_gq_code_review_layer_not_checked():
+    """layer=code-review 恒早返回、不查（D2）——即便报告完全无锚、或锚本身畸形（缺 q=），
+    code-review 层也零违规。"""
+    al = _mod()
+    findings = []
+    al.check_gate_questions("# 无任何锚的报告\n", "code-review", findings)
+    assert findings == []
+    findings2 = []
+    al.check_gate_questions('<!-- sdflow:gate-questions v1 -->\n', "code-review", findings2)
+    assert findings2 == []
+
+
+# --- main() 接线核验：spec-review 层缺 gate-questions 锚 → CLI 端到端 VIOLATION（回归锁，防漏调用）--
+
+def test_gq_cli_end_to_end_violation_spec_review(tmp_path):
+    """端到端：spec-review 层完整报告（其余锚齐全）但缺 gate-questions 锚 → returncode 1 +
+    JSON 含 missing-gate-questions（证明 main() 真接了 check_gate_questions，非只单测覆盖）。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(site="design-voice") + "\n"
+           + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+           + _ds("design-voice") + "\n")
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "spec-review", root)
+    assert r.returncode == 1, r.stderr
+    assert any(x["kind"] == "missing-gate-questions" for x in json.loads(r.stdout)["violations"])
+
+
+def test_gq_cli_end_to_end_clean_spec_review(tmp_path):
+    """端到端正例：spec-review 层报告补齐 gate-questions 锚（q 值正确）→ CLEAN（exit 0）。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(site="design-voice") + "\n"
+           + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+           + _ds("design-voice") + "\n"
+           + _gq() + "\n")
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "spec-review", root)
+    assert r.returncode == 0, r.stderr
+
+
+def test_gq_cli_code_review_layer_no_gate_questions_needed(tmp_path):
+    """回归锁：code-review 层完整报告（既有 fixture，无 gate-questions 锚）仍 CLEAN——
+    确认新 always-on 检查不误伤既有 code-review 端到端正例。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_OV_XM + '\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+           '<!-- sdflow:declared-sites v1 declared="code-voice" -->\n')
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 0, r.stderr
