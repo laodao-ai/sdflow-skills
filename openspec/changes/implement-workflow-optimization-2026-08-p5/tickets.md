@@ -33,10 +33,10 @@ impl-pipeline: tickets
 
 用 p4 归档报告**副本**做回放核验：原样 lint FAIL（缺新锚）→ 手工加段后 PASS（不改归档文件原件）。
 
-- [ ] `ANCHOR_PREFIXES` 登记 + `check_gate_questions` 函数实现（layer 分治、q 值校验、重复锚 fail-closed、fence-aware）
-- [ ] 七组契约测试全部通过（正例 / 缺锚 / q 变异四子项 / 重复锚 / fence 内 / code-review 不查）
-- [ ] p4 归档报告副本回放：原样 FAIL → 加段后 PASS
-- [ ] 既有 anchor_lint 测试无回归
+- [x] `ANCHOR_PREFIXES` 登记 + `check_gate_questions` 函数实现（layer 分治、q 值校验、重复锚 fail-closed、fence-aware）
+- [x] 七组契约测试全部通过（正例 / 缺锚 / q 变异四子项 / 重复锚 / fence 内 / code-review 不查）
+- [x] p4 归档报告副本回放：原样 FAIL → 加段后 PASS
+- [x] 既有 anchor_lint 测试无回归
 
 ### Task 2: sdflow-spec 分批条款 + 规范面同步
 
@@ -59,12 +59,12 @@ impl-pipeline: tickets
 
 完成后全仓负向 grep `一次只问一个|一次一问` 确认规范面归零（docs/ 与 reference/ 描述性提法除外）。
 
-- [ ] A.1 + B.3 条款重写为 D3 全文
-- [ ] 相位流程图「一次一问」字样已改
-- [ ] `generation-process.md:75` 括号措辞已同步
-- [ ] spec-workflow 主 spec Scenario 措辞已同步
-- [ ] 既有测试断言已同步（旧字面不再命中）
-- [ ] 全仓规范面 grep 确认归零
+- [x] A.1 + B.3 条款重写为 D3 全文
+- [x] 相位流程图「一次一问」字样已改
+- [x] `generation-process.md:75` 括号措辞已同步
+- [x] spec-workflow 主 spec Scenario 措辞已同步
+- [x] 既有测试断言已同步（旧字面不再命中）
+- [x] 全仓规范面 grep 确认归零
 
 ### Task 3: sdflow-spec-review 报告模版三问小节 + 锚行
 
