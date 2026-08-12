@@ -96,11 +96,11 @@ grep bundle 内 spec-review 规则文件（经 `~/.sdflow/hack/resolve-workflow.
 
 每文件清理后即跑该 skill 对应 `tests/` + `hack/tests/`（memo C2 爆破面）+ `python3 hack/sync_principles.py --check`，红了当场修断言或回滚该处删改。
 
-- [ ] `audit/skill-doc1-audit.md` 骨架建立（15 节）
-- [ ] 7 个超 500 行 SKILL 逐文件审计清理 + 每文件测试绿
-- [ ] 8 个 ≤500 行 SKILL 审计（含零改动留档）
-- [ ] `sync_principles.py --check` 全仓通过
-- [ ] 全仓 pytest 无回归
+- [x] `audit/skill-doc1-audit.md` 骨架建立（15 节）
+- [x] 7 个超 500 行 SKILL 逐文件审计清理 + 每文件测试绿
+- [x] 8 个 ≤500 行 SKILL 审计（含零改动留档）
+- [x] `sync_principles.py --check` 全仓通过
+- [x] 全仓 pytest 无回归
 
 ### Task 5: 收尾回填（roadmap + issues + hand-off）
 
