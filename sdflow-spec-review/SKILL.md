@@ -347,14 +347,26 @@ Step3 barrier 处 collect。
 - **置信分流（与置信数字脱钩，仅供报告排序/展示，MUST NOT 作裁决门槛）**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值门槛**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。**「拿不准 → 决策登记区」这条路由由是否真拿不准决定，不由任何置信数字决定**——本层从未有过数值滤，此处只是显式重申决策登记区路由与置信度脱钩这一既有事实，与 sdflow-code-review 同期把数值滤/跨模型豁免矩阵一并退役对齐。
 - **outside-voice findings 直通〔R4〕**：被 `anchor_lint` 合法组合矩阵判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`，非固定 `runner=codex`——Codex 宿主下跨模型 runner 恰是 `claude`）的 voice findings 同走上方机械引用核 + 对抗裁决，与各镜 findings 同池、不享任何特殊通道；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
 - **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、第四步对应自检项跳过、**不调 emitter**（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按第四步「度量锚」描述构造 roster+findings 并调 `lens_metric_emit.py`（**采纳/裁掉/defer 为设计门拍板前的临时裁决，MUST 在拍板回写时最终确定，见〔SR-M〕**）。
-- **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调 `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/spec-review-report.md --layer spec-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚存在性 + lens-metric 字段/枚举/sev/layer==--layer/计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。**保留信任边界声明**：`findings=N` 与合并池实收数的**数值一致性**仍是主 session 信任边界、非机械可验——脚本不谎称保证数值正确。config `metrics.enabled` 关/无 metrics 块时 lens-metric 一类跳过（脚本内门控）。**此门只挡「同一会话内忘记跑这步」，挡不住「整段跳过本步」**（诚实拦截力）。
+- **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调 `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/spec-review-report.md --layer spec-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚存在性（layer=spec-review 时另加 `gate-questions` 拍板层声明锚，恒须、不受 `metrics.enabled` 门控，design Db）+ lens-metric 字段/枚举/sev/layer==--layer/计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。**保留信任边界声明**：`findings=N` 与合并池实收数的**数值一致性**仍是主 session 信任边界、非机械可验——脚本不谎称保证数值正确。config `metrics.enabled` 关/无 metrics 块时 lens-metric 一类跳过（脚本内门控）。**此门只挡「同一会话内忘记跑这步」，挡不住「整段跳过本步」**（诚实拦截力）。
+  - **`gate-questions` 违规的 problem/cause/fix 转译**〔implement-workflow-optimization-2026-08-p5 task 1.3〕：lint 本身沿用既有 `[anchor_lint] VIOLATION` 结构化格式原样输出（`missing-gate-questions` / `duplicate-gate-questions-anchor` / `missing-field` / `q-value-mismatch`），本条补人读转译——**problem**＝报告缺该锚 / 锚出现 ≥2 条（fence 外）/ 锚行缺 `q=` 属性 / `q` 值与 `scope,deps,risk` 不逐字相等；**cause**＝出报告时决策登记区顶部漏放「拍板三问」小节 + 锚行、或复制模版时改动/重复了锚行、或 `q` 值手误；**fix**＝回到下方「报告决策登记区格式」的「拍板三问」小节模版，在决策登记区**最顶端**、`[需拍板]` 条目之前补齐三问 + 紧邻的唯一一条 `<!-- sdflow:gate-questions v1 q="scope,deps,risk" -->`（`q` 值逐字，fence 外仅此一条），改完重跑本步锚行自检确认退出码为 0。
 - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
 - 按 `design-diagrams.md`：命中触发的图**只验证存在/正确/未过时**，缺失/过时标记，不重画。
 - **checkpoint 提交（P2c 唯一一次，DD1：旧广审子步的独立 checkpoint 已随单批 dispatch 合并退役）**：产出报告 + amendments 后 → `~/.sdflow/hack/checkpoint-commit.sh spec-review "并行多镜审 + 合并报告 + spec-review-amendment"`。
 
-**报告决策登记区格式**：
+**报告决策登记区格式**（顶端先放「拍板三问」小节，`[需拍板]` 条目之前；design Da/Db）：
 
 ```
+  spec-review-report.md · 拍板三问（决策登记区最顶端，人在设计 HARD-GATE 逐项勾选认/不认）
+  ┌───────────────────────────────────────────────────────────────────┐
+  │ Q-scope 范围划界认不认？                                              │
+  │   自答：锚 proposal Non-Goals/Out-of-scope ——<一句话，指回具体条目位置>  │  [ ] 认  [ ] 不认
+  │ Q-deps  依赖/顺序认不认？                                             │
+  │   自答：锚 tasks 任务边界与 Blocked-by ——<一句话，指回具体条目位置>      │  [ ] 认  [ ] 不认
+  │ Q-risk  风险赌注与对策认不认？                                         │
+  │   自答：锚 sdflow:hr-tg 的 hit/declared 判定 + 对策条目 ——<一句话>      │  [ ] 认  [ ] 不认
+  └───────────────────────────────────────────────────────────────────┘
+<!-- sdflow:gate-questions v1 q="scope,deps,risk" -->
+
   spec-review-report.md · 决策登记区
   ┌─────────────────────────────────────────────────────┐
   │ [自动决策] D1  某镜发现,裁决已定,附理由,默认接受可覆盖  │  高置信 → 默认采纳
@@ -364,6 +376,11 @@ Step3 barrier 处 collect。
   │ [已裁掉]  X2[ref-check]  machine-裁掉(findings_ref_check.py reason=…) │  机械裁掉来源可辨
   └─────────────────────────────────────────────────────┘
 ```
+
+三问只落本报告（spec-review），code-review 报告 MUST NOT 被要求含三问（无人门的报告不加拍板结构）。
+锚行独占一行、紧邻三问小节、fence 外仅此唯一一条，`q` 值 MUST 逐字等于 `scope,deps,risk`（有序、无增减）。
+**本机验为拍板层声明锚机验**（锚存在 + `q` 值逐字）——三问正文小节是否真实在场属本模版契约 + 设计门
+人读层，无机械保证，MUST NOT 声称三问内容本身已被机械兜底（design Db）。
 
 ## 第四步：产出
 
