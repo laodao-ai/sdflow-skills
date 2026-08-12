@@ -111,9 +111,9 @@ grep bundle 内 spec-review 规则文件（经 `~/.sdflow/hack/resolve-workflow.
 - issues set-status：T275→DONE、T101→DONE（evidence 各指交付锚）；T256 确认仍 OPEN 且调研段在册（显式 `--change` 字段）
 - hand-off 注记：三问首个真实 dogfood 挂下一次设计审
 
-- [ ] roadmap 5.3/5.2 措辞修正 + 子任务勾选
-- [ ] T275→DONE / T101→DONE / T256 确认 OPEN
-- [ ] hand-off 注记落盘
+- [x] roadmap 5.3/5.2 措辞修正 + 子任务勾选
+- [x] T275→DONE / T101→DONE / T256 确认 OPEN
+- [x] hand-off 注记落盘
 
 ### Task 6: 实现验证（收尾，不计入 3–6 预算）
 
