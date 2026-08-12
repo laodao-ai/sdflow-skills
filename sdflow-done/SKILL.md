@@ -162,8 +162,6 @@ description: >
 
 将 reconcile → verify → **hand-off** → archive → git commit → merge 串成一条收尾流水线。各步独立子代理、按本步性质选 model（见「模型选择」）：**verify → 强档**（唯一终门），**archive → 中档**（判断），**commit → 弱档**（机械）；**merge** 留主 session（单向 git，缺省执行、调用时可 opt-out）。
 
-> **核心改进（v3，基于实战）**：① 归档**必须**走 `openspec archive` CLI 以**同步 delta 到主 specs**（旧版手动 `mv` 漏了这步，新能力永远进不了 `openspec/specs/`），遇中文遗留 spec 用 `--skip-specs` + 手动同步；② 默认分支自动检测（勿假设 main）；③ **merge 缺省执行**（ff），不想合并就在调用时明说；④ verify 必产 `verify-report.md` 存 change 目录（随归档留档）；⑤ 步骤固定 + 各步独立子代理 → 按本步性质选 model（verify=强档、archive=中档、commit=弱档）。
-
 ---
 
 ## 第零步：确认 change + 检测默认分支 + 复选框对账
@@ -555,13 +553,4 @@ high 的 effort 执行**——与 model 档位「不降档」铁律同构、同�
 >
 > 对比 subagent-driven-development 的实现循环（高频、动态、上百任务）：那里「弱档转写实现 + 强档评审」是对的，但它**会**有运行时误分类风险（要靠评审兜底）。**规则随场景变。**
 
-## 附：实战踩坑速记（来自首次执行）
-
-| 坑 | 现象 | 对策 |
-|---|---|---|
-| 手动归档漏 spec 同步 | 新能力不进 `openspec/specs/` | 用 `openspec archive` CLI |
-| 中文遗留主 spec | CLI rebuild 报 `must have Purpose section` → Abort | `--skip-specs` + 手动同步 |
-| 复选框 stale | CLI 警告 "23/24 incomplete" | 第 0.3 步先对账勾选 |
-| blockquote 在 MUST 前 | validate 报 `must contain SHALL or MUST` | 注记放 MUST 段之后 |
-| 照搬旧 delta | spec 与终审后实况不符 | 同步按当前代码真正做的写 |
-| 硬编码 main / --no-ff | 仓库是 master、用户偏好 ff | 检测分支 + ff-only |
+历史取舍不进入默认运行；仅在审计历史依据时读取 references/evolution-notes.md。

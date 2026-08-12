@@ -333,8 +333,7 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py reindex             
 ### 历史迁移工具（`migrate`，一次性，本仓已执行过）
 
 `migrate` 是 v1（`buglist/`+`todolist/` 双格式）→ v2（`open/`+`closed/` 单文件）一次性转换工具。
-本仓已迁移完成（287 个 issue 全部迁移，v1 数据文件/脚本已删除），日常使用不再需要调用；仅供其它
-仍在 v1 格式的仓库迁移用：`python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py migrate`（无需额外参数，`--root` 缺省当前
+本仓日常使用不再需要调用；仅供其它仍在 v1 格式的仓库迁移用：`python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py migrate`（无需额外参数，`--root` 缺省当前
 git 根；幂等，已存在的目标文件按 ID 跳过）。
 
 ---

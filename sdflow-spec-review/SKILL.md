@@ -158,8 +158,7 @@ description: >
 `spec-checklists/spec-quality-base.md`（base R 项，广审双镜的职责源）+ `spec-checklists/domains/`（领域 R 项）
 操作化为一次**连续跑的编排评审**：第零步规则/档位解析 → Step1 能力探针 + 单批 dispatch（一条消息内并行
 派出广审双镜 strategy/plan-eng + 领域镜 + 对抗镜 + 接地镜 + design-voice，均为 fresh context）→ Step3
-合并去重 + 对抗裁决 → Step4 产出**一份** `spec-review-report.md`。取代旧"外部广审工具 + spec-review
-各出报告 + 人工手动合并"，也取代旧「Step1 广审 → Step2 多镜」两段串行 dispatch（T20 分治退役）。
+合并去重 + 对抗裁决 → Step4 产出**一份** `spec-review-report.md`（历史沿革见 `references/evolution-notes.md` §1）。
 
 > **两条连续性铁律（阶段二自动流的前提）**：
 > - **不依赖 `/clear`（G1）**：评审 fan-out 到 fresh-context 子代理，独立性由"子代理冷上下文"给，不由 `/clear` 给。
@@ -183,11 +182,9 @@ description: >
 
 ## 第一步：能力探针 + 规划镜头 + 单批 dispatch（广审双镜 + 领域镜 + 对抗镜 + 接地镜 + design-voice）
 
-DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**——广审（strategy/plan-eng）不再是
-外部工具原生执行 + 落盘 amendment 再等领域/对抗镜跟进的两段结构，而是本 skill **自持**的两个 fresh 子
-代理镜，与领域镜/对抗镜/接地镜/design-voice 同批一条消息内并行派出，互不依赖（旧「串行纪律〔T20〕
-分治」——领域/对抗镜须等外部广审产出的 amendment 落盘——一并退役：新广审镜只回结构化 findings、不
-改盘面，等待理由消失）。
+DD1：广审（strategy/plan-eng）是本 skill **自持**的两个 fresh 子代理镜，与领域镜/对抗镜/接地镜/
+design-voice 同批一条消息内**单批全并行 dispatch**，互不依赖，只回结构化 findings、不改盘面
+（历史沿革见 `references/evolution-notes.md` §1）。
 
 **能力探针（本步开始时跑一次；语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：本轮全程只探测这一次，探针结果对本步单批 dispatch 的全部镜（broad/domain/adversarial/grounding）共用。
 
@@ -218,7 +215,7 @@ DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**
   `subagents="unavailable"` 时 `mode="main-session"`（主 session 亲做两镜判断，`mirrors=` 仍计入 `broad`
   token，合法降级、不进 dead-fanout 计数集，`anchor_lint.py:674-676` 现行为已支持）。**诚实边界**：mode
   值为主 session 自报，`anchor_lint` 对本锚只验族存在性（前缀匹配），不校验 mode 枚举值，MUST NOT 声称有
-  机械保证。（旧 `mode="native|simulated"` 枚举与广审产物独立落盘、复用判定机制整体删除。）
+  机械保证。
 
 **规划镜头（主 session）**：
 
@@ -322,8 +319,7 @@ MUST 按固定三段拼接，MUST NOT 打散顺序或把段①内容手工重述
 > 的设计」，漏带段①（如脚本调用失败仍继续 fan-out）它**必然**把「现状不是这么做的」当成「这个设计该
 > 缩水」。**评审的基准是目标态。**
 
-**design-voice 恒自跑（DD3：回落路径转正，旧「outside-voice 复用守卫」——`outside_voice_guard.py` 调用 /
-广审产物落盘复用判定——整体退役）**：本步单批 dispatch 内一并派出（按下方「outside-voice
+**design-voice 恒自跑（DD3，历史沿革见 `references/evolution-notes.md` §2）**：本步单批 dispatch 内一并派出（按下方「outside-voice
 helper 调用协议」，site="design-voice"，context=proposal「What Changes」+ design「Decisions」全文）——
 context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下 fan-out 工作，结果在
 Step3 barrier 处 collect。
@@ -344,7 +340,7 @@ Step3 barrier 处 collect。
   裁决，报告本段**显著标注**「⚠️ 机械引用核未生效」。
 - **对抗裁决**：对每条通过机械前置的 finding 判"是否真的会在实现期出问题"——对抗镜的反驳若 ≥ 多数成立则采信；存疑的降级或标"需人确认"。
 - **反静默压制（escalate-not-drop，Q3 铁律）**：热主 session 裁决对 reviewer 子代理的 finding **只能降级 / 批注、不得静默丢弃**。判"不成立"的也须连理由落入报告「已裁掉」区（原始发现 + 裁掉理由；机械裁掉项标 `[ref-check]`，与对抗裁决裁掉的来源可辨），供人类设计门复核"裁得对不对"。
-- **置信分流（与置信数字脱钩，仅供报告排序/展示，MUST NOT 作裁决门槛）**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值门槛**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。**「拿不准 → 决策登记区」这条路由由是否真拿不准决定，不由任何置信数字决定**——本层从未有过数值滤，此处只是显式重申决策登记区路由与置信度脱钩这一既有事实，与 sdflow-code-review 同期把数值滤/跨模型豁免矩阵一并退役对齐。
+- **置信分流（与置信数字脱钩，仅供报告排序/展示，MUST NOT 作裁决门槛）**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值门槛**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。**「拿不准 → 决策登记区」这条路由由是否真拿不准决定，不由任何置信数字决定**（历史沿革见 `references/evolution-notes.md` §3）。
 - **outside-voice findings 直通〔R4〕**：被 `anchor_lint` 合法组合矩阵判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`，非固定 `runner=codex`——Codex 宿主下跨模型 runner 恰是 `claude`）的 voice findings 同走上方机械引用核 + 对抗裁决，与各镜 findings 同池、不享任何特殊通道；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
 - **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、第四步对应自检项跳过、**不调 emitter**（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按第四步「度量锚」描述构造 roster+findings 并调 `lens_metric_emit.py`（**采纳/裁掉/defer 为设计门拍板前的临时裁决，MUST 在拍板回写时最终确定，见〔SR-M〕**）。
 - **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调 `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/spec-review-report.md --layer spec-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚存在性（layer=spec-review 时另加 `gate-questions` 拍板层声明锚，恒须、不受 `metrics.enabled` 门控，design Db）+ lens-metric 字段/枚举/sev/layer==--layer/计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。**保留信任边界声明**：`findings=N` 与合并池实收数的**数值一致性**仍是主 session 信任边界、非机械可验——脚本不谎称保证数值正确。config `metrics.enabled` 关/无 metrics 块时 lens-metric 一类跳过（脚本内门控）。**此门只挡「同一会话内忘记跑这步」，挡不住「整段跳过本步」**（诚实拦截力）。
@@ -608,3 +604,5 @@ fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout
 - **必须读真实代码**，不得只验 spec 自洽（接地镜专司此事）。
 - 项目无关：规则路径一律经 `~/.sdflow/hack/resolve-workflow.sh` 解析（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`。
 - checkpoint 脚本 = `~/.sdflow/hack/checkpoint-commit.sh`（setup.sh 全局安装）；缺失则先跑 setup，或退化为普通 `git add -A && git commit`。
+
+历史取舍不进入默认运行；仅在审计历史依据时读取 references/evolution-notes.md。

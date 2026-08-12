@@ -387,10 +387,9 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
      阈值常量取值不强制求注释 / 无害冗余不标（Suppressions 既有口径不变）；理由落「已裁掉」区（不标
      `[ref-check]`，与机械裁掉来源可辨）。
    - **defer**：真实但拿不准优先级/方案 → 进 Step4 defer 台账（buglist/todolist）。
-   **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**——旧「被 `anchor_lint` 合法组合矩阵判
-   「跨模型」即跳过数值滤直通对抗裁决」的豁免条款随数值滤一并废止：数值滤门槛已不存在，「豁免于该门槛」
-   这一概念随之消失，跨模型 finding 不再需要任何特殊通道；矩阵本身（`host-adaptive-execution` 单一源）
-   继续供其余用途（如 anchor 校验、declared-sites 完整性）引用，未被删除。
+   **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**，无特殊通道（历史沿革见
+   `references/evolution-notes.md` §2）；`host-adaptive-execution` 单一源矩阵继续供其余用途（如
+   anchor 校验、declared-sites 完整性）引用，未被删除。
 4. **置信仅排序**：Step2 各镜自报置信（0–100）**只用于报告内 Findings 区展示排序**，**MUST NOT** 作为
    采纳/裁掉/defer 的判据或任何数值门槛——门槛判断已收窄为上方机械三态 + 二元裁决两层。
 5. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
@@ -476,7 +475,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
    本步顺带调用 emitter 或顺带省略下一步**。
 7. **度量锚落锚 + 锚行自检〔B25，impl-orchestration delta〕**——**本步是本轮 code-review 输出
    lens-metric / ref-check 锚的唯一途径，是一个具体、不可省略的工具调用，MUST NOT 被当作「写报告」
-   那句散文里可以顺带略过的细节**（拆成独立编号正是为此，见下方历史注记）：
+   那句散文里可以顺带略过的细节**（拆成独立编号正是为此）：
    - **度量锚落锚〔impl-review-fix mlh-p4〕**：`metrics.enabled=false` → 本段不落、**不调 emitter**；`true` → 用 Step4「裁决计数」
      构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --host "$SDFLOW_HOST" --input <构造的f>`
      （`--host` 取第零步同一次 `resolve-models.sh` 导出值；roster 中非 outside-voice 普通镜行 `runner` MUST 等于 `--host`；
@@ -491,7 +490,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
      计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。
      **此自检由同一执行落锚的主 session 自行运行、非独立外部门**（与 `ship-gate.code_review` 锚由 `ship_gate.py` 外部
      拦截不同）——诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"（该残余缺口现已由
-     `ship_gate.py` 的 B25 锚存在门在消费点兜底，见下方历史注记）。
+     `ship_gate.py` 的 B25 锚存在门在消费点兜底）。
      **保留信任边界声明**：数值一致性（`findings`/`采纳`/`独立`等是否与合并池实收数吻合）**是主 session 信任
      边界、非机械可验**，脚本 MUST NOT 谎称能机械保证数值正确。
      **config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
@@ -505,15 +504,10 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
      的机械显著提示由 `/sdflow-retro` 聚合（跑 `sdflow-retro/scripts/lens_metric_aggregate.py` 只读聚合所有归档报告）；
      是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
      不含评审架构本身的取舍）。
-   - 🔴 **历史注记（B25，diagnosis 见 `impl-reports/task5-skill-adaptation.md`）**：2026-08-07 ~ 08-12
-     六轮归档 `code-review-report.md`（`metrics.enabled=true` 全程未变）**100% 缺 `sdflow:lens-metric`
-     锚**——诊断为「本步被系统性跳过，而非 emitter 调用失败」：独立冒烟测试证实 `lens_metric_emit.py`
-     本身工作正常（合法输入 exit 0 正确产锚、非法输入 exit 1 正确拒收）；其中一份报告甚至已写出
-     「### 度量锚」标题 + 「metrics.enabled=true」说明，却仍未真正调用脚本、也未运行上方锚行自检
-     （若真跑过自检，脚本会因缺 lens-metric 锚判违规、阻塞本步——而报告照常归档说明自检同样被跳过）。
-     `ship_gate.py` 现已加 B25 锚存在门（外部机械兜底，见 impl-orchestration delta「ship_gate 评审报告
-     机械层门」）——未来即便本步再被跳过，`ship_gate` 也会判「该步进行中，重跑」而非放行归档；但
-     SKILL 侧不应只靠外部门兜底，仍 MUST 把度量锚落锚当具体、不可省略的动作执行。
+   - **本步不可省略**：`ship_gate.py` 已加 B25 锚存在门（外部机械兜底，见 impl-orchestration delta
+     「ship_gate 评审报告机械层门」）——即便本步被跳过，`ship_gate` 也会判「该步进行中，重跑」而非
+     放行归档；但 SKILL 侧不应只靠外部门兜底，仍 MUST 把度量锚落锚当具体、不可省略的动作执行
+     （历史诊断见 `references/evolution-notes.md` §1）。
 8. **checkpoint 提交（第二段，report-only）**：
    🔴 **工作树纪律〔1.6b〕**：`checkpoint-commit.sh` 用 `git add -A` 全量暂存 ⇒ 跑本步**前** MUST 先
    `git status --porcelain` 确认工作树**只剩报告文件**（`code-review-report.md` 及其 `.outside-voice/` 等评审产物），
@@ -769,3 +763,5 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆�
 - **代码即 ground truth**：直接读 diff 与真实代码，不设接地镜（与 sdflow-spec-review 的唯一结构差异，换历史镜 + 机械引用核）。
 - checkpoint 脚本 = `~/.sdflow/hack/checkpoint-commit.sh`（setup.sh 全局安装）；缺失则先跑 setup，或退化为普通 `git add -A && git commit`。
 - 项目无关：规则路径一律经 `~/.sdflow/hack/resolve-workflow.sh` 解析（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`。
+
+历史取舍不进入默认运行；仅在审计历史依据时读取 references/evolution-notes.md。
