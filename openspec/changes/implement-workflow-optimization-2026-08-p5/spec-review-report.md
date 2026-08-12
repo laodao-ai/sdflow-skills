@@ -17,7 +17,10 @@
 （codex/gpt-5.6-sol，async·harness 后台，~6min，rc=0）。合并去重得 21 条（原始 findings 26 条），
 机械引用核 `findings_ref_check.py` 18/18 `pass`（3 条裁掉项未入核，见已裁掉区）。
 
-**裁决结果：16 条采纳（amendment 已全部落盘，标 `[spec-review-amendment]`）、2 条需拍板、3 条裁掉。**
+**裁决结果（2026-08-12 人拍板 Q1/Q2 后最终化）：18 条采纳（amendment 已全部落盘，标
+`[spec-review-amendment]`）、3 条裁掉、0 条待拍板**——原 2 条需拍板项：Q1 人拍选项 A
+（memo 已补 D3 三镜简表）、Q2 经调研核销（Codex 官方文档证实假设成立，proposal 假设表已
+补证据锚）。
 
 最重的三条（均已修复）：
 
@@ -56,9 +59,11 @@
 | D15 | M17 `sync_principles --check` 时机滞后（对抗镜B F04，`tasks.md:37`） | 低 | 挪进逐文件循环（成本≈0，归因窗口从 15 文件收窄到 1） |
 | D16 | M18 测试路径前缀缺失（接地镜 GD-003，`design.md:82`） | 低 | design scope-check 表 / tasks 1.2 补全 `sdflow-init/assets/workflow/` 前缀 |
 
-### [需拍板]（设计 HARD-GATE 时勾选）
+### [需拍板 → 已拍板]（2026-08-12 人拍板，两项均已收口）
 
-**Q1 · TG-23 命中判定张力（strategy F4，`decision-memo.md:85`，中）**
+**Q1 · TG-23 命中判定张力（strategy F4，`decision-memo.md:85`，中）——✅ 人拍选项 A**：
+memo「三镜代价」节已补 D3 三镜简表（系统/用户/开发循环 + 主次判定：用户镜主导），
+D1/D2/D4 维持原判。以下为拍板时呈现的原始选项（留档）：
 memo 自判「本次无 TG-23 命中」，但 D1–D4 每条都列有「砍掉的候选」，字面满足「≥2 合理方案」
 触发条件；尤其 D3（分批/整链呈现协议）有真实的三镜权衡（交互体验/认知负担/组合爆炸退化）。
 - **选项 A（推荐）**：memo 补 D3 三镜简表（系统镜：无代码耦合、纯 SKILL 条款可回退；用户镜：
@@ -69,9 +74,14 @@ memo 自判「本次无 TG-23 命中」，但 D1–D4 每条都列有「砍掉�
 - 三面后果：系统镜——两选项均无代码影响；用户镜——A 多一段可读决策档案，B 保持 memo 紧凑；
   开发循环镜——A 为后续同类交互决策立范式，B 零成本。**主次判定：开发循环镜主导（memo 是
   长期决策档案），推荐 A。**
-- ⚠️ memo 是人已确认的拍板记录，评审不代改——勾选后由实现期或收尾回填补写。
+- （原「评审不代改 memo」保留条款已由人 2026-08-12 明确拍板解除——补记已按选项 A 落盘。）
 
-**Q2 · 「references/ 默认不加载」未验 Codex 侧（对抗镜A A4，`proposal.md:89`，中）**
+**Q2 · 「references/ 默认不加载」未验 Codex 侧（对抗镜A A4，`proposal.md:89`，中）——
+✅ 调研核销（人确认更新）**：Codex 官方 skills 文档明确 progressive disclosure 三级加载——
+启动只注入 name+description，SKILL.md 正文激活时加载，`references/`/`scripts/`/`assets/`
+仅被显式引用时读取（https://developers.openai.com/codex/skills ，2026-08-12 查证）。
+假设在双宿主成立，spot-check 不再必要；proposal 假设表已补该证据锚。残余 = 文档与实现
+漂移的低概率边角（通则④接受）。以下为拍板时呈现的原始选项（留档）：
 该假设的验证依据（sdflow-spec 先例）只覆盖 Claude Code；本仓 skills 同时 symlink 进
 `~/.codex/skills/`，四件套无一句 Codex 侧调研，T275 的 token 收益在 Codex 宿主下未验证。
 - **选项 A（推荐）**：tasks 3.1 后补一步低成本 spot-check——Codex 会话触发一个已有
@@ -112,14 +122,15 @@ memo 自判「本次无 TG-23 命中」，但 D1–D4 每条都列有「砍掉�
 
 ## 度量锚（lens-metric · 草稿值，拍板回写时最终化〔SR-M〕）
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="9" 采纳="7" 裁掉="1" defer="1" 独立="2" sev="致0/高1/中3/低3" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="8" 采纳="7" 裁掉="0" defer="1" 独立="3" sev="致0/高1/中2/低4" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="9" 采纳="8" 裁掉="1" defer="0" 独立="3" sev="致0/高1/中4/低3" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="8" 采纳="8" 裁掉="0" defer="0" 独立="4" sev="致0/高1/中3/低4" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="3" 采纳="3" 裁掉="0" defer="0" 独立="2" sev="致0/高0/中1/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="4" 采纳="2" 裁掉="2" defer="0" 独立="1" sev="致0/高1/中0/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="3" sev="致0/高3/中1/低0" -->
 
 （emitter `lens_metric_emit.py` exit 0 产出；分类正确性 / roster 完备性 / findings 誊写准确
-仍是主 session 信任边界。defer 计数对应 Q1/Q2，拍板后按最终去向原地更新覆盖。）
+仍是主 session 信任边界。**本块已按 2026-08-12 Q1/Q2 拍板结果最终化**〔SR-M〕：原 2 条
+defer（Q1/Q2）均转采纳/中，emitter 重跑原地覆盖。）
 
 ## 信任边界与诚实声明
 
@@ -134,11 +145,13 @@ memo 自判「本次无 TG-23 命中」，但 D1–D4 每条都列有「砍掉�
 
 ## 收敛口
 
-**建议进设计 HARD-GATE**：16 条 amendment 已落盘且无一触及 memo 拍板决策本体（D1–D4 原样），
-两条需拍板项（Q1/Q2）均为低成本增补、不阻塞主线。人过本报告勾 Q1/Q2 → 批准 → 拍板回写
-（`ship-gate.design_approved` + `reviewed_sha` 同次写入报告头部 frontmatter；本报告与
-amendment 属拍板前盘面变更，MUST 先 checkpoint 提交、以该提交 sha 为 `reviewed_sha`）。
+**建议进设计 HARD-GATE**：18 条 amendment 已落盘（含 Q1 memo 补记、Q2 假设表证据锚），
+需拍板项已清零。批准后拍板回写（`ship-gate.design_approved` + `reviewed_sha` 同次写入
+报告头部 frontmatter；Q1/Q2 收口属拍板前二次修订，已单独 checkpoint，`reviewed_sha`
+以该提交为准〔ADR-7(b)〕）。
 
-## 拍板记录（人读行，拍板后回填）
+## 拍板记录（人读行）
 
-- [ ] 设计门拍板：＿＿＿＿（日期 / 结论 / Q1、Q2 勾选结果）
+- [x] Q1/Q2 收口：2026-08-12 人拍板——Q1 选项 A（memo 补 D3 三镜简表）、Q2 调研核销
+      （Codex 官方文档 https://developers.openai.com/codex/skills ）
+- [ ] 设计门拍板：＿＿＿＿（日期 / 结论）

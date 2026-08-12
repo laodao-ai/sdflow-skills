@@ -90,7 +90,7 @@ roadmap `workflow-optimization-2026-08` 阶段 5（人类门减负与 context �
 | 假设 | 失效影响 |
 |---|---|
 | 考古层删/迁不改变 SKILL 行为语义（判据 = DOC-1 删除测试，逐条人可复核） | 失效 = 某 SKILL 执行行为变化；由审计留档 + 全仓 pytest + code-review 冷层三层兜；残余风险见 memo「接受的边角」 |
-| `references/` 旁文件默认不加载对所有 skill 成立（Claude Code 只注入 SKILL.md 正文） | 失效 = 迁移不省 token；sdflow-spec 先例（`references/evolution-notes.md` 按需读）为证，若发现例外则该 skill 改为直接删除 |
+| `references/` 旁文件默认不加载对所有 skill 成立（双宿主 progressive disclosure：Claude Code 只注入 SKILL.md 正文；Codex 官方文档明确 `references/`/`scripts/`/`assets/` 仅被显式引用时读取——https://developers.openai.com/codex/skills ，2026-08-12 查证）[spec-review-amendment] | 失效 = 迁移不省 token；sdflow-spec 先例（`references/evolution-notes.md` 按需读）为证，若发现例外则该 skill 改为直接删除 |
 | 拍板三问可在不破坏既有报告锚契约的前提下以新锚增量加入（既有 gate/lint 不认识的锚被忽略） | 失效 = 存量报告校验误伤；以 anchor_lint 负例测试 + 历史归档报告回放核验 |
 
 ## Compliance
