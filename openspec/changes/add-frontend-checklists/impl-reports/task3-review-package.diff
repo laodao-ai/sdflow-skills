@@ -1,0 +1,398 @@
+# Review package: b09686af..de275c93
+
+## Commits
+de275c93 docs(add-frontend-checklists): guide/INDEX 同步至前端领域目标态
+
+## Files changed
+ openspec/INDEX.md                                  |  4 +-
+ .../impl-reports/task3-brief.md                    | 19 +++++
+ .../impl-reports/task3-guide-sync.md               | 84 ++++++++++++++++++++++
+ sdflow-init/assets/workflow/checklists-guide.html  | 68 +++++++++---------
+ 4 files changed, 141 insertions(+), 34 deletions(-)
+
+## Diff
+diff --git a/openspec/INDEX.md b/openspec/INDEX.md
+index d2ed40fb..2334cf58 100644
+--- a/openspec/INDEX.md
++++ b/openspec/INDEX.md
+@@ -13,22 +13,22 @@
+ | 名称 | 文件 | 作用 |
+ |---|---|---|
+ | `workflow` | [workflow/workflow.md](./workflow/workflow.md) | 端到端流程总览（三阶段连续化）：/sdflow-spec 生成→设计审(sdflow-spec-review 编排器)→设计 GATE→实现(sdflow-implement)+代码审(sdflow-code-review)+收尾(sdflow-done)；阶段内部不用 /clear，仅两处阶段交界用（G1），连续跑到 merge |
+ | `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-NN，驱动 约束/领域清单/画图/必填槽 四层 |
+ | `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | 生成起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6（`/sdflow-spec` 调用，或 `opsx:ff` 直呼） |
+ | `generation-process` | [workflow/generation-process.md](./workflow/generation-process.md) | 生成过程：发散(explore) + `/sdflow-spec`（澄清→拷问→生成三相位） |
+ | `design-diagrams` | [workflow/design-diagrams.md](./workflow/design-diagrams.md) | 设计/spec 阶段画哪些图、何时画、什么形态（C4 + 行为图，触发条件化） |
+ | `spec-review` | [workflow/spec-review.md](./workflow/spec-review.md) | spec 评审（Detection 层）：只做 prevention 残差，trigger 驱动 + 独立 + 读码核验 |
+ | `model-tiers` | [workflow/model-tiers.md](./workflow/model-tiers.md) | 模型档位映射（强/中/弱职责 + canonical 缺省 + config 覆盖语义） |
+ 
+-设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-NN + domains，含 devex）。
+-代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-NN + domains）。
++设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-NN + domains，含 devex、frontend(+frontend-react)）。
++代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-NN + domains，含 frontend(+frontend-react)）。
+ 说明类（可删不影响执行）：[workflow/reference/](./workflow/reference/)。
+ 人读概念指南（原理 / 设计思想 / 实战用法）：`~/.sdflow/workflow/sdflow-guide.html`（自包含 HTML，浏览器直接打开；随 bundle 全局分发，不入消费仓）。
+ <!-- opsx-init:rules:end -->
+ ### 设计规则
+ 
+ | 名称 | 文件 | 主题 |
+ |---|---|---|
+ | `doc-authoring` | [rules/doc-authoring.md](./rules/doc-authoring.md) | DOC-1：设计与决策文档正文只保留当前最终态；被否决方案、演进史和元教训移入附录，避免历史噪声误导后续实现与评审。 |
+ | `premise-verification` | [rules/premise-verification.md](./rules/premise-verification.md) | 写断言之前先验证其依赖的外部事实（落笔前证伪、引用即打开、改共享物先溯源、决策落文档前先验依赖、正反双向验证）。 |
+ | `file-format-convention` | [rules/file-format-convention.md](./rules/file-format-convention.md) | 文本文件编码统一 UTF-8、换行符统一 LF、尾行换行；`.editorconfig` + `.gitattributes` 双层保证。 |
+diff --git a/openspec/changes/add-frontend-checklists/impl-reports/task3-brief.md b/openspec/changes/add-frontend-checklists/impl-reports/task3-brief.md
+new file mode 100644
+index 00000000..2f429593
+--- /dev/null
++++ b/openspec/changes/add-frontend-checklists/impl-reports/task3-brief.md
+@@ -0,0 +1,19 @@
++### Task 3: 同步与留痕（guide + INDEX + research 附件）
++
++**Blocked-by:** 1,2
++**R-ID:** R3
++
++更新人读手册与目录级注记，确保无失鲜表述：
++
++- `checklists-guide.html` 全面更新为目标态（6 处改动面见 tasks 3.1 逐块清单：架构图 ASCII 树、覆盖矩阵、domain cards、§四缺口分析重写、§五教程换例；不动脚本/样式；改后自检标签配对+目录锚点+通读内容一致性）
++- `openspec/INDEX.md` L23-24 括注扩注（沿「含 devex」先例，如「含 devex、frontend(+frontend-react)」）
++- 核验 `research/absorption-candidates.md` 附件完整（26 条 + 备选冻结区 + 拍板头注 + 来源清单）
++
++- [ ] guide §一架构图去「缺失」标注、补 frontend-react 分支
++- [ ] guide §二覆盖矩阵 pill-gap→就绪、「已知缺口」callout 消除
++- [ ] guide §四无矛盾 ID 表与失效叙事（旧 CR-FE-01~05 建议表已删除或重写）
++- [ ] guide §五教程区无「以 frontend 缺失为前提」的叙事
++- [ ] `grep -n "缺失\|已知缺口" checklists-guide.html` 逐条判定无失鲜
++- [ ] INDEX.md 括注到位
++- [ ] research 附件完整
++
+diff --git a/openspec/changes/add-frontend-checklists/impl-reports/task3-guide-sync.md b/openspec/changes/add-frontend-checklists/impl-reports/task3-guide-sync.md
+new file mode 100644
+index 00000000..6908b3e2
+--- /dev/null
++++ b/openspec/changes/add-frontend-checklists/impl-reports/task3-guide-sync.md
+@@ -0,0 +1,84 @@
++# Task 3 实施报告：同步与留痕（guide + INDEX + research 附件）
++
++## 3.1 `checklists-guide.html` 更新为目标态
++
++文件：`sdflow-init/assets/workflow/checklists-guide.html`
++
++6 处改动面逐块落实：
++
++1. **§一架构图 ASCII 树**（原 L286-287）：去除 `[frontend.md ← 缺失]` 标注；两侧新增
++   `frontend-react.md`（`└` 子层，沿 `backend-go.md` 画法），手工计算列对齐（右列起始列参照同
++   层其余行 ~35/37 字符位，与既有行视觉一致）。原 `frontend.md` 行右侧的 `llm.md` 挪到新增行下方
++   （`devex.md` / `llm.md` 同行保留原有单侧领域对照）。
++
++2. **§二覆盖矩阵**：`frontend` 行 code 列 `pill-gap`（缺失）→ `pill-ok`（就绪，`CR-FE-01~08`）；
++   spec 列计数 `FE-01~05` → `FE-01~13`。新增 `frontend-react` 独立行（spec `REACT-01~03` /
++   code `CR-REACT-01~07`，均就绪，TG-03）。删除「已知缺口：`code-checklists/domains/frontend.md`」
++   callout 整段（前提已消失，无改写价值——直接删除，矩阵本身已表达就绪状态）。
++
++3. **Domain cards 区**（§三）：按 backend-go 先例，两侧 domain-grid 均新增 `frontend-react` 卡片
++   （`extends: frontend`，列出 REACT-01~03 / CR-REACT-01~07 摘要）。`frontend` 卡片 desc 从
++   FE-01~05 摘要扩为 FE-01~13 全量摘要（新增 CWV/请求瀑布/CSP/URL 即状态/表单语义/错误边界/
++   i18n/响应式八项）；code 侧新增 `frontend` 卡片（CR-FE-01~08 摘要，原完全缺失）。
++
++4. **§四「缺口分析与扩展建议」**：整节重写。原「高优先级：前端代码审清单」子节（含与实际
++   CR-FE-01~08 同 ID 不同义的建议表 CR-FE-01~05，且 CR-FE-05=可访问性与人拍板排除 a11y 矛盾）
++   **整段删除**。保留「潜在新领域」表格但移除已完成的 `frontend-react` 行（该表原第 4 行
++   「先建 frontend 通用，再按框架分层」的前提已完成）；节标题改为「扩展建议：潜在新领域」并加
++   一句「前端已于 add-frontend-checklists（2026-08）补齐」说明。`<h2>` 序号未级联改动——保留
++   「四、」编号，只换标题文字与正文，规避重排 §五/§六 序号与 side-toc 的连锁改动（简化取向，
++   语义等价于删除+重写但影响面更小）。侧栏目录 `#gaps` 链接文字同步「缺口分析」→「扩展建议」。
++
++5. **§五「如何新增一个领域」教程**：唯一 worked example（补齐 `code-checklists/domains/frontend.md`）
++   改写为「已建成回顾」叙事——开场句从「以补齐...为例，完整流程」改为「已建成回顾：...是这套
++   五步流程的最近一次实跑，以它为例复盘完整流程」；步骤列表本身（建文件/写 delta/更新注册表/
++   检查触发/同步 config/走 change 流程）保持不变（仍是准确的操作序列，只是叙事时态从"将要做"
++   变"已做过"）；步骤后新增一句「实际条目见 `code-checklists/domains/frontend.md`（CR-FE-01~08）；
++   设计审侧同批同法补齐见 `spec-checklists/domains/frontend.md`（FE-06~13）」。结尾
++   `callout-info`（分层原则：React/Vue 特化建 frontend-react.md）改为「分层原则的实例」，
++   注明已建成状态与 REACT-01~03 / CR-REACT-01~07 计数。
++
++6. **自检**：
++   - 标签配对：`div`/`section`/`table`/`tr`/`td`/`th`/`ul`/`li`/`ol`/`pre` 开闭标签计数逐一核对，
++     全部平衡（62/62、6/6、3/3、26/26、72/72、11/11、3/3、22/22、2/2、3/3）。
++   - 目录锚点：`side-toc` 六个 `href="#..."` 与对应 `<section id="...">` 一一对应（`arch` /
++     `matrix` / `domains` / `gaps` / `howto` / `conventions`），均有效。
++   - `grep -n "缺失\|已知缺口" checklists-guide.html`：唯一命中为 §二矩阵图例说明句
++     「绿色 = 已就绪，红色 = **缺失**且应补，灰色 = 设计上不需要」——这是颜色图例的通用释义，
++     不是对 frontend 的失鲜断言，判定为**无失鲜**。
++   - 通读内容一致性：`frontend`/`frontend-react` 在架构图、矩阵、domain cards、§四、§五、§六
++     「分工」表中的表述互不矛盾；ID 计数（FE-01~13 / REACT-01~03 / CR-FE-01~08 /
++     CR-REACT-01~07）与 `spec-checklists/domains/frontend*.md`、`code-checklists/domains/frontend*.md`
++     实际文件核对一致。
++
++## 3.2 `INDEX.md` 括注
++
++文件：`openspec/INDEX.md` L23-24（`opsx-init:rules` 托管区块内）
++
++沿「含 devex」先例扩注：
++- 设计审规则集行：`（base BASE-NN + domains，含 devex）` → `（base BASE-NN + domains，含 devex、frontend(+frontend-react)）`
++- 代码审规则集行：`（base CR-NN + domains）` → `（base CR-NN + domains，含 frontend(+frontend-react)）`
++
++两行均为**新增**注记（原文本无 frontend 相关失鲜表述，不是失鲜修正）。
++
++## 3.3 research 附件核验
++
++文件：`openspec/changes/add-frontend-checklists/research/absorption-candidates.md`
++
++核验结果：**完整，通过**。
++
++- **拍板头注**：文件开头「拍板结果（2026-08-13 用户）」段落存在，含调研路径、过滤判据、标记说明。
++- **26 条**：A 组（spec-frontend 增补）8 条 A1-A8 + B 组（code-frontend 新建）8 条 B1-B8 +
++  C 组（spec-react 新建）3 条 C1-C3 + D 组（code-react 新建）7 条 D1-D7 = 8+8+3+7 = **26 条**，与
++  实际交付计数一致（FE-06~13=8、CR-FE-01~08=8、REACT-01~03=3、CR-REACT-01~07=7）。
++- **备选冻结区**：§E 存在，含 E1（a11y 全路 12 条，W3C 一手来源）、E2（多端条目，剔除）、
++  E3（调研中主动淘汰条目），均标注冻结/不进正式清单。
++- **来源清单**：§F「调研诚实边界」存在，逐条列出〔未核实〕标记条目、spec-review 前端领域镜复核
++  结论、未抓取来源、子代理调研故障复盘。
++
++无需改动此文件。
++
++## 完成状态
++
++3.1/3.2/3.3 全部完成，`sdflow-init/assets/workflow/checklists-guide.html`（改动）与
++`openspec/INDEX.md`（改动）已 `git add` + 普通 commit；research 附件核验通过、未改动。
+diff --git a/sdflow-init/assets/workflow/checklists-guide.html b/sdflow-init/assets/workflow/checklists-guide.html
+index c4c26f6d..ee4d848c 100644
+--- a/sdflow-init/assets/workflow/checklists-guide.html
++++ b/sdflow-init/assets/workflow/checklists-guide.html
+@@ -242,21 +242,21 @@
+   }
+   .side-toc a.active .side-toc-num { color: var(--accent); }
+ </style>
+ 
+ <aside class="side-toc" aria-label="侧栏目录">
+   <div class="side-toc-title">目录</div>
+   <ol>
+     <li><a href="#arch"><span class="side-toc-num">一</span>架构</a></li>
+     <li><a href="#matrix"><span class="side-toc-num">二</span>覆盖矩阵</a></li>
+     <li><a href="#domains"><span class="side-toc-num">三</span>领域速览</a></li>
+-    <li><a href="#gaps"><span class="side-toc-num">四</span>缺口分析</a></li>
++    <li><a href="#gaps"><span class="side-toc-num">四</span>扩展建议</a></li>
+     <li><a href="#howto"><span class="side-toc-num">五</span>新增领域</a></li>
+     <li><a href="#conventions"><span class="side-toc-num">六</span>写规则约定</a></li>
+   </ol>
+ </aside>
+ 
+ <div class="page">
+ 
+   <header class="page-header">
+     <h1>审查清单资产指南</h1>
+     <p class="subtitle">sdflow 工作流的核心质量资产——设计审与代码审的领域清单体系。本文介绍当前覆盖面、架构设计，以及如何为新领域（如前端代码审）扩展清单。</p>
+@@ -276,22 +276,23 @@
+   spec-quality-base.md  ──────  code-review-base.md
+   (设计审通用 · 30 条)          (代码审通用 · 11 条)
+         │  每份 spec 必过              │  每次 code-review 必过
+         ▼                              ▼
+   domains/                       domains/
+     backend.md                     backend.md
+       └ backend-go.md                └ backend-go.md
+     embedded.md                    embedded.md
+       ├ embedded-ml307c.md           ├ embedded-ml307c.md
+       └ embedded-esp32.md           └ embedded-esp32.md
+-    frontend.md                    llm.md
+-    devex.md                       [frontend.md ← 缺失]
++    frontend.md                    frontend.md
++      └ frontend-react.md            └ frontend-react.md
++    devex.md                       llm.md
+     [未来领域...]                   [未来领域...]</pre></div>
+ 
+     <p><strong>选用规则</strong>：变更起手按 <code>trigger-catalog.md</code> 的 TG 判命中哪些技术栈 → 叠加对应领域链。例如改 Go 后端 = <code>base</code> + <code>backend</code> + <code>backend-go</code>；跨栈变更取并集。不涉及的领域不叠加。</p>
+ 
+     <p><strong>ID 约定</strong>：每条规则有稳定 ID（前缀标明所属层），一经分配不复用、不重排——删除规则只留空号，新增取新号。</p>
+   </section>
+ 
+   <!-- §2 覆盖矩阵 -->
+   <section class="section" id="matrix">
+     <h2><span class="num">二、</span>覆盖矩阵</h2>
+@@ -347,46 +348,48 @@
+           <tr>
+             <td><code>embedded-esp32</code></td>
+             <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">ESP32-*</span></td>
+             <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">CR-ESP32-*</span></td>
+             <td>TG-02</td>
+           </tr>
+ 
+           <tr class="group-row"><td colspan="4">前端</td></tr>
+           <tr>
+             <td><code>frontend</code></td>
+-            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">FE-01~05</span></td>
+-            <td><span class="pill pill-gap"><span class="pill-dot"></span>缺失</span></td>
++            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">FE-01~13</span></td>
++            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">CR-FE-01~08</span></td>
++            <td>TG-03</td>
++          </tr>
++          <tr>
++            <td><code>frontend-react</code></td>
++            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">REACT-01~03</span></td>
++            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">CR-REACT-01~07</span></td>
+             <td>TG-03</td>
+           </tr>
+ 
+           <tr class="group-row"><td colspan="4">专项领域</td></tr>
+           <tr>
+             <td><code>llm</code></td>
+             <td><span class="pill pill-na"><span class="pill-dot"></span>不需要</span></td>
+             <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">CR-LLM-01~02</span></td>
+             <td>TG-27</td>
+           </tr>
+           <tr>
+             <td><code>devex</code></td>
+             <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">DX-01~05</span></td>
+             <td><span class="pill pill-na"><span class="pill-dot"></span>不需要</span></td>
+             <td>TG-28</td>
+           </tr>
+         </tbody>
+       </table>
+     </div>
+ 
+-    <div class="callout callout-gap">
+-      <strong>已知缺口：<code>code-checklists/domains/frontend.md</code></strong> — 设计审侧已有 <code>FE-01~05</code>（交互边缘、加载/空/错误态、乐观更新、首屏辨识度、AI-slop 视觉黑名单），但代码审侧完全缺失。前端项目的 <code>sdflow-code-review</code> 目前只能过通用 base，缺少 XSS/CSP、组件生命周期、状态管理、性能（bundle size / 水合）等前端特有的代码审查维度。
+-    </div>
+-
+     <h3>为什么有些领域只在一侧？</h3>
+     <ul>
+       <li><strong>LLM（code-review-only）</strong>：LLM 集成的风险主要在代码消费层（输出信任边界、prompt 一致性），设计层面用通用 base 已够。</li>
+       <li><strong>DevEx（spec-review-only）</strong>：开发者体验的检查点（TTHW、错误信息三件套、命名可猜性）在设计阶段判定，代码侧无对应检查维度。</li>
+     </ul>
+   </section>
+ 
+   <!-- §3 现有领域详览 -->
+   <section class="section" id="domains">
+     <h2><span class="num">三、</span>现有领域速览</h2>
+@@ -408,22 +411,27 @@
+         <div class="card-extends">extends: backend · GO-*</div>
+         <div class="card-desc">Go 语言特有：errgroup 生命周期、context 传播、goroutine 泄漏、interface 最小化等。</div>
+       </div>
+       <div class="domain-card">
+         <div class="card-title">embedded 嵌入式</div>
+         <div class="card-extends">extends: base · EMB-*</div>
+         <div class="card-desc">RTOS+C 通用：任务栈预算、内存布局、中断安全、看门狗、OTA 更新、安全启动。</div>
+       </div>
+       <div class="domain-card">
+         <div class="card-title">frontend 前端</div>
+-        <div class="card-extends">extends: base · FE-01~05</div>
+-        <div class="card-desc">交互边缘场景（双击/离开/慢网络）、加载/空/错误三态、乐观更新与回滚、首屏可辨识+克制装饰、AI-slop 视觉黑名单。</div>
++        <div class="card-extends">extends: base · FE-01~13</div>
++        <div class="card-desc">交互边缘场景、加载/空/错误三态、乐观更新与回滚、首屏可辨识+克制装饰、AI-slop 视觉黑名单、CWV 指标锚定、请求瀑布审查、CSP 与嵌入策略、URL 即状态、表单设计语义、错误边界与降级、i18n 就绪度、响应式断点策略。</div>
++      </div>
++      <div class="domain-card">
++        <div class="card-title">frontend-react</div>
++        <div class="card-extends">extends: frontend · REACT-01~03</div>
++        <div class="card-desc">React 框架特化：Suspense/加载边界设计、server state 与 client state 分离、[仅RSC] 服务端/客户端职责切分。</div>
+       </div>
+       <div class="domain-card">
+         <div class="card-title">devex 开发者体验</div>
+         <div class="card-extends">extends: base · DX-01~05 · spec-review-only</div>
+         <div class="card-desc">TTHW 分档、错误信息三件套（problem/cause/fix）、命名可猜性与默认值、升级路径（废弃警告+迁移说明）、Skill DX 清单。</div>
+       </div>
+     </div>
+ 
+     <h3>代码审清单 <code>code-checklists/</code></h3>
+     <div class="domain-grid">
+@@ -435,85 +443,81 @@
+       <div class="domain-card">
+         <div class="card-title">backend 后端</div>
+         <div class="card-extends">extends: base · CR-BE-01~03</div>
+         <div class="card-desc">数据库操作安全（参数化查询/游标释放/N+1）、HTTP Handler 安全（体大小/输入校验/XSS/CORS）、DB 层竞态（find-or-create/check-then-set）。</div>
+       </div>
+       <div class="domain-card">
+         <div class="card-title">backend-go</div>
+         <div class="card-extends">extends: backend · CR-GO-*</div>
+         <div class="card-desc">Go 特有代码审查：defer 陷阱、channel 关闭、goroutine 泄漏检测、error wrapping。</div>
+       </div>
++      <div class="domain-card">
++        <div class="card-title">frontend 前端</div>
++        <div class="card-extends">extends: base · CR-FE-01~08</div>
++        <div class="card-desc">XSS sink 数据流追踪、postMessage 双向校验、凭证与敏感数据存放、CSRF 前端侧配合、跳转与嵌入安全、长驻页面资源清理、模态框焦点生命周期、表单错误提示与恢复。</div>
++      </div>
++      <div class="domain-card">
++        <div class="card-title">frontend-react</div>
++        <div class="card-extends">extends: frontend · CR-REACT-01~07</div>
++        <div class="card-desc">React 框架特化：Effect 存在性审查、纯度语义违规、Compiler 时代 memo 观、React 19 API 采用正确性、列表 key 语义、状态所有权与 re-render 半径、[仅RSC] 边界纪律。</div>
++      </div>
+       <div class="domain-card">
+         <div class="card-title">llm LLM 集成</div>
+         <div class="card-extends">extends: base · CR-LLM-01~02 · code-review-only</div>
+         <div class="card-desc">输出信任边界（结构化值校验/URL allowlist/RAG 防注入）、Prompt 一致性（1-indexed/工具 wiring 一致/限额单一声明）。</div>
+       </div>
+     </div>
+   </section>
+ 
+-  <!-- §4 缺口分析 -->
++  <!-- §4 扩展建议 -->
+   <section class="section" id="gaps">
+-    <h2><span class="num">四、</span>缺口分析与扩展建议</h2>
+-
+-    <h3>高优先级：前端代码审清单</h3>
+-    <p>设计审侧 <code>frontend.md</code> 已有 5 条规则，但代码审侧完全空白。建议补充的维度：</p>
+-    <div class="matrix-wrap">
+-      <table>
+-        <thead><tr><th>建议 ID</th><th>维度</th><th>典型检查点</th></tr></thead>
+-        <tbody>
+-          <tr><td><code>CR-FE-01</code></td><td>XSS / 内容注入</td><td><code>dangerouslySetInnerHTML</code> / <code>v-html</code> 的输入来源校验；用户输入进 DOM 前转义</td></tr>
+-          <tr><td><code>CR-FE-02</code></td><td>组件生命周期</td><td>副作用清理（事件监听/定时器/订阅在卸载时移除）；异步操作对已卸载组件的写保护</td></tr>
+-          <tr><td><code>CR-FE-03</code></td><td>状态管理</td><td>共享状态的更新竞态（并发 setState/dispatch）；派生状态与源数据不一致</td></tr>
+-          <tr><td><code>CR-FE-04</code></td><td>性能</td><td>Bundle size 意识（大依赖按需加载）；列表渲染 key 稳定性；不必要的重渲染</td></tr>
+-          <tr><td><code>CR-FE-05</code></td><td>可访问性</td><td>交互元素有可访问名称；键盘可操作；焦点管理（模态框/抽屉打开时焦点捕获）</td></tr>
+-        </tbody>
+-      </table>
+-    </div>
++    <h2><span class="num">四、</span>扩展建议：潜在新领域</h2>
+ 
+-    <h3>中优先级：潜在新领域</h3>
++    <p>前端（设计审 + 代码审两侧）已于 <code>add-frontend-checklists</code>（2026-08）补齐并接入 <code>trigger-catalog</code> TG-03；下表为后续仍可能扩展的领域，视是否有实际项目按需再补：</p>
+     <div class="matrix-wrap">
+       <table>
+         <thead><tr><th>领域</th><th>覆盖面</th><th>触发条件</th><th>优先级判断</th></tr></thead>
+         <tbody>
+           <tr><td><code>mobile</code></td><td>iOS/Android 原生</td><td>移动端变更</td><td>有实际项目时再补</td></tr>
+           <tr><td><code>data-pipeline</code></td><td>ETL / 数据工程</td><td>数据管道变更</td><td>有实际项目时再补</td></tr>
+           <tr><td><code>infra</code></td><td>IaC / CI/CD</td><td>基础设施变更</td><td>有实际项目时再补</td></tr>
+-          <tr><td><code>frontend-react</code></td><td>React 特化 delta</td><td>extends frontend</td><td>先建 frontend 通用，再按框架分层</td></tr>
+         </tbody>
+       </table>
+     </div>
+   </section>
+ 
+   <!-- §5 如何新增领域 -->
+   <section class="section" id="howto">
+     <h2><span class="num">五、</span>如何新增一个领域</h2>
+ 
+-    <p>以补齐 <code>code-checklists/domains/frontend.md</code> 为例，完整流程：</p>
++    <p>已建成回顾：<code>code-checklists/domains/frontend.md</code>（<code>add-frontend-checklists</code>，2026-08）是这套五步流程的最近一次实跑，以它为例复盘完整流程：</p>
+ 
+     <ol class="steps">
+       <li><strong>建文件</strong>：在 <code>sdflow-init/assets/workflow/code-checklists/domains/</code> 下新建 <code>frontend.md</code>，文件头声明继承关系：
+ <pre class="code-block"># 代码审查领域：前端 / UI（通用）
+ 
+ > `extends: base` —— 前端代码审查特有维度，框架无关；
+ > 通用维度见 `../code-review-base.md`。</pre>
+       </li>
+       <li><strong>只写 delta</strong>：每条取新 ID（前缀 <code>CR-FE-</code>），只写本层新增的审查项。格式跟随同目录既有文件：<code>ID | 规则 | 触发条件 | 检查点</code> 四列表格。<strong>不复制 base 或父层的任何条目</strong>。</li>
+       <li><strong>更新注册表</strong>：在 <code>code-checklists/README.md</code> 的「领域注册表」加一行：
+ <pre class="code-block">| `domains/frontend.md` | base | 前端/UI | `CR-FE-` |</pre>
+       </li>
+       <li><strong>检查触发</strong>：确认 <code>trigger-catalog.md</code> 中已有对应 TG（前端是 TG-03）。如果是全新领域，需要在 trigger-catalog 新增一个 TG 条目。</li>
+       <li><strong>同步 config 模版</strong>：如果新领域需要项目配置段（如领域特定的约束），在 <code>config.template.yaml</code> 的 domains 列表中注册。</li>
+       <li><strong>走正常 change 流程</strong>：这类改动本身就应该走 <code>/sdflow-spec</code> → review → ship 的完整流程——dogfooding。</li>
+     </ol>
+ 
++    <p>实际条目见 <code>code-checklists/domains/frontend.md</code>（CR-FE-01~08）；设计审侧同批同法补齐见 <code>spec-checklists/domains/frontend.md</code>（FE-06~13）。</p>
++
+     <div class="callout callout-info">
+-      <strong>分层原则</strong>：如果某个框架（如 React/Vue）有特化规则，建 <code>frontend-react.md</code> 并声明 <code>extends: frontend</code>。读 React 项目的完整清单 = <code>base</code> + <code>frontend</code> + <code>frontend-react</code> 三层并集。这与 <code>backend</code> → <code>backend-go</code> 的分层完全对称。
++      <strong>分层原则的实例</strong>：框架特化规则走同一模式——<code>frontend-react.md</code> 声明 <code>extends: frontend</code>（已建成，spec 侧 REACT-01~03 · code 侧 CR-REACT-01~07）。读 React 项目的完整清单 = <code>base</code> + <code>frontend</code> + <code>frontend-react</code> 三层并集，与 <code>backend</code> → <code>backend-go</code> 的分层完全对称。
+     </div>
+   </section>
+ 
+   <!-- §6 设计约定 -->
+   <section class="section" id="conventions">
+     <h2><span class="num">六、</span>写规则的约定</h2>
+ 
+     <h3>每条规则包含</h3>
+     <ul>
+       <li><strong>稳定 ID</strong>：前缀标明层，号码只增不减（删除留空号）</li>

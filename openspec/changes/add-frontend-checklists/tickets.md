@@ -50,11 +50,11 @@ impl-pipeline: tickets
 - `code-checklists/domains/backend.md:11` CR-BE-02 IOU 句改为交叉引用 CR-FE-01
 - 三处栈枚举文本追加 `(+frontend-react)`：`sdflow-spec-review/SKILL.md:223`、`sdflow-init/SKILL.md:195`、`config.template.yaml:24`
 
-- [ ] TG-03 行含 delta 记法
-- [ ] spec 侧 README 注册表 +1 行、ID 表含 `REACT-`
-- [ ] code 侧 README 注册表 +2 行、ID 表含 `CR-FE-`/`CR-REACT-`、扩展约定指针行到位
-- [ ] `grep -rn "待 frontend domain 覆盖" sdflow-init/assets/workflow/` 归零
-- [ ] 三处栈枚举行含 `frontend(+frontend-react)`
+- [x] TG-03 行含 delta 记法
+- [x] spec 侧 README 注册表 +1 行、ID 表含 `REACT-`
+- [x] code 侧 README 注册表 +2 行、ID 表含 `CR-FE-`/`CR-REACT-`、扩展约定指针行到位
+- [x] `grep -rn "待 frontend domain 覆盖" sdflow-init/assets/workflow/` 归零
+- [x] 三处栈枚举行含 `frontend(+frontend-react)`
 
 ### Task 3: 同步与留痕（guide + INDEX + research 附件）
 
