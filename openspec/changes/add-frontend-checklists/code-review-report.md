@@ -30,6 +30,12 @@ Step1 自持 scope 审计: scope-drift=零偏离 · 完成度=4/4 tasks 全 DONE
 
 <!-- sdflow:fanout-capability v1 host="claude" subagents="available" mirrors="domain,adversarial,broad" -->
 
+## 机械引用核
+
+<!-- sdflow:ref-check v1 status="ran" pass="0" fail="0" uncheckable="0" -->
+
+零 findings 进入合并池，三计数皆 0。
+
 ## Findings（已采纳）
 
 无。
@@ -57,10 +63,17 @@ TG-28（devex）非 HR-TG 成员，无需领域专属 cross-model。
 
 ## outside-voice
 
-<!-- sdflow:outside-voice v1 site="code-voice" guard="none" host="claude" runner="claude" reason_code="ok" findings="0" truncated="false" -->
+<!-- sdflow:outside-voice v1 site="code-voice" guard="none" host="claude" runner="none" reason_code="fallback-unavailable" findings="0" truncated="false" -->
 <!-- sdflow:declared-sites v1 declared="code-voice" -->
 
 跨模型第二意见：零 findings（纯 Markdown 规则资产，无运行期逻辑可爆破）。
+
+## 度量锚
+
+<!-- sdflow:lens-metric v1 layer="code-review" lens="adversarial" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="code-review" lens="broad" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="code-review" lens="domain" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="code-review" lens="outside-voice" host="claude" runner="none" site="code-voice" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
 
 ## 结论
 
