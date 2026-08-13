@@ -46,3 +46,28 @@ commit（2026-07-03），早于 `openspec/matt/` 建立（2026-07-10）一周；
 
 `ff-generation-constraints.md` 的 `wayfinder-resolved:` 前缀溯源规则**保留但标 legacy**——消费仓
 **存量**（重构前生成）footage 仍可能被该前缀溯源引用；新建 roadmap 包不再产生此前缀的新实例。
+
+### A5 · 「③ 生成过程」从三相位四 skill 收窄为两相位两 skill（`sdflow-spec` 吸收 brainstorming + grill）
+
+`generation-process.md` 原版 §二把「③ 生成过程」拆成三个相位：**发散**（`opsx:explore`）、
+**收敛**（`brainstorming`，逼出 2-3 方案 → 逐段批准 → 落设计）、**对抗压测**（`grill-me` /
+`grill-with-docs`，把设计往死里问、逐分支死磕薄弱处）。§三进一步论证：`config.yaml` 把①结构、
+②约束固化后，`brainstorming` 的机械步被吸收（方案落 BASE-12 槽、自检靠 S 扫描、写文档靠 ff），
+只剩 R 桶；而 grill 正是专锤 R 桶的工具，逐项命中标准与锚：
+
+| grill（尤其 -with-docs）的动作 | 命中的标准 / 锚 |
+|------|------|
+| 揪模糊 / 重载术语 → 定准 | BASE-09 歧义 / 术语定义 |
+| 代码 vs 主张 不一致就揭穿 | D-1 代码事实（Accurate · 锚① 代码库） |
+| 编边界场景压测 | BASE-01 四类场景 + BASE-06 错误路径 |
+| 逐分支死磕决策树 | BASE-27 时序可执行性（实现者会卡哪） |
+| 落 ADR + 词汇表 | BASE-12 ADR + 锚③ 既有决策 / ADR |
+
+当时的结论：**brainstorming 是"产设计"的收敛器，grill 是"锤设计"的对抗器**——结构与约束已被
+config 守住后，真正稀缺的是对抗压测，grill 比再跑一遍 brainstorming 的机械自检更值钱。
+
+**后续演进**：`/sdflow-spec` 上线后把「发散 + 对抗 + 生成」收进一个入口——相位 A 澄清、相位 B 拷问
+（承接原 grill 锤炼 R 桶的职责）、相位 C 生成四件套一次连续跑，且拷问结构性前置于成文（改想法比
+改四份成文便宜）。`brainstorming` / `grill-me` / `grill-with-docs` 三个独立 skill 不再是「③ 生成
+过程」推荐流水线的组成部分，`fix-workflow-bundle-staleness` 据此把 §二 现行化为「两相位两 skill」
+（`opsx:explore` + `/sdflow-spec`），§三整节移入本条。

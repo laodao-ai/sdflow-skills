@@ -1,6 +1,6 @@
-# opsx:ff 起手强制规范（前置动作 FF-0 + 生成硬约束 D-1~D-6）
+# 生成起手强制规范（FF-0 + D-1~D-6）
 
-> **定位声明**：本规范是 `/opsx:ff` 起手强制项的**唯一权威定义源**——含前置动作 **FF-0（开分支）** 与生成硬约束 **D-1~D-6**。
+> **定位声明**：本规范是 `/sdflow-spec`（或 `/opsx:ff` 直呼）起手强制项的**唯一权威定义源**——含前置动作 **FF-0（开分支）** 与生成硬约束 **D-1~D-6**。
 > 所有调用方（`config.yaml` rules 自动注入、`workflow/workflow.md` 流程、各处对比表/判定速查）
 > **只引用编号、不复制定义内容**。约束内容如有变更，只改本文件。
 >
@@ -121,7 +121,7 @@ D 约束是稀缺资源——塞太多会触发过载。
 调用方（如 `workflow/workflow.md`）**不得复制上表定义文本**，只能写形如：
 
 ```
-/opsx:ff {change}。按 @openspec/workflow/ff-generation-constraints.md 注入：
+/sdflow-spec {change}（或 /opsx:ff 直呼）。按 ~/.sdflow/workflow/ff-generation-constraints.md 注入：
 默认 D-1/D-3/D-5；本变更涉及 <DB schema 迁移 / 外部依赖 / 产品 model>，
 追加对应条件约束 <D-2 / D-4 / D-6>。
 ```
@@ -145,7 +145,7 @@ D 约束是稀缺资源——塞太多会触发过载。
 
 ```
 # 定义只在本 rule 文件一处
-# 所有调用方：按 @openspec/workflow/ff-generation-constraints.md 注入 D-x
+# 所有调用方：按 ~/.sdflow/workflow/ff-generation-constraints.md 注入 D-x
 调用点: 按 rule 注入默认 D-1/D-3/D-5，涉及 DB schema/外部依赖/共享 model 时追加 D-2/D-4/D-6
 ```
 
