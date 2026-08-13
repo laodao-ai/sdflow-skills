@@ -249,7 +249,7 @@
     <li><a href="#arch"><span class="side-toc-num">一</span>架构</a></li>
     <li><a href="#matrix"><span class="side-toc-num">二</span>覆盖矩阵</a></li>
     <li><a href="#domains"><span class="side-toc-num">三</span>领域速览</a></li>
-    <li><a href="#gaps"><span class="side-toc-num">四</span>缺口分析</a></li>
+    <li><a href="#gaps"><span class="side-toc-num">四</span>扩展建议</a></li>
     <li><a href="#howto"><span class="side-toc-num">五</span>新增领域</a></li>
     <li><a href="#conventions"><span class="side-toc-num">六</span>写规则约定</a></li>
   </ol>
@@ -283,8 +283,9 @@
     embedded.md                    embedded.md
       ├ embedded-ml307c.md           ├ embedded-ml307c.md
       └ embedded-esp32.md           └ embedded-esp32.md
-    frontend.md                    llm.md
-    devex.md                       [frontend.md ← 缺失]
+    frontend.md                    frontend.md
+      └ frontend-react.md            └ frontend-react.md
+    devex.md                       llm.md
     [未来领域...]                   [未来领域...]</pre></div>
 
     <p><strong>选用规则</strong>：变更起手按 <code>trigger-catalog.md</code> 的 TG 判命中哪些技术栈 → 叠加对应领域链。例如改 Go 后端 = <code>base</code> + <code>backend</code> + <code>backend-go</code>；跨栈变更取并集。不涉及的领域不叠加。</p>
@@ -354,8 +355,14 @@
           <tr class="group-row"><td colspan="4">前端</td></tr>
           <tr>
             <td><code>frontend</code></td>
-            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">FE-01~05</span></td>
-            <td><span class="pill pill-gap"><span class="pill-dot"></span>缺失</span></td>
+            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">FE-01~13</span></td>
+            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">CR-FE-01~08</span></td>
+            <td>TG-03</td>
+          </tr>
+          <tr>
+            <td><code>frontend-react</code></td>
+            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">REACT-01~03</span></td>
+            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">CR-REACT-01~07</span></td>
             <td>TG-03</td>
           </tr>
 
@@ -374,10 +381,6 @@
           </tr>
         </tbody>
       </table>
-    </div>
-
-    <div class="callout callout-gap">
-      <strong>已知缺口：<code>code-checklists/domains/frontend.md</code></strong> — 设计审侧已有 <code>FE-01~05</code>（交互边缘、加载/空/错误态、乐观更新、首屏辨识度、AI-slop 视觉黑名单），但代码审侧完全缺失。前端项目的 <code>sdflow-code-review</code> 目前只能过通用 base，缺少 XSS/CSP、组件生命周期、状态管理、性能（bundle size / 水合）等前端特有的代码审查维度。
     </div>
 
     <h3>为什么有些领域只在一侧？</h3>
@@ -415,8 +418,13 @@
       </div>
       <div class="domain-card">
         <div class="card-title">frontend 前端</div>
-        <div class="card-extends">extends: base · FE-01~05</div>
-        <div class="card-desc">交互边缘场景（双击/离开/慢网络）、加载/空/错误三态、乐观更新与回滚、首屏可辨识+克制装饰、AI-slop 视觉黑名单。</div>
+        <div class="card-extends">extends: base · FE-01~13</div>
+        <div class="card-desc">交互边缘场景、加载/空/错误三态、乐观更新与回滚、首屏可辨识+克制装饰、AI-slop 视觉黑名单、CWV 指标锚定、请求瀑布审查、CSP 与嵌入策略、URL 即状态、表单设计语义、错误边界与降级、i18n 就绪度、响应式断点策略。</div>
+      </div>
+      <div class="domain-card">
+        <div class="card-title">frontend-react</div>
+        <div class="card-extends">extends: frontend · REACT-01~03</div>
+        <div class="card-desc">React 框架特化：Suspense/加载边界设计、server state 与 client state 分离、[仅RSC] 服务端/客户端职责切分。</div>
       </div>
       <div class="domain-card">
         <div class="card-title">devex 开发者体验</div>
@@ -443,6 +451,16 @@
         <div class="card-desc">Go 特有代码审查：defer 陷阱、channel 关闭、goroutine 泄漏检测、error wrapping。</div>
       </div>
       <div class="domain-card">
+        <div class="card-title">frontend 前端</div>
+        <div class="card-extends">extends: base · CR-FE-01~08</div>
+        <div class="card-desc">XSS sink 数据流追踪、postMessage 双向校验、凭证与敏感数据存放、CSRF 前端侧配合、跳转与嵌入安全、长驻页面资源清理、模态框焦点生命周期、表单错误提示与恢复。</div>
+      </div>
+      <div class="domain-card">
+        <div class="card-title">frontend-react</div>
+        <div class="card-extends">extends: frontend · CR-REACT-01~07</div>
+        <div class="card-desc">React 框架特化：Effect 存在性审查、纯度语义违规、Compiler 时代 memo 观、React 19 API 采用正确性、列表 key 语义、状态所有权与 re-render 半径、[仅RSC] 边界纪律。</div>
+      </div>
+      <div class="domain-card">
         <div class="card-title">llm LLM 集成</div>
         <div class="card-extends">extends: base · CR-LLM-01~02 · code-review-only</div>
         <div class="card-desc">输出信任边界（结构化值校验/URL allowlist/RAG 防注入）、Prompt 一致性（1-indexed/工具 wiring 一致/限额单一声明）。</div>
@@ -450,26 +468,11 @@
     </div>
   </section>
 
-  <!-- §4 缺口分析 -->
+  <!-- §4 扩展建议 -->
   <section class="section" id="gaps">
-    <h2><span class="num">四、</span>缺口分析与扩展建议</h2>
+    <h2><span class="num">四、</span>扩展建议：潜在新领域</h2>
 
-    <h3>高优先级：前端代码审清单</h3>
-    <p>设计审侧 <code>frontend.md</code> 已有 5 条规则，但代码审侧完全空白。建议补充的维度：</p>
-    <div class="matrix-wrap">
-      <table>
-        <thead><tr><th>建议 ID</th><th>维度</th><th>典型检查点</th></tr></thead>
-        <tbody>
-          <tr><td><code>CR-FE-01</code></td><td>XSS / 内容注入</td><td><code>dangerouslySetInnerHTML</code> / <code>v-html</code> 的输入来源校验；用户输入进 DOM 前转义</td></tr>
-          <tr><td><code>CR-FE-02</code></td><td>组件生命周期</td><td>副作用清理（事件监听/定时器/订阅在卸载时移除）；异步操作对已卸载组件的写保护</td></tr>
-          <tr><td><code>CR-FE-03</code></td><td>状态管理</td><td>共享状态的更新竞态（并发 setState/dispatch）；派生状态与源数据不一致</td></tr>
-          <tr><td><code>CR-FE-04</code></td><td>性能</td><td>Bundle size 意识（大依赖按需加载）；列表渲染 key 稳定性；不必要的重渲染</td></tr>
-          <tr><td><code>CR-FE-05</code></td><td>可访问性</td><td>交互元素有可访问名称；键盘可操作；焦点管理（模态框/抽屉打开时焦点捕获）</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <h3>中优先级：潜在新领域</h3>
+    <p>前端（设计审 + 代码审两侧）已于 <code>add-frontend-checklists</code>（2026-08）补齐并接入 <code>trigger-catalog</code> TG-03；下表为后续仍可能扩展的领域，视是否有实际项目按需再补：</p>
     <div class="matrix-wrap">
       <table>
         <thead><tr><th>领域</th><th>覆盖面</th><th>触发条件</th><th>优先级判断</th></tr></thead>
@@ -477,7 +480,6 @@
           <tr><td><code>mobile</code></td><td>iOS/Android 原生</td><td>移动端变更</td><td>有实际项目时再补</td></tr>
           <tr><td><code>data-pipeline</code></td><td>ETL / 数据工程</td><td>数据管道变更</td><td>有实际项目时再补</td></tr>
           <tr><td><code>infra</code></td><td>IaC / CI/CD</td><td>基础设施变更</td><td>有实际项目时再补</td></tr>
-          <tr><td><code>frontend-react</code></td><td>React 特化 delta</td><td>extends frontend</td><td>先建 frontend 通用，再按框架分层</td></tr>
         </tbody>
       </table>
     </div>
@@ -487,7 +489,7 @@
   <section class="section" id="howto">
     <h2><span class="num">五、</span>如何新增一个领域</h2>
 
-    <p>以补齐 <code>code-checklists/domains/frontend.md</code> 为例，完整流程：</p>
+    <p>已建成回顾：<code>code-checklists/domains/frontend.md</code>（<code>add-frontend-checklists</code>，2026-08）是这套五步流程的最近一次实跑，以它为例复盘完整流程：</p>
 
     <ol class="steps">
       <li><strong>建文件</strong>：在 <code>sdflow-init/assets/workflow/code-checklists/domains/</code> 下新建 <code>frontend.md</code>，文件头声明继承关系：
@@ -505,8 +507,10 @@
       <li><strong>走正常 change 流程</strong>：这类改动本身就应该走 <code>/sdflow-spec</code> → review → ship 的完整流程——dogfooding。</li>
     </ol>
 
+    <p>实际条目见 <code>code-checklists/domains/frontend.md</code>（CR-FE-01~08）；设计审侧同批同法补齐见 <code>spec-checklists/domains/frontend.md</code>（FE-06~13）。</p>
+
     <div class="callout callout-info">
-      <strong>分层原则</strong>：如果某个框架（如 React/Vue）有特化规则，建 <code>frontend-react.md</code> 并声明 <code>extends: frontend</code>。读 React 项目的完整清单 = <code>base</code> + <code>frontend</code> + <code>frontend-react</code> 三层并集。这与 <code>backend</code> → <code>backend-go</code> 的分层完全对称。
+      <strong>分层原则的实例</strong>：框架特化规则走同一模式——<code>frontend-react.md</code> 声明 <code>extends: frontend</code>（已建成，spec 侧 REACT-01~03 · code 侧 CR-REACT-01~07）。读 React 项目的完整清单 = <code>base</code> + <code>frontend</code> + <code>frontend-react</code> 三层并集，与 <code>backend</code> → <code>backend-go</code> 的分层完全对称。
     </div>
   </section>
 
