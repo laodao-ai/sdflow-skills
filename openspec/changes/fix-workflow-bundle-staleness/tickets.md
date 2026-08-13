@@ -33,9 +33,9 @@ impl-pipeline: tickets
 - `spec-checklists/spec-quality-base.md`：:37 writing-plans→出 ticket；`spec-checklists/README.md`：:62 `rules/` 错路径→`../`、:64 R 落点现行化
 - `/review` 消费方 8 处统一改写：`code-checklists/README.md`:3,13,28,53,68 + `code-review-base.md`:3 + `domains/llm.md`:5 + `trigger-catalog.md`:108
 
-- [ ] 全部位点按 D1/D2/D3/D6/D9 改写完毕，无遗漏
-- [ ] 改后 `quality-layering.md:14` 出处标注仍在
-- [ ] 改后 `spec-quality-base.md:7` 来源行仍在
+- [x] 全部位点按 D1/D2/D3/D6/D9 改写完毕，无遗漏
+- [x] 改后 `quality-layering.md:14` 出处标注仍在
+- [x] 改后 `spec-quality-base.md:7` 来源行仍在
 
 ### Task 2: generation-process 收史 + ff-generation-constraints 外壳更新
 
