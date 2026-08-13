@@ -1,5 +1,7 @@
 # Claude Code Token 节省策略
 
+> **个人历史笔记（superpowers 时代）**：不代表现行工作流，与当前 spec 质量机器无关，纯使用提示存档。
+
 记录在使用 Claude Code + superpowers 工作流时，经过验证的 token 节省方法。
 
 ---

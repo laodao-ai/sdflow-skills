@@ -20,6 +20,9 @@
    └─────────────────────────────────────────────┘
 ```
 
+> L1 举例为历史工具名（brainstorming/autoplan），现行对应 `/sdflow-spec`（生成）与
+> `sdflow-spec-review` / `sdflow-code-review`（评审编排器）；本文不逐处改写举例，L3 框架本身不受影响。
+
 L2 是尺子，L1 是干活的手，L3 是「为什么这么布手、布几道、谁来量」。
 再好的 checklist 也不会自动变成高质量 spec——中间靠 L3 的机制。
 

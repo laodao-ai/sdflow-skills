@@ -2,6 +2,10 @@
 
 > 辨析两个文档的职责边界，说明在 OpenSpec 工作流中各自扮演的角色。
 
+> **历史举例标注**：文中 `plan-ceo-review`（Phase 1 = 已退役 autoplan）、`brainstorming` 为历史工具名，
+> 现行对应设计门评审编排器 `sdflow-spec-review` 与 `/sdflow-spec` 拷问相位；本文不逐处改写举例，
+> `opsx:ff` 举例已改指 `/sdflow-spec`（仍兼容 `opsx:ff` 直呼）。
+
 ---
 
 ## 一、核心区别
@@ -24,7 +28,7 @@
 OpenSpec 的产出物本身已经包含了 mini-PRD 的等价功能：
 
 ```
-opsx:ff 产出物
+/sdflow-spec 产出物
   ├── proposal.md   ← Why + What Changes + Impact = mini-PRD 骨架
   ├── design.md     ← 技术方案（How）
   ├── specs/*.md    ← 功能级技术 spec（How Detail）
@@ -61,7 +65,7 @@ plan-ceo-review Phase 1（autoplan）
       ↓
 新功能 idea
       ↓
-opsx:ff（生成 proposal.md）
+/sdflow-spec（生成 proposal.md）
   ──── proposal.md 中的 Why 节引用 PRD 对应目标 ────
   ──── 必填：成功指标（阻塞级字段） ────
       ↓
@@ -101,7 +105,7 @@ specs/*.md
 
 ## 六、最大风险：Spec 前没有 PRD 验证
 
-**场景**：工程师拿到一个需求，直接 `opsx:ff` 生成 spec，然后按 spec 实现，最后发现用户根本不需要这个功能。
+**场景**：工程师拿到一个需求，直接 `/sdflow-spec` 生成 spec，然后按 spec 实现，最后发现用户根本不需要这个功能。
 
 **根本原因**：proposal.md 的 "Why" 节通常是描述性的，没有可证伪的成功指标。
 
@@ -109,7 +113,7 @@ specs/*.md
 
 | 阶段 | 防线 | 强度 |
 |------|------|------|
-| opsx:ff | proposal.md 必须填成功指标 | 阻塞级（新增） |
+| /sdflow-spec | proposal.md 必须填成功指标 | 阻塞级（新增） |
 | plan-ceo-review | Dream State 映射 + 前提假设挑战 | 已有，依赖成功指标 |
 | 实现完成后 | 按成功指标 verify | 依赖前两项 |
 
