@@ -76,13 +76,13 @@ reference 文件处置（横幅/标注/移动）、同族失鲜面治（index-se
 - `docs/sdflow-fable5/02-module-reference.md`:160 去号段上界 `[A3]`
 - 本仓 `openspec/config.yaml` 与 template 同款行手动同步，diff 对照确认无分叉
 
-- [ ] reference 三文件横幅/标注均已添加
-- [ ] `Token_Saving_Strategies.md` 已 git mv 至 `docs/` 且有历史横幅
-- [ ] `PRD_vs_Spec.md` 4 处 opsx:ff 已改 + 顶部标注已加
-- [ ] `index-section.md` 6 行全部按 A1 修正
-- [ ] `config.template.yaml` 号段去上界 + blurb 现行化
-- [ ] `openspec/config.yaml` 与 template 同款行一致（diff 对照）
-- [ ] `docs/sdflow-fable5/02-module-reference.md`:160 号段已改
+- [x] reference 三文件横幅/标注均已添加
+- [x] `Token_Saving_Strategies.md` 已 git mv 至 `docs/` 且有历史横幅
+- [x] `PRD_vs_Spec.md` 4 处 opsx:ff 已改 + 顶部标注已加
+- [x] `index-section.md` 6 行全部按 A1 修正
+- [x] `config.template.yaml` 号段去上界 + blurb 现行化
+- [x] `openspec/config.yaml` 与 template 同款行一致（diff 对照）
+- [x] `docs/sdflow-fable5/02-module-reference.md`:160 号段已改
 
 ### Task 4: 实现验证（收尾，不计入 3–6 预算）
 
