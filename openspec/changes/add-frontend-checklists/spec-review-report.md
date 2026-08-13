@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 32eef0604f5bf3c3a5ba584bdfd493bcd01904f0
+---
+
 # Spec Review Report · add-frontend-checklists
 
 - 日期：2026-08-13 · 宿主 host=claude（strong=opus / mid=sonnet / light=haiku；effort high/medium/low）
@@ -52,6 +58,8 @@ HR-TG 判定：命中 TG-19（多条需求，P0/P1 已在场）、TG-22（假设
 - **Q2 · B7/B8 代笔条文认不认**：「纯键盘交互口径」是人拍板的方向，但最终条文文本此前不存在，评审已在候选表 B 组代笔起草（模态框焦点四段 / 表单错误焦点移动与即时消错，来源留 W3C 原链）。文本是否达意请设计门过目；不满意可只改措辞，落点与编号（CR-FE-07/08）不受影响。
 
 **拍板记录（2026-08-13 17:11，用户「都同意」）**：Q1 认可（Non-Goal 边界修订 + task 2.5 fold 维持）；Q2 认可（B7/B8 代笔条文维持，措辞可后续微调）；task 2.3 修订为指针式；两项 defer 优化（注册一致性机械守、guide.html 长期治理）记入 todo 池。**注**：此为对 Q1/Q2/2.3 修订的拍板，设计 HARD-GATE 的批准（拍板三问勾选 + 进 `/sdflow-ship`）另行显式确认。
+
+**设计门已拍板批准，日期 2026-08-13（17:15，用户「批准」）**——批准盘面 = `32eef06`（拍板前二次修订已按 ADR-7(b) 单独落盘），机判锚见本文件头部 frontmatter `ship-gate` 块。〔SR-M〕lens-metric 锚随本次拍板最终化：拍板未翻改任何裁决（13 采纳 / 2 裁掉 / 0 defer 维持），下方锚行数值即门后最终值，原地确认、未重算。
 
 ### [已裁掉]（反静默压制留痕，供复核「裁得对不对」）
 
