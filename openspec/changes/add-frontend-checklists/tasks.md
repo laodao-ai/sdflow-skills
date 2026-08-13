@@ -16,7 +16,7 @@
 
 - [ ] 2.1 `trigger-catalog.md` TG-03 领域列：`frontend` → `` `frontend`(+`frontend-react`) ``（与 TG-01/02 记法同构）
 - [ ] 2.2 `spec-checklists/README.md`：架构图加 frontend-react 分支、ID 约定表加 `REACT-` 行、领域注册表加 frontend-react 行
-- [ ] 2.3 `code-checklists/README.md`：架构图加 frontend 链、选用规则 L33「frontend（如有）」接实为 `frontend(+frontend-react)`、ID 表加 `CR-FE-`/`CR-REACT-` 行、注册表加 2 行；[spec-review-amendment] 另追加「如何新增一个领域（扩展约定）」节（该侧原无此节，复制 spec 侧 `README.md:82-88` 五步、ID 示例改 CR- 前缀——design Context 订正项）
+- [ ] 2.3 `code-checklists/README.md`：架构图加 frontend 链、选用规则 L33「frontend（如有）」接实为 `frontend(+frontend-react)`、ID 表加 `CR-FE-`/`CR-REACT-` 行、注册表加 2 行；[spec-review-amendment·人拍板指针式] 另加一行扩展约定**指针**（该侧原无此节；查表式规则按仓内纪律用指针不复制文本，避免 +1 漂移面）：「扩展约定（五步）见 `../spec-checklists/README.md` §如何新增一个领域，两侧同法、ID 用 CR- 前缀」
 - [ ] 2.4 [spec-review-amendment] `code-checklists/domains/backend.md:11`：CR-BE-02 检查点内「客户端框架渲染（`dangerouslySetInnerHTML` / `v-html` 等）待 frontend domain 覆盖，本条不声称覆盖」改为「客户端框架渲染 XSS 见 `domains/frontend.md` CR-FE-01（本条聚焦服务端模板渲染）」；不动该条其余内容（4 镜 + voice 收敛的 IOU 关闭项）
 - [ ] 2.5 [spec-review-amendment] 三处栈枚举文本追加 react delta：`sdflow-spec-review/SKILL.md:223` 与 `sdflow-init/SKILL.md:195` 的 `（backend·go / embedded·ml307c·esp32 / frontend）` → `（backend·go / embedded·ml307c·esp32 / frontend(+frontend-react)）`；`config.template.yaml:24` 同式（`sdflow-code-review/SKILL.md:680` 用「…」省略式列举、非穷举清单，不改）
 

@@ -15,7 +15,7 @@ decision_hash: b26635380818
 ## 承重约束
 
 1. **扩展走既有「通用 base + 领域 delta」架构，纯增量**：只写本层新增规则、`extends:` 声明父层、不改 base/父层、注册表登记一行。
-   锚：`sdflow-init/assets/workflow/spec-checklists/README.md:82-88`（扩展约定五步）。[spec-review-amendment 锚订正：code 侧 README **无**扩展约定节（68 行，注册表后即尾注）——「同构」仅指注册表/ID 表结构；扩展纪律以 spec 侧为单一源，code 侧缺节随 task 2.3 补齐。]
+   锚：`sdflow-init/assets/workflow/spec-checklists/README.md:82-88`（扩展约定五步）。[spec-review-amendment 锚订正：code 侧 README **无**扩展约定节（68 行，注册表后即尾注）——「同构」仅指注册表/ID 表结构；扩展纪律以 spec 侧为单一源，code 侧随 task 2.3 加指针行（不复制文本，人拍板 2026-08-13 指针式）。]
 2. **ID 前缀无冲突**：spec 侧 frontend 增补沿用 `FE-`（从 FE-06 起，ID 不复用不重排，README:53）；新层 `REACT-` 未被占用；code 侧 `CR-FE-` / `CR-REACT-` 未被占用。
    锚：`spec-checklists/README.md:45-53` ID 表、`code-checklists/README.md:37-47` ID 表。
 3. **分层选用记法 = 括号 +delta 式**：TG-03 的领域列由 `frontend` 改为 `` `frontend`(+`frontend-react`) ``，与 TG-01 `backend`(+`backend-go`)、TG-02 `embedded`(+芯片 delta) 同构；react delta 的触发子条件 = 变更实际涉及 React 栈（与 backend-go 语言 delta 同语义），**无需新触发机制**。

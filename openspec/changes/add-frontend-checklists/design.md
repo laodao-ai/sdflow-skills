@@ -5,7 +5,7 @@
 动机见 `proposal.md - Why`。现状与约束：
 
 - spec 侧 `frontend.md` 现有 FE-01~05（交互状态 + 视觉品味），形制 = `extends: base` 头注 + 单表（ID/规则/触发条件/检查点）+ 尾注；code 侧无 frontend domain。
-- 两侧 README 各有：架构图、选用规则（TG 映射）、ID 约定表、领域注册表；扩展约定五步（「只写本层新增、extends 声明父层、每条给触发条件/检查点/防什么失效、注册表登记、不改 base/父层」）**仅 spec 侧 README 成节（`README.md:82-88`）——code 侧 README 现无该节**（注册表后即尾注，68 行），随本 change task 2.3 补齐 [spec-review-amendment：原句「两侧各有扩展约定」经实读证伪，voice 发现]。
+- 两侧 README 各有：架构图、选用规则（TG 映射）、ID 约定表、领域注册表；扩展约定五步（「只写本层新增、extends 声明父层、每条给触发条件/检查点/防什么失效、注册表登记、不改 base/父层」）**仅 spec 侧 README 成节（`README.md:82-88`）——code 侧 README 现无该节**（注册表后即尾注，68 行），随本 change task 2.3 加**指针行**指向 spec 侧（不复制文本，单一源保持 spec 侧）[spec-review-amendment：原句「两侧各有扩展约定」经实读证伪，voice 发现；指针式为人拍板 2026-08-13]。
 - `trigger-catalog.md` TG-03 领域列现为 `frontend`；分层链既有记法 = `backend`(+`backend-go`)。
 - 条目内容 = 已拍板 26 条（`decision-memo.md` + `research/absorption-candidates.md`，含逐条检查点全文与来源）。
 
@@ -53,7 +53,7 @@ openspec/changes/add-frontend-checklists/research/   [新] 候选表+备选冻�
 ├── sdflow-spec-review/SKILL.md          [改] L223 栈枚举 +frontend-react
 ├── sdflow-init/SKILL.md                 [改] L195 栈枚举 +frontend-react
 ├── sdflow-init/assets/workflow/config.template.yaml  [改] L24 栈枚举 +frontend-react
-└── code-checklists/README.md            [改] 追加「如何新增一个领域（扩展约定）」节（复制 spec 侧五步、改 ID 示例——该侧原无此节）
+└── code-checklists/README.md            [改] 加一行扩展约定指针（指向 spec 侧 §如何新增一个领域；查表式用指针不复制，人拍板 2026-08-13）
 ```
 
 选用链（目标态）：命中 TG-03 → spec 审读 `base+frontend(+frontend-react)`；code 审读 `code-review-base+frontend(+frontend-react)`；react delta 叠加条件 = 变更实际涉及 React 栈（同 backend-go 语义）。
