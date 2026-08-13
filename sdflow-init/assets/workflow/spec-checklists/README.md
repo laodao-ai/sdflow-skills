@@ -19,6 +19,7 @@
           ├ embedded-ml307c.md  ML307C delta (extends embedded)
           └ embedded-esp32.md   ESP32 delta (extends embedded)
         frontend.md             前端 / UI 通用
+          └ frontend-react.md   React delta (extends frontend)
         [future] ...            新领域在此扩展
 ```
 
@@ -49,6 +50,7 @@
 | `GO-NN` | backend-go delta | `GO-01 errgroup 生命周期` |
 | `EMB-NN` | embedded 通用 | `EMB-02 任务栈预算` |
 | `ML307C-NN` / `ESP32-NN` | 芯片 delta | `ESP32-02 OTA 双槽安全` |
+| `REACT-NN` | frontend-react delta | `REACT-01 Suspense/加载边界设计` |
 
 ID 一经分配不复用、不重排——删除规则只留空号，新增规则取新号。
 
@@ -75,6 +77,7 @@ base 规则带 `落点` 标签，指明该规则最终**怎么落地执行**（�
 | `domains/embedded-ml307c.md` | embedded | ML307C（蜂窝模组） | `ML307C-` | ✅ 就绪 |
 | `domains/embedded-esp32.md` | embedded | ESP32-C3（WiFi SoC） | `ESP32-` | ✅ 就绪 |
 | `domains/frontend.md` | base | 前端 / UI（任意框架） | `FE-` | ✅ 就绪 |
+| `domains/frontend-react.md` | frontend | React | `REACT-` | ✅ 就绪 |
 | `domains/devex.md` | base | developer-facing 交付面（CLI/API/SDK/skill/配置面，TG-28，**spec-review-only**） | `DX-` | ✅ 就绪 |
 
 ---

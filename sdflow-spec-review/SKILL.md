@@ -220,7 +220,7 @@ design-voice 同批一条消息内**单批全并行 dispatch**，互不依赖，
 **规划镜头（主 session）**：
 
 - **广审双镜（strategy/plan-eng）恒跑**，不受 TG 命中门控——职责划分见下方「广审镜」小节。
-- 按 `{change_dir}` 实际涉及的栈 + 内容判命中的 TG/领域 → 决定开哪几个**领域镜**（backend·go / embedded·ml307c·esp32 / frontend）。
+- 按 `{change_dir}` 实际涉及的栈 + 内容判命中的 TG/领域 → 决定开哪几个**领域镜**（backend·go / embedded·ml307c·esp32 / frontend(+frontend-react)）。
 - 按风险定**对抗镜**数量：普通 2 个，高风险 3 个。固定 1 个**接地镜**（机械读码核验）。
 - 只审命中的；config 已固化的结构/占位/一致性（T/S）不进任何镜。
 - **roster 条件化派发〔DD6/DD2，implement-workflow-optimization-2026-08-p2〕**：全部评审镜（两层合计 13 面）

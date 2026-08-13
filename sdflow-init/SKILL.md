@@ -192,7 +192,7 @@ python <skill>/scripts/init.py init --root /path/to/project
 脚本结束会提示下一步：
 
 1. **填 config 的「本项目」段**（init 新建 config 时）：编辑 `openspec/config.yaml` 的 `## 本项目`
-   context 段，填该项目的 tech stack、命中的领域（backend·go / embedded·ml307c·esp32 / frontend）、
+   context 段，填该项目的 tech stack、命中的领域（backend·go / embedded·ml307c·esp32 / frontend(+frontend-react)）、
    硬边界等。**通用段与 rules 照搬模版、勿改**。
 2. **合并已存在的 config**（config.yaml 已存在时）：把模版（`openspec/workflow/config.template.yaml`）的
    「通用」context 段 + 全部 `rules:` 并入现有 config.yaml，**保留**用户的「本项目」段和自定义键。
