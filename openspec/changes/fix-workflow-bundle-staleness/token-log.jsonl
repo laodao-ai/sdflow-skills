@@ -1,0 +1,1 @@
+{"v": 1, "ts": "2026-08-13T09:42:17+0800", "step": "sdflow-spec-grill", "session": "5622d585-ed96-4c36-92c5-e7c6953bdee5", "host": "claude", "anchor": true, "reason": "ok", "usage": {"input": 222, "output": 198292, "cache_read": 17642542, "cache_creation": 815041, "messages": 117}}
