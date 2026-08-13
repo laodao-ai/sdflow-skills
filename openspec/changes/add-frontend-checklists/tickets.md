@@ -91,6 +91,6 @@ impl-pipeline: tickets
 - 三处栈枚举行含 `frontend(+frontend-react)`
 - `grep -n "缺失\|已知缺口" sdflow-init/assets/workflow/checklists-guide.html` 逐条判定
 
-- [ ] 单元测试证据齐全并通过
-- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] 单元测试证据齐全并通过
+- [x] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
