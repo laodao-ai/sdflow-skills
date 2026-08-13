@@ -8,3 +8,4 @@
 {"v": 1, "ts": "2026-08-13T17:47:09+0800", "step": "add-frontend-checklists:task2-wiring", "session": "de1be88d-e679-4c95-9e4a-c9a557121598", "host": "claude", "anchor": false, "reason": "no-transcript"}
 {"v": 1, "ts": "2026-08-13T17:57:06+0800", "step": "add-frontend-checklists:task3-guide-sync", "session": "de1be88d-e679-4c95-9e4a-c9a557121598", "host": "claude", "anchor": false, "reason": "no-transcript"}
 {"v": 1, "ts": "2026-08-13T18:24:26+0800", "step": "add-frontend-checklists:task4-verification", "session": "de1be88d-e679-4c95-9e4a-c9a557121598", "host": "claude", "anchor": false, "reason": "no-transcript"}
+{"v": 1, "ts": "2026-08-13T18:29:24+0800", "step": "impl-review", "session": "de1be88d-e679-4c95-9e4a-c9a557121598", "host": "claude", "anchor": false, "reason": "no-transcript"}
