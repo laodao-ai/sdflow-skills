@@ -18,35 +18,26 @@
 
 所以 ③ 不进 config，进本文档。
 
-## 二、③ = 三种对话相位 + 四个 skill
+## 二、③ = 两个相位 + 两个 skill
 
-不是"选一个 skill"，而是三个**相位**，各有专用 skill：
+不是"选一个 skill"，而是两个**相位**，各有专用 skill：
 
 | 相位 | skill | 干什么 | 产物 / 门禁 |
 |------|-------|--------|------------|
 | **发散** | `opsx:explore` | 想清要不要 / 是什么；reframe 问题，防过早收敛 | 无（思考即价值） |
-| **收敛** | `brainstorming` | 逼出 2-3 方案 → 逐段批准 → 落设计 | design doc + **HARD-GATE** |
-| **对抗压测** | `grill-me` / `grill-with-docs` | 把设计往死里问，逐分支死磕薄弱处 | 共识（docs 版还落 ADR/术语） |
+| **收敛 + 拷问 + 生成** | `/sdflow-spec` | 澄清(A) → 拷问(B) → 生成(C) 一次连续跑；拷问结构性前置于成文 | 四件套 + decision-memo.md + **HARD-GATE** |
 
 ```
-   发散 ──────────────► 收敛 ──────────────► 对抗验证
-   explore           brainstorming        grill(-with-docs)
-   (问题模糊时)        (产出+把门)           (死磕分支+对齐术语+落ADR)
+   发散 ──────────────────────► 收敛 + 拷问 + 生成
+   opsx:explore                /sdflow-spec
+   (问题模糊时)                  (产四件套 + 拷问前置 + 把门)
 ```
 
-## 三、关键洞见：①② 固化后，③ 收窄到 R 桶，grill 价值反超 brainstorming
+## 三、①② 固化后 ③ 收窄到 R 桶（历史论证见 workflow-history.md A5）
 
-config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12 槽、自检靠 S 扫描、写文档靠 ff），只剩 R 桶。而 **grill 正是专锤 R 桶的工具**——逐项命中标准与锚：
-
-| grill（尤其 -with-docs）的动作 | 命中的标准 / 锚 |
-|------|------|
-| 揪模糊 / 重载术语 → 定准 | BASE-09 歧义 / 术语定义 |
-| 代码 vs 主张 不一致就揭穿 | D-1 代码事实（Accurate · 锚① 代码库） |
-| 编边界场景压测 | BASE-01 四类场景 + BASE-06 错误路径 |
-| 逐分支死磕决策树 | BASE-27 时序可执行性（实现者会卡哪） |
-| 落 ADR + 词汇表 | BASE-12 ADR + 锚③ 既有决策 / ADR |
-
-结论：**brainstorming 是"产设计"的收敛器，grill 是"锤设计"的对抗器。** 结构与约束已被 config 守住后，真正稀缺的是**对抗压测**——grill 比再跑一遍 brainstorming 的机械自检更值钱。
+`/sdflow-spec` 相位 B 拷问是收窄后 R 桶的对话执行器；`brainstorming` 与 `grill-me` / `grill-with-docs`
+两工具期的完整论证（config 固化①②后机械步如何被吸收、grill 逐项命中哪些标准与锚）已移入
+[workflow-history.md](./workflow-history.md) A5。
 
 ## 四、推荐流水线（唯一入口）
 
@@ -56,6 +47,7 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
         ↓ 人示意收敛(如"开搞"/"做吧"/"开 change") → 模型自动 invoke
   /sdflow-spec                          澄清(A) → 拷问(B) → 生成(C) 一次连续跑
         ↓                               拷问结构性前置于成文；产四件套 + decision-memo.md
+        ↓ /clear → /sdflow-spec-review（阶段二设计审）
   HARD-GATE 批准                        保留「未批准不实现」门禁
         ↓
   /sdflow-ship（sdflow-implement 等）
@@ -69,7 +61,7 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
 
 模型 SHALL 在以下情形自动 invoke `/sdflow-spec`：
 ① explore 中人示意收敛（如「开搞」「做吧」「开 change」）；
-② 用户描述需求且判断需要开 change 时。
+② 用户描述需求且需要开 change 时。
 
 **模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发；explore 讨论仍在发散、用户
 未表达收敛信号时，MUST NOT 自动跳转。触发方式的改变**不影响**相位 B 的拷问协议（呈现与拍板
@@ -104,7 +96,7 @@ schema 是阶段一入口的**结构与提示层**：它声明四件套的 artif
 
 - **①② 在 `config.yaml`，③ 在本文**：三杠杆分工不重叠（结构+约束守机械正确，过程守判断正确+人把门）。
 - **explore 的"问题模糊"是过程决策，不入 [`trigger-catalog.md`](./trigger-catalog.md)**（TG 是"按变更内容"的触发；相位选择是"按不确定性"的元决策，性质不同）。
-- **grill 落的产物回流标准**：ADR ↔ BASE-12、术语 ↔ BASE-09、代码核验 ↔ D-1。grill 是这些 R 项的**对话执行器**。
+- **拷问落的产物回流标准**：ADR ↔ BASE-12、术语 ↔ BASE-09、代码核验 ↔ D-1。`/sdflow-spec` 相位 B 拷问是这些 R 项的**对话执行器**。
 
 ## 七、检查清单（用 ③ 时）
 
