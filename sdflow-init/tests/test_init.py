@@ -273,6 +273,21 @@ class TestProjectLocalSchema:
             f"schema: {init_mod.PROJECT_SCHEMA}"
         )
 
+    def test_migration_accepts_marker_with_extra_keys(self, tmp_path):
+        """openspec CLI writes created/skip_specs etc alongside schema."""
+        root = self._project(tmp_path)
+        fork_bound = root / "openspec" / "changes" / "active"
+        fork_bound.mkdir(parents=True, exist_ok=True)
+        (fork_bound / "proposal.md").write_text("# proposal\n", encoding="utf-8")
+        marker = fork_bound / ".openspec.yaml"
+        marker.write_text(
+            f"schema: {init_mod.PROJECT_SCHEMA}\ncreated: 2026-08-13\nskip_specs: true\n",
+            encoding="utf-8",
+        )
+        count = init_mod.migrate_changes(str(root), init_mod.PROJECT_SCHEMA)
+        assert count == 0
+        assert marker.read_text(encoding="utf-8").startswith(f"schema: {init_mod.PROJECT_SCHEMA}")
+
     @pytest.mark.parametrize("content", ["schema: ", "schema: unexpected\n", "not-schema: value\n"])
     def test_migration_rejects_invalid_or_mismatched_existing_marker(self, tmp_path, content):
         root = self._project(tmp_path)
