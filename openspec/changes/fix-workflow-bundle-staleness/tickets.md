@@ -53,12 +53,12 @@ impl-pipeline: tickets
 - `workflow-history.md` 新增 A5 条目承接 §三论证考古
 - `ff-generation-constraints.md`：标题改「生成起手强制规范（FF-0 + D-1~D-6）」；定位声明与调用方示例改 /sdflow-spec 语境（保「或 /opsx:ff 直呼」）；`@openspec/workflow/` 路径表述改 canonical；背景/历史节不动
 
-- [ ] `generation-process.md` §二/§三/§六按 D4 改写完毕
-- [ ] §四流水线图正确插入阶段二行，其余行未变
-- [ ] §四 ② 已删「判断」二字，其余措辞未变
-- [ ] `pytest hack/tests/test_canonical_entry_sync.py` 全绿（presence 六子串保留）
-- [ ] `workflow-history.md` A5 条目已新增
-- [ ] `ff-generation-constraints.md` 按 D5 更新完毕，背景/历史节未动
+- [x] `generation-process.md` §二/§三/§六按 D4 改写完毕
+- [x] §四流水线图正确插入阶段二行，其余行未变
+- [x] §四 ② 已删「判断」二字，其余措辞未变
+- [x] `pytest hack/tests/test_canonical_entry_sync.py` 全绿（presence 六子串保留）
+- [x] `workflow-history.md` A5 条目已新增
+- [x] `ff-generation-constraints.md` 按 D5 更新完毕，背景/历史节未动
 
 ### Task 3: reference 处置 + 同族面治 + config 同步
 
