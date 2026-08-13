@@ -624,16 +624,15 @@ def migrate_changes(root, schema=BUILTIN_SCHEMA):
 
 
 def _marker_schema(marker):
-    """Return the single schema value in a migration marker, or fail loudly.
+    """Return the schema value from a change marker, or fail loudly.
 
-    Marker 文件永远是 `migrate_changes` 自己写的单行 `schema: <value>\\n`（见 `_atomic_write`
-    调用点）——这里的解析是防用户手工改坏该文件的防御性校验，MUST 恰好一个 `schema` 键、
-    值非空字符串，语义同旧版手搓正则（拒绝额外键/空值/多余非注释内容）。"""
+    openspec CLI 写入的 .openspec.yaml 除 schema 外还可能包含 created、skip_specs 等
+    可选字段——只要求 schema 键存在且为非空字符串，不限制额外键。"""
     try:
         data = _yq(".", marker, default={})
     except RuntimeError as exc:
         raise RuntimeError(f"schema marker 不可解析：{marker}: {exc}") from exc
-    if not isinstance(data, dict) or set(data.keys()) != {"schema"}:
+    if not isinstance(data, dict) or "schema" not in data:
         raise RuntimeError(f"schema marker 不可解析：{marker}")
     value = data.get("schema")
     if not isinstance(value, str) or not value:
