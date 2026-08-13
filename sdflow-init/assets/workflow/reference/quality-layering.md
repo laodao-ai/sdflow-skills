@@ -22,7 +22,7 @@
 ```
 
 **关键**：这些 reviewer 都是 **fresh-context 独立子 agent**。所以"独立性"——我们一直强调的卖点——
-**生成期内部已经有了**。事后 `/clear + /sdflow-code-review` 再加的独立性只是"脱离 controller 的全冷独立"，边际收益。
+**生成期内部已经有了**。事后 sdflow-code-review（独立编排器 + fresh 子代理 fan-out）再加的独立性只是"脱离 controller 的全冷独立"，边际收益。
 
 ## 二、但它们查的是**通用 rubric**，不是我们的领域清单
 
@@ -35,11 +35,11 @@ Standards 轴 dispatch 模板**必填槽**已前移进循环（见 `sdflow-imple
 | 维度 | 生成期已做? | 事后 review 重复? |
 |---|---|---|
 | spec 合规（建的=要的） | ✅ Spec 轴 | Step1 自持 scope 审计 **部分重复** |
-| 通用代码质量（CR-01~09 base） | ✅ Standards 轴 | /sdflow-code-review base **大幅重复** |
+| 通用代码质量（CR base） | ✅ Standards 轴 | /sdflow-code-review base **大幅重复** |
 | **领域规则（CR-EMB/ML307C/ESP32/GO）** | ✅ Standards 轴必填槽已注入 | **冷独立兜底**（见下方 P3c，非"唯一残差"） |
 | scope-drift / 计划完成度 | ⚠️ 部分 | Step1 自持 scope 审计补全 |
 | 全冷独立（脱离 controller） | ❌ 双轴审仍 implementer/controller 同轮次 | /sdflow-code-review 补，但边际 |
-| PR 级 DB/API/Auth 改动 | ❌ | 官方 code-review |
+| PR 级 DB/API/Auth 改动 | ❌ | sdflow-code-review |
 
 **结论**：后置 review 的**通用质量部分是冗余**；真正残差只剩 **领域规则 + scope-drift + PR 风险 + 一点冷独立**。
 
@@ -81,7 +81,7 @@ Standards 轴 dispatch 模板**必填槽**已前移进循环（见 `sdflow-imple
     本节这条 G1 谈的是**独立性**，成本 / 档位 / 盘面纪律 / 自足性都不在其射程内 ⇒ 两处例外均不与之矛盾。
   - 🔴 **MUST NOT 拿「主审裁决需要冷视角」当任一处例外的理由**——本节上面几行已正面回答过它
     （事后 sdflow-code-review 的冷来自**独立编排器 + fresh 子代理 fan-out**，不来自 `/clear`）。
-  - **边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 subagent-dev / sdflow-implement
+  - **边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 sdflow-implement
     调度期间、code-review→done 交接）；阶段三内部需控上下文用 **`/compact` 而非 `/clear`**（merge 意图不在盘上、`VERIFY_FAIL` 恢复要重建理解，
     而 done 的 verify 本就是冷子代理）。
 

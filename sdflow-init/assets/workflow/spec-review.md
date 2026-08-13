@@ -26,7 +26,7 @@
 ### 原则 1 · 独立性（瑞士奶酪：自审无效）
 
 作者审自己 = 同一片奶酪叠自己，洞不会错开。**review 必须由独立于作者的上下文做**：
-fresh-context 子 agent / 第二声音（如 Codex）/ `/clear` 后重审 / grill。
+fresh-context 子 agent / 第二声音（如 Codex）/ grill。
 → 同 session 的 self-review 不算 review，只算生成期自检。
 
 ### 原则 2 · 接地（读真实代码）
@@ -69,7 +69,7 @@ L0 机械、L1 标准、L2 判断——三层盲区不同，叠起来才不漏�
 
 ```
   置信高 → 直接采信，回流修 spec
-  置信中 → 标"需人确认"，进 AskUserQuestion
+  置信中 → 标"需人确认"，写入报告决策登记区
   置信低 → 仍上抛（一行带过），绝不静默滤除
 ```
 
@@ -88,8 +88,8 @@ L0 机械、L1 标准、L2 判断——三层盲区不同，叠起来才不漏�
 
 | 机制 | 独立性 | 处置 |
 |------|--------|------|
-| **brainstorming 自检**（占位/歧义/scope） | self | **退回生成期**——已被 config 吸收，review 阶段别重复 |
-| **手写 checklist**（spec-quality/review-checklist） | self | 已 = `spec-checklists/`；review 只跑**命中 TG 的 R 项**，别全 BASE-01~28 逐条 |
+| **生成期自检**（占位/歧义/scope） | self | **退回生成期**——已被 config 吸收，review 阶段别重复 |
+| **手写 checklist**（spec-quality/review-checklist） | self | 已 = `spec-checklists/`；review 只跑**命中 TG 的 R 项**，别全 BASE 逐条 |
 | **强制画图** | self | 退化为「**验证**图存在/正确/未过时」，非重画（见 design-diagrams.md §五） |
 | **广审双镜**（strategy/plan-eng，本 skill 自持 fresh 子代理，按 base R 项划分） | ✅ 独立 | **保留为主力**；覆盖 base 计划级 + 工程级 R 项（前提/范围/一致性/清晰度/ADR 决策/架构耦合/错误路径/NFR/安全…），火力集中 Validation + 判断，别再核对 config 已防的 T/S 项 |
 

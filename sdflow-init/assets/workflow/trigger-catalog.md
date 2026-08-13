@@ -105,7 +105,7 @@
 | 层 | 文件 | 引用方式 |
 |----|------|---------|
 | D 约束 | `ff-generation-constraints.md` | D-2/D-4/D-6 的触发条件即 TG-04/08/06 |
-| 领域清单 | `spec-checklists/`（设计期 sdflow-spec-review）+ `code-checklists/`（代码期 /review） | 同一 TG-01/02/03 选 domain，两份清单同源；设计审过 spec-checklists/domains，代码审过 code-checklists/domains |
+| 领域清单 | `spec-checklists/`（设计期 sdflow-spec-review）+ `code-checklists/`（代码期 sdflow-code-review + sdflow-implement Standards 轴必填槽） | 同一 TG-01/02/03 选 domain，两份清单同源；设计审过 spec-checklists/domains，代码审过 code-checklists/domains |
 | 画图 | `design-diagrams.md` | 触发条件表即 TG-09~14、TG-18 |
 | 模版槽 | `spec-checklists/`（base/domain T 项）+ 模版骨架 | 每个 `〔触发〕` 槽标注对应 TG-NN |
 | 评审 cross-model | sdflow-spec-review / sdflow-code-review（规划镜头 HR-TG 判定） | 引用下方「HR-TG 子集」附录的 ID 集，不复制清单 |

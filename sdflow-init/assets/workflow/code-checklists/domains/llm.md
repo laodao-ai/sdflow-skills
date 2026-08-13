@@ -2,7 +2,7 @@
 
 > `extends: base` —— 代码**消费 LLM/agent 产出**这一面特有的审查维度，语言无关；
 > 通用维度见 [`../code-review-base.md`](../code-review-base.md)。
-> **code-review-only domain**：本领域清单只在代码审（`/review`）侧登记，设计审（spec-checklists）侧无对应文件。
+> **code-review-only domain**：本领域清单只在代码审（`sdflow-code-review` + `sdflow-implement` Standards 轴）侧登记，设计审（spec-checklists）侧无对应文件。
 
 ---
 

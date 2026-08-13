@@ -59,9 +59,9 @@ base 规则带 `落点` 标签，指明该规则最终**怎么落地执行**（�
 | 落点 | 含义 | 下游产物 |
 |------|------|---------|
 | **T** | 模版槽位 | spec/design 模版里的固定章节，空槽即可见缺失 |
-| **C** | 生成约束 | 生成时主动行为（grep/阻塞），见 `rules/ff-generation-constraints.md` |
+| **C** | 生成约束 | 生成时主动行为（grep/阻塞），见 `../ff-generation-constraints.md` |
 | **S** | 自动扫描 | lint 式机械检查（占位符、形容词 NFR…） |
-| **R** | 对话/评审 | 需人判断，留 brainstorming / eng-review |
+| **R** | 对话/评审 | 需人判断，留 `/sdflow-spec` 相位 B 拷问 / `/sdflow-spec-review` |
 
 ---
 

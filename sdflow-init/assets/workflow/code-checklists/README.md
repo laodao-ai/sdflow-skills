@@ -1,6 +1,6 @@
 # 代码审查规则集（通用 base + 领域 delta）
 
-> 项目无关、可复用的**代码实现审查**规则集，在 `/review`（代码阶段）使用。
+> 项目无关、可复用的**代码实现审查**规则集，在 `sdflow-code-review`（代码阶段，含 `sdflow-implement` Standards 轴必填槽）使用。
 > 架构与 [`../spec-checklists/`](../spec-checklists/)（设计阶段审查）对称：**通用 base + 领域 delta**，
 > 共用 [`../trigger-catalog.md`](../trigger-catalog.md) 的 TG 决定领域深度。
 
@@ -10,7 +10,7 @@
 
 ```
   code-review-base.md           通用 base —— 任何代码都适用（语言无关）
-        │  每次 /review 必过
+        │  每次 sdflow-code-review 必过
         ▼
   domains/<domain>.md           领域 delta —— 按命中技术栈叠加
         backend.md              后端通用（DB/HTTP）
@@ -25,7 +25,7 @@
 
 ## 选用规则（与 spec-checklists 同源 TG）
 
-`/review` 按变更**命中的 TG**（见 trigger-catalog）选领域，与设计期 sdflow-spec-review 选 spec 领域**同一套触发**：
+`sdflow-code-review`（及 `sdflow-implement` Standards 轴必填槽）按变更**命中的 TG**（见 trigger-catalog）选领域，与设计期 sdflow-spec-review 选 spec 领域**同一套触发**：
 
 ```
   命中 TG-01(后端) → code-review-base + backend(+go)
@@ -50,7 +50,7 @@ ID 一经分配不复用、不重排。
 
 ```
   设计期(sdflow-spec-review) → spec-checklists/   "设计对不对"
-  代码期(/review)  → code-checklists/   "实现对不对"
+  代码期(sdflow-code-review + sdflow-implement Standards 轴)  → code-checklists/   "实现对不对"
   两者共用 trigger-catalog 决定领域；互不重复（一个审 spec，一个审 code）
 ```
 
@@ -65,4 +65,4 @@ ID 一经分配不复用、不重排。
 | `domains/embedded-esp32.md` | embedded | ESP32-C3 | `CR-ESP32-` |
 | `domains/llm.md` | base | LLM 集成面（代码消费 LLM/agent 产出） | `CR-LLM-` |
 
-*规则集 v1 · 项目无关 · 代码审查（/review 阶段）*
+*规则集 v1 · 项目无关 · 代码审查（sdflow-code-review / sdflow-implement Standards 轴阶段）*

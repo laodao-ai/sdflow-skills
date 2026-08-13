@@ -1,6 +1,6 @@
 # 通用代码审查规则集（base）
 
-> **定位**：项目无关、语言无关的代码实现审查维度，`/review` 阶段每次必过；
+> **定位**：项目无关、语言无关的代码实现审查维度，`sdflow-code-review`（及 `sdflow-implement` Standards 轴必填槽）阶段每次必过；
 > 再按命中 TG 叠加 `domains/` 领域 delta。架构见 [README.md](./README.md)。
 
 ---
