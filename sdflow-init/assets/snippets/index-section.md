@@ -15,7 +15,7 @@
 | `spec-review` | [workflow/spec-review.md](./workflow/spec-review.md) | spec 评审（Detection 层）：只做 prevention 残差，trigger 驱动 + 独立 + 读码核验 |
 | `model-tiers` | [workflow/model-tiers.md](./workflow/model-tiers.md) | 模型档位映射（强/中/弱职责 + canonical 缺省 + config 覆盖语义） |
 
-设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-NN + domains，含 devex）。
-代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-NN + domains）。
+设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-NN + domains，含 devex、frontend(+frontend-react)）。
+代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-NN + domains，含 frontend(+frontend-react)）。
 说明类（可删不影响执行）：[workflow/reference/](./workflow/reference/)。
 人读概念指南（原理 / 设计思想 / 实战用法）：`~/.sdflow/workflow/sdflow-guide.html`（自包含 HTML，浏览器直接打开；随 bundle 全局分发，不入消费仓）。
