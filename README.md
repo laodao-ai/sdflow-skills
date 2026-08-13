@@ -41,7 +41,6 @@ git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && 
 | 分类 | Skill | 说明 |
 |------|-------|------|
 | 工作流铺设/维护 | `sdflow-init` | 一键把整套 OpenSpec spec 工作流 bundle 铺进任意项目（本仓库是该 bundle 权威源） |
-| 工作流铺设/维护 | `sdflow-maintain` | 扫描 openspec 目录状态、对比 INDEX、报告差异并修复 |
 | 工作流铺设/维护 | `sdflow-upgrade` | 运行 checkout 一键升级：pull → setup → 版本展示（堵 pull→setup 窗口期） |
 | 生成（阶段一） | `sdflow-spec` | 阶段一·产 spec 单一入口：澄清 → 拷问 → 生成三相位一次连续跑，拷问结构性前置于成文；产四件套 + 承重的 `decision-memo.md`（`/clear` 无损）。人可直接触发；人示意收敛（如"开搞"）时模型自动 invoke，但模型不得自主判断"该开 change 了" |
 | 评审（主审） | `sdflow-spec-review` | 阶段二·设计审主审：自持广审双镜 + 并行多镜（领域+对抗+接地读码）+ design-voice 跨模型第二意见 → 一份 spec-review-report，供人类门拍板 |
@@ -56,7 +55,7 @@ git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && 
 | 记录（issues 台账） | `sdflow-issues` | issues 台账单一 skill：bug 池（缺陷记录 + 状态回写 OPEN→VERIFIED→FIXED，B-ID）+ todo 池（改进 / 技术债，T-ID）两池记录，跨池 `issues/INDEX.md` 重建与批次注册表维护，保证 ID 不撞号、总览/详情双写一致 |
 | 复盘 | `sdflow-retro` | 只读再生 workflow 成本×价值复盘报告（阶段墙钟×per-镜价值 join），不决策不改动 |
 
-> `sdflow-init`、`sdflow-issues`、`sdflow-retro`、`sdflow-maintain`、`sdflow-implement`、`sdflow-ship`、
+> `sdflow-init`、`sdflow-issues`、`sdflow-retro`、`sdflow-implement`、`sdflow-ship`、
 > `sdflow-done`、`sdflow-architecture`、`sdflow-devenv` 与 `sdflow-upstream-watch` 为**数据类 skill**
 > （带 `scripts/`，多数另有 `tests/`），由脚本保证确定性；其余 5 个
 > （`sdflow-spec`、`sdflow-spec-review`、`sdflow-code-review`、`sdflow-roadmap`、`sdflow-upgrade`）
@@ -73,7 +72,7 @@ git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && 
 > |------|------|
 > | `opsx-project-init` | `sdflow-init` |
 > | `opsx-done` | `sdflow-done` |
-> | `opsx-maintain` | `sdflow-maintain` |
+> | `opsx-maintain` | ~~`sdflow-maintain`~~（已退役） |
 > | `opsx-roadmap-planner` | `sdflow-roadmap` |
 > | `spec-review` | `sdflow-spec-review` |
 > | `impl-review` | `sdflow-code-review` |

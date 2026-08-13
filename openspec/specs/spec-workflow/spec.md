@@ -271,7 +271,7 @@ skills（sdflow-spec-review / sdflow-code-review / sdflow-done / sdflow-buglist�
 
 **告警文案 SHALL 陈述带前置条件的死件语义而非「遮蔽全局」**〔F3：MUST NOT 用无条件绝对断言〕——resolver 取消仓内优先后（见「规则全局解析 resolver」需求），残留副本对评审不再有生效路径；但该表述 SHALL 带前置条件（「若刚 `git pull` 还没跑 `bash setup.sh`，先跑 setup 再判断」——部署窗口内旧 resolver 的步①仍在，副本仍生效）。文案 SHALL 明确：删 = 清理死件（推荐），并**附可直接复制的删除命令**（如 `rm -rf openspec/workflow/tools openspec/workflow/lens-metric-contract.md` + 告警列出的规则文件）/ 留 = 无害但无用；MUST NOT 沿用"留 = 显式 pin"的旧表述（pin 语义已取消，该表述会让用户以为副本仍在生效）。存量死件清理由人执行该命令完成，MUST NOT 新增一次性自动清删代码〔设计门 Q2〕。**检测判据 SHALL 扩员**：原 `RULE_MARKERS` 三项之外 SHALL 同时检测残留 `tools/` 目录与 `lens-metric-contract.md`（二者停铺后同为死件，只报规则本体会漏掉最大块的残留）。此告警即 CONTEXT 术语『反静默守卫』的**残留死件**变体（见 `adr/0003`、`adr/0039`）。
 
-〔spec-review-amendment / impl-review-fix 935eb42〕告警触发点 = **`init` 与 `update` 两种模式均内联检测**（同一判据函数：新项目 fresh init 自然零残留、零告警；老仓被误当新项目跑 `init` 时也不因模式不同而假绿放过残留）+ **`sdflow-maintain` 兜底扫描**（覆盖常年不跑 `init`/`update` 的仓）；检测范围 MUST 同时覆盖旧版仓内 `hack/checkpoint-commit.sh` **孤儿副本**（checkpoint 全局化后不再被任何机制刷新），并给对称提示。
+〔spec-review-amendment / impl-review-fix 935eb42〕告警触发点 = **`init` 与 `update` 两种模式均内联检测**（同一判据函数：新项目 fresh init 自然零残留、零告警；老仓被误当新项目跑 `init` 时也不因模式不同而假绿放过残留）；检测范围 MUST 同时覆盖旧版仓内 `hack/checkpoint-commit.sh` **孤儿副本**（checkpoint 全局化后不再被任何机制刷新），并给对称提示。
 
 #### Scenario: update 不删残留、给出死件告警
 - **WHEN** 一个 pre-change 的存量消费仓（有规则副本与 `tools/`）跑 `update`

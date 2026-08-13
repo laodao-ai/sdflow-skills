@@ -236,10 +236,6 @@ def report(data, sad=(), root=None):
 def render(root):
     """load + validate + report ——【外部调用方的唯一入口】。→ (ok: bool, text: str)
 
-    【为什么要有这个函数】：`sdflow-maintain` 要把 lint 的结果【原样并入】它的扫描报告
-    （spec `maintain-scan`）。让它自己去 load+validate+report，就是把这三步复制一份 ⇒ 必漂。
-    ∴ 这里出一个函数，`main()` 和 maintain 【都调它】。
-
     ok=False ⇒ text 是错误说明（坏 JSON / schema 不合法）——那是唯一 fail-closed 的情形。
     """
     try:

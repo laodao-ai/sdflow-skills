@@ -172,10 +172,6 @@ _Avoid_: 把它做成无人干预机械镜像 tasks→roadmap（越界判断，�
 _Avoid_: 用裸二态码把不可验界定藏进消费方会过度信任的干净信号（假绿/假阴/假新鲜温床）；让脚本用子串/正则兜底完整性判断（制造新假阳假阴）——完整性强制（声明 vs 实际、逐条处置）属模型/spec-review，非机械校验器职责。
 _Avoid_: 把报告工具 fail-closed 锚「畸形当空」（锚错方向，放过真正的「误读→假一致」）；把「读到 0 条」当失败（那是响亮自纠态）；照搬门的 all-or-nothing 到报告工具（有差异≠该 fail）
 
-**maintain / init 的 INDEX 分治 (Maintain vs Init INDEX Division)** 〔grill-amendment · adr/0016〕:
-`openspec/INDEX.md` 里「rules」撞两义须分治：**workflow bundle 规则**（`openspec/workflow/*.md`）索引在 `<!-- opsx-init:rules:start..end -->` **托管块**、归 **sdflow-init**（`update` 刷新）；**消费仓通用规则**（`openspec/rules/*.md`，可选目录，缺失=合法空）在托管块之外、归 **sdflow-maintain** 的 set-diff。maintain 解析 INDEX MUST **用机器锚行界定、跳过 init 托管块**（不跳则 bundle 条目被误当「已删未清理」+ 诱导越界改 init 领地）。maintain 依赖 init 两常量（`RULE_MARKERS`/`MARK_IDX`）：**canonical 留 `init.py`、maintain 保自包含副本 + 跨脚本一致性守卫 pytest**（跨 skill import 破自包含且运行时脆、物理单一源不可达）——T17 的真闭合 = 机验同步（守卫测试），非删到一份；跨语言副本（bash）难同守则 defer 登记。
-_Avoid_: maintain set-diff 时把 init 托管块条目当自己领地（越界+误报）；跨 skill import 取「物理单一源」（破自包含、运行时脆）；把「删到只剩一份」当 T17 闭合（跨 skill 不可达，机验同步才是）
-
 **历史存档（memo 增量落盘 + 存量 footage 统称）** 〔grill-amendment · rebuild-sdflow-roadmap-v2；术语订正 refactor-roadmap-internalize-deps〕:
 roadmap 规划中「决策形成过程」的原始素材层，与「决策生成」（三件套正文）相对——血统类比：历史存档是毛片、design §决策是成片。物理形态两种：**当前形态** B 相位纪要 `memo.md` 在包根增量落盘；**存量形态**（`refactor-roadmap-internalize-deps` 之前产出的包）保留 wayfinder 的 map+tickets 落 `roadmaps/{name}/footage/` 目录，按冻结条款兼容续跑、不再新增。引用纪律统一：三件套 MUST NOT 引用任何历史存档内容（`footage/` 或 `memo.md`），有价值结论须精炼后写入正文。
 _Avoid_: 把历史存档当 wayfinder 专属产物（memo 同属，未跑过 wayfinder 的包同样适用同一引用禁令）；「详见 footage/memo」类表述（历史存档是草稿证据、非权威源）；与 DOC-1 语境的「考古层」（文档正文演进史，见 `openspec/rules/doc-authoring.md`）混用改名——两者是不同概念，本词条改名不涉及 DOC-1 语境

@@ -313,7 +313,7 @@ _STALE_SHADOW_PRECONDITION = (
 
 
 def stale_shadow_warnings(root):
-    """反静默守卫·陈旧遮蔽（R-MRF-3）死件变体：update 内联为主 + sdflow-maintain 兜底（同款判据）。
+    """反静默守卫·陈旧遮蔽（R-MRF-3）死件变体。
     resolver 已取消仓内优先（adr/0039），残留副本对评审已无生效路径；只告警，绝不删，
     MUST NOT 新增一次性自动清删代码（设计门 Q2：人执行告警附带的命令即达终态零死件）。"""
     warns = []

@@ -7,8 +7,8 @@ description: >
   项目——在其他项目 cwd 下调用会被机械 cwd 守卫（git remote 判定）拒绝、不写任何文件。
   当用户在本仓说"上游追踪"、"跑一轮上游分诊"、"看看上游有什么新东西可以吸收"、
   "/sdflow-upstream-watch" 时触发；不要与 `sdflow-upgrade`（升级本工具链运行 checkout 的
-  git pull + setup）或 `sdflow-maintain`（扫描 openspec 目录结构一致性）混淆——三者职责
-  互不重叠，本 skill 不升级任何东西、不扫结构，只做「上游有什么新东西、值不值得抄」的分诊。
+  git pull + setup）混淆——两者职责互不重叠，本 skill 不升级任何东西，
+  只做「上游有什么新东西、值不值得抄」的分诊。
 ---
 
 # sdflow-upstream-watch — 上游追踪与分诊报告
@@ -169,8 +169,7 @@ description: >
 - ✅ 想知道 gstack / superpowers / matt 套件 / OpenSpec CLI 自上次锚点以来有什么新
   commit/版本，哪些值得抄进本仓。
 - ✅ `sdflow-upgrade` 提示"距上次上游追踪已 N 天"之后，找时间跑一轮。
-- ⚠️ 不用于：升级本工具链自身（`sdflow-upgrade`）；扫描本仓 openspec 目录结构一致性
-  （`sdflow-maintain`）；不在 sdflow-skills 仓内的项目（机械守卫会拒绝）。
+- ⚠️ 不用于：升级本工具链自身（`sdflow-upgrade`）；不在 sdflow-skills 仓内的项目（机械守卫会拒绝）。
 
 ## 运行序列
 

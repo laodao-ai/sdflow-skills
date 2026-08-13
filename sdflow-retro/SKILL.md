@@ -6,8 +6,7 @@ description: >
   lens-metric 锚（价值维），聚合出 `openspec/retro/report.md`：per-change 明细、阶段占比、
   成本双峰、per-镜价值表。**只呈现不决策**——砍镜/降采样/优先级永远人决，本 skill 不做判断、
   不改动任何 change/spec/issues 内容。专指「openspec change 评审工作流复盘」，
-  与通用工程回顾（gstack `retro`：团队周度复盘会）和 `sdflow-maintain`（扫 openspec 目录结构
-  一致性、无成本×价值维度）都不是一回事——本 skill 只做这一件事：把 review 工作流自身的
+  与通用工程回顾（gstack `retro`：团队周度复盘会）不是一回事——本 skill 只做这一件事：把 review 工作流自身的
   成本和产出价值摆到一张报告上给人看。触发：想看"这套评审流程到底值不值"、"哪个镜出的问题多"、
   "复盘一下最近几个 change 的耗时"、"regenerate/刷新复盘报告"。Trigger with /sdflow-retro。
 ---
@@ -172,8 +171,7 @@ description: >
 - ✅ 想知道最近几个 change 在评审流程上花了多少时间、哪个阶段最重。
 - ✅ 想看 per-镜（lens）出的 findings 数、采纳率、独立发现数——判断某镜是否还值得跑。
 - ✅ 归档了新 change 之后，想让 `openspec/retro/report.md` 反映最新数据。
-- ⚠️ 不用于：扫 openspec 目录结构一致性（那是 `/sdflow-maintain` 的事）；不用于团队周度
-  工程复盘会（那是 gstack `retro`）；不用于记录单个 bug/todo（`/sdflow-issues`）。
+- ⚠️ 不用于：团队周度工程复盘会（那是 gstack `retro`）；不用于记录单个 bug/todo（`/sdflow-issues`）。
 
 ## 怎么做
 

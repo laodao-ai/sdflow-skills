@@ -103,8 +103,8 @@ pytest sdflow-issues/tests/                             # 单个 skill
 pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
 ```
 
-带 `scripts/` 的数据类 skill 共 10 个：`sdflow-init`、`sdflow-issues`、`sdflow-retro`（无 tests/）、
-`sdflow-maintain`、`sdflow-implement`、`sdflow-ship`、`sdflow-done`、`sdflow-architecture`、
+带 `scripts/` 的数据类 skill 共 9 个：`sdflow-init`、`sdflow-issues`、`sdflow-retro`（无 tests/）、
+`sdflow-implement`、`sdflow-ship`、`sdflow-done`、`sdflow-architecture`、
 `sdflow-devenv`、`sdflow-upstream-watch`。其余 5 个（`sdflow-spec`、`sdflow-spec-review`、
 `sdflow-code-review`、`sdflow-roadmap`、`sdflow-upgrade`）为纯 Markdown 编排类，无自动化测试。
 
@@ -126,7 +126,7 @@ pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
 1. **编排类（纯 Markdown）**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` /
    `sdflow-roadmap` / `openspec-upgrade` — 靠 SKILL.md 指令驱动主 session 调度子代理，无脚本。
 2. **数据类（Markdown + Python）**：`sdflow-issues` / `sdflow-init` /
-   `sdflow-retro` / `sdflow-maintain` — 由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
+   `sdflow-retro` — 由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
 
 ### `setup.sh` 安装机制（核心，改动需谨慎）
 
@@ -339,7 +339,7 @@ schema fork 漂移检测与自动 rebase 属于已记录遗留边界。
 
 ## 本仓库自身的 OpenSpec 工作流规范
 
-下方为 `sdflow-init` 铺设、`sdflow-maintain` 维护的托管区块（**勿手改区块内部**），
+下方为 `sdflow-init` 铺设的托管区块（**勿手改区块内部**），
 是本仓库做变更时的强制流程，也是上文提到的规则真相源：
 
 <!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本区块 -->

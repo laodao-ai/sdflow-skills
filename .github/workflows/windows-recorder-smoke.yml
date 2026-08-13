@@ -13,7 +13,6 @@ on:
       - "sdflow-init/assets/**"
       - "sdflow-init/scripts/**"
       - "sdflow-issues/**"
-      - "sdflow-maintain/scripts/**"
       - "sdflow-retro/scripts/**"
       - "sdflow-ship/scripts/**"
   pull_request:
@@ -28,7 +27,6 @@ on:
       - "sdflow-init/assets/**"
       - "sdflow-init/scripts/**"
       - "sdflow-issues/**"
-      - "sdflow-maintain/scripts/**"
       - "sdflow-retro/scripts/**"
       - "sdflow-ship/scripts/**"
   workflow_dispatch:
