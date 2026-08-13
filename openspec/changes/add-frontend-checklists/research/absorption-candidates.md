@@ -32,7 +32,9 @@
 | B3 | 凭证与敏感数据存放 | session token/凭证禁 localStorage/sessionStorage（应 httpOnly cookie）；bundle 里不得有密钥（`VITE_`/`NEXT_PUBLIC_` 前缀 = 公开，逐个核不是密钥）；低敏数据 sessionStorage 优于 localStorage | 一个 XSS 即可批量收割 localStorage 里的 token；打进 bundle 的密钥 = 已泄露 | OWASP HTML5 ✅（env 前缀部分〔未核实〕） |
 | B4 | CSRF 前端侧配合 | 状态变更禁走 GET；写请求带 CSRF token（经 header/payload，禁经 cookie 传）或 custom header 方案；CORS 白名单明确指定源（禁 `*`+credentials、禁正则通配子域）；依赖 SameSite 时核对官方严苛条件表 | SameSite 当银弹 → 子域/GET 变更/旧浏览器场景被绕 | OWASP CSRF ✅ |
 | B5 | 跳转与嵌入安全 | location/href 赋值的目标若含用户输入：白名单校验路径、拒绝协议注入（javascript:/data:）防 open redirect；不信任内容 iframe 加 sandbox | 钓鱼跳板：合法域名 + ?redirect=恶意站；第三方内容逃逸 | OWASP ✅ |
-| B6 | 长驻页面资源清理（CR-04 前端特化） | 挂在 window/document/外部 emitter 上的 listener、定时器、observer（Intersection/Resize/Mutation）在组件卸载时成对清理；SPA 无整页刷新，泄漏只积累不清零 | 长驻单页内存持续增长、幽灵 listener 触发已卸载组件逻辑 | 〔未核实〕（与 CR-04 重叠度请拍板：可并入其检查点或独立成条） |
+| B6 | 长驻页面资源清理（CR-04 前端特化） | 挂在 window/document/外部 emitter 上的 listener、定时器、observer（Intersection/Resize/Mutation）在组件卸载时成对清理；SPA 无整页刷新，泄漏只积累不清零 | 长驻单页内存持续增长、幽灵 listener 触发已卸载组件逻辑 | 〔未核实〕（已拍板：独立成条，条文内注「CR-04 的前端特化」） |
+| B7 | 模态框焦点生命周期（E1 #3 捞回，纯键盘交互口径）[spec-review-amendment 起草] | 打开模态：焦点移入模态内首个合理元素；开启期间 Tab/Shift+Tab 循环圈禁在模态内、不落到被遮罩内容；Esc 关闭；关闭后焦点还原到触发元素。四段缺一即键盘操作断链 | 键盘用户 Tab 穿透到遮罩下的页面、或关闭模态后焦点丢回文档顶部从头再 Tab | w3.org/WAI/ARIA/apg/patterns/dialog-modal（原 a11y 来源，措辞已按拍板转纯键盘交互口径） |
+| B8 | 表单错误提示与恢复（E1 #5 捞回，纯键盘交互口径）[spec-review-amendment 起草] | 提交失败：焦点移动到首个错误字段或错误摘要（摘要项可激活跳转对应字段）；错误提示与字段结构关联、紧邻可见；修正后该字段错误即时消除（呼应 A5 校验时机分级） | 键盘用户提交失败后停留在提交按钮处，无法定位错误字段、逐个盲找 | w3.org/WAI/tutorials/forms/notifications（原 a11y 来源，措辞已按拍板转纯键盘交互口径） |
 
 ## C. spec-react 新建（REACT-01 起，设计审）
 
@@ -73,7 +75,7 @@
 | 11 | 流程内不强迫重复输入（WCAG 3.3.7；自动回填/同地址勾选） | spec | WCAG22 Understanding redundant-entry |
 | 12 | alt/可访问名称语义质量（功能图标写功能不写外观） | code | w3.org/WAI/tutorials/images |
 
-注：#3（模态框焦点/Esc）与 #5（表单错误恢复）同时是纯键盘交互 UX 正确性，如愿意可以非 a11y 名义收进 B 组，已单独提请复核。
+注：#3（模态框焦点/Esc）与 #5（表单错误恢复）已按人拍板以纯键盘交互口径捞回进 B 组（B7/B8，正式条文见上方 B 组表 [spec-review-amendment]）；本表两行保留 W3C 来源留痕。
 
 ### E2. 多端条目（用户裁剪）
 
@@ -89,6 +91,7 @@
 ## F. 调研诚实边界
 
 - 〔未核实〕标记的条目（A2/A4/A6/A8/B6/C1/C2/D6 及 B3 局部）依据模型知识/业界共识，未逐字核对权威页面——检查点内容成熟稳定，风险低，但引用不指向具体页面。
+- [spec-review-amendment] 2026-08-13 阶段二 spec-review 前端领域镜已对上述 8 条 + B3 局部（`VITE_`/`NEXT_PUBLIC_` 前缀语义）逐条复核：**均准确，无过时/错误/误导表述**（A6 未做具体 API 声称故不受 Error Boundary 仍需 class 组件的影响）。复核方式 = 领域镜模型知识核验，**非逐字权威页面核对**——〔未核实〕标记保留原义（引用不指向具体页面），落盘正式清单时不携带该标记（清单条目本不带来源）。
 - web.dev rendering-on-the-web（SSR/CSR 权衡）未抓取：渲染策略选型未入候选，如需要可补一条。
 - web.dev inp.html 已抓取但未细读（阈值已从 vitals 页核实）。
 - 子代理调研故障复盘：本日 WebFetch 后端在子代理侧挂死率约五成（并行/串行皆中招），最终 React/性能/安全/汇编四路全部由主 session curl+WebFetch 完成；a11y 为唯一子代理完整跑通的路。

@@ -11,6 +11,7 @@
 - 新建 `code-checklists/domains/frontend.md`（CR-FE-01 ~ 08，extends base）：XSS sink 数据流、postMessage 校验、凭证存放、CSRF 配合、跳转/嵌入安全、长驻页面资源清理（CR-04 前端特化）、模态框焦点生命周期、表单错误提示与恢复（后两条以纯键盘交互口径措辞）。**接走 CR-BE-02 的 IOU**。
 - 新建 `code-checklists/domains/frontend-react.md`（CR-REACT-01 ~ 07，extends frontend）：Effect 存在性、纯度语义违规、Compiler 时代 memo 观、React 19 API 正确性、列表 key 语义、状态所有权与 re-render 半径、[仅RSC] 边界纪律。
 - 接线：`trigger-catalog.md` TG-03 领域列 `frontend` → `` `frontend`(+`frontend-react`) ``（与 TG-01/02 的 +delta 记法同构）；两侧 README 架构图 + ID 表 + 注册表登记；`code-checklists/README.md:33`「frontend（如有）」占位接实。
+- [spec-review-amendment] 接线补两处评审多镜收敛发现的漏项：① `code-checklists/domains/backend.md:11` CR-BE-02 的 IOU 句「待 frontend domain 覆盖」改为交叉引用（指向 CR-FE-01），否则 IOU 兑现后原句构成新失鲜；② 三处栈枚举文本追加 `(+frontend-react)`——`sdflow-spec-review/SKILL.md:223`（领域镜派发指令）、`sdflow-init/SKILL.md:195`、`sdflow-init/assets/workflow/config.template.yaml:24`（均已列 backend·go / 芯片 delta，独缺 react delta 即不对称失鲜）。
 - 同步：`checklists-guide.html` 覆盖表（人读手册，现记「code frontend 缺失」将失鲜）；`openspec/INDEX.md:23-24` 目录级括注。
 - 每个新建/增补文件头加「机械层前置」注记（lint 能确定性抓的不进清单，指明 eslint-plugin-react-hooks / jsx-a11y / TypeScript 等推荐面）。
 - 研究附件随 change 落盘：`research/absorption-candidates.md`（26 条候选全文 + 来源 + 备选冻结区：a11y 10 条、多端剔除项、主动淘汰名单）。
@@ -30,8 +31,9 @@
 ## Success Metrics
 
 - 4 个 domain 文件落盘且形制与既有一致（extends 头 + 表格 + 尾注），26 条全部落位、ID 连续无冲突。
-- `grep -rn "frontend（如有）"` 归零；TG-03 行含 `+frontend-react` delta 记法；两侧 README 注册表各含 2 行新登记。
-- `checklists-guide.html` 与 INDEX.md 无「frontend code 缺失」类失鲜表述。
+- `grep -rn "frontend（如有）"` 归零；TG-03 行含 `+frontend-react` delta 记法；spec 侧 README 注册表 +1 行（frontend-react；frontend.md 已在册 `README.md:77`）、code 侧 +2 行（frontend + frontend-react）[spec-review-amendment：原「各含 2 行」对 spec 侧不成立]。
+- [spec-review-amendment] `grep -rn "待 frontend domain 覆盖" sdflow-init/assets/workflow/` 归零（IOU 句已改交叉引用）；三处栈枚举行含 `frontend(+frontend-react)`。
+- `checklists-guide.html` 与 INDEX.md 无「frontend code 缺失」类失鲜表述——核验 = `grep -n "缺失\|已知缺口" checklists-guide.html` 逐条人工判定 + 通读 §四/§五教程区块确认无「以 frontend 缺失为前提」的叙事与矛盾 ID 表残留 [spec-review-amendment：原缺可执行核验锚]。
 - 备选文档在 `research/` 且含全部被裁剪候选（a11y 12 条中 10 条冻结 + 2 条捞回留痕）。
 
 ## Non-Goals
@@ -40,7 +42,7 @@
 - **不新增 TG 条目**（TG-03 已存在，只改其领域列记法）。
 - **不建 Vue/Svelte 等其他框架 delta**（结构已就绪，未来按需另开）。
 - **a11y 与多端条目不进正式清单**（人拍板裁剪，冻结存档于备选文档；模态框焦点/表单错误恢复两条以纯交互口径捞回不在此列）。
-- **不改评审 SKILL 与 workflow 机制**（选用逻辑由既有 TG 机制承载）。
+- **不改评审 SKILL 与 workflow 机制**（选用逻辑由既有 TG 机制承载）。[spec-review-amendment 边界澄清：本条指机制/流程零改动；SKILL 内**栈枚举文本**因本 change 产生的失鲜（`sdflow-spec-review/SKILL.md:223` 等三处追加 `(+frontend-react)`）属接线一致性修正，不在本条禁止范围——见 What Changes 接线补项，设计门可否决回滚。]
 - **不向下游消费仓推送**（`sdflow-init update` 是使用动作，不在本 change 交付面；发布随常规 push + 运行 checkout 升级）。
 
 ## 需求优先级
@@ -50,7 +52,7 @@
 
 ## 假设
 
-- 〔未核实〕标记的 8 条候选（A2/A4/A6/A8/B6/C1/C2/D6 及 B3 局部）内容依据模型知识/业界共识，未逐字核对权威页面——若个别表述不准，失效影响限于单条检查点措辞，评审期可修订（清单条目可轻易 amend，非难逆转）。
+- 〔未核实〕标记的 8 条候选（A2/A4/A6/A8/B6/C1/C2/D6 及 B3 局部）内容依据模型知识/业界共识，未逐字核对权威页面——若个别表述不准，失效影响限于单条检查点措辞，评审期可修订（清单条目可轻易 amend，非难逆转）。[spec-review-amendment：2026-08-13 spec-review 前端领域镜已逐条复核，均准确（复核方式=模型知识核验，非逐字权威页核对，诚实边界见候选表 §F）。]
 - React delta 锚 React 19.x 语义（含 Compiler）——若目标项目用 React 18-，Compiler 条目（CR-REACT-03）按触发条件自然不命中，不产生误导。
 
 ## Compliance

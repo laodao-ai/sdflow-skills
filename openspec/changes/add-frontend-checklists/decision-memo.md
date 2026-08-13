@@ -15,13 +15,14 @@ decision_hash: b26635380818
 ## 承重约束
 
 1. **扩展走既有「通用 base + 领域 delta」架构，纯增量**：只写本层新增规则、`extends:` 声明父层、不改 base/父层、注册表登记一行。
-   锚：`sdflow-init/assets/workflow/spec-checklists/README.md:82-88`（扩展约定四步）；code 侧 README 同构。
+   锚：`sdflow-init/assets/workflow/spec-checklists/README.md:82-88`（扩展约定五步）。[spec-review-amendment 锚订正：code 侧 README **无**扩展约定节（68 行，注册表后即尾注）——「同构」仅指注册表/ID 表结构；扩展纪律以 spec 侧为单一源，code 侧缺节随 task 2.3 补齐。]
 2. **ID 前缀无冲突**：spec 侧 frontend 增补沿用 `FE-`（从 FE-06 起，ID 不复用不重排，README:53）；新层 `REACT-` 未被占用；code 侧 `CR-FE-` / `CR-REACT-` 未被占用。
    锚：`spec-checklists/README.md:45-53` ID 表、`code-checklists/README.md:37-47` ID 表。
 3. **分层选用记法 = 括号 +delta 式**：TG-03 的领域列由 `frontend` 改为 `` `frontend`(+`frontend-react`) ``，与 TG-01 `backend`(+`backend-go`)、TG-02 `embedded`(+芯片 delta) 同构；react delta 的触发子条件 = 变更实际涉及 React 栈（与 backend-go 语言 delta 同语义），**无需新触发机制**。
    锚：`trigger-catalog.md:44-46`；`spec-checklists/README.md:30-37` 选用规则。
 4. **TG-03/frontend 消费面完整清单**（grep 实测，2026-08-13）：`trigger-catalog.md:46`、`code-checklists/README.md:33`（「frontend（如有）」占位正好接实）、两侧 README 架构图+注册表、`checklists-guide.html`（覆盖表含「frontend.md ← 缺失」记述，本 change 后失鲜）、`INDEX.md:23-24`（目录级括注）。`spec-quality-base.md` 仅叙述性提及（BASE-28 特化方向、审计说明），与新文件一致无需改。
    锚：本 change 拷问期 grep 输出（`grep -rn "TG-03" / "frontend"` 于 assets/workflow 与四个评审 SKILL 目录）。
+   [spec-review-amendment 清单补漏（评审多镜 grep 复测）]：原清单漏 4 处消费面——`code-checklists/domains/backend.md:11`（CR-BE-02 IOU 句，本 change 兑现后原句失鲜）、`sdflow-spec-review/SKILL.md:223`（领域镜派发指令的栈枚举，活执行文本）、`sdflow-init/SKILL.md:195` 与 `config.template.yaml:24`（栈枚举）；INDEX.md:23-24 定性订正为**新增**括注（沿「含 devex」先例），该两行现无 frontend 失鲜文本。
 5. **26 条条目内容与归属已由人拍板**：24 条候选全收 + B6 独立成条 + a11y #3/#5 以纯交互口径捞回进 code-frontend。
    锚：2026-08-13 对话拍板（「都收吧。其他的都同意推荐」）+ 候选表 `scratchpad/research/absorption-candidates.md` 拍板头注。
 6. **change 目录可携带四件套之外的附件**：`decision-memo.md` 本身即先例；研究附件随 change 落盘、归档随行合法。
