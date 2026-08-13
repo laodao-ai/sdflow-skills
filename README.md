@@ -8,7 +8,8 @@
 既产出工作流资产、又用它管理自身变更（dogfooding）。
 
 > 📖 想系统理解这套体系的**原理、设计思路与实战用法**：见
-> [docs/sdflow-guide.html](./docs/sdflow-guide.html)（自包含单文件，浏览器直接打开即可）。
+> [sdflow-init/assets/workflow/sdflow-guide.html](./sdflow-init/assets/workflow/sdflow-guide.html)
+> （自包含单文件，浏览器直接打开即可；装过 sdflow 的机器上也可直接开 `~/.sdflow/workflow/sdflow-guide.html`）。
 
 ## Quick Start（跑一个变更，从需求到 merge）
 

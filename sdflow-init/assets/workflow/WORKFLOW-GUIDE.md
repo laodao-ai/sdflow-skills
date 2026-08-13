@@ -9,6 +9,7 @@
 
 > **定位**：从需求到实现的端到端流程总览，串起 `openspec/workflow/` 的全部规则。
 > 本文给**流程骨架 + 每步归属哪条规则**；各步细则见对应规则文件，不在此重复。
+> **概念入门**：这套体系的原理、设计思想与实战用法见 `~/.sdflow/workflow/sdflow-guide.html`（自包含 HTML，浏览器直接打开；随 workflow bundle 分发，不入消费仓）。
 > **流程本性**：三阶段**尽量连续自动运行**——阶段内部的 `/clear` 由子代理 fresh-context 独立性替代（阶段交界两处仍 SHALL 清，见 §三.2）、
 > 中途 AskUserQuestion 改报告决策登记、每步产物 checkpoint 提交；全流程**只在阶段二设计门停一次人类**。
 

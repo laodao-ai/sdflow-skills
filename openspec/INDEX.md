@@ -23,6 +23,7 @@
 设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-01~30 + domains，含 devex）。
 代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-01~09 + domains）。
 说明类（可删不影响执行）：[workflow/reference/](./workflow/reference/)。
+人读概念指南（原理 / 设计思想 / 实战用法）：`~/.sdflow/workflow/sdflow-guide.html`（自包含 HTML，浏览器直接打开；随 bundle 全局分发，不入消费仓）。
 <!-- opsx-init:rules:end -->
 ### 设计规则
 
