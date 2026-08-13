@@ -30,7 +30,7 @@
 | `lens-metric-contract.md` | ✗ | 机读契约现行；`claude-fallback 废弃` 为有意墓碑 |
 | `design-diagrams.md` | ✗ | T42 刚扩展，口径现行 |
 | `ff-generation-constraints.md` | ✓ | 标题/定位/调用示例改 sdflow-spec 语境 + canonical 路径（D5）；背景/历史节原位保留 |
-| `generation-process.md` | ✓ | §二现行化（含 :21 标题行 `[spec-review-amendment A8]`）、§三移史、§六措辞（D4）；§四措辞逐字保留（评审 Q1/Q2 对 §四图与触发规则② 另有待拍板项，见 spec-review-report 决策登记区） |
+| `generation-process.md` | ✓ | §二现行化（含 :21 标题行 `[spec-review-amendment A8]`）、§三移史、§六措辞（D4）；§四**定点两处按 spec 回归**（图补阶段二 = spec:1604、② 删「判断」= spec:1608，均为 bundle↔spec 分叉修正 `[spec-review-amendment A11/A12]`），其余措辞逐字保留（presence 六子串不动，test 不锚跨行 ASCII 图） |
 | `spec-review.md` | ✓ | :72 AskUserQuestion→决策登记区（D1）、:29 删「/clear 后重审」、:91 brainstorming→生成期自检、:92 去 BASE 号段（D9/D6） |
 | `spec-checklists/README.md` | ✓ | :62 `rules/` 错路径 → `../`、:64 R 落点措辞现行化（D9） |
 | `spec-checklists/spec-quality-base.md` | ✓ | :37 writing-plans → 出 ticket（D2）；:7 来源行保留（provenance 非失鲜） |

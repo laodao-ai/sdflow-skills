@@ -9,7 +9,7 @@
 - 两处正面矛盾按现行口径（P3c / G2）改写。
 - 退役机制残留清理：`quality-layering.md` 的 subagent-dev、官方 code-review、`/clear +` 措辞；`spec-quality-base.md` 的 writing-plans 括注。
 - `/review` 消费方统一改写为「sdflow-code-review（+ sdflow-implement Standards 轴必填槽）」（8 处：code-checklists 6 处 + trigger-catalog 1 处 + llm domain 1 处 `[spec-review-amendment A4：接地镜补 README:28]`）。
-- `generation-process.md` 按 DOC-1 收史：§二改现行两工具表，§三整节移入 `workflow-history.md`（新增 A5），保住被 `test_canonical_entry_sync.py` 钉住的 §四措辞。
+- `generation-process.md` 按 DOC-1 收史：§二改现行两工具表，§三整节移入 `workflow-history.md`（新增 A5），保住被 `test_canonical_entry_sync.py` 钉住的 §四措辞；§四另有两处 bundle↔spec 分叉按 spec 回归（流水线图补阶段二 = spec:1604、自动触发 ② 删「判断」二字 = spec:1608），presence 锚六子串逐字不动 `[spec-review-amendment A11/A12]`。
 - `ff-generation-constraints.md` 外壳更新：标题、定位声明、调用方示例改 /sdflow-spec 语境；路径表述改 canonical 口径。
 - 号段硬编码去上界（TG-01~24/28、BASE-01~28 共 5 处）——号段漂移已实证两次发生，删数字后无漂移面。
 - `Spec_Quality_Collaboration.md` 加历史横幅；`Token_Saving_Strategies.md` 移出 bundle 至 `docs/`（个人使用笔记，非工作流资产）并加历史横幅；`PRD_vs_Spec.md` 另加顶部历史举例标注 `[spec-review-amendment A5/A6]`。

@@ -15,7 +15,7 @@
 - **Q-deps 依赖/顺序认不认？**
   自答：锚 tasks.md 四组线性任务（1 修正 → 2 收史 → 3 处置 → 4 收尾门），组间无并行依赖；唯一顺序敏感点 = 4.2 `init.py update` 必须在 index-section 修正**之后**跑（否则把失鲜行重新灌回 INDEX.md，plan-eng F1 已实证 INDEX.md:15 现有同款陈旧行）。 [ ] 认 [ ] 不认
 - **Q-risk 风险赌注与对策认不认？**
-  自答：锚 `sdflow:hr-tg` 判定 `hit="none"`（declared=TG-22,TG-25,TG-28，无高风险触发）+ design「Risks」5 条——对抗镜实证机械门覆盖面成立（无隐藏措辞测试锚、canonical 软链指向运行 checkout 无即时暴露窗口）；剩余赌注仅 Q1/Q2 两个拍板项。 [ ] 认 [ ] 不认
+  自答：锚 `sdflow:hr-tg` 判定 `hit="none"`（declared=TG-22,TG-25,TG-28，无高风险触发）+ design「Risks」5 条——对抗镜实证机械门覆盖面成立（无隐藏措辞测试锚、canonical 软链指向运行 checkout 无即时暴露窗口）；原 Q1/Q2 两个拍板项经二次调研升格为 spec 锚定失鲜修正（A11/A12），无剩余拍板项。 [ ] 认 [ ] 不认
 
 <!-- sdflow:gate-questions v1 q="scope,deps,risk" -->
 
@@ -33,20 +33,13 @@
 - **A7 · memo C3 证据锚失实（勘误记录，memo 不回改）**〔M8，低，strategy 独家〕——「CLAUDE.md『历史参考（已退役）』段」不存在（grep 零命中）；writing-plans 退役的真实锚 = `openspec/changes/archive/2026-08-12-remove-superpowers-pipeline/`。memo 保持历史拍板记录原样，实现者以本条为准。
 - **A8 · generation-process §二标题行同步**〔M9，低，strategy 独家〕——:21「## 二、③ = 三种对话相位 + 四个 skill」若不随正文改为两工具表会自相矛盾；tasks 2.1 已显式包含。
 - **A9 · tasks 2.1「四短语」勘误**〔M10，低，对抗镜1 独家〕——`test_canonical_entry_sync.py` 实为**三对 presence 断言（六子串）**（「推荐流水线」+「唯一入口」、「模型 SHALL 在以下情形自动 invoke」+「/sdflow-spec」、「模型 MUST NOT 自主判断」+「该开 change 了」）；自检一律以 `pytest hack/tests/test_canonical_entry_sync.py` 为准，不靠记忆 grep。
-- **A10 · bundle 外 `CR-01~09` 残留（SKILL.md ×4 / docs/workflow-skills ×2）不 fold，记 todo**〔M1d 之 bundle 外部分〕——当前值准确（CR 实到 09 未漂）、位于 skill 源与人读文档（非 bundle 分发面），fold 会加宽改动面；漂移仅在 CR 扩号时发生。三镜：系统镜 fold 增 blast-radius / 用户镜零现时影响 / 开发循环镜 todo 成本≈0——开发循环镜主导 ⇒ defer 记 todo。
+- **A10 · bundle 外 `CR-01~09` 残留（SKILL.md ×4 / docs/workflow-skills ×2）不 fold，记 todo**〔M1d 之 bundle 外部分〕——当前值准确（CR 实到 09 未漂）、位于 skill 源与人读文档（非 bundle 分发面），fold 会加宽改动面；漂移仅在 CR 扩号时发生。三镜：系统镜 fold 增 blast-radius / 用户镜零现时影响 / 开发循环镜 todo 成本≈0——开发循环镜主导 ⇒ defer 记 **T282**。
+- **A11 · generation-process §四流水线图补阶段二**〔M3，中危，voice 独家；原 Q1 升格〕——二次调研发现权威锚：`openspec/specs/spec-workflow/spec.md:1604` 的唯一线性路径字符串**本身含** `→ /clear → sdflow-spec-review`，而现图 `/sdflow-spec → HARD-GATE 批准`（:53-61）缺该环节 ⇒ 属 **bundle↔spec 分叉修正**（本 change 目标内失鲜），非 D4 拍板范围扩张。可行性亲验：`test_canonical_entry_sync.py` docstring 明文「不锚跨行 ASCII 图」，presence 六子串全在标题/散文行。修法：只插一行 `↓ /clear → /sdflow-spec-review（阶段二设计审）`，不重排其他行。人确认继续（2026-08-13 10:40）。
+- **A12 · 自动触发规则 ② 删「判断」二字回归 spec 措辞**〔M4，中危，voice 独家；原 Q2/TENSION 升格〕——二次调研推翻双方原框架：② 是 simplify-workflow（2026-08-05 归档）拍板的**现行设计**（spec:1608 + :1617 专属 Scenario「用户直接描述需求 → 直接 invoke」），voice 的「自相矛盾」判定不成立；真问题是 bundle :72 比 spec 权威措辞（「② 用户描述需求且需要开 change 时」）**多「判断」二字**——正是这两个字制造「模型可自主判断」误读。修法 = bundle 回归 spec 措辞（删两字），纯 bundle↔spec 分叉修正，不撞 Non-Goals「不改规则语义」（语义权威在 spec）。主审原推荐（改写为「此即人的示意信号」）经复查**撤回**——会加深分叉，此推荐当时未亲验（教训已记 T283）。voice 的「删除②/加 absence 断言」不采（推翻现行设计 + 加宽）。人确认继续（2026-08-13 10:40）。
 
 ### [需拍板]（人工设计门勾选）
 
-- **Q1 · generation-process §四流水线图缺阶段二**〔M3，中危，voice 独家；与 design「§四措辞逐字保留」拍板相抵〕
-  现图 `/sdflow-spec → HARD-GATE 批准 → /sdflow-ship`（:53-61）跳过了 `/clear → /sdflow-spec-review`，与 `workflow.md` §一步骤表及 CLAUDE.md「出口序列」不一致（图下散文 :65 口径正确，属图示不完整而非正面矛盾）。
-  - **选项 A（推荐）**：本 change 内改图插入阶段二。主审已亲验：测试锚三对短语全在标题/散文（`has_line` 子串核），图行零锚，改图不红。
-  - **选项 B**：维持 D4 原拍板（§四逐字保留），记 todo 另开。
-  - **三面后果**：系统镜——A 零机械风险、B 零改动；用户镜——A 消除消费仓 AI「生成完直过门」误读、B 留已知失鲜例外（与 Success Metric 1「清零」相抵）；开发循环镜——A 增量一处图改随本门禁同验、B 多一轮 change 固定成本。**主次判定**：用户镜为主（bundle 口径一致正是本 change 的目标态），推荐 A。
-- **Q2 · 自动触发规则 ② 口径张力（TENSION：voice vs 主审）**〔M4，中危〕
-  `generation-process.md:72`「② 用户描述需求且判断需要开 change 时」——voice 判其与 :74「MUST NOT 自主判断」正面矛盾、建议删除并加 absence 断言；主审判可兼容解读（用户描述需求本身=人的信号）但措辞确实留下「模型自主判断」的许可口子，且 CLAUDE.md 手写侧仅列「人示意收敛」，两侧「MUST NOT 互相矛盾」约束下这是口径张力。收窄措辞**触碰规则语义**，撞 proposal Non-Goals「不改规则语义」边界 ⇒ 上抛。
-  - **选项 A（推荐）**：fold 最小澄清改写——「② 用户直接要求开 change、或明确描述要做的需求（此即人的示意信号）时」；语义不变（仍须人信号），仅消除歧义主语；不加 absence 断言（不加宽）。
-  - **选项 B**：defer 另开 change，严格守「不改语义」边界。
-  - **三面后果**：系统镜——A 三对 presence 断言不受影响、B 零风险；用户镜——A 关掉误读口子、B 张力再存活一个发布周期；开发循环镜——A 一句话、B 一轮 change 成本。**主次判定**：系统镜为主（规则被下游 AI 误读成「可自主开 change」是行为面风险），推荐 A；但「这算措辞澄清还是语义变更」的定性由人裁。
+（无——原 Q1/Q2 经二次调研（用户 2026-08-13 10:22 触发）发现 spec 权威锚后升格为 A11/A12 失鲜修正，人已确认方向（10:40）；设计门只需过拍板三问与本报告整体。）
 
 ### [已裁掉]（反静默压制，原始发现 + 裁掉理由，供门上复核）
 
@@ -70,7 +63,7 @@
 | 对抗镜1（隐藏假设） | 1+7 未破 | 1(A3)+1(A9) | 1(X2) | 0 | 未破清单：行号漂移 / §三零外部引用（C5 成立）/ gen_workflow_guide 消费面（C6 成立）/ canonical 软链指向运行 checkout（无暴露窗口） |
 | 对抗镜2（失败模式） | 2+4 未破 | 1(A1 加强：「去 /clear」第三矛盾) | 1(X3) | 0 | 未破清单：git mv 连锁（C7 成立）/ 全仓测试无隐藏措辞锚 / init.py update 副作用面 |
 | 接地镜 | 2 不符 + 全量核验 | 1(A4) | 1(X1) | 0 | 其余全部 file:line 引用核验一致（含 test_canonical_entry_sync 断言、gen_workflow_guide 消费面、A1~A4/A5 未占用、39 md 计数） |
-| design-voice（codex） | 6 | 4(A1c/A2 部分、A5、A6) | 0 | 2(Q1、Q2) | 独家贡献 Q1/Q2/A5/A6——4/6 采纳 + 2 需拍板，零裁掉 |
+| design-voice（codex） | 6 | 6(A1c/A2 部分、A5、A6、A11、A12) | 0 | 0 | 独家贡献 A5/A6/A11/A12——6/6 全采纳（A11/A12 经二次调研以 spec 锚修正定性后升格），零裁掉 |
 
 **镜间冲突裁决记录**：接地镜 vs 主审（X1，行号）、对抗镜1 vs 接地镜（X2，/review 计数）——两处均以主审亲跑命令的输出为准。
 
@@ -83,7 +76,7 @@
 
 - 能力探针：host=claude 免探，`subagents="available"` 为机制事实；`mirrors=` 由本 skill 直写，无机械 spawn 证明。
 - `findings=N` 与合并池实收数的数值一致性、lens-metric 分类/roster 完备性/誊写准确性 = 主 session 信任边界，emitter 只保证给定输入的确定性归约。
-- lens-metric 锚为 pre-gate 草稿值：需拍板项（Q1/Q2）门上翻改去向后，SHOULD 随拍板回写同步重算（SR-M，best-effort 无机械兜底）。
+- lens-metric 锚已随 A11/A12 升格重算（emitter 重跑，非手拼）；门上若再翻改去向，SHOULD 随拍板回写同步重算（SR-M，best-effort 无机械兜底）。
 - 「改动前全仓 2649 passed」未复跑核验（只读评审不跑全仓 pytest，收尾门 4.3 兜底）。
 
 ## 锚行区
@@ -97,8 +90,8 @@
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="2" sev="致0/高2/中1/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="2" 采纳="1" 裁掉="1" defer="0" 独立="1" sev="致0/高0/中1/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="8" 采纳="6" 裁掉="0" defer="2" 独立="2" sev="致0/高2/中4/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="8" 采纳="8" 裁掉="0" defer="0" 独立="4" sev="致0/高2/中6/低0" -->
 
 ## 收敛口
 
-四件套已按 A1-A9 修订（标 `[spec-review-amendment]`；A10 记 todo）。**建议进设计 HARD-GATE**：人过本报告拍板三问 + Q1/Q2 两项（均附推荐），若采纳 Q1/Q2 的选项 A，按「拍板前二次修订」协议先单独 checkpoint 修订、再回写 `ship-gate` frontmatter 锚；随后 `/clear` → `/sdflow-ship`。
+四件套已按 A1-A12 修订（标 `[spec-review-amendment]`；A10 记 T282，裁决纪律教训记 T283）。二次修订已按「拍板前二次修订」协议单独 checkpoint（见 git log `spec-review-amendment`）。**建议进设计 HARD-GATE**：人过本报告拍板三问即可（无剩余待拍板项）；批准后主审把 `design_approved: true` + 该 checkpoint 的 40 位 `reviewed_sha` 同次写入本文件头部 frontmatter，随后 `/clear` → `/sdflow-ship`。

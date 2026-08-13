@@ -13,7 +13,7 @@
 
 ## 2. generation-process 收史 + ff-generation-constraints 外壳
 
-- [ ] 2.1 `generation-process.md`：§二改现行两工具表（explore + /sdflow-spec），**含 :21 节标题行**（「三种对话相位 + 四个 skill」随正文同步）`[spec-review-amendment A8]`；§三整节移除、原位留一行指路 workflow-history A5（§四编号不重排）；§六「grill 是对话执行器」→「/sdflow-spec 相位 B 拷问」；**改后以 `pytest hack/tests/test_canonical_entry_sync.py` 核验 §四 presence 三对断言（六子串）逐字保留**（勿凭记忆 grep「四短语」）`[spec-review-amendment A9]`〔D4〕
+- [ ] 2.1 `generation-process.md`：§二改现行两工具表（explore + /sdflow-spec），**含 :21 节标题行**（「三种对话相位 + 四个 skill」随正文同步）`[spec-review-amendment A8]`；§三整节移除、原位留一行指路 workflow-history A5（§四编号不重排）；§六「grill 是对话执行器」→「/sdflow-spec 相位 B 拷问」；**§四定点两处按 spec 回归** `[spec-review-amendment A11/A12]`——流水线图在 `/sdflow-spec` 与 `HARD-GATE 批准` 之间插一行 `↓ /clear → /sdflow-spec-review（阶段二设计审）`（锚 `openspec/specs/spec-workflow/spec.md:1604` 唯一线性路径字符串；只插一行，不重排图内其他行）+ :72「② 用户描述需求且**判断**需要开 change 时」删「判断」二字回归 spec :1608 措辞；**改后以 `pytest hack/tests/test_canonical_entry_sync.py` 核验 §四 presence 三对断言（六子串）逐字保留**（勿凭记忆 grep「四短语」）`[spec-review-amendment A9]`〔D4〕
 - [ ] 2.2 `workflow-history.md` 新增 A5 条目承接 §三论证考古〔D4〕
 - [ ] 2.3 `ff-generation-constraints.md`：标题改「生成起手强制规范（FF-0 + D-1~D-6）」；定位声明与调用方示例改 /sdflow-spec 语境（保「或 /opsx:ff 直呼」）；`@openspec/workflow/` 路径表述改 canonical；背景/历史节不动〔D5〕
 
