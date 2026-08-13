@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 6cf368ceed434398c3ba2871d859132e8ff7ae61
+---
+
 # fix-workflow-bundle-staleness · Spec Review Report
 
 - **change**: `openspec/changes/fix-workflow-bundle-staleness/`（`skip_specs: true`，四件套 = proposal / design / tasks + decision-memo）
@@ -91,6 +97,10 @@
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="2" 采纳="1" 裁掉="1" defer="0" 独立="1" sev="致0/高0/中1/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="8" 采纳="8" 裁掉="0" defer="0" 独立="4" sev="致0/高2/中6/低0" -->
+
+## 拍板记录
+
+设计门已拍板批准，日期 2026-08-13（10:49 CST）。批准盘面 = `6cf368ceed434398c3ba2871d859132e8ff7ae61`（spec-review-amendment checkpoint，含 A1-A12 全部修订后的四件套）。lens-metric 锚已在拍板前随 A11/A12 升格由 emitter 重算，门上无再翻改，无需二次重算（SR-M）。
 
 ## 收敛口
 
