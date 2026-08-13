@@ -1,5 +1,9 @@
 # Spec 质量保证：brainstorming vs autoplan 协作分析
 
+> **历史分析**：`brainstorming`（superpowers）与 `autoplan`（gstack）两个 skill 均已退役，现行工作流由
+> `/sdflow-spec`（生成，含澄清/拷问/生成三相位）与 `sdflow-spec-review` / `sdflow-code-review`（评审
+> 编排器）取代。本文保留作为历史设计脉络参考，不代表现行流程；下文举例与产物路径均为历史口径。
+
 > 基于 superpowers 6.0.3 brainstorming skill 和 gstack autoplan skill 原始文档的对比分析。
 > 目标：找出两者如何分工，确保 spec 达到**完整、准确、正确、可执行**四个标准。
 

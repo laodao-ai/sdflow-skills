@@ -157,7 +157,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    TG["trigger-catalog.md<br/>TG-01~26 触发单一源"] -->|驱动| D["ff-generation-constraints.md<br/>D-1~D-6 生成硬约束"]
+    TG["trigger-catalog.md<br/>TG-NN 触发单一源"] -->|驱动| D["ff-generation-constraints.md<br/>D-1~D-6 生成硬约束"]
     TG -->|驱动| CL["spec-checklists/ + code-checklists/<br/>base + domains delta（后端/Go/嵌入式/前端）"]
     TG -->|驱动| DG["design-diagrams.md 画图要求"]
     TG -->|驱动| SLOT["config.yaml rules 模版必填槽"]
