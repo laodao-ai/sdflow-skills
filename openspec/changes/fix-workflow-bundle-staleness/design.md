@@ -30,29 +30,30 @@
 | `lens-metric-contract.md` | ✗ | 机读契约现行；`claude-fallback 废弃` 为有意墓碑 |
 | `design-diagrams.md` | ✗ | T42 刚扩展，口径现行 |
 | `ff-generation-constraints.md` | ✓ | 标题/定位/调用示例改 sdflow-spec 语境 + canonical 路径（D5）；背景/历史节原位保留 |
-| `generation-process.md` | ✓ | §二现行化、§三移史、§六措辞（D4）；§四措辞逐字保留 |
+| `generation-process.md` | ✓ | §二现行化（含 :21 标题行 `[spec-review-amendment A8]`）、§三移史、§六措辞（D4）；§四措辞逐字保留（评审 Q1/Q2 对 §四图与触发规则② 另有待拍板项，见 spec-review-report 决策登记区） |
 | `spec-review.md` | ✓ | :72 AskUserQuestion→决策登记区（D1）、:29 删「/clear 后重审」、:91 brainstorming→生成期自检、:92 去 BASE 号段（D9/D6） |
 | `spec-checklists/README.md` | ✓ | :62 `rules/` 错路径 → `../`、:64 R 落点措辞现行化（D9） |
 | `spec-checklists/spec-quality-base.md` | ✓ | :37 writing-plans → 出 ticket（D2）；:7 来源行保留（provenance 非失鲜） |
 | `spec-checklists/domains/*`（backend·go / devex / embedded·esp32·ml307c / frontend，7 个） | ✗ | 面扫零命中 |
-| `code-checklists/README.md` | ✓ | :3,13,53,68 `/review` → 现行消费方（D3） |
+| `code-checklists/README.md` | ✓ | :3,13,28,53,68（5 处 `[spec-review-amendment A4：+:28]`）`/review` → 现行消费方（D3） |
 | `code-checklists/code-review-base.md` | ✓ | :3 同上（D3） |
 | `code-checklists/domains/llm.md` | ✓ | :5 同上（D3） |
 | `code-checklists/domains/*`（其余 5 个） | ✗ | 面扫零命中 |
 | `prompts/step{1,4,5,8,9}-*.md` | ✗ | 与现行五步逐字对齐 |
 | `reference/README.md` | ✓ | :6-8 部署观改 canonical、:17 删 Token_Saving 行、:18 quality-layering 描述改 P3c 口径（D1/D7/D9） |
-| `reference/quality-layering.md` | ✓ | :25 `/clear +` 措辞、:42 官方 code-review 表行、:84 subagent-dev（D2）；:14 出处标注保留 |
+| `reference/quality-layering.md` | ✓ | :25 `/clear +` 措辞、:42 官方 code-review 表行、:84 subagent-dev（D2）；:38 CR-01~09 去上界 `[spec-review-amendment A2]`；:14 出处标注保留 |
 | `reference/scope-drift-diagnosis.md` | ✗ | 现行（:13「plan/review/code」为泛指） |
 | `reference/Spec_Quality_Methodology.md` | ✓ | 顶部加 L1 历史举例标注（D8） |
 | `reference/Spec_Quality_Collaboration.md` | ✓ | 顶部加历史横幅（D7） |
-| `reference/PRD_vs_Spec.md` | ✓ | 4 处 opsx:ff 举例 → sdflow-spec（D9） |
-| `reference/Token_Saving_Strategies.md` | ✓ | git mv → `docs/`（D7） |
+| `reference/PRD_vs_Spec.md` | ✓ | 4 处 opsx:ff 举例 → sdflow-spec（D9）+ 顶部历史举例标注（D8 同款）`[spec-review-amendment A5]` |
+| `reference/Token_Saving_Strategies.md` | ✓ | git mv → `docs/`（D7）+ 移动后顶部历史横幅 `[spec-review-amendment A6]` |
 | `sdflow-guide.html` | ✗ | 昨日新迁入，内容现行（非 md，列此为完备） |
 | `config.template.yaml` | ✓ | :23-27 去号段 + 现行化 blurb（D6/D9） |
 | —— bundle 外同族 —— | | |
-| `snippets/index-section.md` | ✓ | :13/15/16 blurb 现行化 + 去号段（D9/D6） |
+| `snippets/index-section.md` | ✓ | 按内容定位改 :10/:11/:12/:13/:18/:19（D9/D6；`[spec-review-amendment A1]`——memo 原引 :13,15,16 行号错位勘误 + :10 的 ff+grill/subagent-dev/「去 /clear」第三矛盾、:12 opsx:ff blurb、:18/:19 号段一并纳入） |
+| `docs/sdflow-fable5/02-module-reference.md` | ✓ | :160 `TG-01~26`（第三漂移值）去上界 `[spec-review-amendment A3]` |
 | 本仓 `openspec/config.yaml` | ✓ | 与 template 同款行手动同步（D9） |
-| 本仓 `openspec/INDEX.md` | ✓ | 由 `init.py update` 从 snippet 再生，不手改 |
+| 本仓 `openspec/INDEX.md` | ✓ | 由 `init.py update` 从 snippet 再生，不手改（**须在 index-section 修正后再跑 update**，否则失鲜行回灌 `[spec-review-amendment]`） |
 
 ## 改动面与门禁关系图
 
