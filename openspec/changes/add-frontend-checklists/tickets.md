@@ -67,13 +67,13 @@ impl-pipeline: tickets
 - `openspec/INDEX.md` L23-24 括注扩注（沿「含 devex」先例，如「含 devex、frontend(+frontend-react)」）
 - 核验 `research/absorption-candidates.md` 附件完整（26 条 + 备选冻结区 + 拍板头注 + 来源清单）
 
-- [ ] guide §一架构图去「缺失」标注、补 frontend-react 分支
-- [ ] guide §二覆盖矩阵 pill-gap→就绪、「已知缺口」callout 消除
-- [ ] guide §四无矛盾 ID 表与失效叙事（旧 CR-FE-01~05 建议表已删除或重写）
-- [ ] guide §五教程区无「以 frontend 缺失为前提」的叙事
-- [ ] `grep -n "缺失\|已知缺口" checklists-guide.html` 逐条判定无失鲜
-- [ ] INDEX.md 括注到位
-- [ ] research 附件完整
+- [x] guide §一架构图去「缺失」标注、补 frontend-react 分支
+- [x] guide §二覆盖矩阵 pill-gap→就绪、「已知缺口」callout 消除
+- [x] guide §四无矛盾 ID 表与失效叙事（旧 CR-FE-01~05 建议表已删除或重写）
+- [x] guide §五教程区无「以 frontend 缺失为前提」的叙事
+- [x] `grep -n "缺失\|已知缺口" checklists-guide.html` 逐条判定无失鲜
+- [x] INDEX.md 括注到位
+- [x] research 附件完整
 
 ### Task 4: 实现验证（收尾，不计入 3–6 预算）
 
