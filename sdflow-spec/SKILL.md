@@ -368,6 +368,7 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 
 1. **ADR 三条件**：难逆转 + 缺上下文会令人意外 + 有真实权衡 ⇒ 该决策需要一条 ADR（提议落 `openspec/adr/`）。
 2. **术语冲突判据**：该决策引入/使用的术语与 `openspec/CONTEXT.md` 已有定义是否冲突或模糊 ⇒ 需更新 CONTEXT.md。
+3. scope 内聚检查——判据见 `references/scope-cohesion-check.md`。
 
 🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
 [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
@@ -437,13 +438,13 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
    任一必需字段缺失或字段类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，
    **MUST NOT 重试同一调用**。
 3. **先处理载荷语义，再写入**：
-   - 成对的 `<!-- sdflow:delegation:start -->` / `<!-- sdflow:delegation:end -->` 区块须在**应用载荷前**整段剥离，MUST NOT 解析 Markdown；两标记均无是 no-op，缺失/乱序/不成对则 fail-closed 报 problem + cause + fix。
+   - 成对的 `<!-- sdflow:delegation:start -->` / `<!-- sdflow:delegation:end -->` 区块须在**应用载荷前**整段剥离，MUST NOT 解析 Markdown；均无是 no-op，缺失/乱序/不成对则 fail-closed 报 problem+cause+fix。
    - `resolvedOutputPath` 为 glob（如 `specs/**/*.md`）时只是模式；按 instruction 推导具体`specs/<capability>/spec.md`。既有产物只取 `status --json` 的 `artifactPaths.<id>.existingOutputPaths`。
-   - 生成前读 status；artifact 的 `status` 为 `skipped` 时跳过，MUST NOT 创建任何对应文件，并从依赖阅读清单移除该artifact；认CLI报skipped。
+   - 生成前读 status；`status` 为 `skipped` 时跳过，MUST NOT 创建任何对应文件，并从依赖阅读清单移除该 artifact。
 4. **路径净化**（`resolvedOutputPath` 来自第三方 CLI，直接当写入目标 = confused deputy）：
    canonicalize 后 MUST 满足 —— ① 严格位于 `openspec/changes/<name>/` 内 ② 落在 artifact
    allowlist（`proposal.md` / `design.md` / `tasks.md` / `specs/**/*.md`）③ **从仓根到目标
-   逐组件都不是 symlink**（含 change 目录自身及其祖先；拒绝 symlink 逃逸）。任一不满足 ⇒ 拒写并 fail-closed 报告。
+   逐组件都不是 symlink**（含 change 目录及祖先；拒 symlink 逃逸）。任一不满足 ⇒ 拒写并 fail-closed 报告。
 4. **写入**：临时文件 → **原子替换**（同目录 `.tmp-*` + rename）。MUST NOT 就地半截覆盖。
 5. **写后核验（C.4）**。
 
@@ -462,7 +463,7 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 - **MUST NOT 手搓 Markdown 解析器**去判任一者。
 
 🔴 **诚实边界**：CLI 1.5.0 的 `validate --strict` 只校验 `specs/*/spec.md` delta；
-其余三份截断仍可能双绿，只能由终审读回判定，MUST NOT 声称它能挡住半截 design.md。
+其余三份截断仍可能双绿，只能终审读回判定，MUST NOT 声称它能挡住半截 design.md。
 
 ---
 
@@ -518,8 +519,8 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 3. /sdflow-spec-review
 ```
 
-**理由只引两条**（这两条构成对 `workflow.md` G1「全流程不用 `/clear`」的**具名例外**）：
-① **cache 按模型隔离** —— 拖着旧上下文切档 = 全价重付；② **产 / 审错档纪律** —— 阶段一与阶段二的合适档位不同，换档是本例外的真实动因。
+**理由只引两条**（对 `workflow.md` G1「全流程不用 `/clear`」的**具名例外**）：
+① **cache 按模型隔离**——拖旧上下文切档=全价重付；② **产/审错档纪律**——阶段一二档位不同，换档是本例外真实动因。
 
 🔴 **MUST NOT 引用「主审裁决需冷视角」** —— 该论据已被 G1 正面回答（独立性由 fan-out 的
 fresh 子代理提供，不由 `/clear` 提供）。

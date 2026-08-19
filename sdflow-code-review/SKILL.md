@@ -400,6 +400,11 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 
 ## 第四步：自动修 / 自动裁 / defer（阶段三无人类门，P3e）
 
+- **fold/defer 判定指针**〔change 拆分标准〕：与本 change 相关的发现（related finding）在决定
+  「顺手做掉」还是「defer」前，先过 `spec-checklists/spec-quality-base.md` 的 **BASE-18** 防吸积
+  AND 门判定（判据详见该行）；完整规则与 why 见单一源 `reference/change-decomposition-standard.md`
+  （经 `~/.sdflow/hack/resolve-workflow.sh` 解析，**指针引用 MUST NOT 复制标准文本**）。对齐既有
+  fold-vs-defer 条款，不改变下方「能修的自动修」与「修不了 / genuinely 拿不准」两态的既有裁决路径。
 - **能修的自动修**：标 `[impl-review-fix]`，**不进延后池**。
 - **≥2 方案（`T10-choice` 三级协议，替换旧「有把握自动选」；"T10" 保留为历史别名）**：①有客观判据（测试/断言/基准可判）→ 自动选并**按三镜 + 主次记理由**入报告；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过才自动选（复核记录写台账）；③复核不过/无从复核 → defer。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。** 不问人。
 - **修不了 / genuinely 拿不准**：defer → **当场调用 recorder add**（`python3

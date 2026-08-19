@@ -212,6 +212,10 @@ review：恒跑 strategy/plan-eng 双镜 + sync-only outside voice（不分档�
 - `roadmap.md` 里每个子任务应该**恰好是一次 `/opsx:new` 能完成的工作**
 - 如果某个子任务感觉要拆成 5 个 change 才能做完 → 它本身应该是一个"子阶段"，而非一个任务
 - **禁止**在 roadmap 阶段做"子任务的细化"——那是未来实施变更（`implement-{phase-name}`）的 scope
+- **阶段拆分判据 = change 拆分标准单一源**（`reference/change-decomposition-standard.md`，经
+  `~/.sdflow/hack/resolve-workflow.sh` 解析，**指针引用 MUST NOT 复制标准文本**）：每阶段 SHALL 是
+  一个完整内聚的阶段结果（未来恰好一次 change 可交付）——**MUST NOT** 按来源批次/顺手凑票拆分阶段，
+  **MUST NOT** 把一个内聚交付物拆散跨多阶段，**MUST NOT** 把不相干功能混入同一阶段
 
 ### 规则 3：三件套不引用历史存档
 
