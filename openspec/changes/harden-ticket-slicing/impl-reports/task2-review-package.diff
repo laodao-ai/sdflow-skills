@@ -1,0 +1,208 @@
+# Review package: e81e663..6dbef47 (Task 2 worktree merge)
+
+## Commits
+6dbef47 merge(harden-ticket-slicing): Task 2 出票侧消费语义与必触发复核
+eb359de feat(harden-ticket-slicing): 出票侧消费语义升级为默认采纳+偏离审计，新增票外发现上报
+
+## Files changed
+ .../impl-reports/task2-plan-consumption.md         | 69 ++++++++++++++++++++++
+ sdflow-implement/SKILL.md                          | 51 ++++++++++++++--
+ 2 files changed, 116 insertions(+), 4 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/harden-ticket-slicing/impl-reports/task2-plan-consumption.md b/openspec/changes/harden-ticket-slicing/impl-reports/task2-plan-consumption.md
+new file mode 100644
+index 0000000..61035e7
+--- /dev/null
++++ b/openspec/changes/harden-ticket-slicing/impl-reports/task2-plan-consumption.md
+@@ -0,0 +1,69 @@
++# Task 2 impl-report: 出票侧消费语义与必触发复核
++
++- **票**: Task 2（`tasks.md` 第 2 组 2.1–2.3）
++- **base**: `e81e6636f5294ca7e26687fc386eb3b6b805c49c`（feat/harden-ticket-slicing，含 Task 1 已落地
++  的 `change-decomposition-standard.md` + BASE-31）
++- **改动文件**: `sdflow-implement/SKILL.md`（唯一改动文件，其余文件零改动）
++- **`sdflow:principles` 托管块**: 未动，`python3 hack/sync_principles.py --check` 通过（见下）
++
++## 起手环境问题（非本票工作内容，但影响可核验性，如实记录）
++
++本 worktree 分配时基于的分支是 `main`（`1540703`），不含 `feat/harden-ticket-slicing` 分支上
++`e81e663`（落盘 task2/task3 brief 的提交）。任务说明里指定「基于 `e81e663`」与实际 worktree 状态
++不一致——`git merge-base --is-ancestor e81e663 HEAD` 判 NOT ANCESTOR。核实该 worktree 分支
++（`worktree-agent-a44ae4fa6eba1863b`）无任何独有提交（`git status` clean、HEAD 恰为 `main` tip）后，
++判定为无损操作：`git reset --hard e81e663` 把本 worktree 分支对齐到正确 base。此后方能读到
++`impl-reports/task2-brief.md`。
++
++## 验收标准逐条对照
++
++| # | 验收标准 | 落点 | 达成证据 |
++|---|---|---|---|
++| 1 | 消费语义改为默认采纳 + 偏离逐条记 `planning-decisions.md`，行格式「切片偏离: <偏离点> \| <理由(三镜+主次)>」，MUST NOT 静默偏离 | `sdflow-implement/SKILL.md:254-260`（起手检查段） | 新增「切片建议消费语义 = 默认采纳 + 偏离审计」小节，逐字给出行格式与 MUST NOT 静默偏离；替换原「建议输入」措辞 |
++| 2 | `T10-choice` 复核必触发三条件写入 | `sdflow-implement/SKILL.md:262-269` | 三条件编号列表①既无节也无成立缺席理由②实质偏离草图③草图与 design 正文矛盾，逐字对应 spec `impl-orchestration/spec.md:9` |
++| 3 | 条件①取 Q1-A 口径：合规缺席不触发；缺席理由蕴含单票而出 >1 张功能票 ⇒ 视同条件③矛盾触发 | `sdflow-implement/SKILL.md:264` | 条件 1 括注原样写入该口径 |
++| 4 | 既有「粒度争议」触发路径保留不变，与必触发三条件并存 | `sdflow-implement/SKILL.md:262`、`:280-283` | 三条件标题句明写「既有路径保留不变，与下列三条件并存」；段尾补回「粒度争议…走同一 `T10-choice` 三级决策协议」一句，未删除原有粒度争议路径的语义 |
++| 5 | 复核结论接三级协议出口：通过⇒按方案出票；证伪或无从复核⇒停并上抛，MUST NOT 继续用被证伪方案 | `sdflow-implement/SKILL.md:270-272` | 「复核结论按既有 `T10-choice` 三级协议出口」句 + 证伪/无从复核 ⇒ 停并上抛 + MUST NOT 继续出票 |
++| 6 | 附诚实边界句：必触发为指令层约束，判定由出票方自报无确定性信号，MUST NOT 表述为机械保证 | `sdflow-implement/SKILL.md:274-275` | 🔴 诚实边界 blockquote，逐字对应 spec 措辞 |
++| 7 | 新增「票外发现上报」段：implementer 撞到相关但票外的发现 MUST NOT 自行扩 scope，上报编排层按 BASE-18 AND 门判 fold/defer，判定记一行入该票 impl-report | `sdflow-implement/SKILL.md:615-618`（dispatch 必含项）+ `:643-658`（编排层处置新节「票外发现的 fold/defer」） | dispatch bullet 要求 implementer 上报不自扩；新节写明判定入口=`change-decomposition-standard.md`→BASE-18 AND门，fold/defer 两分支处置，「判定与去向 SHALL 记一行入该票 impl-report」 |
++| 8 | fold 时序边界：未进双轴审可并入当前票；已在途/已完成 ⇒ 追加进后续票或新增 Blocked-by 当前票的票，MUST NOT 中途改动已在双轴审途中的票的验收标准 | `sdflow-implement/SKILL.md:651-655` | 两分支列表逐字覆盖，含 MUST NOT 中途改动一句 |
++| 9 | implementer dispatch 模板同步带上报指令（未声明即等同未约束） | `sdflow-implement/SKILL.md:615-618` | 该 bullet 在「派发 Agent…dispatch prompt 必含」列表内，且带🔴与「子代理是 fresh context，未声明即等同未约束」原文措辞 |
++| 10 | `sdflow:principles` 托管块零改动 | 见下机械核验 | `sync_principles.py --check` 通过 |
++
++## 硬核验点（编排层指定）
++
++```
++$ grep -rn "change-decomposition-standard" sdflow-implement/
++sdflow-implement/SKILL.md:647:`openspec/workflow/reference/change-decomposition-standard.md`（经 resolver 解析）指向的
++```
++命中。Task 1 已在 bundle 文档（`reference/change-decomposition-standard.md` 头部）写下「本标准文
++被 `sdflow-implement` 等三处消费点以指针方式引用」的断言，本行是该断言在 `sdflow-implement` 侧成真
++的落点。
++
++## 命令与退出码
++
++```
++$ python3 hack/sync_principles.py --check
++[sync_principles] ✅ 27 个投放面全部与真相源一致（四条通则 + 广审镜定义）
++exit=0
++
++$ /usr/bin/python3 -m pytest -q
++2601 passed, 10 skipped in 413.27s (0:06:53)
++exit=0
++```
++
++## TDD 契约说明（未新增自动化测试及理由）
++
++本票改的是 `sdflow-implement/SKILL.md` 指令文本，非可执行代码；`grep` 确认仓内对该文件**没有**
++针对措辞/节结构的机械守卫（唯一相关的机械门是 `sync_principles.py --check`，只守
++`sdflow:principles` 托管块，本票未触碰该块，已核验通过）。为凑 TDD 而对该指令文本硬造断言测试会
++落进「无界语法面手搓解析器」（CLAUDE.md 基准 5）——故本票**无新增自动化测试**，验证手段 = 全仓
++既有 pytest 保持绿（未破坏任何既有守卫）+ 逐条验收标准的 `file:line` 锚（上表）。
++
++## Concerns
++
++无。全部验收标准逐条达成，硬核验点命中，全仓测试与托管块门禁均绿。
++
++## 范围内未做的事
++
++无——tasks.md 第 2 组三项（2.1/2.2/2.3）全部完成，未发现票外相关发现需上报 fold/defer。
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index 6876371..c9f8b7f 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -244,27 +244,49 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任
+ - **frontier**（由本 skill **执行模式内部**每轮调用，解析 `Blocked-by` 拓扑 + 已完成号集，算出
+   下一批 next-ready ticket 号）：
+   ```
+   python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py frontier --plan <plan路径> --done <1,2|none>
+   ```
+ 
+ ## 出 ticket 模式（`mode=tickets-plan`）
+ 
+ ### 起手检查
+ 
+-读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。design.md 若含「切片建议」节，作为
+-**建议输入**参考其初步 ticket 划分与阻塞边草图；**无该节则完全自主出 ticket**——粒度争议不问
+-用户，走 ship `T10-choice` 三级决策协议（design D9；无客观判据档派 **strong 档**对抗镜复核推荐切分方案）。
++读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。
++
++**切片建议消费语义 = 默认采纳 + 偏离审计**〔harden-ticket-slicing〕：design.md 若含「切片建议」
++节，其初步 ticket 划分与阻塞边草图 SHALL 作为**默认切分方案**采纳（该草图已经阶段二评审与设计
++HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判断）——**不是**参考输入。出票方对草图的
++每处**实质偏离**（增/删/合并票、改阻塞边、改切片边界）SHALL 逐条记入 `impl-reports/planning-decisions.md`，
++行格式 = 「切片偏离: <偏离点> | <理由(三镜+主次)>」，**MUST NOT 静默偏离**。
++
++**`T10-choice` 对抗镜复核必触发三条件之一**（既有「粒度争议」触发路径保留不变，与下列三条件并存）：
++
++1. design.md **既无**「切片建议」节、**也无**成立的缺席理由（= 违反 BASE-31 的合规态；**有成立
++   缺席理由的合规缺席不触发本条**——但缺席理由蕴含单票交付而实际出票 >1 张功能票 ⇒ 视同条件 3 矛盾触发）；
++2. 出票对草图有实质偏离（见上，偏离后的方案须复核）；
++3. 切片建议草图与 design.md 正文矛盾（评审 amendments 只改其他节时，切片节可能残留旧切分——
++   文件级失鲜监视不覆盖节级一致性，此处是该缺口的唯一显形点）。
++
++任一命中即派 **strong 档**对抗镜复核切分方案，复核记录按上述行格式落
++`impl-reports/planning-decisions.md`。**复核结论按既有 `T10-choice` 三级协议出口**：通过 ⇒ 按复核
++确认的方案出票；**证伪或无从复核 ⇒ 停并上抛**，**MUST NOT** 以被证伪的切分方案继续出票。
++
++> 🔴 **诚实边界**：上述必触发判定（「偏离」「矛盾」「缺席理由是否成立」）由出票方自报，**无确定性
++> 捕获路径**——这是**指令层约束，MUST NOT 被表述为机械保证**。
++
+ **出票模式的仲裁记录 SHALL 有确定性审计落点**：写入 `impl-reports/planning-decisions.md`（change
+ 目录内、git-tracked，由出票落盘的同一次 checkpoint 一并提交），行格式 = 「`T10-choice` 复核: <方案>
+ | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」——出票模式无 code-review 报告产物，此前该仲裁结果
+-**无处可落**〔spec-review-amendment M15〕。
++**无处可落**〔spec-review-amendment M15〕。粒度争议（≥2 个合理切分候选、无客观判据）走同一
++`T10-choice` 三级决策协议（design D9；无客观判据档派 **strong 档**对抗镜复核推荐切分方案），记录
++同样落 `planning-decisions.md`。
+ 
+ ### 产出：3–6 张 tracer-bullet 垂直切片
+ 
+ - 每张打穿全层（行为级、可独立验证、demoable），**MUST NOT 预写实现代码或具体文件路径**——ticket
+   只描述"交付什么行为"，不描述"改哪个文件/写什么代码"（文件路径写死会很快过期，且抢了
+   implementer 的判断权）。**例外**：若某决策性片段（状态机、reducer、schema、类型形状）源自
+   prototype 技能产出、且用 prose 描述会失真，可内联该片段并注明"源自 prototype"，只保留决策
+   相关部分，不是可运行 demo。
+ - 每张预估改动范围 SHALL 能被单个 fresh implementer 子代理在一个上下文窗口内完整消化（读相关
+   代码 + 实现 + 测试）；预估会 touch 的文件数明显超出常规单窗口容量时，按下方「宽重构例外」走
+@@ -583,20 +605,24 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
+   > 值同理——改后仍恒真的断言同样是假绿。**该自检成本只是一次聚焦运行**。「实现验证」收尾票的
+   > 既有 red-before-green 豁免（见上「收尾票与普通票的三处执行契约差异」节）**不受本扩展影响**
+   > ——该票不写产品代码，验收物是证据不是 diff。
+ - **完成信号后置双写时序**：implementer **实现期提交 MUST NOT 带 `task<N>-` 完成标签**——普通
+   commit 即可，标签延后到该 ticket 双轴审通过后才由执行模式补打；
+ - report file 路径契约：implementer **全量报告**写 `{change_dir}/impl-reports/task<N>-<slug>.md`，
+   dispatch 的**返回值只带状态摘要**（四值状态词之一 + 一行摘要），**MUST NOT** 把全量报告贴进
+   返回文本（上下文经济学：大产物一律走文件交接，不进 prompt/返回值）。fix 轮次的 implementer
+   报告写 `{change_dir}/impl-reports/task<N>-<slug>-fix<轮次>.md`（不覆盖首轮报告，保留审计
+   轨迹）。〔impl-review-fix〕
++- 🔴 **票外发现上报**〔harden-ticket-slicing，子代理是 fresh context，未声明即等同未约束〕：
++  implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，**MUST NOT 自行扩
++  scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）——在返回中上报该发现，编排层按
++  下方「票外发现的 fold/defer」处置。
+ 
+ implementer 状态词表四值处置：
+ 
+ | 状态 | 处置 |
+ |---|---|
+ | `DONE` | 进入双轴审 |
+ | `DONE_WITH_CONCERNS` | 与 `DONE` 同路径进双轴审，implementer 所述 concerns **逐字**附给两轴审子代理〔F7〕 |
+ | `NEEDS_CONTEXT` | 编排层**仅从盘面**（design.md / specs/ / ticket 文本）自答；答不出 → 走 T10（defer 或停），**MUST NOT 编造**答案 |
+ | `BLOCKED` | 统一 halt envelope 停并上抛（见下），blocker 记录**落盘** `{change_dir}/impl-blockers.md`（git-tracked，防会话压缩蒸发）〔F7〕 |
+ 
+@@ -607,20 +633,37 @@ implementer 状态词表四值处置：
+ 
+ **halt envelope 五要素**（`BLOCKED` 与其他一切停机——依赖缺失、gate 拒绝——统一用这个形状呈现，
+ 不是自由散文）：
+ 
+ 1. 错误码；
+ 2. ticket 号与名；
+ 3. 已核实证据（implementer 实际做过什么核验）；
+ 4. 已写盘副作用（哪些文件已经改动/新建，防重跑时误判"从零开始"）；
+ 5. 精确恢复步骤（下一步具体要做什么，不是"请检查一下"这种空泛话）。
+ 
++### 票外发现的 fold/defer〔harden-ticket-slicing〕
++
++implementer 上报「票外发现」（见上「每 ticket 派 fresh implementer」节的 dispatch 必含项）后，
++编排层 SHALL 按 change 拆分标准判定去向——**不自行顺手判**，判定入口 = 单一源
++`openspec/workflow/reference/change-decomposition-standard.md`（经 resolver 解析）指向的
++`BASE-18` 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量，三者皆满足 ⇒ **fold**，任一不满足 ⇒
++**defer**。
++
++- **fold**：按该票是否已进入双轴审决定去向——
++  - 尚未进入双轴审 ⇒ 可并入**当前票**验收标准；
++  - 已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 `Blocked-by` 当前票的票，
++    **MUST NOT 中途改动已在双轴审途中的票的验收标准**。
++  - fold 进的工作**均走正常 implementer + 双轴审**，不豁免。
++- **defer**：经 recorder 落 issues 池（todolist），**MUST 显式带 `change` 字段**指向本 change
++  （省略会误挂当前活跃 change、污染 sweep 圈选）。
++- 判定与去向 **SHALL 记一行入该票 impl-report**（fold/defer + 判据摘要）。
++
+ ### 完成信号双写补打（双轴审通过后）
+ 
+ ```bash
+ bash ~/.sdflow/hack/checkpoint-commit.sh "<change>:task<N>-<slug>" "<一句话描述>"
+ ```
+ 
+ 等价产出 commit message `checkpoint(<change>:task<N>-<slug>): <一句话描述>`，随后同步勾满该 ticket
+ 的验收复选框——**审过才算 done**，两个信号缺一不可。
+ 
+ > **踩坑提示**：`<slug>` 必须真实存在且含横杠（如 `task3-fix-auth`）——`ship_gate.py` 的 `TAG_RE`

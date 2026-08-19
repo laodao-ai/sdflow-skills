@@ -25,3 +25,7 @@
 **该裁决的代价与兜底**：这条断言的成真**依赖 Task 3 真的落地三处指针**。兜底 = ① Task 3 的 dispatch prompt 显式要求 `grep -rln "change-decomposition-standard" sdflow-spec/ sdflow-roadmap/ sdflow-implement/ sdflow-code-review/` 命中全部四个文件；② Task 5 收口再核一次；③ 冷层 `/sdflow-code-review` 看到的是全票落地后的终态，此断言届时为真。
 
 - 2 | `sdflow-init/assets/workflow/reference/change-decomposition-standard.md` | 同上指纹（AND门复制） | **已消解**（fix 轮 re-review 判通过，指针化后判定本体仅存 BASE-18 一处）
+
+## Task 2
+
+- 1 | `sdflow-implement/SKILL.md` | — | 无 Critical/Important（双轴审首轮全通过，Standards 轴附领域清单未覆盖降级声明）
