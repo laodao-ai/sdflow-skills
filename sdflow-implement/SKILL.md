@@ -251,13 +251,35 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 
 ### 起手检查
 
-读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。design.md 若含「切片建议」节，作为
-**建议输入**参考其初步 ticket 划分与阻塞边草图；**无该节则完全自主出 ticket**——粒度争议不问
-用户，走 ship `T10-choice` 三级决策协议（design D9；无客观判据档派 **strong 档**对抗镜复核推荐切分方案）。
+读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。
+
+**切片建议消费语义 = 默认采纳 + 偏离审计**〔harden-ticket-slicing〕：design.md 若含「切片建议」
+节，其初步 ticket 划分与阻塞边草图 SHALL 作为**默认切分方案**采纳（该草图已经阶段二评审与设计
+HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判断）——**不是**参考输入。出票方对草图的
+每处**实质偏离**（增/删/合并票、改阻塞边、改切片边界）SHALL 逐条记入 `impl-reports/planning-decisions.md`，
+行格式 = 「切片偏离: <偏离点> | <理由(三镜+主次)>」，**MUST NOT 静默偏离**。
+
+**`T10-choice` 对抗镜复核必触发三条件之一**（既有「粒度争议」触发路径保留不变，与下列三条件并存）：
+
+1. design.md **既无**「切片建议」节、**也无**成立的缺席理由（= 违反 BASE-31 的合规态；**有成立
+   缺席理由的合规缺席不触发本条**——但缺席理由蕴含单票交付而实际出票 >1 张功能票 ⇒ 视同条件 3 矛盾触发）；
+2. 出票对草图有实质偏离（见上，偏离后的方案须复核）；
+3. 切片建议草图与 design.md 正文矛盾（评审 amendments 只改其他节时，切片节可能残留旧切分——
+   文件级失鲜监视不覆盖节级一致性，此处是该缺口的唯一显形点）。
+
+任一命中即派 **strong 档**对抗镜复核切分方案，复核记录按上述行格式落
+`impl-reports/planning-decisions.md`。**复核结论按既有 `T10-choice` 三级协议出口**：通过 ⇒ 按复核
+确认的方案出票；**证伪或无从复核 ⇒ 停并上抛**，**MUST NOT** 以被证伪的切分方案继续出票。
+
+> 🔴 **诚实边界**：上述必触发判定（「偏离」「矛盾」「缺席理由是否成立」）由出票方自报，**无确定性
+> 捕获路径**——这是**指令层约束，MUST NOT 被表述为机械保证**。
+
 **出票模式的仲裁记录 SHALL 有确定性审计落点**：写入 `impl-reports/planning-decisions.md`（change
 目录内、git-tracked，由出票落盘的同一次 checkpoint 一并提交），行格式 = 「`T10-choice` 复核: <方案>
 | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」——出票模式无 code-review 报告产物，此前该仲裁结果
-**无处可落**〔spec-review-amendment M15〕。
+**无处可落**〔spec-review-amendment M15〕。粒度争议（≥2 个合理切分候选、无客观判据）走同一
+`T10-choice` 三级决策协议（design D9；无客观判据档派 **strong 档**对抗镜复核推荐切分方案），记录
+同样落 `planning-decisions.md`。
 
 ### 产出：3–6 张 tracer-bullet 垂直切片
 
@@ -590,6 +612,10 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
   返回文本（上下文经济学：大产物一律走文件交接，不进 prompt/返回值）。fix 轮次的 implementer
   报告写 `{change_dir}/impl-reports/task<N>-<slug>-fix<轮次>.md`（不覆盖首轮报告，保留审计
   轨迹）。〔impl-review-fix〕
+- 🔴 **票外发现上报**〔harden-ticket-slicing，子代理是 fresh context，未声明即等同未约束〕：
+  implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，**MUST NOT 自行扩
+  scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）——在返回中上报该发现，编排层按
+  下方「票外发现的 fold/defer」处置。
 
 implementer 状态词表四值处置：
 
@@ -613,6 +639,23 @@ implementer 状态词表四值处置：
 3. 已核实证据（implementer 实际做过什么核验）；
 4. 已写盘副作用（哪些文件已经改动/新建，防重跑时误判"从零开始"）；
 5. 精确恢复步骤（下一步具体要做什么，不是"请检查一下"这种空泛话）。
+
+### 票外发现的 fold/defer〔harden-ticket-slicing〕
+
+implementer 上报「票外发现」（见上「每 ticket 派 fresh implementer」节的 dispatch 必含项）后，
+编排层 SHALL 按 change 拆分标准判定去向——**不自行顺手判**，判定入口 = 单一源
+`openspec/workflow/reference/change-decomposition-standard.md`（经 resolver 解析）指向的
+`BASE-18` 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量，三者皆满足 ⇒ **fold**，任一不满足 ⇒
+**defer**。
+
+- **fold**：按该票是否已进入双轴审决定去向——
+  - 尚未进入双轴审 ⇒ 可并入**当前票**验收标准；
+  - 已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 `Blocked-by` 当前票的票，
+    **MUST NOT 中途改动已在双轴审途中的票的验收标准**。
+  - fold 进的工作**均走正常 implementer + 双轴审**，不豁免。
+- **defer**：经 recorder 落 issues 池（todolist），**MUST 显式带 `change` 字段**指向本 change
+  （省略会误挂当前活跃 change、污染 sweep 圈选）。
+- 判定与去向 **SHALL 记一行入该票 impl-report**（fold/defer + 判据摘要）。
 
 ### 完成信号双写补打（双轴审通过后）
 
