@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 05332f5dc607e3ce4751c7f2b763e63387b26771
+---
+
 # spec-review-report · harden-ticket-slicing
 
 - **评审对象**：`openspec/changes/harden-ticket-slicing/` 四件套 + decision-memo（盘面 commit f796527）
@@ -17,11 +23,11 @@
 ## 拍板三问（决策登记区最顶端，人在设计 HARD-GATE 逐项勾选认/不认）
 
 - **Q-scope 范围划界认不认？**
-  自答：锚 proposal Non-Goals（`proposal.md:39-44`）——不搬出票步位置、不做偏离机械判定、不改 strong 档映射、不加评审侧切片同步核，四条排除与 What Changes 的 P0×3+P1×1 边界互补自洽。 [ ] 认  [ ] 不认
+  自答：锚 proposal Non-Goals（`proposal.md:39-44`）——不搬出票步位置、不做偏离机械判定、不改 strong 档映射、不加评审侧切片同步核，四条排除与 What Changes 的 P0×3+P1×1 边界互补自洽。 [x] 认  [ ] 不认
 - **Q-deps 依赖/顺序认不认？**
-  自答：锚 tasks 分组与 design 切片建议（`design.md:57-64`）——T-a(bundle 面) → T-b(出票侧)/T-c(三处引用) → T-d(收尾)，tasks 1.x→2.x/3.x→4.x 与之逐一对应，接地镜核验 3.x 落点（B.7 / roadmap / Step4 defer 流）全部真实存在。 [ ] 认  [ ] 不认
+  自答：锚 tasks 分组与 design 切片建议（`design.md:57-64`）——T-a(bundle 面) → T-b(出票侧)/T-c(三处引用) → T-d(收尾)，tasks 1.x→2.x/3.x→4.x 与之逐一对应，接地镜核验 3.x 落点（B.7 / roadmap / Step4 defer 流）全部真实存在。 [x] 认  [ ] 不认
 - **Q-risk 风险赌注与对策认不认？**
-  自答：锚 sdflow:hr-tg 判定 hit=none（declared=TG-19,TG-23,TG-28，无高风险触发）+ design Risks 表五条（`design.md:66-72`）；本轮评审新增一个待拍板风险点 Q1（D4 条件① 的复核税，见下）。 [ ] 认  [ ] 不认
+  自答：锚 sdflow:hr-tg 判定 hit=none（declared=TG-19,TG-23,TG-28，无高风险触发）+ design Risks 表五条（`design.md:66-72`）；本轮评审新增一个待拍板风险点 Q1（D4 条件① 的复核税，见下）。 [x] 认  [ ] 不认
 
 <!-- sdflow:gate-questions v1 q="scope,deps,risk" -->
 
@@ -39,6 +45,7 @@
 - **三面后果**：A：系统镜=触发面收窄但护栏保住 D4 原始动机（无草图**多票**自主切分仍必复核），零新机制；用户镜=人门语义不变；开发循环镜=最高频形态（合规小修）免一次 strong 复核。B：系统镜=条件最简；用户镜=不变；开发循环镜=每个合规小修永久付 strong 复核税，与 D2 意图直接冲突。
 - **主次判定**：开发循环镜主导——小修是目标态下最高频形态，B 会把 D2 的减负全数吃掉；A 的「出票与理由矛盾即触发」护栏使高风险路径（自主多票切分）一张不漏。
 - **默认处理**：本轮**不预改**该条件（人已拍板过 D4 触发集，改动属实质决策）；批准 A 后按 amendment 落 `specs/impl-orchestration/spec.md` + `tasks.md 2.2`。
+- **拍板记录**：2026-08-19 人拍板**选 A**——条件① 收窄 + 矛盾护栏已按 amendment 落地（标 `[spec-review-amendment Q1-A]`，单独 checkpoint 05332f5）。
 
 ### [自动决策]（高置信采信，已回改产物并标 `[spec-review-amendment]`，默认接受可覆盖）
 
@@ -77,9 +84,9 @@
 
 **图表核验**（design-diagrams）：本 change 命中图 = design.md「切分判断流（变更前→变更后）」ASCII 图——存在、正确；随 D5 修正档位标注后未过时。无缺失图。
 
-**度量锚（lens-metric · pre-gate 草稿值，拍板回写时按〔SR-M〕最终化）**：
+**度量锚（lens-metric · 已按〔SR-M〕随拍板最终化：Q1 defer→采纳，emitter 重算原地覆盖）**：
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="6" 采纳="4" 裁掉="1" defer="1" 独立="2" sev="致0/高1/中3/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="6" 采纳="5" 裁掉="1" defer="0" 独立="3" sev="致0/高2/中3/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="4" 采纳="2" 裁掉="1" defer="1" 独立="1" sev="致0/高0/中2/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="1" sev="致0/高0/中1/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
@@ -100,6 +107,10 @@
 7. `decision-memo.md` — 三镜代价节改口 + D1/D4 三镜+主次判定（D8）
 
 ---
+
+## 拍板记录（人读行）
+
+**设计门已拍板批准**：三问全认、Q1 选 A，日期 2026-08-19。被批准盘面 = 05332f5dc607e3ce4751c7f2b763e63387b26771（含 Q1-A 二次修订，已单独 checkpoint 后回写锚，ADR-7(b) 时序合规）。
 
 ## 收敛口
 
