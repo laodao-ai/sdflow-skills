@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change matt-workflow-integration. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: ticket 文件兼容 ship_gate 既有完成判据契约
 
 ticket 文件 SHALL 写入 change 目录的 `tickets.md`，每 ticket 以 `### Task N: <ticket 名>` 为标题、ticket 内含验收标准复选框；出 ticket 收尾 SHALL 显式 checkpoint（plan 单独提交建立完成窗口锚）〔grill-amendment〕。完成信号 SHALL **后置双写**〔spec-review-amendment F1；设计门 2026-07-10 拍板定稿（方案甲）〕：implementer 实现期提交 MUST NOT 带 `task<N>-` 完成标签；该 ticket 双轴审 + 修复环通过后，由执行模式补打 `checkpoint(<change>:task<N>-<slug>)` 完成标签并勾全验收复选框——**审过才算 done**；resume 发现「实现提交在、完成标签缺」SHALL 进入续审而非重实现。plan 首次提交后结构 SHALL 不可变：MUST NOT 重号/重排/删除/复用 Task 号，重规划只可追加新号〔F1〕。plan 文件 frontmatter SHALL 含且仅含 `impl-pipeline` 单键（无注释/示例/第二块——marker 块内杂行会被 gate 计为幻影任务）〔F5〕；该键为文件格式契约，SHALL 无路由读取方〔adr/0042〕。
@@ -232,7 +234,11 @@ tickets SHALL 为唯一实现管线〔adr/0042，取代「管线路由为手动�
 
 ### Requirement: 出 ticket 模式产出 tracer-bullet ticket 并落盘即返回（tickets.md 单名）
 
-sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket（计数仅约束垂直切片；expand–contract 例外序列的迁移批次、以及下述「实现验证」收尾 ticket 均不占该预算〔spec-review-amendment E5〕）：每 ticket 为打穿全层、可独立验证的行为级描述，MUST NOT 预写实现代码或具体文件路径；每 ticket SHALL 声明显式 Blocked-by 阻塞边与 R-ID 需求标注；宽重构（单一机械改动 blast radius 扫全仓）SHALL 走 expand–contract 序列例外而非强行垂直切片。ticket 文件头部 SHALL 逐字携带 design 领域约束为 Global Constraints 节。
+sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket（计数仅约束垂直切片；expand–contract 例外序列的迁移批次、以及下述「实现验证」收尾 ticket 均不占该预算〔spec-review-amendment E5〕；design.md 写明成立的「单票交付」缺席理由且出票确为 1 张功能票时，是与 expand–contract 并列的合法例外，同样不受该预算约束〔impl-review-fix〕）：每 ticket 为打穿全层、可独立验证的行为级描述，MUST NOT 预写实现代码或具体文件路径；每 ticket SHALL 声明显式 Blocked-by 阻塞边与 R-ID 需求标注；宽重构（单一机械改动 blast radius 扫全仓）SHALL 走 expand–contract 序列例外而非强行垂直切片。ticket 文件头部 SHALL 逐字携带 design 领域约束为 Global Constraints 节。
+
+**切片建议消费语义 SHALL 为「默认采纳 + 偏离审计」**〔harden-ticket-slicing〕：出票起手 SHALL 读 design.md 的「切片建议」节；节存在时其初步 ticket 划分与阻塞边草图 SHALL 作为**默认切分方案**采纳（该草图已经阶段二评审与设计 HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判断），出票方对草图的每处**实质偏离**（增/删/合并票、改阻塞边、改切片边界）SHALL 逐条记入 `impl-reports/planning-decisions.md` 并附理由，行格式 = 「切片偏离: <偏离点> | <理由(三镜+主次)>」，MUST NOT 静默偏离；节缺席或偏离时按下述必触发条款复核。
+
+**T10-choice 对抗镜复核 SHALL 必触发于三种情形之一**〔harden-ticket-slicing〕：① design.md **既无**「切片建议」节、**也无**成立的缺席理由（= SA-17 违规态；有成立缺席理由的合规缺席不触发本条——但缺席理由蕴含单票交付而实际出票 >1 张功能票 ⇒ 视同条件③矛盾触发〔spec-review-amendment Q1-A〕）；② 出票实质偏离草图（偏离后的方案须复核）；③ 草图与 design.md 正文矛盾（评审 amendments 只改其他节时，切片节可残留旧切分——文件级失鲜监视不覆盖节级一致性，此处是该缺口的唯一显形点）。任一命中即派 **strong 档**对抗镜复核切分方案，复核记录按既有行格式落 `impl-reports/planning-decisions.md`；既有「粒度争议」触发路径保留不变。复核结论 SHALL 按既有 `T10-choice` 三级协议出口处理：通过 ⇒ 按复核确认的方案出票；**复核不过或无从复核 ⇒ 停并上抛**（与下方一致性自扫段同口径），MUST NOT 以被证伪的切分方案继续出票〔spec-review-amendment〕。**必触发为指令层约束（「偏离/矛盾」的判定由出票方自报，无确定性信号），MUST NOT 被表述为机械保证。**
 
 **验收标准的语法面有界性闸门 SHALL 在出票时施加**〔curb-rework-loop-cost〕：某条验收标准若要求对某种语法面**做机械判定**，出票方 SHALL 先判该语法面能否穷举——**有界**（如 CommonMark fence 变体、自有格式的机器锚行）⇒ 可写为机械门；**无界**（通用编程语言源码、YAML、make、shell）⇒ **MUST NOT 写成机械门**，SHALL 改为「让该工具自己回答」（真跑一遍看行为 / 调用该格式的权威解析器），或降级为 best-effort 展示且**不作判定依据**。该判据 SHALL 覆盖伪装形态——不仅匹配「扫描 / 识别 / 拒绝某形态 / 指纹」这类显式措辞，**还 SHALL 匹配「在某格式文件中定位 / 插入 / 修改某处」**（「只动一个键值」听起来不像解析，但「找到那个键」本身就要解析）。**本闸门是指令层约束，MUST NOT 被表述为机械保证。**
 
@@ -297,10 +303,40 @@ sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 �
 - **WHEN** 收尾票 implementer 判定本仓确无 e2e 层
 - **THEN** 证据行记 `e2e | — | 未覆盖 | <判定依据>`，该票仍可通过双轴审，MUST NOT 因缺层停机
 
+#### Scenario: 无切片建议且无缺席理由时复核必触发〔spec-review-amendment Q1-A〕
+
+- **WHEN** design.md 既无「切片建议」节、也无成立的缺席理由，出票方自主决定切分方案（无论是否存在多个候选）
+- **THEN** 出票方 SHALL 派一个 strong 档对抗镜复核该切分方案，不问用户；仲裁结论按行格式落 `impl-reports/planning-decisions.md`
+
+#### Scenario: 合规缺席（有理由）的小修不触发必复核〔spec-review-amendment Q1-A〕
+
+- **WHEN** design.md 无「切片建议」节但写明了成立的缺席理由（如「单票交付，无切分必要」），出票产出与理由一致（1 张功能票）
+- **THEN** 不触发条件① 复核；若实际出票 >1 张功能票（与缺席理由矛盾），出票方 SHALL 视同条件③ 派 strong 档对抗镜复核，仲裁结论落 `planning-decisions.md`
+
 #### Scenario: 粒度争议派 strong 档复核并落审计
 
-- **WHEN** design.md 无「切片建议」节，编排层需自主决定切分方案且存在 ≥2 个合理候选
-- **THEN** 无客观判据可判时派一个 strong 档对抗镜复核推荐的切分方案，不问用户；仲裁结论按行格式落 `impl-reports/planning-decisions.md`
+- **WHEN** 出票过程中出现粒度争议（≥2 个合理切分候选）且无客观判据可判
+- **THEN** 派一个 strong 档对抗镜复核推荐的切分方案，不问用户；仲裁结论按行格式落 `impl-reports/planning-decisions.md`（既有触发路径，与必触发三条件并存）
+
+#### Scenario: 有切片建议且未偏离时默认采纳、不派复核
+
+- **WHEN** design.md 含「切片建议」节，出票产出的票划分与阻塞边与草图一致（无实质偏离），且无粒度争议
+- **THEN** 出票方按草图物化 tickets.md，`planning-decisions.md` 无偏离行，无须派 T10-choice 复核（草图已经阶段二评审与人门）
+
+#### Scenario: 偏离草图须记录并触发复核
+
+- **WHEN** design.md 切片建议为 4 张票，出票方判断其中两张应合并为一张
+- **THEN** 出票方 SHALL 在 `planning-decisions.md` 记一行「切片偏离: 合并票 X/Y | <理由(三镜+主次)>」，并派 strong 档对抗镜复核偏离后的方案；MUST NOT 静默按己意出票
+
+#### Scenario: 草图与 design 正文矛盾时触发复核
+
+- **WHEN** 评审 amendments 废弃了 design 正文中的某机制，而切片建议节仍含一张以该机制为交付物的票
+- **THEN** 出票方 SHALL 判「草图与 design 正文矛盾」，派 strong 档对抗镜复核修正后的切分方案，仲裁结论落 `planning-decisions.md`；MUST NOT 照旧草图出票
+
+#### Scenario: 必触发复核证伪时停并上抛〔spec-review-amendment〕
+
+- **WHEN** 任一必触发情形派出的 strong 档对抗镜将切分方案判「证伪」，且无可自动修正的替代方案
+- **THEN** 出票流程停并上抛，MUST NOT 以被证伪的切分方案继续出票；仲裁结论仍按行格式落 `impl-reports/planning-decisions.md`
 
 #### Scenario: 一致性自扫发现矛盾派 strong 档复核
 
@@ -413,3 +449,16 @@ subagent_type，行为不变）。verify 终门 MUST NOT 低于 high。
 - **WHEN** `$SDFLOW_EFFORT_LIGHT` 为空
 - **THEN** commit 步派发不带 subagent_type，与现行为一致
 
+### Requirement: 执行期票外发现上报编排层按拆分标准判 fold/defer〔harden-ticket-slicing〕
+
+执行模式中 implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，SHALL 上报编排层处置，**MUST NOT 自行扩 scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）。**上报通道 SHALL 比照 `DONE_WITH_CONCERNS` 的既有形状**〔impl-review-fix〕：implementer SHALL 将发现全量写入该票 report file 的固定小节 `## 票外发现`，并在 dispatch 返回值的一行摘要中追加标注 `[has-off-ticket-finding]`；编排层看到该标注时 MUST Read 该小节全文以获取 AND 门判据，MUST NOT 仅凭一行摘要判定。编排层 SHALL 按 change 拆分标准（单一源 `openspec/workflow/reference/change-decomposition-standard.md`，经 resolver 解析；判定入口 = BASE-18 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量）判定——三者皆满足 ⇒ **fold**（该票尚未进入双轴审 ⇒ 可并入当前票验收标准；已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 Blocked-by 当前票的票——MUST NOT 中途改动已在双轴审途中的票的验收标准〔spec-review-amendment〕；均走正常 implementer + 双轴审，且**执行期新增的票 SHALL 补齐出票模式对 ticket 的强制字段与闸门**〔impl-review-fix〕——`Blocked-by` / `R-ID` / 验收复选框 / 验收标准的语法面有界性闸门，或在该票文本中显式列出豁免哪些、为何）；任一不满足 ⇒ **defer**（recorder 落 issues 池，显式带 `change` 字段）。判定与去向 SHALL 记一行入该票 impl-report。
+
+#### Scenario: implementer 撞到相关票外 bug 上报而非顺手修
+
+- **WHEN** implementer 实现某票时发现相邻函数一个与本 change 一致性相关的 bug，修复约 5 行
+- **THEN** implementer 将发现写入该票 report file 的 `## 票外发现` 小节，并在返回摘要标 `[has-off-ticket-finding]`，MUST NOT 直接改动票外代码；编排层读该小节全文按 AND 门判定（同 capability、高耦合、低增量皆满足）后 fold 进当前 change 的后续票
+
+#### Scenario: 不满足 AND 门的发现 defer 进 issues 池
+
+- **WHEN** implementer 发现一个真独立、需自身设计审查的改进点
+- **THEN** 编排层判 defer，经 recorder 落 todolist（显式带 change 字段），该票不因此扩 scope

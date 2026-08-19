@@ -2,7 +2,9 @@
 
 ## Purpose
 `sdflow-spec` 把阶段一「想需求→生成四件套」收拢为单一入口的三相位管线（澄清 A → 拷问 B → 生成 C），解决原三分离入口（`opsx:explore` + `opsx:ff` + 仓外 `grill-with-docs`）的结构性缺陷：拷问易被静默跳过、拷问发生在成文之后导致锚定效应、全程主 session 亲做耗费强档 token。生成经 `openspec` CLI（完成态问 `status`、合格态问 `validate --strict`，MUST NOT 手搓 Markdown 解析器），决策纪要在相位 B 内增量落盘、生成完毕后由主 session 终审核一致性。当前交付形态为**阶段一薄编排**（无 subagent 外派）——阶段二 agent 定义外派因 A/B 验收门判回退而降级为未启用资产保留，外派启用以未来独立实测门达标为前提（见本能力 SA-07）。
+
 ## Requirements
+
 ### Requirement: SA-01 单一入口三相位管线，拷问前置且为内建默认路径
 
 `sdflow-spec` SHALL 以单一入口驱动「澄清（A）→ 拷问（B）→ 生成（C）」三相位管线。相位 A 可在需求已成熟时由主 session 判断提前收束，但相位 B SHALL 是管线的内建默认路径——任何进入相位 C 的路径 SHALL 先产出非空决策纪要。模型 SHALL 在人示意收敛时自动 invoke `/sdflow-spec`，MUST NOT 自主判断「该开 change 了」——须有人的示意信号；相位 B 的拷问协议不因触发方式改变而改变〔simplify-workflow：删除 `disable-model-invocation: true` 要求，触发方式由只能人触发改为模型可自动触发〕。
@@ -423,3 +425,23 @@ openspec CLI 不可用、报错或 schema 不兼容 SHALL fail-closed 中止并�
 - **WHEN** change 的 `.openspec.yaml` 声明 `skip_specs: true`，`status --json` 报 `specs` 的 `status` 为 `"skipped"`
 - **THEN** 相位 C 跳过 specs 产物、不创建 `specs/` 下任何文件，且 tasks 的强制阅读清单不再要求读 specs；`validate --strict` 通过
 
+### Requirement: SA-17 相位 B scope 内聚检查与相位 C 切片建议生成〔harden-ticket-slicing〕
+
+相位 B 收敛前检查（ADR/术语回扫的同一检查点）SHALL 增加 **scope 内聚检查**：按 change 拆分标准（单一源 `openspec/workflow/reference/change-decomposition-standard.md`，经 resolver 解析，指针引用 MUST NOT 复制标准文本）核目标态范围 = **一个完整内聚的阶段结果**——砍窄、加宽、混拼不相关功能均为偏离；发现偏离 SHALL 连同拆分/合并建议呈现给人拍板，MUST NOT 静默调整范围。
+
+相位 C 生成 design.md SHALL 遵循生成约束的「切片建议」升档语义（SHOULD）：非平凡 change 的 design.md 决策区 SHOULD 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）；缺席时 SHALL 在 design.md 写明一句为何不需要（如单票即可交付的小修）。缺席理由的成立性由阶段二 BASE-31 审项核验，本相位只负责「有节或有理由」二择一恒成立，MUST NOT 两者皆无。
+
+#### Scenario: 非平凡 change 生成含切片建议节
+
+- **WHEN** 相位 C 生成一个多任务、多文件面的 change 的 design.md
+- **THEN** design.md 决策区含「切片建议」节（初步票划分 + 阻塞边草图），供阶段二评审与出票模式消费
+
+#### Scenario: 平凡小修缺席切片建议须附理由
+
+- **WHEN** 相位 C 生成一个单文件小修 change 的 design.md，判断无需切片草图
+- **THEN** design.md 写明一句缺席理由（如「单票交付，无切分必要」），MUST NOT 静默缺节
+
+#### Scenario: 相位 B 发现混拼时呈现拆分建议
+
+- **WHEN** 相位 B 拷问发现目标态混入了一个与主线无耦合的独立功能
+- **THEN** 主 session 按拆分标准判其不满足内聚判据，向人呈现「拆出另开 change」建议与依据，由人拍板；MUST NOT 静默砍掉或静默保留

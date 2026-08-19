@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change rebuild-sdflow-roadmap-v2. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: 三件套直写产出
 
 roadmap 规划工作流 SHALL 将三件套（design.md / roadmap.md / task-log.md）直接写入 `openspec/roadmaps/{kebab-case-name}/`，MUST NOT 通过 OpenSpec 变更承载产出过程，MUST NOT 产出独立的 requirements.md 文件。**BREAKING 作用域限定〔spec-review-amendment SR-1〕**：三件套约定仅约束**新产出**的 roadmap 包；存量四件套包（本仓两个 + 一切消费仓存量——skill 全局 symlink 分发，接地镜证实跨仓存在 requirements.md 实质消费与四文件 MUST 场景）SHALL 视为合法历史形态，skill 续跑/更新存量包时 MUST 兼容其四件套结构（MUST NOT 报错、MUST NOT 强推迁移、MUST NOT 因存在 requirements.md 拒绝工作）。**缺件存量包〔spec-review-amendment SR-25〕**：存量包还存在**第三种形态——只有 `roadmap.md`、缺 design.md / task-log.md 的单文件包**（本仓 `openspec/roadmaps/issues-triage-2026-08/` 与 archive 下两包即此形态）。该形态同样 SHALL 视为合法历史形态：续跑时 MUST NOT 报错、MUST NOT 因缺件拒绝工作；收尾 checklist ② 的「三件套相互引用完整」对缺失文件 SHALL 判为不适用而非不通过，并输出一行「存量缺件包（缺 X），引用完整性仅对现存文件核验」提示；操作者要求补齐时按 continue 路径生成缺失文件。**逃生舱〔SR-7〕**：操作者显式要求保留独立 requirements.md 时 SHALL 遵从，并在 design.md 头部注明「非默认形态」。**包生命周期〔SR-3 · 本 change 判定时点前移〕**：同名包 create / continue / replan 判定 SHALL 在**相位 B 起手**完成（走拷问路径时）或**生成落盘前**完成（直接生成路径）——不存在 → create；存在 → 显式区分 continue（增量更新，保留既有 task-log/Review 处置）与 replan（重规划，先在 task-log 记录重规划决定再改写），MUST NOT 静默覆盖既有活文档。
@@ -262,3 +264,17 @@ roadmap.md SHALL 只对近期 1-2 个阶段写满五节（前置条件/目标/�
 #### Scenario: description 含指路句与前置条件
 - **WHEN** 检查 `sdflow-roadmap/SKILL.md` 的 frontmatter description 文本
 - **THEN** 含「先 `/sdflow-architecture`」指路句及「需已 sdflow-init」前置条件提示
+
+### Requirement: 阶段拆分锚定 change 拆分标准〔harden-ticket-slicing〕
+
+roadmap 的每个阶段 SHALL 对应**一个完整内聚的阶段结果**（未来恰好一次 change 可交付），拆分判据 SHALL 引用 change 拆分标准单一源（`openspec/workflow/reference/change-decomposition-standard.md`，经 resolver 解析，指针引用 MUST NOT 复制标准文本）：MUST NOT 按来源批次 / 顺手凑票拆分阶段，MUST NOT 把一个内聚交付物拆散跨多阶段，MUST NOT 把不相干功能混入同一阶段。
+
+#### Scenario: 生成 roadmap 时按完整阶段结果切分
+
+- **WHEN** 生成阶段把一批目标切分为多个 roadmap 阶段
+- **THEN** 每个阶段的交付物是一个可独立验收的完整内聚结果（对应未来一次 change），切分理由可对照拆分标准判定
+
+#### Scenario: 发现某阶段混拼不相干能力时调整
+
+- **WHEN** 拷问或 review 发现某阶段同时含两个互不耦合的能力
+- **THEN** 按拆分标准拆为两个阶段（各自完整），MUST NOT 以「凑一个阶段省事」保留混拼
