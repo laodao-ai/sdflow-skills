@@ -1,0 +1,359 @@
+# Review package: 966e4d2^..966e4d2 (code-review 自动修复轮，范围限定本轮修复 diff)
+
+## Commits
+966e4d2 checkpoint(impl-review): 多镜代码审自动修复
+
+## Files changed
+ openspec/INDEX.md                                   |  2 +-
+ .../specs/impl-orchestration/spec.md                |  6 +++---
+ openspec/config.yaml                                |  2 +-
+ sdflow-implement/SKILL.md                           | 21 ++++++++++++++++++---
+ sdflow-init/assets/snippets/index-section.md        |  2 +-
+ sdflow-init/assets/workflow/config.template.yaml    |  2 +-
+ .../assets/workflow/ff-generation-constraints.md    | 11 +++++++----
+ .../assets/workflow/workflow-rules-guide.html       |  4 ++--
+ 8 files changed, 34 insertions(+), 16 deletions(-)
+
+## Diff
+diff --git a/openspec/INDEX.md b/openspec/INDEX.md
+index 0a6d452..6c80021 100644
+--- a/openspec/INDEX.md
++++ b/openspec/INDEX.md
+@@ -7,21 +7,21 @@
+ 
+ > 本区块由 `sdflow-init` 维护——`openspec/workflow/` bundle 的规则索引。
+ > 新增/删 workflow 规则后重跑 `sdflow-init update`，或手动同步本表。
+ 
+ > 无本地规则副本的仓：下表文件位于全局 canonical `~/.sdflow/workflow/`，相对链接不可点，以文件名为准。
+ 
+ | 名称 | 文件 | 作用 |
+ |---|---|---|
+ | `workflow` | [workflow/workflow.md](./workflow/workflow.md) | 端到端流程总览（三阶段连续化）：/sdflow-spec 生成→设计审(sdflow-spec-review 编排器)→设计 GATE→实现(sdflow-implement)+代码审(sdflow-code-review)+收尾(sdflow-done)；阶段内部不用 /clear，仅两处阶段交界用（G1），连续跑到 merge |
+ | `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-NN，驱动 约束/领域清单/画图/必填槽 四层 |
+-| `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | 生成起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6（`/sdflow-spec` 调用，或 `opsx:ff` 直呼） |
++| `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | 生成起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6 + 切片建议（`/sdflow-spec` 调用，或 `opsx:ff` 直呼） |
+ | `generation-process` | [workflow/generation-process.md](./workflow/generation-process.md) | 生成过程：发散(explore) + `/sdflow-spec`（澄清→拷问→生成三相位） |
+ | `design-diagrams` | [workflow/design-diagrams.md](./workflow/design-diagrams.md) | 设计/spec 阶段画哪些图、何时画、什么形态（C4 + 行为图，触发条件化） |
+ | `spec-review` | [workflow/spec-review.md](./workflow/spec-review.md) | spec 评审（Detection 层）：只做 prevention 残差，trigger 驱动 + 独立 + 读码核验 |
+ | `model-tiers` | [workflow/model-tiers.md](./workflow/model-tiers.md) | 模型档位映射（强/中/弱职责 + canonical 缺省 + config 覆盖语义） |
+ 
+ 设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-NN + domains，含 devex、frontend(+frontend-react)）。
+ 代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-NN + domains，含 frontend(+frontend-react)）。
+ 多为说明类（可删不影响执行），另含 change 拆分标准单一源（`change-decomposition-standard.md`，被
+ 三处 SKILL 引为执行必需的规范文本，详见目录内 README）：[workflow/reference/](./workflow/reference/)。
+ 人读概念指南（原理 / 设计思想 / 实战用法）：`~/.sdflow/workflow/sdflow-guide.html`（自包含 HTML，浏览器直接打开；随 bundle 全局分发，不入消费仓）。
+diff --git a/openspec/changes/harden-ticket-slicing/specs/impl-orchestration/spec.md b/openspec/changes/harden-ticket-slicing/specs/impl-orchestration/spec.md
+index 9b21e55..531bf1d 100644
+--- a/openspec/changes/harden-ticket-slicing/specs/impl-orchestration/spec.md
++++ b/openspec/changes/harden-ticket-slicing/specs/impl-orchestration/spec.md
+@@ -1,15 +1,15 @@
+ ## MODIFIED Requirements
+ 
+ ### Requirement: 出 ticket 模式产出 tracer-bullet ticket 并落盘即返回（tickets.md 单名）
+ 
+-sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket（计数仅约束垂直切片；expand–contract 例外序列的迁移批次、以及下述「实现验证」收尾 ticket 均不占该预算〔spec-review-amendment E5〕）：每 ticket 为打穿全层、可独立验证的行为级描述，MUST NOT 预写实现代码或具体文件路径；每 ticket SHALL 声明显式 Blocked-by 阻塞边与 R-ID 需求标注；宽重构（单一机械改动 blast radius 扫全仓）SHALL 走 expand–contract 序列例外而非强行垂直切片。ticket 文件头部 SHALL 逐字携带 design 领域约束为 Global Constraints 节。
++sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket（计数仅约束垂直切片；expand–contract 例外序列的迁移批次、以及下述「实现验证」收尾 ticket 均不占该预算〔spec-review-amendment E5〕；design.md 写明成立的「单票交付」缺席理由且出票确为 1 张功能票时，是与 expand–contract 并列的合法例外，同样不受该预算约束〔impl-review-fix〕）：每 ticket 为打穿全层、可独立验证的行为级描述，MUST NOT 预写实现代码或具体文件路径；每 ticket SHALL 声明显式 Blocked-by 阻塞边与 R-ID 需求标注；宽重构（单一机械改动 blast radius 扫全仓）SHALL 走 expand–contract 序列例外而非强行垂直切片。ticket 文件头部 SHALL 逐字携带 design 领域约束为 Global Constraints 节。
+ 
+ **切片建议消费语义 SHALL 为「默认采纳 + 偏离审计」**〔harden-ticket-slicing〕：出票起手 SHALL 读 design.md 的「切片建议」节；节存在时其初步 ticket 划分与阻塞边草图 SHALL 作为**默认切分方案**采纳（该草图已经阶段二评审与设计 HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判断），出票方对草图的每处**实质偏离**（增/删/合并票、改阻塞边、改切片边界）SHALL 逐条记入 `impl-reports/planning-decisions.md` 并附理由，行格式 = 「切片偏离: <偏离点> | <理由(三镜+主次)>」，MUST NOT 静默偏离；节缺席或偏离时按下述必触发条款复核。
+ 
+ **T10-choice 对抗镜复核 SHALL 必触发于三种情形之一**〔harden-ticket-slicing〕：① design.md **既无**「切片建议」节、**也无**成立的缺席理由（= SA-17 违规态；有成立缺席理由的合规缺席不触发本条——但缺席理由蕴含单票交付而实际出票 >1 张功能票 ⇒ 视同条件③矛盾触发〔spec-review-amendment Q1-A〕）；② 出票实质偏离草图（偏离后的方案须复核）；③ 草图与 design.md 正文矛盾（评审 amendments 只改其他节时，切片节可残留旧切分——文件级失鲜监视不覆盖节级一致性，此处是该缺口的唯一显形点）。任一命中即派 **strong 档**对抗镜复核切分方案，复核记录按既有行格式落 `impl-reports/planning-decisions.md`；既有「粒度争议」触发路径保留不变。复核结论 SHALL 按既有 `T10-choice` 三级协议出口处理：通过 ⇒ 按复核确认的方案出票；**复核不过或无从复核 ⇒ 停并上抛**（与下方一致性自扫段同口径），MUST NOT 以被证伪的切分方案继续出票〔spec-review-amendment〕。**必触发为指令层约束（「偏离/矛盾」的判定由出票方自报，无确定性信号），MUST NOT 被表述为机械保证。**
+ 
+ **验收标准的语法面有界性闸门 SHALL 在出票时施加**〔curb-rework-loop-cost〕：某条验收标准若要求对某种语法面**做机械判定**，出票方 SHALL 先判该语法面能否穷举——**有界**（如 CommonMark fence 变体、自有格式的机器锚行）⇒ 可写为机械门；**无界**（通用编程语言源码、YAML、make、shell）⇒ **MUST NOT 写成机械门**，SHALL 改为「让该工具自己回答」（真跑一遍看行为 / 调用该格式的权威解析器），或降级为 best-effort 展示且**不作判定依据**。该判据 SHALL 覆盖伪装形态——不仅匹配「扫描 / 识别 / 拒绝某形态 / 指纹」这类显式措辞，**还 SHALL 匹配「在某格式文件中定位 / 插入 / 修改某处」**（「只动一个键值」听起来不像解析，但「找到那个键」本身就要解析）。**本闸门是指令层约束，MUST NOT 被表述为机械保证。**
+ 
+ **计划文件名 SHALL 为 `tickets.md` 单名**〔adr/0042；adr/0033 的按轨分列语境成为历史〕。**在途 plan MUST NOT 被重命名**——完成判据窗口起点由 `git log --diff-filter=A -- <plan 路径>` 取得，该判据**不跟随重命名**，改名会把窗口起点推到改名 commit，使改名前的全部 checkpoint 标签落到窗口外、已完成 ticket 被判未完成并可能重派。∴ 在途 plan SHALL 保留原文件名直至该 change 归档。gate SHALL 经共享 resolver 定位计划文件：`tickets.md` 存在即用之；不存在则判 RUN_PLAN。
+ 
+ 出 ticket SHALL 落盘即返回编排层（ship），MUST NOT 在同一调用内直通执行——保 ship_gate 在出 ticket 后/执行前的校验插入点。原版 to-tickets 的 quiz-the-user 人类步 SHALL 删除（阶段三无人类门），粒度争议按 `T10-choice` 三级决策协议处理（①有客观判据自动选并**按三镜 + 主次**记理由；②无客观判据派 **strong 档**对抗镜复核推荐切分方案，通过方自动选；③复核不过或无从复核 defer）〔spec-review-amendment M3：首版此处漏了「按三镜 + 主次」限定词〕。**出票模式的仲裁记录 SHALL 有确定性审计落点**：写入 `impl-reports/planning-decisions.md`（change 目录内、git-tracked，由出票落盘的同一次 checkpoint 一并提交），行格式 = 「`T10-choice` 复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」——出票模式无 code-review 报告产物，此前该仲裁结果**无处可落**〔spec-review-amendment M15〕。
+@@ -128,21 +128,21 @@ sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 
+ 
+ #### Scenario: 验收标准要求解析无界语法面时被出票闸门拦下
+ 
+ - **WHEN** 某待出 ticket 的验收标准写作「静态门须能识别私有 Tab/focus trap 指纹」或「窄范围 patch 逻辑只动 YAML 的某单键值」
+ - **THEN** 出票方 SHALL 判该语法面无界并改写该验收标准——改为让该工具自己回答（真跑一遍 / 调权威解析器），或降级为不作判定依据的展示；MUST NOT 原样出票
+ 
+ ## ADDED Requirements
+ 
+ ### Requirement: 执行期票外发现上报编排层按拆分标准判 fold/defer〔harden-ticket-slicing〕
+ 
+-执行模式中 implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，SHALL 上报编排层处置，**MUST NOT 自行扩 scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）。编排层 SHALL 按 change 拆分标准（单一源 `openspec/workflow/reference/change-decomposition-standard.md`，经 resolver 解析；判定入口 = BASE-18 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量）判定——三者皆满足 ⇒ **fold**（该票尚未进入双轴审 ⇒ 可并入当前票验收标准；已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 Blocked-by 当前票的票——MUST NOT 中途改动已在双轴审途中的票的验收标准〔spec-review-amendment〕；均走正常 implementer + 双轴审）；任一不满足 ⇒ **defer**（recorder 落 issues 池，显式带 `change` 字段）。判定与去向 SHALL 记一行入该票 impl-report。
++执行模式中 implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，SHALL 上报编排层处置，**MUST NOT 自行扩 scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）。**上报通道 SHALL 比照 `DONE_WITH_CONCERNS` 的既有形状**〔impl-review-fix〕：implementer SHALL 将发现全量写入该票 report file 的固定小节 `## 票外发现`，并在 dispatch 返回值的一行摘要中追加标注 `[has-off-ticket-finding]`；编排层看到该标注时 MUST Read 该小节全文以获取 AND 门判据，MUST NOT 仅凭一行摘要判定。编排层 SHALL 按 change 拆分标准（单一源 `openspec/workflow/reference/change-decomposition-standard.md`，经 resolver 解析；判定入口 = BASE-18 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量）判定——三者皆满足 ⇒ **fold**（该票尚未进入双轴审 ⇒ 可并入当前票验收标准；已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 Blocked-by 当前票的票——MUST NOT 中途改动已在双轴审途中的票的验收标准〔spec-review-amendment〕；均走正常 implementer + 双轴审，且**执行期新增的票 SHALL 补齐出票模式对 ticket 的强制字段与闸门**〔impl-review-fix〕——`Blocked-by` / `R-ID` / 验收复选框 / 验收标准的语法面有界性闸门，或在该票文本中显式列出豁免哪些、为何）；任一不满足 ⇒ **defer**（recorder 落 issues 池，显式带 `change` 字段）。判定与去向 SHALL 记一行入该票 impl-report。
+ 
+ #### Scenario: implementer 撞到相关票外 bug 上报而非顺手修
+ 
+ - **WHEN** implementer 实现某票时发现相邻函数一个与本 change 一致性相关的 bug，修复约 5 行
+-- **THEN** implementer 在返回中上报该发现，MUST NOT 直接改动票外代码；编排层按 AND 门判定（同 capability、高耦合、低增量皆满足）后 fold 进当前 change 的后续票
++- **THEN** implementer 将发现写入该票 report file 的 `## 票外发现` 小节，并在返回摘要标 `[has-off-ticket-finding]`，MUST NOT 直接改动票外代码；编排层读该小节全文按 AND 门判定（同 capability、高耦合、低增量皆满足）后 fold 进当前 change 的后续票
+ 
+ #### Scenario: 不满足 AND 门的发现 defer 进 issues 池
+ 
+ - **WHEN** implementer 发现一个真独立、需自身设计审查的改进点
+ - **THEN** 编排层判 defer，经 recorder 落 todolist（显式带 change 字段），该票不因此扩 scope
+diff --git a/openspec/config.yaml b/openspec/config.yaml
+index b0eefcb..7261973 100644
+--- a/openspec/config.yaml
++++ b/openspec/config.yaml
+@@ -1,20 +1,20 @@
+ schema: sdflow-spec-driven
+ 
+ # 项目上下文（生成产物时展示给 AI）
+ context: |
+   ## 通用｜spec 工作流规则集（随模版携带，勿删）
+   spec 质量规则集见 openspec/workflow/：
+   - trigger-catalog.md      触发词目录 TG-NN（约束/领域/画图/模版必填槽 的公共触发源）
+   - spec-checklists/        通用 base(BASE-NN) + 领域 domains(backend·go / embedded·ml307c·esp32 / frontend)
+   - design-diagrams.md      设计画图规则（哪些图、何时画、ASCII 优先）
+-  - ff-generation-constraints.md  生成时硬约束 D-1~D-6
++  - ff-generation-constraints.md  生成时硬约束 D-1~D-6 + 切片建议〔impl-review-fix〕
+   - generation-process.md   生成过程：explore 发散 + /sdflow-spec（澄清→拷问→生成三相位）
+   起手对变更评估 trigger-catalog，命中的触发激活对应必填槽 / D约束 / 画图 / 领域清单。
+   触发判定一律用具体行为描述，不用风险代号。
+ 
+   ## 本项目｜tech stack / 约定
+   sdflow-skills：自建 Claude Code Skills 统一管理仓库（本身就是一个 skill 集合库，
+   非典型业务代码库）。
+   - 每个 skill 是仓库根下一个目录：`SKILL.md`（frontmatter + 说明）+ 可选 `scripts/`（Python/Shell）
+     + 可选 `assets/`（模版、bundle 资源）。
+   - 安装机制：`setup.sh` 在 `~/.claude/skills/` 下为每个 skill 建相对路径 symlink（macOS/Linux）或
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index c9f8b7f..667f5fb 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -276,20 +276,24 @@ HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判
+ 
+ **出票模式的仲裁记录 SHALL 有确定性审计落点**：写入 `impl-reports/planning-decisions.md`（change
+ 目录内、git-tracked，由出票落盘的同一次 checkpoint 一并提交），行格式 = 「`T10-choice` 复核: <方案>
+ | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」——出票模式无 code-review 报告产物，此前该仲裁结果
+ **无处可落**〔spec-review-amendment M15〕。粒度争议（≥2 个合理切分候选、无客观判据）走同一
+ `T10-choice` 三级决策协议（design D9；无客观判据档派 **strong 档**对抗镜复核推荐切分方案），记录
+ 同样落 `planning-decisions.md`。
+ 
+ ### 产出：3–6 张 tracer-bullet 垂直切片
+ 
++> **不足预算的合法例外**〔impl-review-fix，harden-ticket-slicing〕：design.md 写明成立的「单票
++> 交付」缺席理由（见「起手检查」T10-choice 必触发条件①）、且出票确为 1 张功能票时，是本预算的
++> 合法例外——与下方 expand–contract（超出预算）例外并列，不视为违反本预算。
++
+ - 每张打穿全层（行为级、可独立验证、demoable），**MUST NOT 预写实现代码或具体文件路径**——ticket
+   只描述"交付什么行为"，不描述"改哪个文件/写什么代码"（文件路径写死会很快过期，且抢了
+   implementer 的判断权）。**例外**：若某决策性片段（状态机、reducer、schema、类型形状）源自
+   prototype 技能产出、且用 prose 描述会失真，可内联该片段并注明"源自 prototype"，只保留决策
+   相关部分，不是可运行 demo。
+ - 每张预估改动范围 SHALL 能被单个 fresh implementer 子代理在一个上下文窗口内完整消化（读相关
+   代码 + 实现 + 测试）；预估会 touch 的文件数明显超出常规单窗口容量时，按下方「宽重构例外」走
+   expand–contract，不硬塞成一张大 ticket。
+ - 每 ticket 显式声明 `Blocked-by:`（阻塞它的其他 ticket 号，逗号分隔，或 `none`）与 `R-ID:`（该
+   ticket 对应的需求编号，源于本 change 自身 delta spec 的 Requirement ID 缩写）。
+@@ -607,22 +611,25 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
+   > ——该票不写产品代码，验收物是证据不是 diff。
+ - **完成信号后置双写时序**：implementer **实现期提交 MUST NOT 带 `task<N>-` 完成标签**——普通
+   commit 即可，标签延后到该 ticket 双轴审通过后才由执行模式补打；
+ - report file 路径契约：implementer **全量报告**写 `{change_dir}/impl-reports/task<N>-<slug>.md`，
+   dispatch 的**返回值只带状态摘要**（四值状态词之一 + 一行摘要），**MUST NOT** 把全量报告贴进
+   返回文本（上下文经济学：大产物一律走文件交接，不进 prompt/返回值）。fix 轮次的 implementer
+   报告写 `{change_dir}/impl-reports/task<N>-<slug>-fix<轮次>.md`（不覆盖首轮报告，保留审计
+   轨迹）。〔impl-review-fix〕
+ - 🔴 **票外发现上报**〔harden-ticket-slicing，子代理是 fresh context，未声明即等同未约束〕：
+   implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，**MUST NOT 自行扩
+-  scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）——在返回中上报该发现，编排层按
+-  下方「票外发现的 fold/defer」处置。
++  scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）——**上报通道比照 `DONE_WITH_CONCERNS`
++  的既有形状**〔impl-review-fix〕：有发现时，全量写入该票 report file 的固定小节
++  `## 票外发现`（无发现可省略该小节）；dispatch **返回值的一行摘要**须追加标注
++  `[has-off-ticket-finding]`（无发现不标）——编排层据此确定性地知道要不要去读该小节全文；
++  详见下方「票外发现的 fold/defer」的读取契约与处置流程。
+ 
+ implementer 状态词表四值处置：
+ 
+ | 状态 | 处置 |
+ |---|---|
+ | `DONE` | 进入双轴审 |
+ | `DONE_WITH_CONCERNS` | 与 `DONE` 同路径进双轴审，implementer 所述 concerns **逐字**附给两轴审子代理〔F7〕 |
+ | `NEEDS_CONTEXT` | 编排层**仅从盘面**（design.md / specs/ / ticket 文本）自答；答不出 → 走 T10（defer 或停），**MUST NOT 编造**答案 |
+ | `BLOCKED` | 统一 halt envelope 停并上抛（见下），blocker 记录**落盘** `{change_dir}/impl-blockers.md`（git-tracked，防会话压缩蒸发）〔F7〕 |
+ 
+@@ -641,25 +648,33 @@ implementer 状态词表四值处置：
+ 5. 精确恢复步骤（下一步具体要做什么，不是"请检查一下"这种空泛话）。
+ 
+ ### 票外发现的 fold/defer〔harden-ticket-slicing〕
+ 
+ implementer 上报「票外发现」（见上「每 ticket 派 fresh implementer」节的 dispatch 必含项）后，
+ 编排层 SHALL 按 change 拆分标准判定去向——**不自行顺手判**，判定入口 = 单一源
+ `openspec/workflow/reference/change-decomposition-standard.md`（经 resolver 解析）指向的
+ `BASE-18` 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量，三者皆满足 ⇒ **fold**，任一不满足 ⇒
+ **defer**。
+ 
++> **读取契约**〔impl-review-fix，比照 `DONE_WITH_CONCERNS` 澄清段〕：dispatch 返回值一行摘要
++> 标 `[has-off-ticket-finding]` 时，执行模式 **MUST Read** 该票 report file
++> （`{change_dir}/impl-reports/task<N>-<slug>.md`）的 `## 票外发现` 小节取**全文**，再据其中的
++> 「同 capability / 高耦合 / 低增量」判据信息判 AND 门——**MUST NOT** 只凭返回值那一行摘要判定，
++> 摘要本身装不下 AND 门所需的判据细节。未标该记号时无需去读，视为本票无票外发现。
++
+ - **fold**：按该票是否已进入双轴审决定去向——
+   - 尚未进入双轴审 ⇒ 可并入**当前票**验收标准；
+   - 已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 `Blocked-by` 当前票的票，
+     **MUST NOT 中途改动已在双轴审途中的票的验收标准**。
+-  - fold 进的工作**均走正常 implementer + 双轴审**，不豁免。
++  - fold 进的工作**均走正常 implementer + 双轴审**，不豁免。执行期新增的票 SHALL 补齐上方
++    「出票模式」节对 ticket 的强制字段与闸门（`Blocked-by` / `R-ID` / 验收复选框 / 语法面
++    有界性闸门），或在该票文本中显式列出豁免哪些、为何〔impl-review-fix〕。
+ - **defer**：经 recorder 落 issues 池（todolist），**MUST 显式带 `change` 字段**指向本 change
+   （省略会误挂当前活跃 change、污染 sweep 圈选）。
+ - 判定与去向 **SHALL 记一行入该票 impl-report**（fold/defer + 判据摘要）。
+ 
+ ### 完成信号双写补打（双轴审通过后）
+ 
+ ```bash
+ bash ~/.sdflow/hack/checkpoint-commit.sh "<change>:task<N>-<slug>" "<一句话描述>"
+ ```
+ 
+diff --git a/sdflow-init/assets/snippets/index-section.md b/sdflow-init/assets/snippets/index-section.md
+index 09c0dc6..5137a0c 100644
+--- a/sdflow-init/assets/snippets/index-section.md
++++ b/sdflow-init/assets/snippets/index-section.md
+@@ -2,21 +2,21 @@
+ 
+ > 本区块由 `sdflow-init` 维护——`openspec/workflow/` bundle 的规则索引。
+ > 新增/删 workflow 规则后重跑 `sdflow-init update`，或手动同步本表。
+ 
+ > 无本地规则副本的仓：下表文件位于全局 canonical `~/.sdflow/workflow/`，相对链接不可点，以文件名为准。
+ 
+ | 名称 | 文件 | 作用 |
+ |---|---|---|
+ | `workflow` | [workflow/workflow.md](./workflow/workflow.md) | 端到端流程总览（三阶段连续化）：/sdflow-spec 生成→设计审(sdflow-spec-review 编排器)→设计 GATE→实现(sdflow-implement)+代码审(sdflow-code-review)+收尾(sdflow-done)；阶段内部不用 /clear，仅两处阶段交界用（G1），连续跑到 merge |
+ | `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-NN，驱动 约束/领域清单/画图/必填槽 四层 |
+-| `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | 生成起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6（`/sdflow-spec` 调用，或 `opsx:ff` 直呼） |
++| `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | 生成起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6 + 切片建议（`/sdflow-spec` 调用，或 `opsx:ff` 直呼） |
+ | `generation-process` | [workflow/generation-process.md](./workflow/generation-process.md) | 生成过程：发散(explore) + `/sdflow-spec`（澄清→拷问→生成三相位） |
+ | `design-diagrams` | [workflow/design-diagrams.md](./workflow/design-diagrams.md) | 设计/spec 阶段画哪些图、何时画、什么形态（C4 + 行为图，触发条件化） |
+ | `spec-review` | [workflow/spec-review.md](./workflow/spec-review.md) | spec 评审（Detection 层）：只做 prevention 残差，trigger 驱动 + 独立 + 读码核验 |
+ | `model-tiers` | [workflow/model-tiers.md](./workflow/model-tiers.md) | 模型档位映射（强/中/弱职责 + canonical 缺省 + config 覆盖语义） |
+ 
+ 设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-NN + domains，含 devex、frontend(+frontend-react)）。
+ 代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-NN + domains，含 frontend(+frontend-react)）。
+ 多为说明类（可删不影响执行），另含 change 拆分标准单一源（`change-decomposition-standard.md`，被
+ 三处 SKILL 引为执行必需的规范文本，详见目录内 README）：[workflow/reference/](./workflow/reference/)。
+ 人读概念指南（原理 / 设计思想 / 实战用法）：`~/.sdflow/workflow/sdflow-guide.html`（自包含 HTML，浏览器直接打开；随 bundle 全局分发，不入消费仓）。
+diff --git a/sdflow-init/assets/workflow/config.template.yaml b/sdflow-init/assets/workflow/config.template.yaml
+index 53f2555..3c6695f 100644
+--- a/sdflow-init/assets/workflow/config.template.yaml
++++ b/sdflow-init/assets/workflow/config.template.yaml
+@@ -16,21 +16,21 @@
+ # ═════════════════════════════════════════════════════════════
+ schema: sdflow-spec-driven
+ 
+ # 项目上下文（生成产物时展示给 AI）
+ context: |
+   ## 通用｜spec 工作流规则集（随模版携带，勿删）
+   spec 质量规则集见 openspec/workflow/（无本地副本时为 ~/.sdflow/workflow/，下同）：
+   - trigger-catalog.md      触发词目录 TG-NN（约束/领域/画图/模版必填槽 的公共触发源）
+   - spec-checklists/        通用 base(BASE-NN) + 领域 domains(backend·go / embedded·ml307c·esp32 / frontend(+frontend-react))
+   - design-diagrams.md      设计画图规则（哪些图、何时画、ASCII 优先）
+-  - ff-generation-constraints.md  生成时硬约束 D-1~D-6
++  - ff-generation-constraints.md  生成时硬约束 D-1~D-6 + 切片建议〔impl-review-fix〕
+   - generation-process.md   生成过程：explore 发散 + /sdflow-spec（澄清→拷问→生成三相位）
+   起手对变更评估 trigger-catalog，命中的触发激活对应必填槽 / D约束 / 画图 / 领域清单。
+   触发判定一律用具体行为描述，不用风险代号。
+ 
+   ## 本项目｜tech stack / 约定（每个项目自填；新项目替换本段）
+   <在此填写：Tech stack / API style / DB 访问 / Forbidden patterns / 详见 CLAUDE.md 等>
+ 
+ # 按 artifact 注入的自定义规则（升级安全：在仓库内，openspec update 不覆盖）
+ # 槽位分「无条件必填」与「〔TG-NN〕命中才必填」两类；TG 定义见 trigger-catalog.md。
+ rules:
+diff --git a/sdflow-init/assets/workflow/ff-generation-constraints.md b/sdflow-init/assets/workflow/ff-generation-constraints.md
+index aab9660..474c40c 100644
+--- a/sdflow-init/assets/workflow/ff-generation-constraints.md
++++ b/sdflow-init/assets/workflow/ff-generation-constraints.md
+@@ -1,13 +1,13 @@
+-# 生成起手强制规范（FF-0 + D-1~D-6）
++# 生成起手强制规范（FF-0 + D-1~D-6 + 切片建议）
+ 
+-> **定位声明**：本规范是 `/sdflow-spec`（或 `/opsx:ff` 直呼）起手强制项的**唯一权威定义源**——含前置动作 **FF-0（开分支）** 与生成硬约束 **D-1~D-6**。
++> **定位声明**：本规范是 `/sdflow-spec`（或 `/opsx:ff` 直呼）起手强制项的**唯一权威定义源**——含前置动作 **FF-0（开分支）**、生成硬约束 **D-1~D-6**、以及「切片建议」节的生成侧规范〔impl-review-fix，harden-ticket-slicing〕。
+ > 所有调用方（`config.yaml` rules 自动注入、`workflow/workflow.md` 流程、各处对比表/判定速查）
+ > **只引用编号、不复制定义内容**。约束内容如有变更，只改本文件。
+ >
+ > 方法论定位：D 约束属于「生成时 × 外部接地」的预防型质量手段
+ > （见 [Spec_Quality_Methodology.md](./reference/Spec_Quality_Methodology.md) 原则 1）。
+ 
+ ## 前置强制动作（FF-0：开 feature 分支）
+ 
+ > FF-0 是 ff **起手必做的非 D 动作**（VCS 前置，不是内容约束，故与 D-x 区分编号）。
+ 
+@@ -33,22 +33,25 @@
+ > 此未判定路径只输出 `additionalContext`，**MUST NOT 解析 shell**，也不设置 `permissionDecision`；多处创建调用则先行 stacking deny。
+ > hook 实现同一条三分支判定：**保护分支 → deny**；**已在 `feat/{该 change}` → 放行**；**其它 feature 分支 → deny 并要求先问人**（人确认「就地继续」后**分两步**敲：先单独 `touch <仓根>/openspec/.ff0-ack`，**再重跑** `openspec new change <name>`——**MUST NOT 写成 `touch … && openspec …` 一条**：PreToolUse 在命令执行**前**判定，那一刻哨兵还不存在，守卫会把这条命令连同 touch 一起 deny，唯一逃生口变死循环。**该哨兵是给人拍板用的一次性逃生口：守卫读到即删、只对下一次调用生效，模型 MUST NOT 自行 touch 它**；判据只看文件在不在，MUST NOT 从命令串里认口令——命令串是无界的 shell 语法面）。
+ > **残留令牌是真实的绕过口，如实登记**：人若在自己的终端里敲 `openspec new change`（hook 根本不触发），哨兵**永不被消费**，会留在盘上静默放行下一次调用。缓解只做两件**有界**的事：① 哨兵带**有界时效**，超窗即失效并自动删除（把「常驻绕过口」压成一个短窗口）——窗口长度的**单一源** = hook 的 `ACK_TTL_SECONDS`，deny 文案按 `// 60` 自报分钟数，**本文与 hook 散文一律不写死数字**（手抄一份即与常量分叉、改常量不会红）；判据是**双边**的 `0 ≤ now − mtime ≤ TTL`——单边式在 mtime 落在未来（时钟回拨 / 从备份恢复保留 mtime）时恒真，窗口形同虚设；② `/openspec/.ff0-ack` 进 canonical runtime gitignore（`assets/snippets/runtime-gitignore.txt`），防 `checkpoint-commit.sh` 的 `git add -A` 把它提交入库、让每个 clone 都带一个。窗口内的残留仍是真洞，本 hook **MUST NOT 声称堵死它**——它从来不是安全边界，真正的防线是纪律 + review。
+ > Git 探测异常一律 silent fail-open；命令语义未判定则按上述无决策 context 诚实显形。文档级强制（调用方注入 + review 核对）作为补充层。
+ 
+ ## 切片建议
+ 
+ design.md 决策区 **SHOULD** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）；节缺席时决策区
+ **MUST** 写明一句为何不需要——「有节」或「有缺席理由」二择一恒成立，不存在两者皆缺的合规态。
+ 
+-草图票数须落 **3–6 张垂直切片**预算内；超出该预算须在节内注明 expand–contract 例外依据。拆分标准
+-的完整规则与 why 见单一源 [`reference/change-decomposition-standard.md`](./reference/change-decomposition-standard.md)。
++草图票数须落 **3–6 张垂直切片**预算内；超出该预算须在节内注明 expand–contract 例外依据。**不足预算
++也有一条与 expand–contract 并列的合法例外**〔impl-review-fix，harden-ticket-slicing〕：**决策区**写明
++成立的「单票交付」缺席理由（即本节合规缺席）、且出票确为 1 张功能票时视为合规——该例外不需要额外
++注明依据，缺席理由本身即依据。拆分标准的完整规则与 why 见单一源
++[`reference/change-decomposition-standard.md`](./reference/change-decomposition-standard.md)。
+ 
+ 出 ticket 模式（`sdflow-implement`）如何消费该节（默认采纳 / 实质偏离如何记录 / T10-choice 复核
+ 必触发条件）单一源在 `sdflow-implement/SKILL.md` 出票模式起手检查段——本文件只定义生成侧档位，
+ 不复制消费语义，避免两处漂移。
+ 
+ 切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀——该前缀留给 roadmap wayfinding 效力范围内
+ 的已决 ticket 溯源（`openspec/roadmaps/{name}/footage/`），混用会让溯源指向错误的出处。
+ 
+ > 🔴 **legacy**：`sdflow-roadmap` 的三分支路由 / footage 落盘机制已随
+ > `refactor-roadmap-internalize-deps` 移除（讨论层内化为 memo 单载体），**新建 roadmap 包不再产生
+diff --git a/sdflow-init/assets/workflow/workflow-rules-guide.html b/sdflow-init/assets/workflow/workflow-rules-guide.html
+index 1b3f33d..716ac23 100644
+--- a/sdflow-init/assets/workflow/workflow-rules-guide.html
++++ b/sdflow-init/assets/workflow/workflow-rules-guide.html
+@@ -253,21 +253,21 @@
+ 
+   <p>整个 workflow bundle 由四类资产组成，各有明确分工：</p>
+ 
+   <div class="diagram"><pre>
+ sdflow-init/assets/workflow/
+ │
+ ├─ <strong>规则文件</strong>（7 个 .md）         ← 流程骨架 + 生成/评审约束，全部<em>领域无关</em>
+ │    workflow.md                     端到端流程唯一线性路径
+ │    trigger-catalog.md              触发词单一源（TG-NN），领域枢纽
+ │    generation-process.md           生成过程规则（三杠杆中唯一非 config 可固化的）
+-│    ff-generation-constraints.md    FF-0 分支判定 + D-1~D-6 生成硬约束
++│    ff-generation-constraints.md    FF-0 分支判定 + D-1~D-6 生成硬约束 + 切片建议
+ │    design-diagrams.md              设计期画图规则
+ │    spec-review.md                  评审残差规则（只审 prevention 焊不住的）
+ │    model-tiers.md                  模型档位映射（strong/mid/light 两机队）
+ │
+ ├─ <strong>机械层工具</strong>（6 个 .py + tests）  ← 确定性门禁/校验，脚本 owns 一致性
+ │    tools/anchor_lint.py            lens-metric 锚契约校验
+ │    tools/findings_ref_check.py     findings 引用核验（路径/行号/引文）
+ │    tools/hr_tg_intersect.py        HR-TG 交集（高风险触发词命中判定）
+ │    tools/lens_metric_emit.py       lens-metric 锚行 emitter
+ │    tools/review_disposition_check  roadmap review 处置校验
+@@ -342,21 +342,21 @@ sdflow-init/assets/workflow/
+         <strong>§四 自动触发规则：</strong>人示意收敛（「开搞」「做吧」）→ 模型 SHALL 自动 invoke <code>/sdflow-spec</code>；模型 MUST NOT 自主判断「该开 change 了」
+       </div>
+     </div>
+ 
+     <div class="rule-card">
+       <div class="rule-card-header">
+         <span class="rule-card-name">ff-generation-constraints.md</span>
+         <span class="pill pill-rule">规则</span>
+         <span class="rule-card-meta">198 行</span>
+       </div>
+-      <p><strong>FF-0 前置动作 + D 约束</strong>——FF-0 三分支判定（保护分支→建 / 本 change→跳过 / 其它 feature→halt 问人）是每次生成的起手式。D-1~D-6 是注入四件套的生成硬约束（如 D-2 DB 迁移须带 v_old/v_new 对照表）。</p>
++      <p><strong>FF-0 前置动作 + D 约束 + 切片建议</strong>——FF-0 三分支判定（保护分支→建 / 本 change→跳过 / 其它 feature→halt 问人）是每次生成的起手式。D-1~D-6 是注入四件套的生成硬约束（如 D-2 DB 迁移须带 v_old/v_new 对照表）；「切片建议」是 design.md 决策区的初步 ticket 划分规范。</p>
+       <div class="key-content">
+         <strong>D 约束由 TG 驱动：</strong>命中 TG-04 → 自动注入 D-2；命中多个 TG → 取并集
+       </div>
+     </div>
+ 
+     <div class="rule-card">
+       <div class="rule-card-header">
+         <span class="rule-card-name">design-diagrams.md</span>
+         <span class="pill pill-rule">规则</span>
+         <span class="rule-card-meta">120 行</span>
