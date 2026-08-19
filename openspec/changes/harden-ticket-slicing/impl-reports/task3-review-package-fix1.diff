@@ -1,0 +1,222 @@
+# Review package: aa93bf7..a4f9f8d685ef1f76e64fba4be8d5e8ad58d0f17c (Task 3 fix 轮 1，增量：上轮已审 SHA..HEAD)
+
+## Commits
+a4f9f8d fix(harden-ticket-slicing): 接回 Task 3 scope 内聚检查执行路径
+
+## Files changed
+ .../impl-reports/task3-three-refs-fix1.md          | 136 +++++++++++++++++++++
+ sdflow-spec/SKILL.md                               |  11 +-
+ 2 files changed, 139 insertions(+), 8 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/harden-ticket-slicing/impl-reports/task3-three-refs-fix1.md b/openspec/changes/harden-ticket-slicing/impl-reports/task3-three-refs-fix1.md
+new file mode 100644
+index 0000000..b7f8d7f
+--- /dev/null
++++ b/openspec/changes/harden-ticket-slicing/impl-reports/task3-three-refs-fix1.md
+@@ -0,0 +1,136 @@
++# Task 3 · Critical 修复报告（fix1）：SA-17 scope 内聚检查未接回执行路径
++
++## 问题回顾
++
++Task 3 把 SA-17 的 scope 内聚检查判据整条下沉到新建的
++`sdflow-spec/references/scope-cohesion-check.md`，但没有把它接回执行路径：
++
++1. `SKILL.md` 的「按需资料路由（默认不加载）」索引没有列出该文件。
++2. B.7 item 3 只有一行「判据见 X」，无 MUST 强度；随后的 🔴 句「两者未经人确认 MUST NOT 自动写入」的
++   「两者」只指 item 1/2（ADR + 术语），不覆盖 item 3。
++
++## 修复内容（两处，均已落盘）
++
++### 修复 1：B.7 item 3 补最小 MUST 强度
++
++`sdflow-spec/SKILL.md:372`
++
++- 改前：`3. scope 内聚检查——判据见 \`references/scope-cohesion-check.md\`。`
++- 改后：`3. scope 内聚检查：MUST 读 \`references/scope-cohesion-check.md\` 判据；发现偏离 MUST 呈现给人拍板，MUST NOT 静默调整范围。`
++
++item 3 现在自带 MUST 强度（读判据 + 呈现给人拍板 + MUST NOT 静默调整范围），不再依赖后面那句只覆盖
++item 1/2 的 🔴 句，语义与 SA-17「发现偏离 SHALL 连同拆分/合并建议呈现给人拍板，MUST NOT 静默调整范围」对齐。
++
++### 修复 2：路由索引补一行
++
++`sdflow-spec/SKILL.md:182`（新增，紧跟在原 ADR/术语提议那条 bullet 之后）：
++
++```
++- B.7 item 3 做 scope 内聚检查时读取 [`references/scope-cohesion-check.md`](references/scope-cohesion-check.md)。
++```
++
++格式与其余五条「何时读」bullet 一致。
++
++## 腾空间：逐处「改前 → 改后 + 为什么无损」
++
++新增两处共 +147 字符（item3 行 +38，路由行 +109），文件原本 17,998/18,000，必须腾出至少 145 字符。
++腾出的两处均为**字面重复文本**，删除/压缩后不损失任何 MUST/MUST NOT/判定条件/例外声明：
++
++### 腾空间 A：删除文末与路由索引verbatim 重复的整段
++
++`sdflow-spec/SKILL.md`（原第 528–532 行，出口序列之后）：
++
++- 改前（整段删除）：
++  ```
++  ---
++
++  历史取舍不进入默认运行；仅在审计历史依据或设计未来 T132 gate 时读取
++  [`references/evolution-notes.md`](references/evolution-notes.md)。T132 未来 gate 尚未实现，保持 OPEN。
++  ```
++- 改后：（无，整段删除，文档在「🔴 MUST NOT 引用『主审裁决需冷视角』」后结束）
++- 为什么无损：这段与「按需资料路由」索引里的 bullet（`SKILL.md:178-179`，未改动）**逐字重复**——
++  `仅在审计历史依据或设计未来 T132 gate 时读取 [evolution-notes.md]。T132 未来 gate 尚未实现，保持 OPEN。`
++  同一条「何时读 + 现状」在同一文件里出现两次，删除文末这份不改变任何指令内容——读者在文档任意位置
++  都能从路由索引拿到同样的信息，且路由索引出现更早（第 178 行 vs 原第 531 行），是更合理的唯一落点。
++  节省 137 字符（用 `python3 -c` 实测：删除前后 diff 差值 = 18141 → 18003，之后与其余修改叠加）。
++
++### 腾空间 B：压缩 B.7 与 B.6 verbatim 重复的警示句
++
++`sdflow-spec/SKILL.md:374`（原第 373–374 行）：
++
++- 改前：
++  ```
++  🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
++  [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
++  ```
++- 改后：
++  ```
++  🔴 同 B.6：item 1/2 两者未经人确认 MUST NOT 自动写入，判据与模板同引 B.6 所示文件。
++  ```
++- 为什么判定无损、以及编排层要求正面回答的三问：
++
++  这句话在 B.6（`SKILL.md:362-364`，**本次未改动**）里逐字出现过一次——「🔴 两者未经人确认 MUST NOT
++  自动写入。判据与模板见 [adr-and-glossary-templates.md]」，B.7 是对 B.6 的「收敛前逐条回扫」（B.7 结尾
++  自己就写着「与 B.6 的区别」），紧接着把同一句警示原样再抄一遍。压缩把 MUST NOT 语义完整保留
++  （「两者未经人确认 MUST NOT 自动写入」一字不改），只是把**直接文件链接**换成了**指向 B.6 的指针**。
++
++  **① `adr-and-glossary-templates.md` 是否仍在执行路径上可达**：是，且是**双重可达**、完全未受本次改动
++  影响——(a) B.6 原句（`SKILL.md:362-364`）持有的直接链接**我没有动它**，B.7 上面几行就是 B.6，物理
++  距离是「同一屏内往上翻几行」；(b) 路由索引第 181 行「命中 ADR/术语提议条件时读取
++  [adr-and-glossary-templates.md]」也未改动，是独立于 B.6/B.7 之外的第二条直接路径。两条路径都完好，
++  我删的只是 B.7 里的**第三份**重复。
++
++  **② 「两者」的指代是否更清楚还是更糊**：净效果是**更清楚**。原句「两者」在 B.7 的语境里本来就该指
++  item 1/2（因为 item 3 是本次新加、且有自己独立的 MUST 语义，不受这句管），但原文没有显式说明，
++  容易被误读成「item 1/2/3 三者」。改后显式写「item 1/2」消除了这个歧义，是澄清而非缩窄。
++
++  **③ 净效果判定——不是完全无损，是一处已知的微小代价**：删链接确实把「B.7 单独一句话就能定位到文件」
++  降级成「需要读者知道/回看 B.6」的一跳间接指路。对**连续通读**这个文件的 agent（本 skill 的唯一
++  设计用法——SKILL.md 是一次性顺序读完，不是查表式随机跳转文档）而言，这一跳发生在同一屏内、
++  上一个小节标题之下，代价接近零；但如果未来出现「只读 B.7 局部、不读 B.6」的消费方式（当前没有这种
++  用法，B.7 本身依赖 B.6 的上下文才能理解「收敛前回扫」的含义，所以这种局部读取本就不成立），
++  这一跳会造成一次额外查找。**我判定这不是完全对称的无损压缩，是一个成本极低、但确实存在的已知代价
++  （已知代价 vs 语义损失的区别：MUST/MUST NOT 内容零丢失，只丢失了「零跳转直达」这一便利性）**，
++  如实标注在此，是否需要恢复直接链接由编排层裁定。
++
++## 核验命令与输出（均前台运行，非后台 Monitor）
++
++```
++$ python3 -c "print(len(open('sdflow-spec/SKILL.md',encoding='utf-8').read()))"
++17934
++EXIT_1=0
++```
++
++```
++$ /usr/bin/python3 -m pytest hack/tests/test_sdflow_spec_resident_contract.py -q
++..........                                                               [100%]
++10 passed in 0.01s
++EXIT_2=0
++```
++
++```
++$ /usr/bin/python3 -m pytest -q
++........................................................................ [  2%]
++（省略中间进度行，全部为 . / s）
++...................                                                      [100%]
++2601 passed, 10 skipped in 370.01s (0:06:10)
++EXIT_3=0
++```
++
++```
++$ python3 hack/sync_principles.py --check
++[sync_principles] ✅ 27 个投放面全部与真相源一致（四条通则 + 广审镜定义）
++EXIT_4=0
++```
++
++四条命令全部 exit 0。文件最终 17,934 字符，低于 18,000 阈值，余量 66 字符。
++
++## Scope 确认
++
++本次只改了 `sdflow-spec/SKILL.md` 里上述两处修复 + 两处腾空间（共四处 diff hunk，见上）。未触碰
++`sdflow-roadmap/SKILL.md`、`sdflow-code-review/SKILL.md`、`references/scope-cohesion-check.md` 的实质内容，
++未改动或放宽 `hack/tests/test_sdflow_spec_resident_contract.py` 的阈值。
++
++## 完成信号
++
++本报告不勾 `tickets.md` 复选框、不打 `checkpoint(...:task3-...)` 完成标签——这两项按信号权威表由双轴审通过后执行模式补打。
+diff --git a/sdflow-spec/SKILL.md b/sdflow-spec/SKILL.md
+index 3692a21..fd178fc 100644
+--- a/sdflow-spec/SKILL.md
++++ b/sdflow-spec/SKILL.md
+@@ -172,20 +172,21 @@ A 澄清──共识初成──▶ B 拷问（起手即建分支 + change 目
+ **按需资料路由（默认不加载）**：
+ 
+ - 仅在人明确要求重新评估或启用外派时读取
+   [`references/delegation-protocol.md`](references/delegation-protocol.md)。外派当前未启用，默认全程主 session 亲做。
+ - 仅在发生失败、降级或需要诊断时读取
+   [`references/degradation-ladder.md`](references/degradation-ladder.md)，按其中 `problem + cause + fix` 契约处置。
+ - 仅在审计历史依据或设计未来 T132 gate 时读取
+   [`references/evolution-notes.md`](references/evolution-notes.md)。T132 未来 gate 尚未实现，保持 OPEN。
+ - 写或核验决策纪要时读取 [`references/decision-memo-schema.md`](references/decision-memo-schema.md)；
+   命中 ADR/术语提议条件时读取 [`references/adr-and-glossary-templates.md`](references/adr-and-glossary-templates.md)。
++- B.7 item 3 做 scope 内聚检查时读取 [`references/scope-cohesion-check.md`](references/scope-cohesion-check.md)。
+ 
+ ---
+ 
+ ## 第零步：起手（环境 → 档位 → 重入探测）
+ 
+ ### 0.1 openspec CLI 预检（唯一 fail-closed 面）
+ 
+ ```bash
+ openspec --version                 # 记下实际版本号，降级/失败报告里要写它
+ openspec context                   # 项目上下文（本项目栈/约定/规则集入口），进相位 A 前读一遍
+@@ -361,24 +362,23 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话
+ 发现术语冲突或模糊语言 ⇒ **提议**更新 `openspec/CONTEXT.md`。
+ 🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
+ [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
+ 
+ ### B.7 收敛前检查（B.6 升级：从「临场感知」→ 显式检查点）
+ 
+ 收敛前，把 `decision-memo.md` 已拍板的**每条决策**过一遍：
+ 
+ 1. **ADR 三条件**：难逆转 + 缺上下文会令人意外 + 有真实权衡 ⇒ 该决策需要一条 ADR（提议落 `openspec/adr/`）。
+ 2. **术语冲突判据**：该决策引入/使用的术语与 `openspec/CONTEXT.md` 已有定义是否冲突或模糊 ⇒ 需更新 CONTEXT.md。
+-3. scope 内聚检查——判据见 `references/scope-cohesion-check.md`。
++3. scope 内聚检查：MUST 读 `references/scope-cohesion-check.md` 判据；发现偏离 MUST 呈现给人拍板，MUST NOT 静默调整范围。
+ 
+-🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
+-[`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
++🔴 同 B.6：item 1/2 两者未经人确认 MUST NOT 自动写入，判据与模板同引 B.6 所示文件。
+ 
+ **与 B.6 的区别**：B.6 是拷问过程中的惰性钩子（命中就提议）；本步是**收敛前逐条回扫**——B.6 漏掉的、
+ 或在后续拷问中语义发生变化的决策，在此兜底捕获。
+ 
+ ### B.8 收敛两步（⑤⑥）
+ 
+ **⑤ 纪要定稿** —— 补齐 frontmatter 身份字段：`schema_version` / `change` / `branch` /
+ `generated_at` / `decision_hash`。`decision_hash` MUST 用
+ [`references/decision-memo-schema.md`](./references/decision-memo-schema.md) §2 的**那一条命令**
+ 算（C.1 判 4 重算时跑的是同一条 ⇒ 定义即命令，无两端口径失配面）。
+@@ -517,15 +517,10 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法
+ 1. /clear
+ 2. 切换到评审档模型（阶段二用评审档，与阶段一的产出档不同）
+ 3. /sdflow-spec-review
+ ```
+ 
+ **理由只引两条**（对 `workflow.md` G1「全流程不用 `/clear`」的**具名例外**）：
+ ① **cache 按模型隔离**——拖旧上下文切档=全价重付；② **产/审错档纪律**——阶段一二档位不同，换档是本例外真实动因。
+ 
+ 🔴 **MUST NOT 引用「主审裁决需冷视角」** —— 该论据已被 G1 正面回答（独立性由 fan-out 的
+ fresh 子代理提供，不由 `/clear` 提供）。
+-
+----
+-
+-历史取舍不进入默认运行；仅在审计历史依据或设计未来 T132 gate 时读取
+-[`references/evolution-notes.md`](references/evolution-notes.md)。T132 未来 gate 尚未实现，保持 OPEN。
