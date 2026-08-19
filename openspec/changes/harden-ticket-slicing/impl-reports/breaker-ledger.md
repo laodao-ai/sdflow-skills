@@ -34,3 +34,7 @@
 
 - 1 | `sdflow-spec/SKILL.md` | SA-17 判据下沉后未接回执行路径（路由索引漏登记 + item 3 无 MUST 强度） | **Critical**（已派 fix）
 - 2 | `sdflow-spec/SKILL.md` | 同上指纹 | **已消解**（fix 轮 re-review 判通过；腾空间的删链接一处判 Minor 可接受，`adr-and-glossary-templates.md` 经 B.6 与路由索引双重直达）
+
+## Task 4
+
+- 1 | `openspec/issues/closed/todo/T141.md` | — | 无 Critical/Important（双轴审首轮全通过；Spec 轴逐条实核 7 个 evidence 锚全部真实可达）
