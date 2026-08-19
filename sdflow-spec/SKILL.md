@@ -179,6 +179,7 @@ A 澄清──共识初成──▶ B 拷问（起手即建分支 + change 目�
   [`references/evolution-notes.md`](references/evolution-notes.md)。T132 未来 gate 尚未实现，保持 OPEN。
 - 写或核验决策纪要时读取 [`references/decision-memo-schema.md`](references/decision-memo-schema.md)；
   命中 ADR/术语提议条件时读取 [`references/adr-and-glossary-templates.md`](references/adr-and-glossary-templates.md)。
+- B.7 item 3 做 scope 内聚检查时读取 [`references/scope-cohesion-check.md`](references/scope-cohesion-check.md)。
 
 ---
 
@@ -368,10 +369,9 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 
 1. **ADR 三条件**：难逆转 + 缺上下文会令人意外 + 有真实权衡 ⇒ 该决策需要一条 ADR（提议落 `openspec/adr/`）。
 2. **术语冲突判据**：该决策引入/使用的术语与 `openspec/CONTEXT.md` 已有定义是否冲突或模糊 ⇒ 需更新 CONTEXT.md。
-3. scope 内聚检查——判据见 `references/scope-cohesion-check.md`。
+3. scope 内聚检查：MUST 读 `references/scope-cohesion-check.md` 判据；发现偏离 MUST 呈现给人拍板，MUST NOT 静默调整范围。
 
-🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
-[`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
+🔴 同 B.6：item 1/2 两者未经人确认 MUST NOT 自动写入，判据与模板同引 B.6 所示文件。
 
 **与 B.6 的区别**：B.6 是拷问过程中的惰性钩子（命中就提议）；本步是**收敛前逐条回扫**——B.6 漏掉的、
 或在后续拷问中语义发生变化的决策，在此兜底捕获。
@@ -524,8 +524,3 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 
 🔴 **MUST NOT 引用「主审裁决需冷视角」** —— 该论据已被 G1 正面回答（独立性由 fan-out 的
 fresh 子代理提供，不由 `/clear` 提供）。
-
----
-
-历史取舍不进入默认运行；仅在审计历史依据或设计未来 T132 gate 时读取
-[`references/evolution-notes.md`](references/evolution-notes.md)。T132 未来 gate 尚未实现，保持 OPEN。
