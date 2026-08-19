@@ -37,9 +37,15 @@
 
 ## 切片建议
 
-design.md 决策区 **MAY** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）。出 ticket 模式
-（`sdflow-implement`）消费该节的语义是**建议，非契约**——节缺席时自主出 ticket；对切片粒度的争议
-走既有 `T10-choice` 三级决策协议（无客观判据档派 **strong 档**对抗镜复核）。
+design.md 决策区 **SHOULD** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）；节缺席时决策区
+**MUST** 写明一句为何不需要——「有节」或「有缺席理由」二择一恒成立，不存在两者皆缺的合规态。
+
+草图票数须落 **3–6 张垂直切片**预算内；超出该预算须在节内注明 expand–contract 例外依据。拆分标准
+的完整规则与 why 见单一源 [`reference/change-decomposition-standard.md`](./reference/change-decomposition-standard.md)。
+
+出 ticket 模式（`sdflow-implement`）如何消费该节（默认采纳 / 实质偏离如何记录 / T10-choice 复核
+必触发条件）单一源在 `sdflow-implement/SKILL.md` 出票模式起手检查段——本文件只定义生成侧档位，
+不复制消费语义，避免两处漂移。
 
 切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀——该前缀留给 roadmap wayfinding 效力范围内
 的已决 ticket 溯源（`openspec/roadmaps/{name}/footage/`），混用会让溯源指向错误的出处。
