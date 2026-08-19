@@ -6,7 +6,7 @@ sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 �
 
 **切片建议消费语义 SHALL 为「默认采纳 + 偏离审计」**〔harden-ticket-slicing〕：出票起手 SHALL 读 design.md 的「切片建议」节；节存在时其初步 ticket 划分与阻塞边草图 SHALL 作为**默认切分方案**采纳（该草图已经阶段二评审与设计 HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判断），出票方对草图的每处**实质偏离**（增/删/合并票、改阻塞边、改切片边界）SHALL 逐条记入 `impl-reports/planning-decisions.md` 并附理由，行格式 = 「切片偏离: <偏离点> | <理由(三镜+主次)>」，MUST NOT 静默偏离；节缺席或偏离时按下述必触发条款复核。
 
-**T10-choice 对抗镜复核 SHALL 必触发于三种情形之一**〔harden-ticket-slicing〕：① design.md 无「切片建议」节（自主切分的整体方案须复核）；② 出票实质偏离草图（偏离后的方案须复核）；③ 草图与 design.md 正文矛盾（评审 amendments 只改其他节时，切片节可残留旧切分——文件级失鲜监视不覆盖节级一致性，此处是该缺口的唯一显形点）。任一命中即派 **strong 档**对抗镜复核切分方案，复核记录按既有行格式落 `impl-reports/planning-decisions.md`；既有「粒度争议」触发路径保留不变。复核结论 SHALL 按既有 `T10-choice` 三级协议出口处理：通过 ⇒ 按复核确认的方案出票；**复核不过或无从复核 ⇒ 停并上抛**（与下方一致性自扫段同口径），MUST NOT 以被证伪的切分方案继续出票〔spec-review-amendment〕。**必触发为指令层约束（「偏离/矛盾」的判定由出票方自报，无确定性信号），MUST NOT 被表述为机械保证。**
+**T10-choice 对抗镜复核 SHALL 必触发于三种情形之一**〔harden-ticket-slicing〕：① design.md **既无**「切片建议」节、**也无**成立的缺席理由（= SA-17 违规态；有成立缺席理由的合规缺席不触发本条——但缺席理由蕴含单票交付而实际出票 >1 张功能票 ⇒ 视同条件③矛盾触发〔spec-review-amendment Q1-A〕）；② 出票实质偏离草图（偏离后的方案须复核）；③ 草图与 design.md 正文矛盾（评审 amendments 只改其他节时，切片节可残留旧切分——文件级失鲜监视不覆盖节级一致性，此处是该缺口的唯一显形点）。任一命中即派 **strong 档**对抗镜复核切分方案，复核记录按既有行格式落 `impl-reports/planning-decisions.md`；既有「粒度争议」触发路径保留不变。复核结论 SHALL 按既有 `T10-choice` 三级协议出口处理：通过 ⇒ 按复核确认的方案出票；**复核不过或无从复核 ⇒ 停并上抛**（与下方一致性自扫段同口径），MUST NOT 以被证伪的切分方案继续出票〔spec-review-amendment〕。**必触发为指令层约束（「偏离/矛盾」的判定由出票方自报，无确定性信号），MUST NOT 被表述为机械保证。**
 
 **验收标准的语法面有界性闸门 SHALL 在出票时施加**〔curb-rework-loop-cost〕：某条验收标准若要求对某种语法面**做机械判定**，出票方 SHALL 先判该语法面能否穷举——**有界**（如 CommonMark fence 变体、自有格式的机器锚行）⇒ 可写为机械门；**无界**（通用编程语言源码、YAML、make、shell）⇒ **MUST NOT 写成机械门**，SHALL 改为「让该工具自己回答」（真跑一遍看行为 / 调用该格式的权威解析器），或降级为 best-effort 展示且**不作判定依据**。该判据 SHALL 覆盖伪装形态——不仅匹配「扫描 / 识别 / 拒绝某形态 / 指纹」这类显式措辞，**还 SHALL 匹配「在某格式文件中定位 / 插入 / 修改某处」**（「只动一个键值」听起来不像解析，但「找到那个键」本身就要解析）。**本闸门是指令层约束，MUST NOT 被表述为机械保证。**
 
@@ -71,10 +71,15 @@ sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 �
 - **WHEN** 收尾票 implementer 判定本仓确无 e2e 层
 - **THEN** 证据行记 `e2e | — | 未覆盖 | <判定依据>`，该票仍可通过双轴审，MUST NOT 因缺层停机
 
-#### Scenario: 无切片建议时复核必触发
+#### Scenario: 无切片建议且无缺席理由时复核必触发〔spec-review-amendment Q1-A〕
 
-- **WHEN** design.md 无「切片建议」节，出票方自主决定切分方案（无论是否存在多个候选）
+- **WHEN** design.md 既无「切片建议」节、也无成立的缺席理由，出票方自主决定切分方案（无论是否存在多个候选）
 - **THEN** 出票方 SHALL 派一个 strong 档对抗镜复核该切分方案，不问用户；仲裁结论按行格式落 `impl-reports/planning-decisions.md`
+
+#### Scenario: 合规缺席（有理由）的小修不触发必复核〔spec-review-amendment Q1-A〕
+
+- **WHEN** design.md 无「切片建议」节但写明了成立的缺席理由（如「单票交付，无切分必要」），出票产出与理由一致（1 张功能票）
+- **THEN** 不触发条件① 复核；若实际出票 >1 张功能票（与缺席理由矛盾），出票方 SHALL 视同条件③ 派 strong 档对抗镜复核，仲裁结论落 `planning-decisions.md`
 
 #### Scenario: 粒度争议派 strong 档复核并落审计
 

@@ -8,7 +8,7 @@
 ## 2. 出票侧（对应切片建议 T-b）
 
 - [ ] 2.1 `sdflow-implement/SKILL.md` 出票模式起手检查段：消费语义「建议输入」→「默认采纳 + 实质偏离逐条记 `impl-reports/planning-decisions.md`（行格式「切片偏离: <偏离点> | <理由(三镜+主次)>」）」〔R: 出 ticket 模式产出 tracer-bullet ticket（MODIFIED）〕
-- [ ] 2.2 `sdflow-implement/SKILL.md` 同段：T10-choice 复核必触发三条件（无切片建议 ∨ 实质偏离 ∨ 草图与 design 正文矛盾），保留既有粒度争议路径，附诚实边界句（指令层约束非机械保证）；复核结论接三级协议出口——证伪/无从复核 ⇒ 停并上抛，MUST NOT 以被证伪的切分方案继续出票〔spec-review-amendment D2〕〔R: 出 ticket 模式产出 tracer-bullet ticket（MODIFIED）〕
+- [ ] 2.2 `sdflow-implement/SKILL.md` 同段：T10-choice 复核必触发三条件（既无切片建议节也无成立缺席理由 ∨ 实质偏离 ∨ 草图与 design 正文矛盾——条件① 取 Q1-A 口径：合规缺席不触发，缺席理由与实际出票矛盾〔称单票而出 >1 张功能票〕视同条件③〔spec-review-amendment Q1-A〕），保留既有粒度争议路径，附诚实边界句（指令层约束非机械保证）；复核结论接三级协议出口——证伪/无从复核 ⇒ 停并上抛，MUST NOT 以被证伪的切分方案继续出票〔spec-review-amendment D2〕〔R: 出 ticket 模式产出 tracer-bullet ticket（MODIFIED）〕
 - [ ] 2.3 `sdflow-implement/SKILL.md` 执行模式：新增「票外发现上报」段——implementer MUST NOT 自行扩 scope，上报编排层按拆分标准（BASE-18 AND 门）判 fold/defer，判定记一行入该票 impl-report；implementer dispatch 模板同步加上报指令〔R: 执行期票外发现上报编排层按拆分标准判 fold/defer（ADDED）〕
 
 ## 3. 三处消费点引用（对应切片建议 T-c）
