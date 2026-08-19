@@ -10,12 +10,12 @@
 
 ```
 变更前：
-  阶段一(强档产)      阶段二(强档审+人门)        阶段三(session 档)
+  阶段一(产出档)      阶段二(评审档+人门)        阶段三(session 档)
   design/tasks ───▶ spec-review ──HARD-GATE──▶ RUN_PLAN 自主切票 ★判断在这里
                     (切片方案通常不存在,审不到)   (无独立审查)
 
 变更后：
-  阶段一(强档产)         阶段二(强档审+人门)        阶段三(session 档)
+  阶段一(产出档)         阶段二(评审档+人门)        阶段三(session 档)
   design.md 含          strategy 镜 BASE-31 ──▶  RUN_PLAN 物化已审草图
   切片建议 SHOULD ★──▶  审存在性/内聚质量           │ 默认采纳
   (判断前移到这里)        HARD-GATE 人可见           │ 偏离→记 planning-decisions.md
@@ -73,9 +73,10 @@ ADR：无提议——所有决策均为规则文本变更，可整体 revert，�
 
 ## Migration Plan
 
-1. 全部改动随本 change 一次落（无分阶段）；权威源改完后消费仓靠 `sdflow-init update` 重拉——改的是权威源而非部署副本，无回灌漂移面。
+1. 全部改动随本 change 一次落（无分阶段）；规则文件（含新增 `reference/`）经**全局 canonical** 分发——`~/.sdflow/workflow` 软链运行 checkout 的 `assets/workflow`，发布 push→pull 后即生效，消费仓零动作（`sdflow-init update` 精简部署只铺 WORKFLOW-GUIDE.md + schema，不铺规则本体）〔spec-review-amendment D7〕；改的是权威源而非部署副本，无回灌漂移面。
 2. 无存量迁移：既有已归档 change 的 design.md 无切片建议节是历史事实，不补写；SHOULD 只约束目标态 producer（新 change）。
-3. 回滚 = `git revert` 本 change 的提交（纯文本规则，无数据、无 schema、无 gate 契约变更）；消费仓已 update 过的，revert 后再 update 一次即回旧版。
+3. 回滚 = `git revert` 本 change 的提交（纯文本规则，无数据、无 schema、无 gate 契约变更）；规则面经 canonical 软链即时回旧版，消费仓零动作〔spec-review-amendment D7〕。
+4. 迁移窗口（已声明接受）〔spec-review-amendment D3〕：本 change 发布前已过设计门、发布后才出票的在途 change，其切片建议节未经 BASE-31 审项审查即被「默认采纳」——接受该一次性窗口：当前全仓在途此形态 change = 0，且必触发条件②③在出票侧仍兜偏离/矛盾，不为此加额外判据。
 
 ## Open Questions
 
