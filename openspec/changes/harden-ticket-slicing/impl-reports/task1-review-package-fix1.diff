@@ -1,0 +1,108 @@
+# Review package: aaad480..96a5e4a (Task 1 fix 轮 1，增量：上轮已审 SHA..HEAD)
+
+## Commits
+96a5e4a fix(harden-ticket-slicing): 规则3去除对BASE-18 AND门判据的复制
+
+## Files changed
+ .../impl-reports/task1-bundle-rules-fix1.md        | 63 ++++++++++++++++++++++
+ .../reference/change-decomposition-standard.md     |  3 +-
+ 2 files changed, 64 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/harden-ticket-slicing/impl-reports/task1-bundle-rules-fix1.md b/openspec/changes/harden-ticket-slicing/impl-reports/task1-bundle-rules-fix1.md
+new file mode 100644
+index 0000000..04e8bc8
+--- /dev/null
++++ b/openspec/changes/harden-ticket-slicing/impl-reports/task1-bundle-rules-fix1.md
+@@ -0,0 +1,63 @@
++# Task 1 Fix 1 — 规则 3 与 BASE-18 去重复制
++
++## 发现（Important，来自 Spec 轴）
++
++`sdflow-init/assets/workflow/reference/change-decomposition-standard.md` 规则 3 把
++`spec-checklists/spec-quality-base.md` BASE-18 的防吸积 AND 门判据近逐字抄了一遍
++（同 capability ∧ 高耦合 ∧ 低增量成本 三元素 + 不满足时的 defer 兜底列举），
++违反本票验收标准「标准文与 BASE-18 互为指针、不复制文本」与 Global Constraints Goals
++「拆分标准单一源放 bundle 的 `reference/`，三处消费点指针引用不复制文本」。
++
++## 改动
++
++文件：`sdflow-init/assets/workflow/reference/change-decomposition-standard.md`
++
++规则 3（原第 19-22 行）:
++
++```
++3. **相关发现优先 fold**：执行 / 评审过程中撞到与当前 change 相关的 bug / todo，默认**并入
++   当前 change 做掉**，而非另开。是否真的该 defer，判定入口 = `BASE-18` 的防吸积 AND 门——
++   **同 capability ∧ 高耦合 ∧ 低增量成本**三者皆满足才真 fold 进当前 change；任一不满足
++   → defer 另开（真独立、扩容大、需自身设计审查、高 blast-radius 均天然落 defer）。
++```
++
++改为（现第 19-21 行）:
++
++```
++3. **相关发现优先 fold**：执行 / 评审过程中撞到与当前 change 相关的 bug / todo，默认**并入
++   当前 change 做掉**，而非另开。是否真的该 defer，判定入口 = `BASE-18` 的防吸積 AND 门——
++   具体判据（三元素与不满足时的 defer 兜底）见该行，本文不复述。
++```
++
++保留了规则 3 本身的规范语义（相关发现默认 fold、defer 判定入口指向 BASE-18），删除的是
++AND 门三元素本体及其 defer 兜底枚举——这段具体判据现在只存在于 BASE-18 一处（单一源）。
++
++**未改动**：规则 1/2/4、README、BASE-18 本身、Why 段第 36 行「判据落在『是否同
++capability、是否高耦合、增量成本是否低』」——编排层已裁决该行是说理性提及（无「三者皆满足
++才 fold / 任一不满足 → defer」的判定本体），保留不改，MUST NOT 再改。
++
++## 核验
++
++### grep 核验（AND 门判据本体只在 BASE-18 一处）
++
++```
++$ grep -rn "同 capability" /Users/cheneyzhao/Documents/04-sdflow-skills/sdflow-init/assets/workflow/
++sdflow-init/assets/workflow/spec-checklists/spec-quality-base.md:42:| BASE-18 | ... 「同 capability ∧ 高耦合 ∧ 低增量」三者皆满足才真 fold 进当前 change，任一不满足 → defer 另开（真独立 / 扩容大 / 需自身设计审查 / 高 blast-radius 天然落此）。... |
++sdflow-init/assets/workflow/reference/change-decomposition-standard.md:36:的失衡都挡住：判据落在「是否同 capability、是否高耦合、增量成本是否低」，而不是「看起来像不像
++```
++
++判定本体（三元素 AND 门 + defer 兜底枚举）只出现在 `spec-quality-base.md:42`（BASE-18）；
++`change-decomposition-standard.md:36` 是 Why 段的说理性提及，非规范判定句式，保留符合
++编排层裁决。
++
++### pytest 全绿（前台跑，`/usr/bin/python3 -m pytest -q`）
++
++```
++2601 passed, 10 skipped in 375.49s (0:06:15)
++```
++
++退出码 0，全绿，无失败/error。
++
++## 状态
++
++`DONE` — 规则 3 改为纯指针引用，AND 门判据单一源收敛到 BASE-18；grep 与 pytest 均核验通过。
+diff --git a/sdflow-init/assets/workflow/reference/change-decomposition-standard.md b/sdflow-init/assets/workflow/reference/change-decomposition-standard.md
+index 2ddd1ee..591dd62 100644
+--- a/sdflow-init/assets/workflow/reference/change-decomposition-standard.md
++++ b/sdflow-init/assets/workflow/reference/change-decomposition-standard.md
+@@ -11,22 +11,21 @@
+ 
+ ## 规则
+ 
+ 1. **一个 change / phase = 一个完整阶段结果**：拆分单位是「一个内聚、可独立验证的交付物」，
+    不是「同一批发现」或「凑够票数」。触碰多个独立功能域的改动不得塞进同一个 change；
+    一件事也不得被拆散跨多个 change。
+ 2. **不按来源批次或凑票拆分**：几个改动是否同批被发现、改起来是否顺手、能不能凑够「看起来
+    合理」的票数，均不是拆分依据——唯一依据是规则 1 的内聚边界。
+ 3. **相关发现优先 fold**：执行 / 评审过程中撞到与当前 change 相关的 bug / todo，默认**并入
+    当前 change 做掉**，而非另开。是否真的该 defer，判定入口 = `BASE-18` 的防吸积 AND 门——
+-   **同 capability ∧ 高耦合 ∧ 低增量成本**三者皆满足才真 fold 进当前 change；任一不满足
+-   → defer 另开（真独立、扩容大、需自身设计审查、高 blast-radius 均天然落 defer）。
++   具体判据（三元素与不满足时的 defer 兜底）见该行，本文不复述。
+ 4. **「缺依赖模块 → 占位 + 记 todo」是 related 语境下的经典 defer 形态**，不是与规则 3 的
+    AND 门并列的「唯一合理 defer」绝对句——AND 门未满足的其余情形（真独立 / 扩容大 / 需自身
+    设计审查 / 高 blast-radius）同样合法落 defer，缺依赖模块只是其中最常见的一种，不得被写成
+    排除其它 defer 理由的绝对句。
+ 
+ ## Why
+ 
+ 碎片化（同一件事被拆成多个 change）不是省事，是把「反复对现状提疑问 + 给妥协方案（WARN /
+ grace / flag）」的根因种下：每次只做半件事，后续每个接手的人都要重新拼出全貌、重新论证
+ 「这次要不要顺带修一下」。一次做完整、锚目标态、fail-closed 收尾，这类反复论证根本不会发生。
