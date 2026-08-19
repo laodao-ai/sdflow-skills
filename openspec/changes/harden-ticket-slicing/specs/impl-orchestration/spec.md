@@ -2,7 +2,7 @@
 
 ### Requirement: 出 ticket 模式产出 tracer-bullet ticket 并落盘即返回（tickets.md 单名）
 
-sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket（计数仅约束垂直切片；expand–contract 例外序列的迁移批次、以及下述「实现验证」收尾 ticket 均不占该预算〔spec-review-amendment E5〕）：每 ticket 为打穿全层、可独立验证的行为级描述，MUST NOT 预写实现代码或具体文件路径；每 ticket SHALL 声明显式 Blocked-by 阻塞边与 R-ID 需求标注；宽重构（单一机械改动 blast radius 扫全仓）SHALL 走 expand–contract 序列例外而非强行垂直切片。ticket 文件头部 SHALL 逐字携带 design 领域约束为 Global Constraints 节。
+sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket（计数仅约束垂直切片；expand–contract 例外序列的迁移批次、以及下述「实现验证」收尾 ticket 均不占该预算〔spec-review-amendment E5〕；design.md 写明成立的「单票交付」缺席理由且出票确为 1 张功能票时，是与 expand–contract 并列的合法例外，同样不受该预算约束〔impl-review-fix〕）：每 ticket 为打穿全层、可独立验证的行为级描述，MUST NOT 预写实现代码或具体文件路径；每 ticket SHALL 声明显式 Blocked-by 阻塞边与 R-ID 需求标注；宽重构（单一机械改动 blast radius 扫全仓）SHALL 走 expand–contract 序列例外而非强行垂直切片。ticket 文件头部 SHALL 逐字携带 design 领域约束为 Global Constraints 节。
 
 **切片建议消费语义 SHALL 为「默认采纳 + 偏离审计」**〔harden-ticket-slicing〕：出票起手 SHALL 读 design.md 的「切片建议」节；节存在时其初步 ticket 划分与阻塞边草图 SHALL 作为**默认切分方案**采纳（该草图已经阶段二评审与设计 HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判断），出票方对草图的每处**实质偏离**（增/删/合并票、改阻塞边、改切片边界）SHALL 逐条记入 `impl-reports/planning-decisions.md` 并附理由，行格式 = 「切片偏离: <偏离点> | <理由(三镜+主次)>」，MUST NOT 静默偏离；节缺席或偏离时按下述必触发条款复核。
 
@@ -135,12 +135,12 @@ sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 �
 
 ### Requirement: 执行期票外发现上报编排层按拆分标准判 fold/defer〔harden-ticket-slicing〕
 
-执行模式中 implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，SHALL 上报编排层处置，**MUST NOT 自行扩 scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）。编排层 SHALL 按 change 拆分标准（单一源 `openspec/workflow/reference/change-decomposition-standard.md`，经 resolver 解析；判定入口 = BASE-18 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量）判定——三者皆满足 ⇒ **fold**（该票尚未进入双轴审 ⇒ 可并入当前票验收标准；已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 Blocked-by 当前票的票——MUST NOT 中途改动已在双轴审途中的票的验收标准〔spec-review-amendment〕；均走正常 implementer + 双轴审）；任一不满足 ⇒ **defer**（recorder 落 issues 池，显式带 `change` 字段）。判定与去向 SHALL 记一行入该票 impl-report。
+执行模式中 implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，SHALL 上报编排层处置，**MUST NOT 自行扩 scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）。**上报通道 SHALL 比照 `DONE_WITH_CONCERNS` 的既有形状**〔impl-review-fix〕：implementer SHALL 将发现全量写入该票 report file 的固定小节 `## 票外发现`，并在 dispatch 返回值的一行摘要中追加标注 `[has-off-ticket-finding]`；编排层看到该标注时 MUST Read 该小节全文以获取 AND 门判据，MUST NOT 仅凭一行摘要判定。编排层 SHALL 按 change 拆分标准（单一源 `openspec/workflow/reference/change-decomposition-standard.md`，经 resolver 解析；判定入口 = BASE-18 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量）判定——三者皆满足 ⇒ **fold**（该票尚未进入双轴审 ⇒ 可并入当前票验收标准；已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 Blocked-by 当前票的票——MUST NOT 中途改动已在双轴审途中的票的验收标准〔spec-review-amendment〕；均走正常 implementer + 双轴审，且**执行期新增的票 SHALL 补齐出票模式对 ticket 的强制字段与闸门**〔impl-review-fix〕——`Blocked-by` / `R-ID` / 验收复选框 / 验收标准的语法面有界性闸门，或在该票文本中显式列出豁免哪些、为何）；任一不满足 ⇒ **defer**（recorder 落 issues 池，显式带 `change` 字段）。判定与去向 SHALL 记一行入该票 impl-report。
 
 #### Scenario: implementer 撞到相关票外 bug 上报而非顺手修
 
 - **WHEN** implementer 实现某票时发现相邻函数一个与本 change 一致性相关的 bug，修复约 5 行
-- **THEN** implementer 在返回中上报该发现，MUST NOT 直接改动票外代码；编排层按 AND 门判定（同 capability、高耦合、低增量皆满足）后 fold 进当前 change 的后续票
+- **THEN** implementer 将发现写入该票 report file 的 `## 票外发现` 小节，并在返回摘要标 `[has-off-ticket-finding]`，MUST NOT 直接改动票外代码；编排层读该小节全文按 AND 门判定（同 capability、高耦合、低增量皆满足）后 fold 进当前 change 的后续票
 
 #### Scenario: 不满足 AND 门的发现 defer 进 issues 池
 

@@ -1,6 +1,6 @@
-# 生成起手强制规范（FF-0 + D-1~D-6）
+# 生成起手强制规范（FF-0 + D-1~D-6 + 切片建议）
 
-> **定位声明**：本规范是 `/sdflow-spec`（或 `/opsx:ff` 直呼）起手强制项的**唯一权威定义源**——含前置动作 **FF-0（开分支）** 与生成硬约束 **D-1~D-6**。
+> **定位声明**：本规范是 `/sdflow-spec`（或 `/opsx:ff` 直呼）起手强制项的**唯一权威定义源**——含前置动作 **FF-0（开分支）**、生成硬约束 **D-1~D-6**、以及「切片建议」节的生成侧规范〔impl-review-fix，harden-ticket-slicing〕。
 > 所有调用方（`config.yaml` rules 自动注入、`workflow/workflow.md` 流程、各处对比表/判定速查）
 > **只引用编号、不复制定义内容**。约束内容如有变更，只改本文件。
 >
@@ -40,8 +40,11 @@
 design.md 决策区 **SHOULD** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）；节缺席时决策区
 **MUST** 写明一句为何不需要——「有节」或「有缺席理由」二择一恒成立，不存在两者皆缺的合规态。
 
-草图票数须落 **3–6 张垂直切片**预算内；超出该预算须在节内注明 expand–contract 例外依据。拆分标准
-的完整规则与 why 见单一源 [`reference/change-decomposition-standard.md`](./reference/change-decomposition-standard.md)。
+草图票数须落 **3–6 张垂直切片**预算内；超出该预算须在节内注明 expand–contract 例外依据。**不足预算
+也有一条与 expand–contract 并列的合法例外**〔impl-review-fix，harden-ticket-slicing〕：**决策区**写明
+成立的「单票交付」缺席理由（即本节合规缺席）、且出票确为 1 张功能票时视为合规——该例外不需要额外
+注明依据，缺席理由本身即依据。拆分标准的完整规则与 why 见单一源
+[`reference/change-decomposition-standard.md`](./reference/change-decomposition-standard.md)。
 
 出 ticket 模式（`sdflow-implement`）如何消费该节（默认采纳 / 实质偏离如何记录 / T10-choice 复核
 必触发条件）单一源在 `sdflow-implement/SKILL.md` 出票模式起手检查段——本文件只定义生成侧档位，

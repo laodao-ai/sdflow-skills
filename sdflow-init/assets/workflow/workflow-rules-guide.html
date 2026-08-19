@@ -260,7 +260,7 @@ sdflow-init/assets/workflow/
 │    workflow.md                     端到端流程唯一线性路径
 │    trigger-catalog.md              触发词单一源（TG-NN），领域枢纽
 │    generation-process.md           生成过程规则（三杠杆中唯一非 config 可固化的）
-│    ff-generation-constraints.md    FF-0 分支判定 + D-1~D-6 生成硬约束
+│    ff-generation-constraints.md    FF-0 分支判定 + D-1~D-6 生成硬约束 + 切片建议
 │    design-diagrams.md              设计期画图规则
 │    spec-review.md                  评审残差规则（只审 prevention 焊不住的）
 │    model-tiers.md                  模型档位映射（strong/mid/light 两机队）
@@ -349,7 +349,7 @@ sdflow-init/assets/workflow/
         <span class="pill pill-rule">规则</span>
         <span class="rule-card-meta">198 行</span>
       </div>
-      <p><strong>FF-0 前置动作 + D 约束</strong>——FF-0 三分支判定（保护分支→建 / 本 change→跳过 / 其它 feature→halt 问人）是每次生成的起手式。D-1~D-6 是注入四件套的生成硬约束（如 D-2 DB 迁移须带 v_old/v_new 对照表）。</p>
+      <p><strong>FF-0 前置动作 + D 约束 + 切片建议</strong>——FF-0 三分支判定（保护分支→建 / 本 change→跳过 / 其它 feature→halt 问人）是每次生成的起手式。D-1~D-6 是注入四件套的生成硬约束（如 D-2 DB 迁移须带 v_old/v_new 对照表）；「切片建议」是 design.md 决策区的初步 ticket 划分规范。</p>
       <div class="key-content">
         <strong>D 约束由 TG 驱动：</strong>命中 TG-04 → 自动注入 D-2；命中多个 TG → 取并集
       </div>

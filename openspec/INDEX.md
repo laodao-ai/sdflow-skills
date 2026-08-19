@@ -14,7 +14,7 @@
 |---|---|---|
 | `workflow` | [workflow/workflow.md](./workflow/workflow.md) | 端到端流程总览（三阶段连续化）：/sdflow-spec 生成→设计审(sdflow-spec-review 编排器)→设计 GATE→实现(sdflow-implement)+代码审(sdflow-code-review)+收尾(sdflow-done)；阶段内部不用 /clear，仅两处阶段交界用（G1），连续跑到 merge |
 | `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-NN，驱动 约束/领域清单/画图/必填槽 四层 |
-| `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | 生成起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6（`/sdflow-spec` 调用，或 `opsx:ff` 直呼） |
+| `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | 生成起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6 + 切片建议（`/sdflow-spec` 调用，或 `opsx:ff` 直呼） |
 | `generation-process` | [workflow/generation-process.md](./workflow/generation-process.md) | 生成过程：发散(explore) + `/sdflow-spec`（澄清→拷问→生成三相位） |
 | `design-diagrams` | [workflow/design-diagrams.md](./workflow/design-diagrams.md) | 设计/spec 阶段画哪些图、何时画、什么形态（C4 + 行为图，触发条件化） |
 | `spec-review` | [workflow/spec-review.md](./workflow/spec-review.md) | spec 评审（Detection 层）：只做 prevention 残差，trigger 驱动 + 独立 + 读码核验 |

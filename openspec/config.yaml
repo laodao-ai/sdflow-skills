@@ -7,7 +7,7 @@ context: |
   - trigger-catalog.md      触发词目录 TG-NN（约束/领域/画图/模版必填槽 的公共触发源）
   - spec-checklists/        通用 base(BASE-NN) + 领域 domains(backend·go / embedded·ml307c·esp32 / frontend)
   - design-diagrams.md      设计画图规则（哪些图、何时画、ASCII 优先）
-  - ff-generation-constraints.md  生成时硬约束 D-1~D-6
+  - ff-generation-constraints.md  生成时硬约束 D-1~D-6 + 切片建议〔impl-review-fix〕
   - generation-process.md   生成过程：explore 发散 + /sdflow-spec（澄清→拷问→生成三相位）
   起手对变更评估 trigger-catalog，命中的触发激活对应必填槽 / D约束 / 画图 / 领域清单。
   触发判定一律用具体行为描述，不用风险代号。

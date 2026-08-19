@@ -283,6 +283,10 @@ HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判�
 
 ### 产出：3–6 张 tracer-bullet 垂直切片
 
+> **不足预算的合法例外**〔impl-review-fix，harden-ticket-slicing〕：design.md 写明成立的「单票
+> 交付」缺席理由（见「起手检查」T10-choice 必触发条件①）、且出票确为 1 张功能票时，是本预算的
+> 合法例外——与下方 expand–contract（超出预算）例外并列，不视为违反本预算。
+
 - 每张打穿全层（行为级、可独立验证、demoable），**MUST NOT 预写实现代码或具体文件路径**——ticket
   只描述"交付什么行为"，不描述"改哪个文件/写什么代码"（文件路径写死会很快过期，且抢了
   implementer 的判断权）。**例外**：若某决策性片段（状态机、reducer、schema、类型形状）源自
@@ -614,8 +618,11 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
   轨迹）。〔impl-review-fix〕
 - 🔴 **票外发现上报**〔harden-ticket-slicing，子代理是 fresh context，未声明即等同未约束〕：
   implementer 撞到**与本 change 相关但在本票验收范围之外**的 bug/改进点时，**MUST NOT 自行扩
-  scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）——在返回中上报该发现，编排层按
-  下方「票外发现的 fold/defer」处置。
+  scope 顺手修**（绕过双轴审的 scope 契约，票的验收边界失效）——**上报通道比照 `DONE_WITH_CONCERNS`
+  的既有形状**〔impl-review-fix〕：有发现时，全量写入该票 report file 的固定小节
+  `## 票外发现`（无发现可省略该小节）；dispatch **返回值的一行摘要**须追加标注
+  `[has-off-ticket-finding]`（无发现不标）——编排层据此确定性地知道要不要去读该小节全文；
+  详见下方「票外发现的 fold/defer」的读取契约与处置流程。
 
 implementer 状态词表四值处置：
 
@@ -648,11 +655,19 @@ implementer 上报「票外发现」（见上「每 ticket 派 fresh implementer
 `BASE-18` 防吸积 AND 门：同 capability ∧ 高耦合 ∧ 低增量，三者皆满足 ⇒ **fold**，任一不满足 ⇒
 **defer**。
 
+> **读取契约**〔impl-review-fix，比照 `DONE_WITH_CONCERNS` 澄清段〕：dispatch 返回值一行摘要
+> 标 `[has-off-ticket-finding]` 时，执行模式 **MUST Read** 该票 report file
+> （`{change_dir}/impl-reports/task<N>-<slug>.md`）的 `## 票外发现` 小节取**全文**，再据其中的
+> 「同 capability / 高耦合 / 低增量」判据信息判 AND 门——**MUST NOT** 只凭返回值那一行摘要判定，
+> 摘要本身装不下 AND 门所需的判据细节。未标该记号时无需去读，视为本票无票外发现。
+
 - **fold**：按该票是否已进入双轴审决定去向——
   - 尚未进入双轴审 ⇒ 可并入**当前票**验收标准；
   - 已在双轴审途中或已完成 ⇒ 追加进后续 ready 票、或新增一张 `Blocked-by` 当前票的票，
     **MUST NOT 中途改动已在双轴审途中的票的验收标准**。
-  - fold 进的工作**均走正常 implementer + 双轴审**，不豁免。
+  - fold 进的工作**均走正常 implementer + 双轴审**，不豁免。执行期新增的票 SHALL 补齐上方
+    「出票模式」节对 ticket 的强制字段与闸门（`Blocked-by` / `R-ID` / 验收复选框 / 语法面
+    有界性闸门），或在该票文本中显式列出豁免哪些、为何〔impl-review-fix〕。
 - **defer**：经 recorder 落 issues 池（todolist），**MUST 显式带 `change` 字段**指向本 change
   （省略会误挂当前活跃 change、污染 sweep 圈选）。
 - 判定与去向 **SHALL 记一行入该票 impl-report**（fold/defer + 判据摘要）。
