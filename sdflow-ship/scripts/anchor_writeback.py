@@ -38,7 +38,6 @@ blob），脏树写锚 = 锚绑定不含在场未提交修订的盘面，结论�
 """
 import argparse
 import base64
-import subprocess
 import sys
 from pathlib import Path
 
@@ -56,23 +55,60 @@ def _fail(msg):
 
 
 def _split_frontmatter_block(text):
-    """`(has_block, body_text)`——只识别文件首行 `---`（去 BOM 后）起到下一行 `---` 止的
-    唯一首块，与 `ship_gate.parse_ship_gate_frontmatter` 的「D2 只认文件首块」同一识别口径
-    （首块无闭合 `---` ⇒ 不成立，整份文本视为正文）。仅做**块边界切分**，不做取值——取值仍
-    交给 `ship_gate.parse_ship_gate_frontmatter` 做（单一源，不在此手搓第二个解析器）。
+    """`(has_block, block_lines, body_text)`——只识别文件首行 `---`（去 BOM 后）起到下一行
+    `---` 止的唯一首块，与 `ship_gate.parse_ship_gate_frontmatter` 的「D2 只认文件首块」同一
+    识别口径（首块无闭合 `---` ⇒ 不成立，整份文本视为正文）。仅做**块边界切分**，不做取值
+    ——取值仍交给 `ship_gate.parse_ship_gate_frontmatter` 做（单一源，不在此手搓第二个解析器）。
+
+    〔impl-review-fix H5〕新增 `block_lines`（首块内部原始行，已去除各行行尾换行符，
+    `has_block=False` 时为 `[]`）：供调用方在**保留块内其它顶层字段**的前提下只替换
+    `ship-gate:` 节点（见 `_replace_shipgate_block`），而非丢弃整块重建。
     """
     t = text[1:] if text.startswith("﻿") else text
     lines = t.splitlines(keepends=True)
     if not lines or lines[0].strip() != "---":
-        return False, text
+        return False, [], text
     end = None
     for i in range(1, len(lines)):
         if lines[i].strip() == "---":
             end = i
             break
     if end is None:
-        return False, text
-    return True, "".join(lines[end + 1:])
+        return False, [], text
+    block_lines = [ln.rstrip("\r\n") for ln in lines[1:end]]
+    return True, block_lines, "".join(lines[end + 1:])
+
+
+def _replace_shipgate_block(block_lines, new_shipgate_lines):
+    """〔impl-review-fix H5〕只替换/插入 frontmatter 首块内**顶层 `ship-gate:` 节点**这一段，
+    块内其它顶层字段（及其嵌套内容）原样保留——`sdflow-spec-review/SKILL.md` 明文契约
+    「脚本自动处理 frontmatter 合并……保留其它既有字段，不新开第二块」，旧实现却整块重建
+    只留 `["---", "ship-gate:", ...]`，任何与 `ship-gate:` 同级的既有字段（如报告手写的
+    `title:`）会被静默丢弃。
+
+    `block_lines`：`_split_frontmatter_block` 返回的首块原始行（不含首尾 `---`）。
+    `new_shipgate_lines`：新 `ship-gate:` 节点各行（含 `ship-gate:` 头行，字段 2 空格缩进）。
+    返回替换后的完整块行列表。
+    """
+    start = None
+    end = None
+    for i, ln in enumerate(block_lines):
+        if start is None:
+            stripped = ln.lstrip()
+            indent = ln[:len(ln) - len(stripped)]
+            if stripped.startswith("ship-gate:") and not indent:
+                start = i
+            continue
+        # 已进入 ship-gate 节点内部：遇到下一个 0 缩进的非空行即节点结束
+        if ln.strip() and not ln[:1].isspace():
+            end = i
+            break
+    if start is None:
+        # absent：块内无顶层 ship-gate: 键，新节点插在块最前面，其余字段原样跟在后面
+        return new_shipgate_lines + block_lines
+    if end is None:
+        end = len(block_lines)
+    return block_lines[:start] + new_shipgate_lines + block_lines[end:]
 
 
 def _coerce_set_value(field, raw):
@@ -126,13 +162,28 @@ def _git_status_porcelain_raw(root, pathspecs):
     `.strip()` 整段输出，porcelain 每行开头的状态码可能是空格（如 ` M path`），
     整段 strip 会啃掉首行状态码的首字符、致后续 `line[3:]` 切分错位。本函数专供
     脏树守卫使用，原样保留每行前导字符。
+
+    〔impl-review-fix C1/H3〕改走 `ship_gate._git_run` 单出口（timeout + env 清理 +
+    环境级失败映射，与本文件其余 git 调用同一条纪律），MUST NOT 再裸调 `subprocess.run`
+    ——裸调用既无 timeout（挂起时无限等待）也无 OSError 捕获（git 缺失时未捕获异常逸出）。
+    〔impl-review-fix C2〕非零返回码 **fail-loud 拒写**，MUST NOT 折成空串——折空串等价于
+    「无脏改动」，会在仓损坏/锁/权限导致 `git status` 失败时把「判定不能」误判为「判定为
+    干净」从而放行写锚，与本文件头注释「脏树守卫」的 fail-loud 立场矛盾（也与 ship_gate.py
+    全篇「读失败 ≠ 空」的 ADR-4 纪律不一致）。
     """
-    cmd = ["git", "-C", str(root), *sg._GIT_HARDEN, "status", "--porcelain"]
+    args = ["status", "--porcelain"]
     if pathspecs:
-        cmd += ["--", *pathspecs]
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                        errors="replace", env=sg._git_env())
-    return r.stdout if r.returncode == 0 else ""
+        args += ["--", *pathspecs]
+    try:
+        r = sg._git_run(root, args, text=True)
+    except sg.GateIndeterminate as exc:
+        _fail(f"git status --porcelain 调用失败，无法判定脏树守卫，拒绝写锚：{exc.cause}")
+    if r.returncode != 0:
+        stderr = (r.stderr or "").strip()
+        detail = f"（stderr: {stderr}）" if stderr else ""
+        _fail(f"git status --porcelain 返回非零退出码（rc={r.returncode}），"
+              f"无法判定脏树守卫，拒绝写锚{detail}")
+    return r.stdout
 
 
 def _dirty_paths(root, domain, dirty_pathspecs):
@@ -146,9 +197,16 @@ def _dirty_paths(root, domain, dirty_pathspecs):
         if not line:
             continue
         # `git status --porcelain` 每行前两字符是状态码（可含空格）、随后一个空格、再是路径
-        # （rename 形态为 `old -> new`，此处只需判断"是否落在 openspec 之外"，取整行足够）。
+        # （rename/copy 形态为 `old -> new`）。
         path = line[3:] if len(line) > 3 else line
-        if domain == "code" and (path == "openspec" or path.startswith("openspec/")):
+        # 〔impl-review-fix M7〕domain 排除判定 MUST 按**目的路径**（rename 箭头之后那段），
+        # MUST NOT 按整行字面量：整行形如 `openspec/old.md -> new.md` 时，旧写法见整行以
+        # `openspec/` 打头就整条 `continue` 跳过——而该 rename 的**目的**其实落在 code 域
+        # （从 openspec 移出到 code 域），真实结果是一个该被判脏的 code 域文件，却被误当
+        # "仍在 openspec 域内、与 code 域无关"而漏判。取箭头后半段再判，方向相反的
+        # rename（code 域移入 openspec）也能正确排除，同一判据两个方向都对。
+        check_path = path.split(" -> ", 1)[-1] if " -> " in path else path
+        if domain == "code" and (check_path == "openspec" or check_path.startswith("openspec/")):
             continue
         dirty.append(path)
     return dirty
@@ -168,13 +226,29 @@ def main(argv=None):
                     help="显式越权：跳过监视集脏树守卫（越权留痕，见本文件头注释）")
     a = p.parse_args(argv)
 
-    root = Path(a.root) if a.root else Path(
-        sg.run_git(Path.cwd(), "rev-parse", "--show-toplevel") or Path.cwd())
-
-    if not sg.run_git(root, "rev-parse", "--git-dir"):
+    # 〔impl-review-fix H4〕`sg.run_git` 内部 `_git_run` 在 git 超时/不可用（`TimeoutExpired`/
+    # `OSError`）时抛 `GateIndeterminate`——原代码裸调用未捕获，会让 traceback 逸出到用户面前
+    # （其余分支都走 `_fail` 给出清晰诊断，唯独这两处例外）。此处统一包 try/except 对齐风格。
+    try:
+        root = Path(a.root) if a.root else Path(
+            sg.run_git(Path.cwd(), "rev-parse", "--show-toplevel") or Path.cwd())
+        git_dir_ok = sg.run_git(root, "rev-parse", "--git-dir")
+    except sg.GateIndeterminate as exc:
+        _fail(f"git 调用失败，无法写锚：{exc.cause}")
+    if not git_dir_ok:
         _fail("git 不可用或 --root 非 git 仓，无法写锚")
 
-    report_path = root / "openspec" / "changes" / a.change / a.report
+    # 〔impl-review-fix H6〕路径穿越防护：`--change` 单路径段（不得含分隔符/`..`），
+    # `--report` 解析后必须仍落在 `openspec/changes/<change>/` 目录内——否则
+    # `--report ../../../etc/passwd` 之类参数可借本脚本的写入能力覆盖任意文件。
+    if not a.change or a.change in (".", "..") or "/" in a.change or "\\" in a.change:
+        _fail(f"--change 值非法（须是单一目录名，不得含路径分隔符或 `..`）：{a.change!r}")
+    change_dir = (root / "openspec" / "changes" / a.change).resolve()
+    report_path = (change_dir / a.report).resolve()
+    try:
+        report_path.relative_to(change_dir)
+    except ValueError:
+        _fail(f"--report 解析后逃逸出 change 目录 {change_dir}，拒绝写入：{a.report!r}")
     if not report_path.is_file():
         _fail(f"报告不存在：{report_path}")
 
@@ -201,7 +275,7 @@ def main(argv=None):
 
     # ── 读旧报告、切出首块 frontmatter（若有）与既有结论状态、合并 --set 覆盖 ──
     old_text = report_path.read_text(encoding="utf-8", errors="replace")
-    _has_block, body = _split_frontmatter_block(old_text)
+    _has_block, old_block_lines, body = _split_frontmatter_block(old_text)
     old_state, err = sg.parse_ship_gate_frontmatter(old_text)
     if err is not None:
         field, cat = err
@@ -218,18 +292,21 @@ def main(argv=None):
         field = field.strip()
         new_state[field] = _coerce_set_value(field, raw.strip())
 
-    lines = ["---", "ship-gate:"]
+    shipgate_lines = ["ship-gate:"]
     for field in _FIELD_ORDER:
         if field in new_state:
-            lines.append(f"  {field}: {_render_value(field, new_state[field])}")
+            shipgate_lines.append(f"  {field}: {_render_value(field, new_state[field])}")
     # 未落在既定展示序里的已知字段（理论上不会发生，FIELD_ENUMS 已含三者）兜底追加
     for field, value in new_state.items():
         if field not in _FIELD_ORDER:
-            lines.append(f"  {field}: {_render_value(field, value)}")
-    lines.append(f"  reviewed_sha: {digest}")
-    lines.append(f"  reviewed_manifest: {manifest_b64}")
-    lines.append("---")
-    new_text = "\n".join(lines) + "\n" + body
+            shipgate_lines.append(f"  {field}: {_render_value(field, value)}")
+    shipgate_lines.append(f"  reviewed_sha: {digest}")
+    shipgate_lines.append(f"  reviewed_manifest: {manifest_b64}")
+
+    # 〔impl-review-fix H5〕只替换块内 ship-gate 节点，块内其它既有顶层字段原样保留
+    # （见 `_replace_shipgate_block` 与 SKILL.md「保留其它既有字段」契约）。
+    merged_block = _replace_shipgate_block(old_block_lines, shipgate_lines)
+    new_text = "\n".join(["---"] + merged_block + ["---"]) + "\n" + body
 
     # ── 原子替换写入 ──
     tmp_path = report_path.with_suffix(report_path.suffix + ".anchor-writeback.tmp")

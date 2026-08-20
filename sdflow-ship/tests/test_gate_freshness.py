@@ -484,6 +484,41 @@ def test_manifest_distinguishes_different_paths_not_folded(repo):
     assert sha_before != sha_after
 
 
+# ══ 〔impl-review-fix C1〕记录分隔符须无歧义（`\0`，非 `\n`）══════════════════
+# 红先于绿：本用例在修复前（记录间以 `\n` 连接）对下列 A/B 两个不同监视集会得到
+# **相同**的 manifest 字节与相同 digest（已在 fix 前用
+# `python3 -c "import ship_gate as sg; ..."` 实测复现）——一个路径本身含 `\n` 的单路径集，
+# 与两条独立路径集，在 `\n` 分隔下字面上不可分辨。修复后（NUL `\0` 分隔）二者 MUST 不同，
+# 因为 git 路径不能合法含 NUL，`\0` 对任何合法路径都是无歧义分隔符。
+
+def test_manifest_no_collision_when_path_contains_newline():
+    """碰撞抗性：单路径（路径字节里嵌了一段"看起来像另一条记录"的文本，含 `\\n`）
+    与两条独立路径，manifest/digest MUST 不同——纯函数级用例，不依赖真实 git 仓
+    （git 是否允许把 `\\n` 写进 tree 条目路径与本测试的判据无关，`fingerprint_entries`
+    对任意 `{path_bytes: (mode,type,oid)}` 输入都要给出无歧义编码）。"""
+    single_path_with_embedded_record = {
+        b"a\n100644 blob deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\tc":
+            (b"100644", b"blob", b"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+    }
+    two_independent_paths = {
+        b"a": (b"100644", b"blob", b"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+        b"c": (b"100644", b"blob", b"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+    }
+    manifest_a, digest_a = _sg.fingerprint_entries(single_path_with_embedded_record)
+    manifest_b, digest_b = _sg.fingerprint_entries(two_independent_paths)
+    assert manifest_a != manifest_b, "不同监视集折叠成了相同 manifest 字节（C1 碰撞）"
+    assert digest_a != digest_b, "不同监视集折叠成了相同 digest（C1 碰撞，会致失鲜门被绕过）"
+
+
+def test_manifest_record_separator_is_nul_not_newline():
+    """直接锚定分隔符字节本身 = `\\0`，防止日后有人"顺手"改回 `\\n` 又不改测试。"""
+    entries = {b"a": (b"100644", b"blob", b"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+               b"b": (b"100644", b"blob", b"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")}
+    manifest, _digest = _sg.fingerprint_entries(entries)
+    assert b"\0" in manifest
+    assert b"\n" not in manifest
+
+
 # ── 保留复用件：全部已声明退役的构件真的不在了 ─────────────────────────────
 
 def test_retired_checkbox_exemption_cluster_leaves_no_dangling_reference():

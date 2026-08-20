@@ -570,17 +570,27 @@ def read_reviewed_sha(root, rel):
 
 def _manifest_bytes_from_entries(entries):
     """`{path_bytes: (mode, type, oid)}` → 规范字节流（按原始 path 字节序排序，逐条
-    `mode SP type SP oid TAB path`，行间以 `\\n` 连接）。〔sweep-pool-debt D3/D4〕
+    `mode SP type SP oid TAB path`，记录间以 `\\0`（NUL）连接）。〔sweep-pool-debt D3/D4〕
+    〔impl-review-fix C1〕
 
     字节保真：mode/type/oid/path 均取自 `ls-tree -z` 的原始字节，不解码、不归一化——
     与 write 侧（`anchor_writeback.py`）共用本函数，故双方对同一盘面恒得字节相同的
     manifest（round-trip 无损，含 Tab/换行/非 UTF-8 路径）。
+
+    〔impl-review-fix C1〕**记录分隔符 MUST 是 `\\0`，MUST NOT 是 `\\n`**：git 路径本身
+    可以合法含 `\\n`（`\\t` 亦可），若仍以 `\\n` 分隔记录，一个含 `\\n` 的路径会与「下一条
+    真实记录」的字面文本在字节层面不可分辨——实测 `{"a\\n100644 blob <oid>\\tc": …}`（单路径，
+    路径本身含换行）与 `{"a": …, "c": …}`（两条独立路径）产出完全相同的 manifest 字节与
+    digest，构成碰撞（design DT-2「字节保真、MUST NOT 依赖会被路径内容混淆的分隔符」实质
+    要求的正是「无歧义」，`\\n` 不满足）。`\\0` 是无歧义选择：git 路径按 `ls-tree -z` 的
+    设计前提本身就不能含 NUL（`-z` 正是靠 NUL 做记录终止符），故用它做本函数的记录分隔符
+    不会与任何合法路径字节冲突。
     """
     lines = []
     for path in sorted(entries.keys()):
         mode, typ, oid = entries[path]
         lines.append(mode + b" " + typ + b" " + oid + b"\t" + path)
-    return b"\n".join(lines)
+    return b"\0".join(lines)
 
 
 def fingerprint_entries(entries):
@@ -596,11 +606,15 @@ def fingerprint_entries(entries):
 def _manifest_entries_from_bytes(manifest_bytes):
     """`fingerprint_entries` 的逆运算之一半：解析规范字节流回 `{path: (mode,type,oid)}`，
     仅供诊断（`guard_design_freshness` 的差异路径点名）使用，不参与等值判定本身
-    （等值判定只走 digest，见 DT-2）。空输入 → 空字典。"""
+    （等值判定只走 digest，见 DT-2）。空输入 → 空字典。
+
+    〔impl-review-fix C1〕记录分隔符与 `_manifest_bytes_from_entries` 同步改为 `\\0`
+    （原 `\\n` 分隔在路径含换行时会与生产侧构成 C1 碰撞，见该函数注释）。
+    """
     if not manifest_bytes:
         return {}
     entries = {}
-    for line in manifest_bytes.split(b"\n"):
+    for line in manifest_bytes.split(b"\0"):
         meta, sep, path = line.partition(b"\t")
         if not sep:
             continue
@@ -1862,7 +1876,14 @@ def decide(root, change):
         emit("REFUSE_START", EXIT_REFUSE, None,
              "未过设计门：spec-review-report.md 缺失或无 design_approved 锚；"
              "先完成设计门。若拍板已发生请人工补锚（显式越权留痕）——"
-             "须补 design_approved 与 reviewed_sha 两个字段（同一次写入落盘）；"
+             # 〔impl-review-fix M9〕原文案列 design_approved+reviewed_sha 两字段、暗示可手写
+             # 补齐，而 _read_anchor 实际要求 reviewed_sha+reviewed_manifest 同时存在
+             # （二者密码学互锁，MUST NOT 手写）；改为直接指向权威写锚脚本的调用方式，三字段
+             # （design_approved/reviewed_sha/reviewed_manifest）由脚本同批原子计算写入，
+             # 撞门者按此文案操作不会再落入「手写完两个字段仍缺 reviewed_manifest」的二次踩坑。
+             "跑 `anchor_writeback.py --change <name> --report spec-review-report.md "
+             "--domain design --set design_approved=true`（同一次写入落盘 design_approved + "
+             "reviewed_sha + reviewed_manifest 三字段，锚值由脚本计算，MUST NOT 手写）；"
              "reviewed_sha 记的是被批准的盘面（拍板放行的那个提交），不是写报告的时刻"
              + _unclosed_frontmatter_hint(report))
     # [implement-workflow-optimization-2026-08-p4 Task3 · B25] 锚存在门①同款：design 门
