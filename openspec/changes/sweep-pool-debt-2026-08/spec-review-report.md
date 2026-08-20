@@ -1,3 +1,8 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: f28c1ffc0d880d728d66a9f6abf514271803d557
+---
 # Spec Review Report · sweep-pool-debt-2026-08
 
 - **评审对象**：`openspec/changes/sweep-pool-debt-2026-08/` 四件套（proposal / design / specs ×3 / tasks）+ decision-memo（参照）
@@ -49,8 +54,8 @@
 
 ### [需拍板]
 
-- **Q1 · TENSION：锚的防伪强度定位（hr-tg voice vs 主审）**——voice 视角：写锚无来源证明，producer 可在未审盘面跑脚本或一致重算两字段得到互证且 fresh 的锚，建议受保护 CI/签名 attestation 验签。主审视角：「一致重算 = 手跑重锚」已按 adr/0008 显式越权留痕定位（git 可审计，DT-7/spec 已登记「已知不覆盖」），D4 诚实边界亦明言只堵值错不堵时机；引入签名/CI 验签超出本 change 目标（通则④：低概率 · 单人仓 · 完美成本高）。**推荐**：维持现设计，但把 memo D4「脚本堵值错/伪造」的「伪造」一词理解收窄为「不一致篡改」（互锁堵不一致篡改与手抄错，不堵一致重算）——此收窄已隐含于 spec 诚实边界句，无需再改文件；signing 机制不做。三面后果——系统镜：维持 = 零新依赖、可回退性不变；signing = 新信任根 + CI 耦合。用户镜：维持 = 越权可审计不可阻断；signing = 单人仓无实际对手模型。开发循环镜：维持 = 零流程新开销；signing = 每次拍板多一道链路。**主次判定**：开发循环镜为主（单人工具仓，威胁模型是自误非对手），维持现设计。 [ ] 按推荐  [ ] 采 voice 方案
-- **Q2 · memo 更正的处置**——本轮对 memo C2/C12/D4 的事实错误均以 design.md 订正条覆盖（memo 保留原文作历史记录，design 为准）。若您希望 memo 本体同步订正（decision-memo 是相位 C 生成的单一源，未来重新生成四件套时会再读它），请在拍板时说明，随二次修订一并落。 [ ] memo 保留原样（design 订正为准）  [ ] memo 本体同步订正
+- **Q1 · TENSION：锚的防伪强度定位（hr-tg voice vs 主审）**——voice 视角：写锚无来源证明，producer 可在未审盘面跑脚本或一致重算两字段得到互证且 fresh 的锚，建议受保护 CI/签名 attestation 验签。主审视角：「一致重算 = 手跑重锚」已按 adr/0008 显式越权留痕定位（git 可审计，DT-7/spec 已登记「已知不覆盖」），D4 诚实边界亦明言只堵值错不堵时机；引入签名/CI 验签超出本 change 目标（通则④：低概率 · 单人仓 · 完美成本高）。**推荐**：维持现设计，但把 memo D4「脚本堵值错/伪造」的「伪造」一词理解收窄为「不一致篡改」（互锁堵不一致篡改与手抄错，不堵一致重算）——此收窄已隐含于 spec 诚实边界句，无需再改文件；signing 机制不做。三面后果——系统镜：维持 = 零新依赖、可回退性不变；signing = 新信任根 + CI 耦合。用户镜：维持 = 越权可审计不可阻断；signing = 单人仓无实际对手模型。开发循环镜：维持 = 零流程新开销；signing = 每次拍板多一道链路。**主次判定**：开发循环镜为主（单人工具仓，威胁模型是自误非对手），维持现设计。 [x] 按推荐（2026-08-20 拍板）  [ ] 采 voice 方案
+- **Q2 · memo 更正的处置**——本轮对 memo C2/C12/D4 的事实错误均以 design.md 订正条覆盖（memo 保留原文作历史记录，design 为准）。若您希望 memo 本体同步订正（decision-memo 是相位 C 生成的单一源，未来重新生成四件套时会再读它），请在拍板时说明，随二次修订一并落。 [x] memo 保留原样（design 订正为准，2026-08-20 拍板按推荐）  [ ] memo 本体同步订正
 
 ### [已裁掉]（反静默压制，可审计）
 
@@ -81,14 +86,14 @@
 
 ---
 
-## 度量锚（lens-metric · config metrics.enabled=true；采纳/裁掉/defer 为设计门拍板前临时裁决，拍板回写时最终化〔SR-M〕）
+## 度量锚（lens-metric · config metrics.enabled=true；已随 2026-08-20 设计门拍板最终化〔SR-M〕：Q1 按推荐拍板，原 defer 项归 采纳）
 
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="6" 采纳="5" 裁掉="1" defer="0" 独立="3" sev="致0/高3/中0/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="5" 采纳="3" 裁掉="2" defer="0" 独立="2" sev="致0/高1/中0/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="1" sev="致0/高0/中1/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="2" 采纳="1" 裁掉="1" defer="0" 独立="0" sev="致0/高0/中0/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="3" 采纳="3" 裁掉="0" defer="0" 独立="2" sev="致1/高1/中1/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="3" 采纳="2" 裁掉="0" defer="1" 独立="1" sev="致0/高1/中1/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="3" 采纳="3" 裁掉="0" defer="0" 独立="2" sev="致0/高1/中2/低0" -->
 
 > 残余信任边界声明：分类正确性、roster 完备性、findings 誊写准确仍是主 session 信任边界；emitter 只保证给定输入的确定性归约。`findings=N` 与合并池实收数的数值一致性同为信任边界，非机械可验。本 skill 只落锚不聚合，复评归 `/sdflow-retro`。
 
@@ -102,4 +107,4 @@ design.md 含锚流对照表（TG-04 模版）+ v_old/v_new ASCII 流程图，�
 
 **建议进设计 HARD-GATE**：三条 critical（归档 SHIPPED 回归 / C12 前提失实 / 自举自锁）与两条 high（manifest 编码 / code 域分支）均已按修订落盘四件套，方向层无未闭合缺口；待人拍板项仅 Q1（防伪定位，推荐维持现设计）与 Q2（memo 是否同步订正）。批准后按拍板回写协议落 `ship-gate.design_approved` frontmatter（本轮修订已在报告前落盘，属评审内 amendment，非「拍板前二次修订」——但**若您在拍板前再要求任何四件套改动**，须先单独 checkpoint 该改动再回写锚〔ADR-7(b)〕）→ `/clear` → `/sdflow-ship`。
 
-*拍板记录区：（设计门拍板后由主 session 补一行人读结论 + frontmatter 机判锚）*
+**拍板记录**：设计门已拍板批准，日期 2026-08-20（含拍板三问全认、Q1/Q2 按推荐）；批准盘面 = f28c1ffc0d880d728d66a9f6abf514271803d557（checkpoint spec-review-amendment：R1+R2 二次修订）；机判锚见本文件头部 frontmatter。
