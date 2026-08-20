@@ -1,6 +1,6 @@
 import subprocess, sys
 from pathlib import Path
-from conftest import commit_all, mkchange, head_sha, write_report
+from conftest import commit_all, mkchange, head_sha, write_report, fingerprint
 from test_gate_preflight import run_gate
 
 # Load ship_gate module for direct function testing.
@@ -25,16 +25,19 @@ PLAN2_TICKETS = (
 
 def approved_change(repo, plan=None, revise=None, anchor="head"):
     # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）。
-    # [harden-gate-git-layer Task1 · tasks 4.1/4.1b] 迁**两段提交模型**：报告 frontmatter 现须带
-    # `reviewed_sha`（被批准的盘面），而旧单次 commit_all 让报告与其审查对象同属根提交 ⇒ 结构上
-    # 没有先于报告的盘面可填。分段：
+    # 〔sweep-pool-debt D3/D4，取代 harden-gate-git-layer Task1 tasks 4.1/4.1b 的 commit-sha 锚〕
+    # 锚从「commit-sha 把手」改为「监视域内容 manifest 的 sha256（+ manifest 本身）」，两字段
+    # 由 `fingerprint(repo, ref, "design")` 权威计算（与生产 `ship_gate.fingerprint_entries`
+    # 物理同源）。仍保留**两段提交模型**（报告落盘前先落盘被批准的四件套）：结构上仍需要
+    # 「先于报告的盘面」存在，才谈得上"计算它的内容指纹"。分段：
     #   ① 四件套（+ 可选 plan）落盘提交 → 这就是「被批准的盘面」
     #   ② 可选第三段〔4.1b〕revise=callable(d)：拍板前二次修订，单独提交（ADR-7(b) 场景）
-    #   ③ 读出 HEAD → 写携带该 sha 的 spec-review-report → 单独提交
-    # anchor: "head"（默认，锚指被批准盘面）｜"pre-revision"（锚指修订**之前**的提交，用于
-    #   验 ADR-7(b) 自锁：拍板刚完成即失鲜）｜None（不写 reviewed_sha，缺锚负例）｜显式 sha 串。
+    #   ③ 在某个 ref 上算 design 域指纹 → 写携带该指纹的 spec-review-report → 单独提交
+    # anchor: "head"（默认，锚 = 修订后 HEAD 上的内容指纹）｜"pre-revision"（锚 = 修订**之前**
+    #   提交上的内容指纹，用于验 ADR-7(b) 自锁：拍板刚完成即失鲜）｜None（不写锚，缺锚负例）。
     d = mkchange(repo)
     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+    (d / "design.md").write_text("# d\n", encoding="utf-8")
     if plan is not None:
         # 🔴 共享 fixture：`approved_change` 被 7 个测试文件消费（test_gate_git_layer.py /
         # test_gate_freshness.py / test_gate_namespace.py / test_gate_impl_progress.py（本文件）/
@@ -49,9 +52,14 @@ def approved_change(repo, plan=None, revise=None, anchor="head"):
     if revise is not None:                          # ② 拍板前二次修订（单独落盘）
         revise(d)
         commit_all(repo, "pre-approval revision")
-    sha = {"head": head_sha(repo), "pre-revision": pre_revision}.get(anchor, anchor)
-    write_report(d, "spec-review-report.md", sha,
-                 body="# 设计审报告\n", design_approved="true")
+    if anchor is None:
+        write_report(d, "spec-review-report.md", None, None,
+                     body="# 设计审报告\n", design_approved="true")
+    else:
+        ref = {"head": head_sha(repo), "pre-revision": pre_revision}.get(anchor, anchor)
+        sha, manifest = fingerprint(repo, ref, "design")
+        write_report(d, "spec-review-report.md", sha, manifest,
+                     body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (approved)")   # ③ 报告单独提交
     return d
 

@@ -23,7 +23,7 @@ ticket 号——由 resolver 定位到的 plan 恒为 `tickets.md`（单名）�
 import sys
 from pathlib import Path
 
-from conftest import commit_all, mkchange, head_sha, write_report
+from conftest import commit_all, mkchange, head_sha, write_report, fingerprint
 from test_gate_preflight import run_gate
 
 _scripts_path = str(Path(__file__).parent.parent / "scripts")
@@ -67,7 +67,8 @@ def _seed_with_new_name(repo, plan):
     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     (d / "tickets.md").write_text(plan, encoding="utf-8")
     commit_all(repo, "seed change artifacts (new plan name)")
-    write_report(d, "spec-review-report.md", head_sha(repo),
+    sha, manifest = fingerprint(repo, head_sha(repo), "design")
+    write_report(d, "spec-review-report.md", sha, manifest,
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (approved)")
     return d

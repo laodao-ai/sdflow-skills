@@ -467,17 +467,21 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 4. **复审一轮（硬上限 1，仅当上一步产生了修复提交时触发）**〔curb-rework-loop-cost · adr/0035〕：
    派一轮复审，输入 diff 范围**限定为上一步 checkpoint 提交本身**（本轮修复 diff），MUST NOT 重新
    打包整个分支 diff 重审。仍报出 Critical/Important → MUST NOT 自发进入第三轮，全部 defer 进
-   buglist，第 6 步写报告时显式标注「复审上限已达，N 项残差已 defer」。**上一步因无自动修复而
+   buglist，第 5 步写报告时显式标注「复审上限已达，N 项残差已 defer」。**上一步因无自动修复而
    跳过时，本步同样跳过**（详见 Step4「自动修复后的复审边界」）。
-5. **取锚**：`git rev-parse HEAD` 的完整 40 位小写 OID = 第 3 步的修复提交（或无修复时的被审
-   基线）——第 4 步的复审不产生新的源码改动，锚仍是同一个提交，即报告 frontmatter 的
-   `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是写报告的时刻」）。**报告写盘 MUST
-   在本步之后、下一步之前**——第 3 步的「仅源码」承诺要成立，报告文件在第 3 步提交那一刻就不能
-   已经存在于工作树。
-6. **写报告初稿** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings（已采纳） + 已裁掉区
-   + 裁决 + 修复/defer 台账〔机读表，含专用 id 列，见 Step4〕），frontmatter 带上一步取得的 `reviewed_sha`。
-   **本步只产出报告正文与 frontmatter，不产出度量锚/引用核锚/自检——那是下一步的独立职责，MUST NOT 在
-   本步顺带调用 emitter 或顺带省略下一步**。
+5. **写报告初稿（无锚）** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings（已采纳） + 已裁掉区
+   + 裁决 + 修复/defer 台账〔机读表，含专用 id 列，见 Step4〕）——先只写正文，**不写 frontmatter**。
+   **本步只产出报告正文，不产出度量锚/引用核锚/自检——那是下一步的独立职责，MUST NOT 在
+   本步顺带调用 emitter 或顺带省略下一步**。**报告写盘（本步）MUST 在第 3 步之后**——第 3 步的
+   「仅源码」承诺要成立，报告文件在第 3 步提交那一刻就不能已经存在于工作树。
+6. **落锚**：调用权威写锚脚本，一次调用同批写入 `code_review` 结论字段与内容锚
+   （`reviewed_sha` + `reviewed_manifest`，取代旧的手抄 `git rev-parse HEAD`）：
+   `python3 sdflow-ship/scripts/anchor_writeback.py --change <change-name> --report code-review-report.md --domain code --set code_review=pass`
+   （或 `blocked`）。锚锚定的是**当前 HEAD**（= 第 3 步的修复提交，或无修复时的被审基线——第 4 步
+   复审不产生新的源码改动，锚仍是同一提交）。脚本的脏树守卫只盯 code 域监视集（仓库顶层条目、
+   排除 `openspec`）——`code-review-report.md` 本身落在 `openspec/` 内、不在监视集中，故第 5 步
+   写的报告正文**即使尚未提交**也不会触发拒写；但若工作树里另有未提交的**非 openspec** 改动
+   （与本轮无关的残留），脚本仍会 fail-loud 拒写，需按第 1 步的洁净检查先行处置。
 7. **度量锚落锚 + 锚行自检〔B25，impl-orchestration delta〕**——**本步是本轮 code-review 输出
    lens-metric / ref-check 锚的唯一途径，是一个具体、不可省略的工具调用，MUST NOT 被当作「写报告」
    那句散文里可以顺带略过的细节**（拆成独立编号正是为此）：
@@ -651,33 +655,72 @@ fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout
 - **机械核**：`anchor_lint.py` 的 `check_declared_sites` 同时比对「declared == 公式重算期望集」与「declared == 报告实落 `site=` 集」，任一不等即 VIOLATION——补上家族级门（有 ≥1 条 outside-voice 锚即过）的 per-site 盲区，**并发 2 站点漏收一个不再被判 CLEAN**。锚缺失 / ≥2 条 / 缺 `declared=` 一律 fail-closed。
 - 🔴 **漏收某站点 MUST NOT 靠删 declared 抹平**：期望集由公式独立重算，declared 与实落一起缩水仍判红。
 
+## impl-review 尾流修订重锚协议〔sweep-pool-debt D9，新建〕
+
+设计门拍板已落之后，本 skill 的 Step4 自动修复**通常**只改源码（`[impl-review-fix]` 标注、
+Step5 checkpoint 提交），不涉及 design 域监视集（`proposal.md`/`design.md`/`specs/`）。但若
+某轮修复确实需要touch 到这些文件之一（如根因在 proposal 的 Non-Goals 划错、design.md 与实现
+出现不一致需订正——这类改动仍标 `checkpoint(impl-review)` subject，供人读审计留痕），**该提交
+落盘后 MUST 立即跑写锚脚本刷新 `spec-review-report.md` 的锚**：
+
+```bash
+python3 sdflow-ship/scripts/anchor_writeback.py \
+  --change <change-name> --report spec-review-report.md --domain design
+```
+
+**不带 `--set`**——本次调用只刷新内容锚（`reviewed_sha` + `reviewed_manifest`），**MUST NOT**
+触碰 `design_approved` 结论字段（那是设计门拍板的结论，不因 impl-review 尾流修订而改变）。
+刷新后的锚提交也 MUST 落盘（`git add` 该报告文件后随下一次 checkpoint 一并提交，或单独一次
+`chore` 提交均可）。
+
+**为何是"重锚"而不是 gate 端豁免**〔D9 与 harden-gate-git-layer 的分歧点〕：旧设计曾让 gate 端
+识别 `checkpoint(impl-review)` subject 精确豁免失鲜判定（帧比较年代的做法），该豁免通道已随
+内容锚整体退役——**gate 端现在没有任何豁免通道**，失鲜判定纯粹是「HEAD 侧重算内容指纹 vs 锚
+digest 等值」。合法的尾流修订要让 gate 判 fresh，唯一途径是 producer（即本 skill）显式重锚，
+不能靠伪造/复用某个 commit subject 蒙混过关。
+
+**忘记重锚的后果与恢复**：若这次 `checkpoint(impl-review)` 提交改了 design 域监视集却忘了重跑
+上述脚本，下次 `/sdflow-ship` 调用会在 design 域失鲜判定处 `REFUSE_START`（fail-closed，
+诊断会点名具体差异路径与提交）——**这是安全的失效方向**（假阴误停，非假阳放行）；补跑本节的
+命令即可恢复，无需回滚提交。
+
+**「手跑重锚脚本绕过二次批准」的越权登记**：本协议本身就是显式越权同权级操作（design.md D9：
+锚字段变更随提交 git 留痕、可审计，`adr/0008` 防御纵深立场不变）——`ship_gate.py` 头注释「已知
+不覆盖」段已登记此点，本 skill **MUST NOT** 在 gate 端新增机械拦截去二次核验"这次重锚是否真的
+只改了合法范围"，那超出了 gate「只读判官」的契约。
+
 ## 报告格式（code-review-report.md）
 
 **报告头部 frontmatter（ship-gate 契约，mlh-p5 迁 frontmatter，模板写死二选一，勿改写字段名、勿两键并存）**：
 MUST 在文件**最顶端**（prepend，非追加末尾）写：
 
+本 frontmatter **MUST 由权威写锚脚本一次调用写入**（`code_review` 结论字段与内容锚 `reviewed_sha`
++ `reviewed_manifest` 同批落盘，**MUST NOT** 手写/手抄）：
+
+```bash
+python3 sdflow-ship/scripts/anchor_writeback.py \
+  --change <change-name> --report code-review-report.md --domain code \
+  --set code_review=pass    # 或 --set code_review=blocked
+```
+
+写入后的形态（供核对，**MUST NOT** 照抄该 40 位样例值手填——脚本算出的是 64 位内容 digest）：
+
 ```yaml
 ---
 ship-gate:
   code_review: pass
-  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
----
-```
-或
-```yaml
----
-ship-gate:
-  code_review: blocked
-  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
+  reviewed_sha: <脚本算出的 64 位内容 digest>
+  reviewed_manifest: <脚本算出的单行 base64>
 ---
 ```
 
 ——`code_review` 字段二选一（`pass`/`blocked`，下划线字段名、小写值），/sdflow-ship 读此 frontmatter 机判。
-**`reviewed_sha` = 被审的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD` 的完整
-40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。语义是「**本次代码审
-放行的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「放行之后源码有没有被改」。
-MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
-若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。头部之后紧接下方正文（含人读结论行，不可省略）：
+**内容锚〔sweep-pool-debt D3/D4，取代 harden-gate-git-layer ADR-1 的 commit-sha 把手〕**：`reviewed_sha`
+= 仓库顶层条目（排除 `openspec`）的 manifest 的 sha256（64 位 hex），`reviewed_manifest` = 该 manifest
+的 base64 编码，二者由脚本从当前 HEAD（committed 盘面）权威计算、密码学互锁。语义是「**本次代码审
+放行的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「放行之后源码有没有被改」。脚本对未提交
+改动的监视集会 fail-loud 拒写（脏树守卫），确保锚不会绑到含未提交修订的盘面。头部之后紧接下方正文
+（含人读结论行，不可省略）：
 
 ```
 ## code-review 报告 — {change}

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import commit_all, mkchange, head_sha, write_report
+from conftest import commit_all, mkchange, head_sha, write_report, fingerprint
 from test_gate_preflight import run_gate
 from test_gate_tail import impl_done
 from test_gate_impl_progress import PLAN2_TICKETS
@@ -42,6 +42,13 @@ LENS_METRIC_SR = ('<!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" 
                    'runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" '
                    'sev="致0/高0/中0/低0" -->')
 REF_CHECK = '<!-- sdflow:ref-check v1 status="clean" pass="0" fail="0" uncheckable="0" -->'
+
+
+def _design_anchor(repo, change="demo"):
+    return fingerprint(repo, head_sha(repo), "design", change)
+
+def _code_anchor(repo, change="demo"):
+    return fingerprint(repo, head_sha(repo), "code", change)
 
 
 def write_config_metrics(root, value):
@@ -80,8 +87,8 @@ def impl_done_with_sr_anchor(repo):
     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     (d / "tickets.md").write_text(PLAN2_TICKETS, encoding="utf-8")
     commit_all(repo, "seed change artifacts")
-    sha = head_sha(repo)
-    write_report(d, "spec-review-report.md", sha,
+    sha, manifest = _design_anchor(repo)
+    write_report(d, "spec-review-report.md", sha, manifest,
                  body="# 设计审报告\n" + LENS_METRIC_SR + "\n", design_approved="true")
     commit_all(repo, "spec-review report (approved)")
     commit_all(repo, "checkpoint(task1-a): A")
@@ -231,7 +238,7 @@ def test_cr_pass_through_when_config_file_entirely_missing(repo):
     # 台账窄化/config 缺文件双向坑之一：不写 openspec/config.yaml，report 无任何度量锚，
     # 且无 defer 台账——本门须放行（不因缺锚被拦），推进到 RUN_VERIFY。
     d = impl_done(repo)
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
@@ -241,7 +248,7 @@ def test_cr_pass_through_when_config_file_entirely_missing(repo):
 def test_cr_pass_through_when_metrics_default_false(repo):
     write_config_metrics(repo, "false")
     d = impl_done(repo)
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
@@ -251,7 +258,7 @@ def test_cr_pass_through_when_metrics_default_false(repo):
 def test_cr_blocked_when_metrics_on_and_anchors_missing(repo):
     write_config_metrics(repo, "true")
     d = impl_done_with_sr_anchor(repo)
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
@@ -263,7 +270,7 @@ def test_cr_blocked_when_metrics_on_and_only_ref_check_missing(repo):
     write_config_metrics(repo, "true")
     d = impl_done_with_sr_anchor(repo)
     body = "# code-review 报告\n" + LENS_METRIC_CR + "\n"
-    write_report(d, "code-review-report.md", head_sha(repo), body=body, code_review="pass")
+    write_report(d, "code-review-report.md", *_code_anchor(repo), body=body, code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS"
@@ -273,7 +280,7 @@ def test_cr_blocked_when_metrics_on_and_only_ref_check_missing(repo):
 def test_cr_fail_closed_when_metrics_unparseable(repo):
     write_config_metrics(repo, '"maybe"')
     d = impl_done(repo)
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
@@ -284,7 +291,7 @@ def test_cr_fail_closed_when_metrics_unparseable(repo):
 def test_cr_passes_when_metrics_on_and_anchors_present(repo):
     write_config_metrics(repo, "true")
     d = impl_done_with_sr_anchor(repo)
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=True), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
@@ -296,7 +303,7 @@ def test_cr_passes_when_metrics_on_and_anchors_present(repo):
 def test_design_gate_pass_through_when_metrics_off(repo):
     d = mkchange(repo)
     commit_all(repo, "seed")
-    write_report(d, "spec-review-report.md", head_sha(repo),
+    write_report(d, "spec-review-report.md", *_design_anchor(repo),
                  body="# 报告\n", design_approved="true")
     commit_all(repo, "sr")
     code, js, _ = run_gate(repo)
@@ -307,7 +314,7 @@ def test_design_gate_blocked_when_metrics_on_and_anchor_missing(repo):
     write_config_metrics(repo, "true")
     d = mkchange(repo)
     commit_all(repo, "seed")
-    write_report(d, "spec-review-report.md", head_sha(repo),
+    write_report(d, "spec-review-report.md", *_design_anchor(repo),
                  body="# 报告\n", design_approved="true")
     commit_all(repo, "sr")
     code, js, _ = run_gate(repo)
@@ -320,7 +327,7 @@ def test_design_gate_passes_when_metrics_on_and_anchor_present(repo):
     d = mkchange(repo)
     commit_all(repo, "seed")
     body = "# 报告\n" + LENS_METRIC_SR + "\n"
-    write_report(d, "spec-review-report.md", head_sha(repo), body=body, design_approved="true")
+    write_report(d, "spec-review-report.md", *_design_anchor(repo), body=body, design_approved="true")
     commit_all(repo, "sr")
     code, js, _ = run_gate(repo)
     assert js["verdict"] not in ("REFUSE_START", "STEP_IN_PROGRESS")
@@ -331,7 +338,7 @@ def test_design_gate_passes_when_metrics_on_and_anchor_present(repo):
 def test_defer_gate_passes_with_valid_id_and_pool_file(repo):
     d = impl_done(repo)
     write_pool_file(repo, "todo", "T900", "demo")
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False, defer_id="T900"), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
@@ -342,7 +349,7 @@ def test_defer_gate_blocked_when_id_missing(repo):
     d = impl_done(repo)
     body = ("# code-review 报告\n### 修复 / defer 台账\n| 类型 | id | 说明 |\n|---|---|---|\n"
             "| defer | 已入 todolist | 无真实 id |\n")
-    write_report(d, "code-review-report.md", head_sha(repo), body=body, code_review="pass")
+    write_report(d, "code-review-report.md", *_code_anchor(repo), body=body, code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS" and js["next"] == "sdflow-code-review"
@@ -351,7 +358,7 @@ def test_defer_gate_blocked_when_id_missing(repo):
 
 def test_defer_gate_blocked_when_pool_file_missing(repo):
     d = impl_done(repo)
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False, defer_id="T901"), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
@@ -362,7 +369,7 @@ def test_defer_gate_blocked_when_pool_file_missing(repo):
 def test_defer_gate_blocked_when_source_change_mismatched(repo):
     d = impl_done(repo)
     write_pool_file(repo, "todo", "T902", "some-other-change")
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False, defer_id="T902"), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
@@ -375,7 +382,7 @@ def test_defer_gate_passes_when_pool_file_uncommitted(repo):
     # 🔴 `commit_all` 内部 `git add -A`，若在其之前写池文件会被顺手一并提交、测不出「未跟踪」
     # 这个分支——池文件须落在**最后一次** commit_all **之后**，run_gate 执行时才是真未跟踪。
     d = impl_done(repo)
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False, defer_id="B900"), code_review="pass")
     commit_all(repo, "cr")   # 报告已提交；池文件此刻尚不存在
     write_pool_file(repo, "bug", "B900", "demo")   # 写盘后不再 commit_all——工作树未跟踪文件
@@ -388,7 +395,7 @@ def test_defer_gate_ignores_description_column_old_ticket_reference(repo):
     # 不存在或 source_change 不符会导致本该通过的用例被误拦）。
     d = impl_done(repo)
     write_pool_file(repo, "todo", "T903", "demo")
-    write_report(d, "code-review-report.md", head_sha(repo),
+    write_report(d, "code-review-report.md", *_code_anchor(repo),
                  body=cr_body(anchors=False, defer_id="T903"), code_review="pass")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)

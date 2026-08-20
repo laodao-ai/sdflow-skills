@@ -1,3 +1,10 @@
+> 🔴 **superseded-by**：本 ADR 决策 1（录 commit-sha 锚）与决策 2 的 design 域监视集（含
+> `tasks.md` + 勾选框豁免层）已被 `adr/0044-content-fingerprint-anchor-retires-commit-sha-and-tasks-checkbox-exemption.md`
+> （`sweep-pool-debt-2026-08` D2/D3/D4/D9）取代：锚从「commit-sha 把手」改为「监视域内容
+> manifest 的 sha256 + manifest 本身」，`tasks.md` 移出 design 域监视集、勾选框豁免层随之
+> 整体退役并物理删除，`checkpoint(impl-review)` gate 端豁免通道改为 producer 侧显式重锚协议。
+> 决策 3（求值窗口）**未受影响、继续有效**——本 ADR 仍是该决策的权威记录，只读历史、不要改写。
+
 # 失鲜判定：**录锚 + 比内容 + 只在判据保护的风险真实存在的阶段求值**
 
 `ship_gate.py` 的失鲜判定要回答「评审结论是否已被后续提交作废」。历史实现一律是**从 git 管道信号推断**「被审过的内容变了没有」：`git log --name-only` → `git diff-tree -m` → `--cc`。

@@ -209,17 +209,24 @@ def test_exit_code_stays_in_contract_under_git_failures(repo, tmp_path):
 
 def test_five_causes_give_distinguishable_advice():
     # 五类原因的补救动作完全不同 ⇒ MUST NOT 用一句「git 调用失败」打天下。
+    # 〔sweep-pool-debt〕内容锚整体退役了「锚指向对象不存在或非 commit」类
+    # （CAUSE_ANCHOR_UNRESOLVABLE）——锚不再解析任何 git 对象，六类→五类。
     cats = [_sg.CAUSE_GIT_UNAVAILABLE, _sg.CAUSE_GIT_TIMEOUT, _sg.CAUSE_ANCHOR_MISSING,
-            _sg.CAUSE_ANCHOR_INVALID, _sg.CAUSE_ANCHOR_UNRESOLVABLE, _sg.CAUSE_READ_FAILED]
+            _sg.CAUSE_ANCHOR_INVALID, _sg.CAUSE_READ_FAILED]
     reasons = {c: _sg._indeterminate_reason(_sg.GateIndeterminate("x", c)) for c in cats}
     assert len(set(reasons.values())) == len(cats), "存在两类原因给出同一句诊断"
     # 各自点名了各自的补救动作（不是同一句话换个词）
     assert "安装 git" in reasons[_sg.CAUSE_GIT_UNAVAILABLE]
     assert "文件系统" in reasons[_sg.CAUSE_GIT_TIMEOUT]
-    assert "重跑对应评审补锚" in reasons[_sg.CAUSE_ANCHOR_MISSING]
-    assert "40 位小写 hex" in reasons[_sg.CAUSE_ANCHOR_INVALID]
-    assert "force-push" in reasons[_sg.CAUSE_ANCHOR_UNRESOLVABLE]
+    assert "重跑写锚脚本" in reasons[_sg.CAUSE_ANCHOR_MISSING]
+    assert "64 位小写 hex" in reasons[_sg.CAUSE_ANCHOR_INVALID]
     assert "仓完整性" in reasons[_sg.CAUSE_READ_FAILED]
+
+
+def test_anchor_unresolvable_cause_is_retired():
+    """〔sweep-pool-debt D3/D4〕锚已改为内容 digest，不再需要"对象存在/是 commit"的语义
+    级解析 ⇒ `CAUSE_ANCHOR_UNRESOLVABLE` 整个分类随之退役、物理删除。"""
+    assert not hasattr(_sg, "CAUSE_ANCHOR_UNRESOLVABLE")
 
 
 def test_timeout_advice_interpolates_the_constant():

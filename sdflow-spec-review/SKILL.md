@@ -398,45 +398,49 @@ Step3 barrier 处 collect。
   拍板批准的是 C2、锚也写 C2（拍板批准的就是它），但报告里的 findings 只针对 C1 ⇒ **拍板前若四件套相对镜子审过的提交有实质改动，
   MUST 先跑一次窄复核（只审增量）再拍板**。gate 看不出「这次改动有没有被审过」，此纪律在流程层兜、不由 gate 管。
   （落盘时序另见下方拍板回写协议的 ADR-7(b)：窄复核通过后、二次修订 MUST 先单独 checkpoint 提交再回写锚。）
-**拍板回写协议（ship-gate 锚，D2，mlh-p5 迁 frontmatter）**：设计门拍板**发生后**，主 session MUST 立即把 `ship-gate.design_approved`
-写入 `spec-review-report.md`**的报告头部 frontmatter**（文件首块，非文件末尾、非正文）——写入者=主 session、触发点=用户批准动作；
-这是 `/sdflow-ship` pre-flight 的唯一机判依据（**写入报告时 `ship-gate:` 顶格列 0，忽略本处 markdown 列表缩进**——下方 yaml
-代码块已置于无缩进独立段落，照抄其文本即可，不要复刻本节说明文字的排版缩进）：
+**拍板回写协议（ship-gate 内容锚，〔sweep-pool-debt D3/D4〕取代 harden-gate-git-layer ADR-1 的
+commit-sha 把手 + 手写 frontmatter）**：设计门拍板**发生后**，主 session MUST 立即调用权威写锚脚本
+`sdflow-ship/scripts/anchor_writeback.py`，在**同一次调用**中把 `ship-gate.design_approved` 与内容锚
+（`reviewed_sha` + `reviewed_manifest`）一并写入 `spec-review-report.md` 的报告头部 frontmatter
+（文件首块，非文件末尾、非正文）——写入者=主 session、触发点=用户批准动作；这是
+`/sdflow-ship` pre-flight 的唯一机判依据：
 
-```yaml
----
-ship-gate:
-  design_approved: true
-  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
----
+```bash
+python3 sdflow-ship/scripts/anchor_writeback.py \
+  --change <change-name> --report spec-review-report.md --domain design \
+  --set design_approved=true
 ```
 
-**`reviewed_sha` = 被批准的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD`
-的完整 40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。
-语义是「**拍板批准的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「批准之后四件套有没有被改」。
-写之前 MUST 核对 `git log -1`，确认所选 commit **已包含**最终批准的四件套内容。
-**两个字段 MUST 在同一次文件写入中落盘**（不可拆成两次 Edit）：拆开且中断落在中间，
-盘面会变成「`design_approved: true` 在、`reviewed_sha` 缺」——gate 判 UNKNOWN(6)，可恢复但无指引。
+**MUST NOT 手写/手抄 `reviewed_sha`**（该字段已从「`git rev-parse HEAD` 的 40 位 commit OID」
+改为「监视域（`proposal.md`/`design.md`/`specs/`）内容 manifest 的 sha256，64 位 hex」，与
+同批写入的 `reviewed_manifest`（manifest 的 base64 编码）密码学互锁）——脚本原子计算并写入这两
+个字段，**LLM MUST NOT 手写锚值**（design.md「锚值 MUST 由脚本计算，MUST NOT 手写」）。语义
+仍是「**拍板批准的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「批准之后监视集内容
+有没有被改」。脚本从当前 HEAD（committed 盘面）计算指纹，**写之前 MUST 确认 HEAD 已包含
+最终批准的四件套内容**（脚本对未提交改动会 fail-loud 拒写，见下方脏树守卫）。
 
-🔴 **拍板前二次修订 MUST 先单独落盘，再回写锚〔harden-gate-git-layer ADR-7(b)，1.7b〕**：
-人读报告后要求再改四件套（该场景真实存在），那些改动**尚未落盘** ⇒ 若直接回写锚，`git rev-parse HEAD`
-取到的是修订**之前**的 HEAD，而修订与 frontmatter 会被下一次 checkpoint 打包进**同一提交**
-⇒ 锚指向不含该修订的更早提交 ⇒ **拍板刚完成、第一次跑 gate 就判 design 失鲜、当场 `REFUSE_START` 自锁**。
-∴ 拍板前若四件套相对镜子审过的提交有**实质**改动，MUST 先把该改动**单独 checkpoint 提交**、
-取得其 sha（`~/.sdflow/hack/checkpoint-commit.sh spec-review-amendment "拍板前二次修订"` → `git rev-parse HEAD`），
-**再**执行拍板回写把该 sha 写进 `reviewed_sha`。**MUST NOT** 让二次修订与 frontmatter 回写落进同一次提交。
-（正常路径——拍板前无二次修订——下锚天然自洽，无须此步；`design_approved` 锚的监视集不含 `spec-review-report.md`
-自己，故写报告那次提交不动监视集，但**这只覆盖正常路径，不覆盖二次修订未单独落盘这条路径**。）
+🔴 **拍板前二次修订 MUST 先单独落盘，再回写锚〔harden-gate-git-layer ADR-7(b)，1.7b；
+脏树守卫已把此纪律机械化，见 sweep-pool-debt D3〕**：人读报告后要求再改四件套（该场景真实存在），
+若这些改动尚未提交，脚本会因**监视集路径存在未提交改动**（`git status --porcelain`）而 fail-loud
+拒写——不再是"若直接回写锚会悄悄锚到错误盘面"的书面纪律，而是脚本层的机械拦截。正确顺序：
+先把该改动**单独 checkpoint 提交**（`~/.sdflow/hack/checkpoint-commit.sh spec-review-amendment
+"拍板前二次修订"`），**再**执行拍板回写（脚本从提交后的 HEAD 计算内容指纹，天然含该修订）。
+**MUST NOT** 用 `--allow-dirty` 绕过此拒写去规避「先提交」这步——该逃生口仅供显式越权场景
+（如紧急人工重锚且确认脏树内容与被批准盘面无关），本正常路径不适用。
+（正常路径——拍板前无二次修订——下锚天然自洽，无须此步；`design_approved` 锚的监视集不含
+`spec-review-report.md` 自己，故写报告那次提交不动监视集。）
 
-写入规则：若 `spec-review-report.md` 已有首块 frontmatter（首行即 `---`），MUST 将 `ship-gate:` 键合并进该已有块（不新开第二块、
-不破坏已有其他键）；若尚无 frontmatter，MUST 在文件最顶端新建此块（**prepend**，MUST NOT 追加到文件末尾）。
-**正文人读拍板记录行保留不删**：决策登记区/拍板记录区仍写一行人读结论（如"设计门已拍板批准，日期 XXXX-XX-XX"）——
-frontmatter 是机判锚，人读行仍留在正文供人阅读、不因迁移而消失。
+脚本自动处理 frontmatter 合并：若 `spec-review-report.md` 已有首块 frontmatter，脚本将
+`ship-gate:` 键合并进该已有块（保留其它既有字段，不新开第二块）；若尚无 frontmatter，脚本在
+文件最顶端新建此块（**prepend**）。**正文人读拍板记录行保留不删**：决策登记区/拍板记录区仍写
+一行人读结论（如"设计门已拍板批准，日期 XXXX-XX-XX"）——frontmatter 是机判锚，人读行仍留在
+正文供人阅读。
 
-**gate exit 3（REFUSE_START）时若拍板已发生，人工补锚指引〔1.8〕**：补此 frontmatter 块 = 显式越权留痕（人机同权）。
-**须补的是两个字段**——`design_approved: true` **与** `reviewed_sha: <40 位 OID>`，二者同一次写入落盘（缺任一即 UNKNOWN(6)）。
-「该填哪个 commit」的判据 = ADR-1 语义句：**锚记的是「被批准的盘面」，不是「写报告的时刻」**——拍板放行的是哪个提交，
-锚就填哪个；填之前 MUST `git log -1 <候选 sha>` 确认它**已包含**最终批准的四件套内容。
+**gate exit 3（REFUSE_START）时若拍板已发生，人工补锚指引〔1.8〕**：重跑上方同一条
+`anchor_writeback.py` 命令即可补锚（人机同权，git 提交历史留痕可审计）——**MUST NOT** 手写
+frontmatter 块。锚计算的判据仍是 ADR-1 语义句的精神：**锚记的是「被批准的盘面」，不是「写报告
+的时刻」**——补锚前 MUST 确认当前 HEAD **已包含**最终批准的四件套内容（若不含，先补提交再跑
+脚本）。
 
 **〔SR-M〕lens-metric 锚随拍板最终化（best-effort，无机械兜底，仍在正文、不迁移）〔impl-review-fix CF-8〕**：spec-review 的
 `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，

@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import commit_all, mkchange, write_report
+from conftest import commit_all, mkchange, write_report, head_sha, fingerprint
 from test_gate_preflight import run_gate
 from test_gate_impl_progress import approved_change, PLAN2_TICKETS
 
@@ -85,8 +85,8 @@ def _approved_change_with_new_name(repo, plan):
     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     (d / "tickets.md").write_text(plan, encoding="utf-8")
     commit_all(repo, "seed change artifacts (new plan name)")
-    from conftest import head_sha
-    write_report(d, "spec-review-report.md", head_sha(repo),
+    sha, manifest = fingerprint(repo, head_sha(repo), "design")
+    write_report(d, "spec-review-report.md", sha, manifest,
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (approved)")
     return d
@@ -211,8 +211,8 @@ def test_mode1_lookalike_plan_in_another_change_is_not_flagged(repo):
     (d / "tickets.md").write_text(PLAN_TICKETS_RICH, encoding="utf-8")
     (other / "tickets.md").unlink()          # 同一 commit：A 的 plan 消失、B 的 plan 出现
     commit_all(repo, "change A 收尾、change B 开工（同一提交）")
-    from conftest import head_sha
-    write_report(d, "spec-review-report.md", head_sha(repo),
+    sha, manifest = fingerprint(repo, head_sha(repo), "design")
+    write_report(d, "spec-review-report.md", sha, manifest,
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (approved)")
 

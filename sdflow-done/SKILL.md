@@ -233,30 +233,36 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
    → 判**核心缺口**。
 5. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
 6. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
-   - **报告头部 frontmatter（ship-gate 契约，mlh-p5 迁 frontmatter，模板写死二选一，勿改写字段名、勿两键并存）**：
-     MUST 在文件**最顶端**（prepend，非追加末尾）写下方模板之一（**`ship-gate:` 与首尾 `---` 须顶格列 0——下方模板已按
-     实际应写入报告的列对齐单独排版，忽略本段说明文字自身的列表缩进，勿把说明文字的缩进也复制进报告**）：
+   - **报告头部 frontmatter（ship-gate 契约，模板写死二选一，勿改写字段名、勿两键并存）**：
+     MUST 在文件**最顶端**（prepend，非追加末尾）写正文（无 frontmatter），随后**调用权威写锚脚本**
+     一次性同批写入 `verify` 结论字段与内容锚（`reviewed_sha` + `reviewed_manifest`）——
+     **MUST NOT 手写/手抄锚值**：
 
+```bash
+python3 sdflow-ship/scripts/anchor_writeback.py \
+  --change <change-name> --report verify-report.md --domain code \
+  --set verify=PASS    # 或 --set verify=FAIL
+```
+
+     写入后的形态（供核对，**MUST NOT** 照抄该 40 位样例值手填——脚本算出的是 64 位内容 digest）：
+
+```yaml
 ---
 ship-gate:
   verify: PASS
-  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
+  reviewed_sha: <脚本算出的 64 位内容 digest>
+  reviewed_manifest: <脚本算出的单行 base64>
 ---
-
-     或
-
----
-ship-gate:
-  verify: FAIL
-  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
----
+```
 
      ——`verify` 字段二选一（`PASS`/`FAIL`，大写、非布尔），/sdflow-ship 读此 frontmatter 机判。
-     **`reviewed_sha` = 被验证的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD`
-     的完整 40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。
+     **内容锚〔sweep-pool-debt D3/D4，取代 harden-gate-git-layer ADR-1 的 commit-sha 把手〕**：
+     `reviewed_sha` = 仓库顶层条目（排除 `openspec`）manifest 的 sha256（64 位 hex），
+     `reviewed_manifest` = 该 manifest 的 base64 编码，二者由脚本从当前 HEAD 权威计算、密码学互锁。
      语义是「**verify 结论覆盖的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「验证之后
-     源码有没有被改」。MUST 与 `verify` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
-     若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。
+     源码有没有被改」。脚本对未提交的（非 `openspec`）改动会 fail-loud 拒写，确保锚不会绑到
+     含未提交修订的盘面。
+     若文件已有首块 frontmatter，脚本会自动合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。
    - 标题 + 日期 + change 名
    - **结论**：PASS / FAIL（人读结论行，紧跟标题下方，供人阅读；frontmatter 已是机判锚，此行不可省略）
    - **逐需求核对表**：| 需求/任务 | 代码出处(文件:行/迁移/测试) | 状态(✅实现/⚠️Minor缺口/❌核心缺失) |
@@ -277,7 +283,7 @@ verify 子代理是指令驱动——漏写 frontmatter 无法事前阻止，但
 主 session 在 verify 子代理返回后、进入第二步前，MUST 执行以下检查：
 
 1. Read `openspec/changes/{change_name}/verify-report.md`
-2. 检查文件开头是否有合法的 ship-gate frontmatter（`---` 包裹的 YAML 块、含 `ship-gate.verify` 键且值 ∈ {PASS,FAIL}、含 `ship-gate.reviewed_sha` 键且值为 40 位十六进制）
+2. 检查文件开头是否有合法的 ship-gate frontmatter（`---` 包裹的 YAML 块、含 `ship-gate.verify` 键且值 ∈ {PASS,FAIL}、含 `ship-gate.reviewed_sha` 键且值为 64 位十六进制、含 `ship-gate.reviewed_manifest` 键且为单行 base64——〔sweep-pool-debt D3/D4〕内容锚取代旧 40 位 commit-OID 把手，两字段须同批由 `anchor_writeback.py` 写入）
 3. **缺文件 / 无 frontmatter / 字段缺失或非法 → 硬停**：报「verify-report.md 缺 ship-gate frontmatter，verify 子代理漏写——请重跑第一步」，MUST NOT 继续第二步
 4. frontmatter 的 `verify` 值与子代理的 PASS/FAIL 末行输出不一致 → 同样硬停并报不一致
 
