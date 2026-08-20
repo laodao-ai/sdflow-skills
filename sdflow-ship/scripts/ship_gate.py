@@ -1580,6 +1580,29 @@ def _plan_task_r_ids(text):
     return result
 
 
+def _plan_task_titles_and_bodies(text):
+    """按 `### Task N:` 分段提取每段标题（冒号后原文）与段内非 fenced 正文（fence-aware，
+    口径同 `_plan_task_r_ids`：同一份 FenceTracker + TASK_TITLE_RE）。返回
+    {task_num_str: (title, body_text)}。仅供 `plan_closing_ticket_check` 校验收尾票格式用；
+    正文只收 fence 外的行——fenced 块里引用的「聚合」字样不得让格式校验假通过。"""
+    titles = {}
+    bodies = {}
+    cur = None
+    fence = FenceTracker()
+    for line in text.splitlines():
+        if fence.feed(line) or fence.inside:
+            continue
+        tm = TASK_TITLE_RE.match(line)
+        if tm:
+            cur = tm.group(1)
+            titles[cur] = line[tm.end():]
+            bodies[cur] = []
+            continue
+        if cur is not None:
+            bodies[cur].append(line)
+    return {tid: (titles[tid], "\n".join(bodies[tid])) for tid in titles}
+
+
 def _load_parse_blocked_by():
     """惰性 sibling-import `sdflow-implement/scripts/impl_route.py::parse_blocked_by`
     （镜像该文件反向 import 本模块 `FenceTracker` 的手法，见其头注 [impl-review-fix F4]）。
@@ -1622,6 +1645,20 @@ def plan_closing_ticket_check(plan):
             "plan 含多张声明 R-ID: all 的 ticket（Task "
             + ", ".join(sorted(closing, key=int)) + "），收尾票须唯一")
     closing_id = closing[0]
+
+    # [T289] 收尾票格式约束——spec impl-orchestration 已 MUST：收尾 ticket 为「实现验证」票、
+    # 验收标准为运行本 change 聚合测试套件；此前只验 R-ID: all + Blocked-by 覆盖，
+    # 任意普通功能票伪标 R-ID: all 即可冒充收尾票绕过聚合回归。
+    title, body = _plan_task_titles_and_bodies(text).get(closing_id, ("", ""))
+    if "实现验证" not in title:
+        return False, (
+            f"声明 R-ID: all 的 Task {closing_id} 标题（{title.strip() or '空'}）不含「实现验证」"
+            "——收尾票须为「实现验证」票，普通功能票 MUST NOT 标 R-ID: all"
+            "（见 design「收尾票的定位」节）")
+    if "聚合" not in body:
+        return False, (
+            f"收尾 ticket（Task {closing_id}）验收标准未提及聚合测试套件——"
+            "其验收 SHALL 为运行本 change 聚合测试套件（单元+集成+e2e）并全部通过")
 
     try:
         parse_blocked_by, TopoError = _load_parse_blocked_by()

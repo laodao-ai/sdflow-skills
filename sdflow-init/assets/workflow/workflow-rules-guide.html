@@ -308,7 +308,6 @@ sdflow-init/assets/workflow/
       <div class="rule-card-header">
         <span class="rule-card-name">workflow.md</span>
         <span class="pill pill-rule">规则</span>
-        <span class="rule-card-meta">148 行</span>
       </div>
       <p><strong>端到端流程总览</strong>——唯一线性路径的单一源。串联三阶段（生成 → 设计审 → 实现/代码审/闭环）的每一步，指向对应规则文件，自身不重复细则。</p>
       <div class="key-content">
@@ -321,7 +320,6 @@ sdflow-init/assets/workflow/
       <div class="rule-card-header">
         <span class="rule-card-name">trigger-catalog.md</span>
         <span class="pill pill-rule">规则</span>
-        <span class="rule-card-meta">135 行</span>
         <span class="domain-tag">领域枢纽</span>
       </div>
       <p><strong>触发词单一权威源</strong>——每个 TG-NN 编号同时驱动五层：D 约束注入、领域清单选用、画图要求、模版必填槽、评审 cross-model。是唯一连接「领域无关规则」与「领域特定清单」的枢纽。</p>
@@ -335,7 +333,6 @@ sdflow-init/assets/workflow/
       <div class="rule-card-header">
         <span class="rule-card-name">generation-process.md</span>
         <span class="pill pill-rule">规则</span>
-        <span class="rule-card-meta">109 行</span>
       </div>
       <p><strong>生成过程规则</strong>——Prevention 三杠杆（结构/约束/过程）中唯一无法固化进 config 的部分。规定 <code>/sdflow-spec</code> 的三相位（澄清 → 拷问 → 生成）、decision-memo 单一源机制、四件套全量生成策略。</p>
       <div class="key-content">
@@ -347,7 +344,6 @@ sdflow-init/assets/workflow/
       <div class="rule-card-header">
         <span class="rule-card-name">ff-generation-constraints.md</span>
         <span class="pill pill-rule">规则</span>
-        <span class="rule-card-meta">198 行</span>
       </div>
       <p><strong>FF-0 前置动作 + D 约束 + 切片建议</strong>——FF-0 三分支判定（保护分支→建 / 本 change→跳过 / 其它 feature→halt 问人）是每次生成的起手式。D-1~D-6 是注入四件套的生成硬约束（如 D-2 DB 迁移须带 v_old/v_new 对照表）；「切片建议」是 design.md 决策区的初步 ticket 划分规范。</p>
       <div class="key-content">
@@ -359,7 +355,6 @@ sdflow-init/assets/workflow/
       <div class="rule-card-header">
         <span class="rule-card-name">design-diagrams.md</span>
         <span class="pill pill-rule">规则</span>
-        <span class="rule-card-meta">120 行</span>
       </div>
       <p><strong>设计期画图规则</strong>——将评审期的「缺图」发现前移到设计期。规定四类图（结构图/行为图/数据流/部署图）的适用条件、形态（ASCII 优先、Mermaid 可选），由 TG 决定该画哪些。</p>
       <div class="key-content">
@@ -371,7 +366,6 @@ sdflow-init/assets/workflow/
       <div class="rule-card-header">
         <span class="rule-card-name">spec-review.md</span>
         <span class="pill pill-rule">规则</span>
-        <span class="rule-card-meta">115 行</span>
       </div>
       <p><strong>评审残差规则</strong>——只审 Prevention（config 固化的结构/约束）焊不住的残差：① Validation（语义判断）② 对抗（证明它会炸）③ 接地（读真实代码核对事实）。不重复检查机械层已防住的东西。</p>
       <div class="key-content">
@@ -383,7 +377,6 @@ sdflow-init/assets/workflow/
       <div class="rule-card-header">
         <span class="rule-card-name">model-tiers.md</span>
         <span class="pill pill-rule">规则</span>
-        <span class="rule-card-meta">50 行</span>
       </div>
       <p><strong>模型档位映射</strong>——strong / mid / light 三档在 Claude 与 Codex 两个机队的缺省模型 + effort 档（Claude 专属正交维度）。编排 SKILL 引用此文件的变量（<code>$SDFLOW_TIER_STRONG</code> 等），不内联模型名。</p>
       <div class="key-content">
@@ -458,7 +451,6 @@ sdflow-init/assets/workflow/
     <div class="rule-card-header">
       <span class="rule-card-name">config.template.yaml</span>
       <span class="pill pill-cfg">配置</span>
-      <span class="rule-card-meta">121 行</span>
     </div>
     <p><code>sdflow-init</code> 用此模版为新项目生成 <code>openspec/config.yaml</code>。分两段：</p>
     <p><strong>通用段</strong>（照搬）：规则集指引、生成软约束（rules），全项目统一。</p>

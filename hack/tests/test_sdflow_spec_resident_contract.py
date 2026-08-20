@@ -86,6 +86,17 @@ REFERENCE_ROUTES = {
             "T132 保持 OPEN",
         ),
     },
+    "scope-cohesion": {
+        "path": "references/scope-cohesion-check.md",
+        "condition": "B.7 item 3 做 scope 内聚检查时读取",
+        "tokens": (
+            "# scope 内聚检查",
+            "change-decomposition-standard.md",
+            "一个完整内聚的阶段结果",
+            "拆分/合并建议",
+            "MUST NOT 基于未拍板的新范围推进",
+        ),
+    },
 }
 
 
@@ -146,7 +157,7 @@ def _assert_reference_routes(entry: str) -> None:
             assert token in content, f"{category} reference 缺语义锚：{token}"
 
 
-def test_three_on_demand_references_have_conditions_paths_and_content():
+def test_on_demand_references_have_conditions_paths_and_content():
     _assert_reference_routes(_text())
 
 

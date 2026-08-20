@@ -39,7 +39,7 @@ import ship_gate as _sg  # noqa: E402
 PLAN_WITH_CLOSER = (
     "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
     "### Task 2: B\n**Blocked-by:** 1\n- [ ] s\n"
-    "### Task 3: 实现验证\n**Blocked-by:** 1,2\n**R-ID:** all\n- [ ] s\n"
+    "### Task 3: 实现验证\n**Blocked-by:** 1,2\n**R-ID:** all\n- [ ] 聚合测试套件全部通过\n"
 )
 
 PLAN_MISSING_CLOSER = (
@@ -51,7 +51,7 @@ PLAN_CLOSER_MISSING_DEP = (
     "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
     "### Task 2: B\n**Blocked-by:** 1\n- [ ] s\n"
     # 收尾票 Blocked-by 漏了功能票 2
-    "### Task 3: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] s\n"
+    "### Task 3: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] 聚合测试套件全部通过\n"
 )
 
 PLAN_DUPLICATE_CLOSER = (
@@ -153,3 +153,46 @@ def test_plan_closing_ticket_check_rejects_new_name_missing_closer(tmp_path):
     plan.write_text(PLAN_MISSING_CLOSER, encoding="utf-8")
     ok, note = _sg.plan_closing_ticket_check(plan)
     assert ok is False and "收尾" in note
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# [T289] 收尾票格式约束：伪装票（普通票伪标 R-ID: all）与半成品收尾票必红
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_functional_ticket_faking_r_id_all_is_rejected(tmp_path):
+    # 普通功能票（标题非「实现验证」）伪标 R-ID: all —— 旧门只看 R-ID+Blocked-by 会放行，
+    # 聚合回归被静默绕过。
+    d = mkchange(tmp_path)
+    plan = d / "tickets.md"
+    plan.write_text(
+        "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
+        "### Task 2: 普通功能票\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] 聚合测试套件\n",
+        encoding="utf-8")
+    ok, note = _sg.plan_closing_ticket_check(plan)
+    assert ok is False and "实现验证" in note
+
+
+def test_closing_ticket_without_aggregate_acceptance_is_rejected(tmp_path):
+    # 标题对但验收标准不含聚合测试套件（半成品收尾票）—— spec 已 MUST
+    # 「验收标准 SHALL 为运行聚合测试套件并全部通过」。
+    d = mkchange(tmp_path)
+    plan = d / "tickets.md"
+    plan.write_text(
+        "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
+        "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] 随便跑点什么\n",
+        encoding="utf-8")
+    ok, note = _sg.plan_closing_ticket_check(plan)
+    assert ok is False and "聚合" in note
+
+
+def test_fenced_aggregate_mention_does_not_satisfy_format(tmp_path):
+    # fenced 块里引用的「聚合」字样不得让格式校验假通过（口径同 gate 其余判据的 fence-aware）。
+    d = mkchange(tmp_path)
+    plan = d / "tickets.md"
+    plan.write_text(
+        "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
+        "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n"
+        "```\n- [ ] 聚合测试套件（这是模板示例）\n```\n- [ ] 真验收项\n",
+        encoding="utf-8")
+    ok, note = _sg.plan_closing_ticket_check(plan)
+    assert ok is False and "聚合" in note
