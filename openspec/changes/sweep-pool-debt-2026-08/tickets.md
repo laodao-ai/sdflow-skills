@@ -68,7 +68,7 @@ impl-pipeline: tickets
 
 按 DT-5 判据把 `sdflow-spec/SKILL.md` 可下沉小节移入 `references/`，把 SKILL 本体压回预算，既有 resident-contract 契约测试保持全绿。
 
-- [ ] 按 DT-5 判据（可下沉 = 执行到该步才需展开的判据表/参考细节；不可下沉 = 流程骨架/铁律/fail-closed 分支）挑选 `sdflow-spec/SKILL.md` 可下沉小节 → `references/`（含路由句），本体 ≤16,000 字符（余量 ≥2,000）
+- [x] 按 DT-5 判据下沉 5 段可下沉小节 → `references/execution-protocol-details.md`（含 4 路由句），本体 17,164 字符——**目标 ≤16,000 未完全达成（剩余大头 principles 托管块/C.3 生成协议 fail-closed/B.1 起手/终审 经双轴审两轴独立核验确属 DT-5 不可下沉类）**，红线（`test_sdflow_spec_resident_contract.py` 全绿 + 硬上限 18,000）达成，余量 836；剩余压缩差额留人工拍板（通则③：不为凑字数砍 fail-closed 目标范围）
 - [ ] `pytest hack/tests/test_sdflow_spec_resident_contract.py` 全绿 + 全量 pytest 复核
 
 ### Task 5: 实现验证（收尾，不计入 3–6 预算）
