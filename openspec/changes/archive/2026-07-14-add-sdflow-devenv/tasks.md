@@ -75,11 +75,11 @@
 - [x] **验 A-8**：「模型能不能为三层提出**像样的**验证方法」——**这个前提至今零实证**
 - [x] **验核心承诺**：产出的 `testing-strategy.md` 是否**每层交代清楚、一层不留白**
 - [x] **验 ⑥ 槽**：「这层看不见什么」写出来的是**套话**，还是**这个项目特有的那句**
-- [ ] 试点结论回灌 `references/`（未覆盖的形态 → 补格；证伪的方法 → 记入 `verification-patterns.md`）
-  > ⏳ **未做** —— mqtt-console 试点结论已写进 `docs/sad/07` 附录 C，但未回灌 `references/`。
+- [x] 试点结论回灌 `references/`（未覆盖的形态 → 补格；证伪的方法 → 记入 `verification-patterns.md`）
+  > 回填 2026-08-20：核验 commit `fb165c3 checkpoint(add-sdflow-devenv:task7-pilot)` 已把 mqtt-console 试点结论回灌 `sdflow-devenv/references/verification-patterns.md`（含「残留 session 泄漏探针」「MQTT 3.1.1 CONNACK 规定」等真实证伪案例）与 `testing-framework.md`，此前的「未做」注记已过期。
 
 ## 8. 收尾
 
-- [ ] `/sdflow-code-review`（远程 PR）
-  > ⏭ **按用户明示跳过** —— 直接走 `/sdflow-done`（verify 仍为唯一终门）。
+`/sdflow-code-review`（远程 PR）（已作废，非勾选项）
+  > ⏭ **按用户明示跳过** —— 直接走 `/sdflow-done`（verify 仍为唯一终门）。（回填 2026-08-20：确未执行，改写为无复选框说明段，非过门假勾）
 - [x] `/sdflow-done` —— verify → archive → commit → merge

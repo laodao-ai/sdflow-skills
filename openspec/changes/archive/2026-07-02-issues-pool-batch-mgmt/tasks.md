@@ -41,7 +41,7 @@
 ## 6. 收尾同步
 
 - [x] 6.1 本仓 `openspec/INDEX.md` 若有规则/计数变更则同步（CLAUDE.md 硬性要求）
-- [ ] 6.2 spec delta 2 条 Requirement 归档时并入 `openspec/specs/spec-workflow/`（opsx-done archive 步做）
+- [x] 6.2 spec delta 2 条 Requirement 归档时并入 `openspec/specs/spec-workflow/`（opsx-done archive 步做）（回填 2026-08-20：核验 `openspec/specs/spec-workflow/spec.md` 现含「债务池统一为 issues 结构且 INDEX 只生成」「批次注册表与 reindex 被动同步状态」两条 Requirement，已并入）
 
 ## 7. Q1–Q3 裁决落地〔spec-review-amendment · provisional，待设计门确认〕
 

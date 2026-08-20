@@ -43,8 +43,8 @@ Codex dispatch codepath
 
 ## 6. Real Efficacy and Closure
 
-- [ ] 6.1 **[grill-amendment]** 在安装新 canonical tools 后，以 Codex 宿主对 `zhws_ops_api` 跑至少一轮 `opus` + `high` 的真实 spec-review/code-review；实际 dispatch 的全部站点必须取得 `host="codex" runner="claude" reason_code="ok"`。**[spec-review-amendment]** 报告必须落不含 context/stderr 的结构化 efficacy 证据（runner/model/effort、dispatch/start/terminal/collect 时刻、自然 duration、stdout digest），并由确定性检查器判定。〔OVBG-01, OVBG-03, HAE-08, HAE-09〕
-- [ ] 6.2 **[grill-amendment]** 该完整层必须至少含一个 `opus` + `high` 的真实 Claude 推理自然耗时 >300 秒并成功，证明跨过旧天花板；sleep/shim、无模型命令或短调用不得替代。若全部自然短于 300 秒，只能记“功能可用、原失效窗口未复现”，不得关闭 efficacy 缺口。〔OVBG-01, HAE-08〕
+6.1（未达标，非勾选项）**[grill-amendment]** 在安装新 canonical tools 后，以 Codex 宿主对 `zhws_ops_api` 跑至少一轮 `opus` + `high` 的真实 spec-review/code-review；实际 dispatch 的全部站点必须取得 `host="codex" runner="claude" reason_code="ok"`。**[spec-review-amendment]** 报告必须落不含 context/stderr 的结构化 efficacy 证据（runner/model/effort、dispatch/start/terminal/collect 时刻、自然 duration、stdout digest），并由确定性检查器判定。〔OVBG-01, OVBG-03, HAE-08, HAE-09〕（回填 2026-08-20：补证任务 T225 已于 2026-08-04 关闭为 WONTDO——外部条件（Codex ChatGPT 额度）持续未就绪，T162 仍 OPEN，确未达标，非过门假勾——改写为无复选框说明段）
+6.2（未达标，非勾选项）**[grill-amendment]** 该完整层必须至少含一个 `opus` + `high` 的真实 Claude 推理自然耗时 >300 秒并成功，证明跨过旧天花板；sleep/shim、无模型命令或短调用不得替代。若全部自然短于 300 秒，只能记“功能可用、原失效窗口未复现”，不得关闭 efficacy 缺口。〔OVBG-01, HAE-08〕（回填 2026-08-20：同 6.1，T226 同日绑定关闭为 WONTDO，确未达标——改写为无复选框说明段）
 - [x] 6.3 **[grill-amendment]** 仅当 6.1/6.2 同时达标且确定性 evidence checker 通过后关闭 T162，更新相关 design/CONTEXT/hand-off 里的“Codex efficacy=0”陈述；若任一站点未可信 collect/未 `ok`、没有自然 >300 秒成功证据或证据字段不可机读，则保留 T162 并如实记录，不得以编排 smoke 假绿。**[spec-review-amendment]**〔HAE-08, HAE-09〕
 - [x] 6.4 运行 `openspec validate enable-codex-background-outside-voice --strict` 与 repo 规定的最终检查，确认 source change 只包含本 change 授权范围，且下游 `zhws_ops_api` 没有被直接手改 canonical workflow 规则。〔OVBG-01, OVBG-04, HAE-09〕
 

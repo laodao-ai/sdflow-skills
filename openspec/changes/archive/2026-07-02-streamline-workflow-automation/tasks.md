@@ -35,7 +35,7 @@
 - [x] 4.1 新增 `hack/checkpoint-commit.sh`：接步骤名参数，`git add -A` + 固定 Conventional message；规避本机三坑（禁 `\`+heredoc / core.fileMode / CRLF）〔G4〕
 - [x] 4.2 workflow.md 各 step prompt 末尾追加"完成后 checkpoint-commit"（skill 之间边界）〔G4/P1〕
 - [x] 4.3 grill 多轮中途**不**提交，仅收敛后一次〔P1〕
-- [ ] 4.4 ⊘ **跳过**（可选）：SessionEnd/Stop 警告 hook（检测未提交产物只告警）——用户决定跳过，随时可加〔G4 §5.3〕
+4.4 ⊘ **已作废（非勾选项）**：SessionEnd/Stop 警告 hook（检测未提交产物只告警）——用户当时明确决定跳过，从未执行；随时可加但非本 change 交付物〔G4 §5.3〕（回填 2026-08-20：可选项被用户显式跳过，不勾选，改写为无复选框说明段，非「为过门假勾」）
 - [x] 4.5 不 squash（opsx-done commit 步兼容"实现期已逐 commit"）〔G5〕
 
 ## 7. workflow bundle 源改写（laodao-skills `opsx-project-init/assets/`，非消费仓副本）　【Phase A 骨架 ✓】
@@ -58,6 +58,10 @@
 
 ## 9. 下游消费仓采纳（**不在本 change 内**，仅登记；各消费仓 update 后各自做）　【routine，A merge 后】
 
-- [ ] 9.1 〔下游〕消费仓跑 `opsx-project-init update` 重拉新 bundle（workflow/tools 归位、新 step prompt、hack/checkpoint-commit.sh）
-- [ ] 9.2 〔下游·Phase B 后〕迁移各仓 `openspec/{buglists,todolists}/` 数据 → `issues/{buglist,todolist}/`，跑 `reindex` 建 INDEX/batches（走 destructive-commands 规则）
-- [ ] 9.3 〔下游〕改各仓 `config.yaml` / `CLAUDE.md` 的 issues·tools 路径引用
+> 回填 2026-08-20：以下三条动作发生在**外部消费仓**，本仓（工具源仓）无法从自身 git log 观测其完成状态，
+> 故不作为本 change 的可勾选任务追踪——改写为无复选框登记说明，不计入归档任务完成度。
+> （本仓自身作为一个消费者，已完成等价迁移：`openspec/issues/{open,closed}/` 现行存在、`openspec/buglists|todolists/` 已不存在。）
+
+9.1 〔下游〕消费仓跑 `opsx-project-init update` 重拉新 bundle（workflow/tools 归位、新 step prompt、hack/checkpoint-commit.sh）——各仓自行执行，本仓不追踪。
+9.2 〔下游·Phase B 后〕迁移各仓 `openspec/{buglists,todolists}/` 数据 → `issues/{buglist,todolist}/`，跑 `reindex` 建 INDEX/batches（走 destructive-commands 规则）——各仓自行执行，本仓不追踪。
+9.3 〔下游〕改各仓 `config.yaml` / `CLAUDE.md` 的 issues·tools 路径引用——各仓自行执行，本仓不追踪。

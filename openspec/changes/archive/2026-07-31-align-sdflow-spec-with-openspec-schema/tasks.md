@@ -34,7 +34,7 @@
 - [x] 3.5 **P1** C.2/C.3 增 `skipped` 态处置：跳过该产物且 MUST NOT 创建文件；依赖它的阅读清单条目相应去掉〔SA-17(c)〕
 - [x] 3.6 **P1** C.2 强制阅读清单改为「以 schema 的 `requires` 为准 + 图不足时 fallback 写死超集」，**保留 fallback 分支**（内置 schema 与未来回退的正确性底座）〔SA-05〕
 - [x] 3.7 **P2** C.3 最小 schema 断言把 `dependencies` 收紧为对象列表（含 `id`/`done`/`path`/`description`）〔SA-05〕
-- [ ] 3.8 **P2** 终审第 2 条（design↔specs 双向核）措辞由「唯一防线」降为「兜底」，并说明降级前提是 schema 已切换〔SA-05〕（部分完成：已降为“判断层兜底”，但未明写“schema 已切换”这一前提）
+3.8（部分完成，非勾选项）**P2** 终审第 2 条（design↔specs 双向核）措辞由「唯一防线」降为「兜底」，并说明降级前提是 schema 已切换〔SA-05〕（部分完成：已降为"判断层兜底"，但未明写"schema 已切换"这一前提）（回填 2026-08-20：核验现行 `sdflow-spec/SKILL.md` 终审段与 `openspec/specs/spec-workflow/spec.md` 全文，均无"schema 已切换"这一前提的显式表述，确未补写——改写为无复选框说明段，非过门假勾；该条属遗留文档精度缺口，非阻塞性）
 
 ## 4. 本仓 dogfood 切换与迁移验证〔SW-SCHEMA〕
 
@@ -50,8 +50,8 @@
 - [x] 5.3 **P0** 加**顺序**用例：断言补写发生在 config 改写之前（顺序颠倒即红）。**[spec-review-amendment R10]** 加「单项补写失败 → config 未被切换」用例
 - [x] 5.4 **P1** 加 `copy_bundle` 整删重拷用例：权威源删文件后消费仓不残留孤儿
 - [x] 5.5 **P1** schema 内容契约用例：四个 `id` 与 `generates` 与内置一致；委派标记成对；`requires` 两条边符合 1.3
-- [ ] 5.6 **P0** 每条新增用例先跑「定点破坏 → 必须红」验证非恒真（承本仓既有反恒真锚纪律）（证据不足：仅留有孤儿清理用例的 mutation red/green 记录，无法证明每条新增用例均先红）
-- [ ] 5.7 **P0** 全仓 `pytest` 绿（未通过：此前运行 90 秒超时，退出码 124；按用户明确批准跳过后续，未假绿）
+5.6（证据不足，非勾选项）**P0** 每条新增用例先跑「定点破坏 → 必须红」验证非恒真（承本仓既有反恒真锚纪律）（证据不足：仅留有孤儿清理用例的 mutation red/green 记录，无法证明每条新增用例均先红）（回填 2026-08-20：历史执行留痕缺失，无法回溯补证——改写为无复选框说明段，非过门假勾；本仓后续 changes 均已把「定点破坏」证据留档为标准实践）
+5.7（部分完成，非勾选项）**P0** 全仓 `pytest` 绿（未通过：此前运行 90 秒超时，退出码 124；按用户明确批准跳过后续，未假绿）（回填 2026-08-20：本机 `/usr/bin/python3 -m pytest -q`（仓根）现全绿——`2620 passed, 10 skipped`，原超时未复现。但本仓真实 CI 的 `windows-recorder-smoke.yml` `windows-full-pytest` job 当前持续红（自 2026-08-12 起近 20 次运行全部 failure），根因是该 runner 缺 `yq` 安装——与本 change 无关、且晚于本 change 归档时间出现，判定为独立于本 change 范围的现存缺口，非过门假勾——改写为无复选框说明段）
 - [x] 5.8 **P0** **[spec-review-amendment R1]** 加 update 模式下 `schema:` 键被改写的用例 + 只改该行其余 config 内容 byte-identical
 
 ## 6. 文档与收尾

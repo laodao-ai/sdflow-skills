@@ -28,9 +28,9 @@
 
 ## 5. 存量迁移（P2）
 
-- [ ] 5.1 wco 包迁移（**前置：包无进行中实施 change + 首个新流程 roadmap 已走通〔SR-15，Q-C 拍板确认〕**）：requirements.md 按**全节清点表**并入 design.md 头部章（**无编号章名不占 `## N.` 序列**〔SR-15/B6〕；grill-amendment Q3：§1.3 愿景/§2 核心需求表/§3 Non-Goals/§5 验收总纲 → 并入；§4 受众 → 一句带过；默认并入、确认已被吸收才弃、弃必记去向）→ 修补包内**前向结构引用**（design.md:62、roadmap.md:69 等，实施时 grep `requirements` 全量复核；task-log 历史 DID 条目保留不回改〔SR-15/E6〕）→ 删 requirements.md → design.md 头部加**考古注记四要素**（旧路径/迁移日期+commit/见 git/「旧 §X→现位置」映射表〔SR-15/XE6/XD10〕）→ **立即跑 `maintain_scan.py`**〔SR-15/B7〕〔R1, R2〕验证：包内 grep 无 requirements.md 活前向引用；**清点表落盘为文件随 commit 提交**（非仅 message）；design 编号序列零位移；归档树不回改（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）
-- [ ] 5.2 mlh 包迁移：同 5.1 全流程（§6 参考文档实施时按内容判并入/弃置；roadmap.md:110、task-log.md:63,98 等前向引用修补）〔R1, R2〕验证：同上（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）
-- [ ] 5.3 两包迁移后总检 `python3 sdflow-maintain/scripts/maintain_scan.py`（每包已各跑一次，此为终态复核；roadmaps/ 前缀本静默排除，防意外）〔R1〕验证：scan 输出零新增（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）
+5.1（受控延后，非勾选项）wco 包迁移（**前置：包无进行中实施 change + 首个新流程 roadmap 已走通〔SR-15，Q-C 拍板确认〕**）：requirements.md 按**全节清点表**并入 design.md 头部章（**无编号章名不占 `## N.` 序列**〔SR-15/B6〕；grill-amendment Q3：§1.3 愿景/§2 核心需求表/§3 Non-Goals/§5 验收总纲 → 并入；§4 受众 → 一句带过；默认并入、确认已被吸收才弃、弃必记去向）→ 修补包内**前向结构引用**（design.md:62、roadmap.md:69 等，实施时 grep `requirements` 全量复核；task-log 历史 DID 条目保留不回改〔SR-15/E6〕）→ 删 requirements.md → design.md 头部加**考古注记四要素**（旧路径/迁移日期+commit/见 git/「旧 §X→现位置」映射表〔SR-15/XE6/XD10〕）→ **立即跑 `maintain_scan.py`**〔SR-15/B7〕〔R1, R2〕验证：包内 grep 无 requirements.md 活前向引用；**清点表落盘为文件随 commit 提交**（非仅 message）；design 编号序列零位移；归档树不回改（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）（回填 2026-08-20：T129 现仍 PROPOSED/open，前置条件仍未满足，确未执行，非过门假勾）
+5.2（受控延后，非勾选项）mlh 包迁移：同 5.1 全流程（§6 参考文档实施时按内容判并入/弃置；roadmap.md:110、task-log.md:63,98 等前向引用修补）〔R1, R2〕验证：同上（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）（回填 2026-08-20：同 5.1，确未执行）
+5.3（受控延后，非勾选项）两包迁移后总检 `python3 sdflow-maintain/scripts/maintain_scan.py`（每包已各跑一次，此为终态复核；roadmaps/ 前缀本静默排除，防意外）〔R1〕验证：scan 输出零新增（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）（回填 2026-08-20：同 5.1，确未执行）
 
 ## 6. 全仓表述同步（P2）
 

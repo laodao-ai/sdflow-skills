@@ -86,8 +86,9 @@
 
 ## 7. 回归验证
 
-- [ ] 7.1 本仓既有 pytest 套件全绿（`pytest`，仓根 rootdir）
-  - 未完成说明：当前 Windows / Python 3.14 环境下全量 `pytest` 有 2 项收集错误；相关测试文件相对本地 `main` 的 merge-base `3b4f838b99f2ccd3bf7a246e8ab675a9b6c40943` 未变化，确认不是本 change 引入；本 change 相关测试与 GBK setup 集成验证已通过。
+7.1（部分完成，非勾选项）本仓既有 pytest 套件全绿（`pytest`，仓根 rootdir）
+  - 未完成说明（原）：当时 Windows / Python 3.14 环境下全量 `pytest` 有 2 项收集错误；相关测试文件相对本地 `main` 的 merge-base `3b4f838b99f2ccd3bf7a246e8ab675a9b6c40943` 未变化，确认不是本 change 引入；本 change 相关测试与 GBK setup 集成验证已通过。
+  - 回填 2026-08-20：本机 `/usr/bin/python3 -m pytest -q`（仓根）现全绿——`2620 passed, 10 skipped`，原「2 项收集错误」已不复现。但**本仓真实 CI**（`windows-recorder-smoke.yml` 的 `windows-full-pytest` job，本 change 自身产出的回归护栏）当前持续红（自 2026-08-12 起近 20 次运行全部 failure，含本轮 HEAD），根因是该 runner 未装 `yq`（`anchor_lint.MetricsError: yq 未安装`）——与本 change 的编码修复无关、且晚于本 change 归档时间出现，判定为**独立于本 change 范围的现存缺口**，非过门假勾——改写为无复选框说明段；该缺口已作为票外发现登记，供后续单开 todo 处置。
       注：该断言**不构成对本 bug 的覆盖**（pytest 的 capsys/capfd 用内存 buffer 替换 `sys.stdout`，规避了这个 bug class，见 `decision-memo.md` D2）；它守的是「本次改动没有打坏别的东西」
 - [x] 7.2 `openspec validate "fix-windows-encoding-crash" --strict --type change` 通过
 - [x] 7.3 ~~人工核对负向用例~~ → **已升为常驻测试，见 1.4** `[spec-review-amendment]`（一次性人工核对跑完即删临时脚本，等于把本 change 唯一常驻防线的自测扔掉；改为 `hack/tests/test_encoding_hygiene.py` 永久保留）

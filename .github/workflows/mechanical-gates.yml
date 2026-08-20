@@ -105,8 +105,9 @@ jobs:
       # 同一信息重复 4 次，而 macOS 泳道按 10 倍计费。选最廉价的 ubuntu-latest × 3.12。
       #
       # **钉死版本**（同第 31 行「MUST NOT 用浮动版本」）：这 6 条用例断言的是
-      # **CLI 1.5.0 的具体行为**（`validate --strict` 只覆盖 delta specs），
-      # 浮动到新版会在发布当天无预警变红且历史 job 不可复现。本机实测基线即 1.5.0。
+      # **CLI 1.9.0 的具体行为**（`validate --strict` 只覆盖 delta specs），
+      # 浮动到新版会在发布当天无预警变红且历史 job 不可复现。本机实测基线即 1.9.0
+      # 〔sweep-pool-debt-2026-08 T294：1.5.0→1.9.0，同一批复核 6 条断言在 1.9.0 下仍绿〕。
       # node 下限来自该包的 `engines: {node: ">=20.19.0"}`（实查 npm 全局包 package.json）。
       - name: Setup Node (openspec CLI 的运行时 — 仅这一条泳道)
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
@@ -116,15 +117,23 @@ jobs:
       - name: Install openspec CLI (让 validate 门真跑起来)
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         run: |
-          npm install -g @fission-ai/openspec@1.5.0
+          npm install -g @fission-ai/openspec@1.9.0
           openspec --version
 
-      # 三道门各自独立跑、各自能红——不合并成一步，否则先失败的那道会掩盖后面的。
+      # 四道门各自独立跑、各自能红——不合并成一步，否则先失败的那道会掩盖后面的。
       - name: Gate — async 调度段两处字节等值（ADR-5）
         run: python hack/check_async_branch_parity.py
 
       - name: Gate — 四条通则托管块与真相源一致
         run: python hack/sync_principles.py --check
+
+      # 归档面校验（sweep-pool-debt-2026-08 T294 · archive-validation）：
+      # `openspec validate --archived` 对全量归档 change 做任务清单结构/完整度校验
+      # （tasks.md 复选框须全勾），本地已收敛至 0 failed；同一条件（仅此泳道装了 CLI）复用，
+      # 防回潮——任一归档 change 引入未勾复选框即当场红。
+      - name: Gate — 归档面校验（openspec validate --archived）
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: openspec validate --archived
 
       - name: Full test suite
         # `-rs` 让 skip 理由**逐条可见**：跨平台泳道上「本地 passed、CI 变 skipped」是

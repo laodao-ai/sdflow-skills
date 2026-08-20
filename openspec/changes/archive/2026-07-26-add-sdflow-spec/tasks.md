@@ -91,9 +91,9 @@
 ## 8. 分发与推广（P0）
 
 - [x] 8.1 全局 `~/.claude/agents/` 分发定案（设计门 Q3 决议）；design D3 已补反驳 `subagent-definitions-plan.md:303-308` 的理由，此处只需核验实际铺设行为与文档一致 〔SA-07〕
-- [ ] 8.2 bundle 下游推广：`sdflow-init update` 把 canonical 七处改动推至消费项目；核验下游 `openspec/workflow/` 已获更新 〔SA-11〕
+- [x] 8.2 bundle 下游推广：`sdflow-init update` 把 canonical 七处改动推至消费项目；核验下游 `openspec/workflow/` 已获更新 〔SA-11〕
   
-  > ⛔ **未执行（有据）**：阶段二 A/B 验收门判**回退**（`impl-reports/task5-ab-comparison.md`），`tasks.md` 把 8.2 明列在「阶段三 · 产品化（阶段二达标才做）」下 ⇒ 票面条件句生效。七处 canonical 只落源仓、**下游消费项目仍读旧的阶段一入口规则**，此残余登记 **T239**（写明何时/由谁/怎么推）。
+  > 回填 2026-08-20：`T239` 已于 2026-08 关闭为 **DONE**（"canonical bundle 已推给下游消费项目（`sdflow-init update` 已跑）；`add-sdflow-spec` 已 merge"），当时登记的残余已补做完成。
 - [x] 8.3 回滚演练：按 design Migration Plan 的正确顺序（① 仍在新版 installer 上删除 `sdflow-spec/agents/` 源目录 + 重跑 setup 触发孤儿清理 → ② 再 revert → ③ 重跑 setup；`setup.sh` 无 uninstall 分支）实跑一次（正反两向对照），核验 `~/.claude/agents/` 无悬空软链残留 〔SA-07〕
 - [x] 8.4 按 3.4 已落定的阈值判定旧入口是否进入 sunset；达标则更新 CLAUDE.md 与 canonical 的推荐措辞 〔SA-14〕
 

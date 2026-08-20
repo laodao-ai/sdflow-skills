@@ -43,9 +43,9 @@
 - [x] 4.2 `workflow-history.md` 追加一条 wayfinder 路径移除记录
 - [x] 4.3 `config.template.yaml`：`:41`/`:51` 两行注入规则引用的「wayfinder→ff 衔接契约」章节在当前 `ff-generation-constraints.md` 中已不存在（既存陈旧引用），随本次一并订正——该文件是消费仓 `config.yaml` 的**生成模版**，改动会随 init 注入每个新下游仓〔spec-review-amendment SR-13〕
 - [x] 4.4 dev checkout 跑 `bash setup.sh`（bundle 改动生效纪律）。**验收动作 = 单独跑 `python3 hack/sync_principles.py --check` 看 exit code**——`setup.sh` 里那一处是 `if ! …; then echo "⚠️…"; fi`，**不是 fail-closed 门**（`set -e` 在 `if` 条件里不生效），警告会淹没在大段输出里〔SR-17 附带〕
-- [ ] 4.5 **hand-off 记录还原步**：合并后须在运行 checkout（`~/.skills/sdflow-skills`）重跑 `setup.sh` 还原（`/sdflow-upgrade`）——CLAUDE.md 的 dev/runtime checkout 纪律明文要求，5 个历史同类 change 的 tasks 均有此步，本 change 原缺〔spec-review-amendment SR-17〕
+- [x] 4.5 **hand-off 记录还原步**：合并后须在运行 checkout（`~/.skills/sdflow-skills`）重跑 `setup.sh` 还原（`/sdflow-upgrade`）——CLAUDE.md 的 dev/runtime checkout 纪律明文要求，5 个历史同类 change 的 tasks 均有此步，本 change 原缺〔spec-review-amendment SR-17〕
 
-      ⏳ **未执行（hand-off）**：本步依赖「push → 运行 checkout pull → setup」链路，本次收尾**不 push**（sdflow-done 不自动 push）⇒ 无法在本轮完成。已在 `hand-off.md` 与 code-review 报告结论区登记为待承接项。
+      回填 2026-08-20：本机现场核验 `readlink ~/.claude/skills/sdflow-ship` → `/Users/cheneyzhao/.skills/sdflow-skills/sdflow-ship`，符合预期（指回运行 checkout）；后续多轮 change 已持续经 `/sdflow-upgrade` 还原，此步已补做完成。
 ## 5. 治理收尾（P2）
 
 - [x] 5.1 新增 ADR：讨论层内化与 matt 套件移除。**权衡要写两条**：① 内化分界线——讨论过程是内在职责、冷审价值恰在外部性 ⇒ 讨论层内化、review 层留外；② **能力承接边界**〔设计门 Q2〕——memo + `## 未决项` 小节承接 wayfinder frontier 的**清单**职能，**不承接** `Blocked-by` 依赖图与 `claimed` 并发语义（单人操作场景不需要），如实写进「当前方案代价」。**matt 移除的论证按订正后的 D2 写**（历史遗留死配置、独立可删、与本 change 无因果，同批做是 fold 判据），**MUST NOT** 沿用「因本次改动才孤立」的旧因果〔SR-1/SR-33〕。**格式**：参照 `openspec/adr/` 现有 36 个文件的命名规则（4 位零填充序号 + kebab-case 标题），取下一个可用编号 `0037-`；无 template 文件，小节结构从现有 ADR 归纳〔SR-37〕
