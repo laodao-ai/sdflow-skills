@@ -2,8 +2,8 @@
 schema_version: 1
 change: sweep-pool-debt-2026-08
 branch: feat/sweep-pool-debt-2026-08
-generated_at: 2026-08-20T17:01:34+08:00
-decision_hash: 2d859634e06a
+generated_at: 2026-08-20T17:30:00+08:00
+decision_hash: d49b7f8b8d15
 ---
 
 # 决策纪要 · sweep-pool-debt-2026-08
@@ -16,11 +16,12 @@ decision_hash: 2d859634e06a
 
 - **D1 四条 todo 四合一，一个 change 四张独立票** — 依据：人 2026-08-20 两次明确拍板（explore 切法呈现后「直接一个 change 做掉」；T292 爆炸半径 22 文件如实报告后「都同意」）；**砍掉的候选**：三 change 切法（T292 独立 + T294 独立 + T287/T290 收尾）——多付两轮流程固定成本，人判不值。scope 内聚检查的「混拼」偏离已呈现，人拍板豁免。
 - **D2 tasks.md 移出 design 失鲜监视集** — 依据：勾框假失鲜已由 `_tasks_content_exempt` 解决（C3），移出后豁免层整层可删（~140 行手搓 CommonMark fence tracker，T189 登记的基准 5 靶子）；实质改动漏检有两层旁路兜底（done 0.3 对账 + code-review Step1 scope 审计）。人 2026-08-20 拍板（Q1）。**砍掉的候选**：保留 tasks.md 于监视集 + 锚存 path→oid 逐条映射——豁免层保留、锚格式复杂化，仅换来对「批准后实质改 tasks.md」的直接检测。
-- **D3 失鲜锚 = 监视集内容指纹（单一 digest）** — 依据：D2 成立后 digest 即充分（无需锚侧字节做勾框豁免）；比较语义不变（C1：现行就是内容比较，只换把手）。**砍掉的候选**：① path→oid 映射锚（D2 已消其必要性）；② 双轨 fallback（commit sha 主 + digest 备）——两套表示、罕用路径测不实。
+- **D3 失鲜锚 = 监视域内容指纹（`reviewed_manifest` 行清单 + `reviewed_sha` digest 互锁）** — 依据：D2 成立后无需锚侧字节做勾框豁免，等值判定走 digest 即充分；manifest 保留是为满足既有 spec 的 REFUSE_START 诊断要求（必须点名文件与提交），与 digest 密码学互证（设计相 C 呈现给人，无异议）。比较语义不变（C1：现行就是内容比较，只换把手）。**砍掉的候选**：① 纯 digest 无 manifest——丢失既有诊断契约；② 双轨 fallback（commit sha 主 + digest 备）——两套表示、罕用路径测不实。
 - **D4 锚值由脚本权威计算写入，LLM 不再手写**（A1 后半，薄版） — 依据：现状锚值由被监管方自报（「有信号≠有可机械捕获路径」）；产出方 SKILL 因锚格式变更本就要编辑，边际成本小。人 2026-08-20 拍板（Q2）。**诚实边界：调用时机仍是 LLM 自报，脚本只堵值错/伪造，不堵时机错。** **砍掉的候选**：另立 todo 后做——同一批文件将来再改一遍。
 - **D5 T294 桶C 改写为作废说明段（prose，无勾选框）** — 依据：补勾即伪造完成（todo 明禁）；CI 排除清单是永久疣；无勾选框可过 validate 已沙盒实测（C4）。动归档历史文件已向人报备，人 2026-08-20 拍板（Q3）。桶A/桶B 按 done 0.3 既有语义对照 git log 回填（C5，非新语义）。
 - **D6 T290 接线 = code-review Step1 输入清单加 `impl-reports/planning-decisions.md` 切片偏离行，做偏离-diff 对账** — 依据：出票期对抗镜只覆盖已申报偏离，Step1 对账才能抓静默偏离（spec 的 MUST NOT 静默偏离现无执行方，C8）；**砍掉的候选**：挑明定位为存档——留一条无人执行的 MUST NOT。
 - **D7 T287 = 下沉 references/，18,000 门不动** — 依据：门是 T242 常驻上下文瘦身契约，调门废其目的；下沉模式已有 6 个先例文件（C7）。下沉哪些小节属实现细节，design 定。
+- **D9 设计域 subject 豁免通道从 gate 端退役，改为 producer 端重锚协议** — 依据：豁免通道（`checkpoint(impl-review)` 精确 subject，spec B2/BR-7）依赖「锚后提交范围」概念，纯内容指纹锚下该概念消失；改为 impl-review 修订提交后重跑写锚脚本刷新锚（不改结论字段），gate 端豁免逻辑（subject 匹配 + 逐提交 walk + 变体真值表）整体退役，`is_stale` 缩为纯指纹等值。审计性等价（重锚 frontmatter 变更随提交留痕，adr/0008 同权级）；忘重锚 ⇒ REFUSE_START，fail-closed 方向安全。人 2026-08-20 拍板（Q4）。**砍掉的候选**：锚额外记 commit sha 供范围 walk——rebase 后 walk 断裂，把本 change 要消灭的脆弱性从后门请回。
 - **D8 ADR：D2+D3+D4 合并落一条新 ADR（修订/接续 adr/0026 的失鲜锚记录）** — 依据：TG-23 命中 + ADR 三条件（难逆转：锚格式是 gate 契约字段；缺上下文会意外：为何 digest 而非 commit sha；真实权衡：D2 的 fail-open 面）。ADR 正文实现期随票落，设计门时人可见。
 
 ## 承重约束
@@ -35,6 +36,7 @@ decision_hash: 2d859634e06a
 - **C8 「切片偏离」审计行全仓零消费方**（3 处命中全是定义处） — 证据锚：grep 命中 `sdflow-implement/SKILL.md:265` + `openspec/specs/impl-orchestration/spec.md:239,329`，无任何读取方。
 - **C9 code-review Step1 scope 审计的输入清单在 `sdflow-code-review/SKILL.md:245`**（proposal + tasks + design + DIFF），planning-decisions.md 不在其中 — 证据锚：该行原文。T290 接线点即此。
 - **C10 上游 A1 原记录含两个机制（内容寻址锚 + 绑定字段权威计算、忽略自报值），T292 现 summary 只承载前半** — 证据锚：`openspec/upstream/reports/20260820T012010Z.md` 尾部 A1 预生成命令原文 vs `openspec/issues/open/todo/T292.md` summary。后半去留需人拍板。
+- **C12 设计域失鲜现含「逐提交 subject 豁免通道」（`checkpoint(impl-review)` 精确式），依赖锚后提交范围概念，与纯内容锚不相容** — 验证方式：读 spec-workflow 的 B2 / 豁免优先级 / 被监管方声明三个 Scenario 原文；证据锚：`openspec/specs/spec-workflow/spec.md` :468-478（优先级）、:489-497（B2）。∴ 迁移必须显式处置该通道（D9），MUST NOT 静默丢弃。
 - **C11 CI openspec pin=1.5.0，本地 1.9.0 全量 --archived 可跑** — 证据锚：`.github/workflows/mechanical-gates.yml:119` + 本地 `openspec --version`。
 
 ## 接受的边角
