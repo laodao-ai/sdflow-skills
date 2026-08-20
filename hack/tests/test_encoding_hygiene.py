@@ -28,7 +28,16 @@ if __name__ == "__main__":
     )
 
     assert hygiene.main(tmp_path) == 0
-    assert "满足编码前导契约" in capsys.readouterr().out
+    assert "1 个入口脚本均满足编码前导契约" in capsys.readouterr().out
+
+
+def test_empty_scan_face_fails_instead_of_false_green(tmp_path, capsys):
+    """[T295] 扫描面为空（glob 漂移 / root 指错）MUST 非零退出——原实现打 ✅ rc=0，
+    与真通过不可区分，是 hack/ 常驻门里唯一无下限断言也不报检查数量的漏网。"""
+    assert hygiene.main(tmp_path) == 1
+    captured = capsys.readouterr()
+    assert "满足编码前导契约" not in captured.out
+    assert "扫描面为空" in captured.err
 
 
 def test_missing_prelude_reports_every_contract_and_repair_pointer(tmp_path, capsys):

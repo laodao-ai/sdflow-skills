@@ -93,11 +93,18 @@ def target_files(root=REPO):
 
 def main(root=REPO):
     root = Path(root)
-    failures = [(path.relative_to(root).as_posix(), missing_contracts(path))
-                for path in target_files(root)]
-    failures = [(path, missing) for path, missing in failures if missing]
+    checked = [(path.relative_to(root).as_posix(), missing_contracts(path))
+               for path in target_files(root)]
+    # [T295] 空扫描面 MUST 红：glob 漂移（目录改名/迁移）会让某个子面静默变空，
+    # 「0 个被检查」与「全部通过」若同样打 ✅ rc=0 则不可区分。只判 0、不写死下限——
+    # 下限会随归档删文件自然下走而过期（test_subprocess_encoding_contract 已记此坑）。
+    if not checked:
+        print("[encoding-hygiene] FAIL: 扫描面为空——TARGET_GLOBS 未命中任何入口脚本"
+              "（glob 漂移或 root 指错）", file=sys.stderr)
+        return 1
+    failures = [(path, missing) for path, missing in checked if missing]
     if not failures:
-        print("[encoding-hygiene] ✅ 所有入口脚本均满足编码前导契约")
+        print(f"[encoding-hygiene] ✅ {len(checked)} 个入口脚本均满足编码前导契约")
         return 0
     print("[encoding-hygiene] FAIL: 下列入口脚本缺少编码前导契约", file=sys.stderr)
     for path, missing in failures:
