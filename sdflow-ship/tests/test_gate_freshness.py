@@ -751,3 +751,22 @@ def test_code_review_single_stage_commit_would_self_lock(repo):
     code, js, _h = run_gate(repo)
     assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-code-review", js
     assert js["freshness"] == "stale"
+
+
+# ══ 〔sweep-pool-debt D3/D4〕rebase/amend 历史重写免疫（brief MUST，内容锚只认树内容） ══
+
+def test_amend_rewriting_history_without_content_change_stays_fresh(repo):
+    """内容不变、只重写提交历史（`git commit --amend` 改 message，或等效的 rebase 落地为
+    新 commit sha）→ design 域 MUST 判 fresh/CURRENT——digest 只认监视集树内容，不认
+    commit sha 本身。区别于 `_merge_amended`/`test_touching_the_report_does_not_move_the_anchor`
+    覆盖的场景（那两个改的是内容或"报告被触碰"，不是"历史被重写、内容原样"）。"""
+    d = approved_change(repo, plan=PLAN2_TICKETS)
+    _reanchor(repo, d)                                   # 锚 = 当前 HEAD 的 design 域指纹
+    pre_amend_sha = head_sha(repo)
+    _git(repo, "commit", "-q", "--amend", "-m", "reword only, no content change")
+    post_amend_sha = head_sha(repo)
+    assert post_amend_sha != pre_amend_sha, "前提校准：amend 未改变 commit sha，本例失去区分力"
+    stale, freshness = _sg.is_stale(repo, BASE + "spec-review-report.md", "design", "demo")
+    assert (stale, freshness) == (False, "fresh")
+    code, js, _h = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL"

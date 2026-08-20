@@ -1,5 +1,5 @@
 import subprocess
-from conftest import commit_all, mkchange
+from conftest import commit_all, mkchange, sg_frontmatter
 from test_gate_preflight import run_gate
 
 
@@ -130,3 +130,19 @@ def test_change_with_glob_metachar_safe(repo):
     commit_all(repo, "archive axb")
     code, js, _ = run_gate(repo, change="a?b")
     assert code == 3 and js["verdict"] == "REFUSE_START" and "不存在" in js["reason"]
+
+
+def test_archived_legacy_40hex_frontmatter_shipped(repo):
+    # 〔sweep-pool-debt spec-review-amendment：归档报告旧 40-hex 锚不阻断 SHIPPED〕
+    # 归档 verify-report.md 携 frontmatter + 40-hex reviewed_sha（无 reviewed_manifest，
+    # 即迁移前旧格式）+ verify: PASS → archived_verify_state 只消费 verify 字段，
+    # MUST NOT 因锚字段格式判 none。
+    arch = repo / "openspec" / "changes" / "archive" / "2026-07-04-demo"
+    arch.mkdir(parents=True, exist_ok=True)
+    (arch / "proposal.md").write_text("归档\n", encoding="utf-8")
+    legacy_40hex = "a" * 40
+    (arch / "verify-report.md").write_text(
+        sg_frontmatter(sha=legacy_40hex, verify="PASS") + "# verify\n", encoding="utf-8")
+    commit_all(repo, "archive demo with legacy 40-hex anchor")
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "SHIPPED"
