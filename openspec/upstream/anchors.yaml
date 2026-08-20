@@ -1,13 +1,13 @@
 schema_version: 1
-last_run: "2026-08-12T13:27:21Z"
+last_run: "2026-08-20T01:24:29Z"
 remind_after_days: 30
 sources:
   gstack:
-    anchor_sha: 94993f74012782fd94416dd44b8314f6363a13a4
+    anchor_sha: 9da6692930db209e8632e8da3d5e5b5995d8af9c
   matt:
-    anchor_sha: 84fdeffd12f2ee307994d1eb6feb48173b6e0502
+    anchor_sha: 885e2ca4d842d139e9aef4e48d366c63cb1b8013
   superpowers:
-    anchor_sha: c54b5608d9be1910de9a5b91c2d15bf6673b9c35
+    anchor_sha: 0fc2bb13a805969c14b0fe9398bad41db346d84e
     installed_version: 6.2.0
   openspec:
-    anchor_version: 1.8.0
+    anchor_version: 1.9.0
