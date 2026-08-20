@@ -155,8 +155,13 @@ tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出
 宿主条件化受限并行 + 每 ticket 双轴审）共享一个 skill、两种互斥模式，由 gate 判定的 RUN_PLAN/CONTINUE_IMPL 两态
 经 `/sdflow-ship` 链序以显式参数直接派发。
 
-本 skill 由 ship 主 session 经 Skill **inline 执行**——**MUST NOT 作为子代理派发**：子代理无法再派
-子代理，而执行模式需要派发 implementer / 双轴审子代理，这个能力只在主 session 位置成立。
+本 skill 由 ship 主 session 经 Skill **inline 执行**——**MUST NOT 作为子代理派发**：执行模式要派
+implementer / 双轴审 / fix 三类子代理，而**子代理位置上的再派发不可依赖**——Claude 宿主下拿不到
+派发能力，Codex 宿主下拿得到但那正是要禁的形态（见下方信号权威表「评审席位与子代理派发」行）。
+🔴 **MUST NOT 把理由写成「子代理无法再派子代理」**：该前提在 Codex 宿主上**已被实测证伪**
+（上游 superpowers codex-efficiency T1：9/9 次 depth-2 派发全部成真，且全是被派方自己加的重复
+评审席位）。结论不变、论据须换——照旧写那句会让「被派方会不会自己再派一层」这个真实风险面
+永远不进视野。
 
 `ship_gate.py` **零改动**——本 skill 只是产出 / 消费 gate 已识别的完成判据契约
 （`tickets.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
@@ -575,9 +580,10 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
   |---|---|---|
   | **本票完成信号** | ① `tickets.md` 里该 `### Task N:` 段的验收复选框（段内**须有**复选框**且**全勾才计入——空段不计入）<br>② 提交 subject 上的 `checkpoint(<change>:task<N>-<slug>)` 标签 | **双轴审通过后由执行模式补打**——implementer 实现期 **MUST NOT** 自行勾框或打完成标签 |
   | **本票工作产物** | 实现代码、测试、`{change_dir}/impl-reports/task<N>-<slug>.md` | implementer 自己写 |
+  | **评审席位与子代理派发** | 编排层（本 skill 执行模式）——双轴审两个 reviewer、fix 子代理**都由它派** | **implementer 不派任何子代理**：self-review = 读自己的 diff；觉得需要第二双眼睛就写进 report file，由编排层决定派谁。Codex 宿主下你**确实派得出来**（实测 depth-2 可成），派出来的是**重复的评审席位**——多花一份钱、拿不到独立性（同一份 context 派出去的镜子不是冷的），且绕过编排层的双轴审契约 |
   | **设计意图（需求 / 设计 / 规格 / 任务清单）** | `proposal.md` · `design.md` · `specs/` · `tasks.md` | **设计阶段已定稿，实现期不是它们的作者**——发现设计有问题走 `NEEDS_CONTEXT` / `BLOCKED` 上抛编排层，由编排层裁决，**不自行改盘** |
 
-  > 这两行归属**与设计门实际消费的判据一一对应**：`ship_gate.py` 的完成集 = checkpoint 标签通道
+  > 完成信号行与设计意图行的归属**与设计门实际消费的判据一一对应**：`ship_gate.py` 的完成集 = checkpoint 标签通道
   > （窗口 `[plan 首次提交 sha, HEAD]` **闭区间**内、命名空间精确等于本 change 的 `TAG_RE` 命中）
   > **∪** 复选框通道（`_parse_plan` fence-aware 按 `### Task <n>:` 分段绑定、段内全勾）；
   > 设计工件那一行对应 gate 的 design 域失鲜监视集（`proposal` / `design` / `tasks.md` / `specs/`）。
