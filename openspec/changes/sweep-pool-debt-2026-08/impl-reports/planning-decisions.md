@@ -25,3 +25,29 @@ Claude 宿主各票独立 worktree，编排层按号序 `git merge --no-ff`，�
 
 全 ticket 语义一致性自扫（checkpoint 前）：无跨票矛盾、无与 Global Constraints 矛盾。Blocked-by
 拓扑无环（功能票无边，收尾票依赖全部功能票号）。
+
+## 执行期修正（Task 1 merge 后）：撤销 task 1.9 的 64-hex 重锚，保留 40-hex
+
+**问题**：task 1.9 要求把本 change 自身 `spec-review-report.md` 从 40-hex 重锚为 64-hex+manifest，
+设计初衷是「防票2/3/4期间 gate 读旧锚自锁」——但该初衷假设**新门**在驱动 ship。
+
+**实测证伪**：驱动本次 ship 的是**运行 checkout 的老门**（`~/.claude/skills/sdflow-ship` →
+`~/.skills/sdflow-skills`，40-hex 格式），非本 dev checkout 的新门。老门读 64-hex 报告直接
+判 `UNKNOWN(6)`（reviewed_sha out-of-domain，实测锚 `66d14ff…`）→ **真自锁**。
+
+**根因**：dev/运行 checkout 分离下，改门的 change 在 ship 期间由**老门**驱动（CLAUDE.md 反向窗口
+纪律）；新门只在 push→pull→`/sdflow-upgrade` 后才生效，那时本 change 早已归档。task 1.9 把方向
+搞反了。
+
+**修正**：merge Task 1 后，把 `spec-review-report.md` 锚恢复为原批准提交 40-hex
+（`f28c1ffc0d880d728d66a9f6abf514271803d557`）、删 `reviewed_manifest`。老门恢复 CONTINUE_IMPL。
+
+**为何 40-hex 是正确终态（非缩水，通则③）**：① ship 期间老门读 40-hex = fresh；② 归档后新门
+（升级生效时）对**归档** change 不做失鲜复检，且 `FIELD_VALIDATORS` 语法接受 40-hex（DT-1 校验
+分层）——两端皆安全。task 1.9 防的场景（新门读 live 40-hex 报告）在 dev/运行分离下**不可达**
+（报告在新门生效前已归档）。spec Requirement「存量旧格式锚重跑写锚」是**能力**，不要求本报告在
+归档件中必须 64-hex。
+
+**代价（三镜）**：系统镜——零全局影响，外科式单行恢复；用户镜——无可感知行为差异；开发循环镜——
+消除一次自锁死循环。**主次**：这是对一个在实际执行环境中失效的设计步的实现期纠正，已按通则③
+显式留痕，交冷层 code-review 复核。
