@@ -242,9 +242,22 @@ Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一�
   （EXEMPT 候选）时，Step2 的免除判定 MUST **阻塞等待本步结果收齐后**才可定案——本步一旦揭出隐藏逻辑，
   EXEMPT 判定作废、Step2 照跑（异步迟到的揭穿换不回已跳过的多镜，守卫空转）；diff 非白名单形状（Step2
   反正要 fan-out）时，本步 MAY 与 Step2 fan-out 并行派发，结果同在 Step3 barrier 前收齐。
-- **输入**：`{change_dir}` 的 proposal.md（scope / Non-Goals）+ tasks.md + design.md + `DIFF_BASE..HEAD`
+- **输入**：`{change_dir}` 的 proposal.md（scope / Non-Goals）+ tasks.md + design.md +
+  `impl-reports/planning-decisions.md`（若存在，出票期「切片偏离: …」审计行）+ `DIFF_BASE..HEAD`
   diff（`--stat` + 全量）。prompt MUST 原文携带本 SKILL.md 顶部「四条通则」区块（`sdflow:principles` 从
   start 到 end，整段复制，不转述、不摘要），MUST 声明「不要 AskUserQuestion，返回结构化 findings」。
+- **切片偏离对账**〔impl-orchestration ADDED Requirement「切片偏离审计行 SHALL 被代码审 scope 审计对账
+  消费」，sweep-pool-debt D6〕：出票期对抗镜只复核**已申报**的切片偏离，静默偏离唯有本对账能捕获——
+  三分支：
+  - **无申报输入可对账（降级不中断）**：design.md 无「切片建议」节，或 `planning-decisions.md`
+    不存在 / 无「切片偏离」行 → 记「无偏离申报可对账」，按既有 scope-drift 流程继续，MUST NOT 因该
+    输入缺席报错中断。
+  - **已申报核对**：`planning-decisions.md` 含「切片偏离: …」行 → 逐条核对申报内容（增/删/合并票、
+    改阻塞边、改切片边界）与实际 diff 是否相符；申报了未做、或做的超出申报 ⇒ 以 finding 上报
+    （`SCOPE-CREEP` 类，视为计划层 scope-drift 的一种）。
+  - **静默偏离上报**：diff 显示实际出票偏离了 design.md「切片建议」草图，但 `planning-decisions.md`
+    无对应「切片偏离: …」申报行 ⇒ 以 finding 上报（`SCOPE-CREEP` 类），MUST NOT 因「出票期对抗镜已
+    复核」而略过——对抗镜只见申报面，不见未申报面，此对账是唯一能捕获静默偏离的消费方。
 - **审计两轴**：
   - **scope-drift**：diff 改动文件 ↔ proposal scope 逐条比对——出圈改动（不在 What Changes / tasks
     覆盖内）逐条列 `SCOPE-CREEP`；Non-Goals 被实现也算 creep。
