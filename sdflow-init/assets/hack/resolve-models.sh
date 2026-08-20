@@ -27,10 +27,11 @@
 #   （Codex 机队 MUST NOT 读扁平覆盖，回落 Codex 机队缺省）。
 #   解析按有界键路径（6 条：2 机队×3 档）行锚定提取，MUST NOT 写通用 YAML 解析器（基准 5）。
 #
-# eval 注入加固（GC-6/D5）：覆盖值先过模型 ID 字符集校验（仅 [A-Za-z0-9._-]，
+# eval 注入加固（GC-6/D5）：覆盖值先过模型 ID 字符集校验（主体仅 [A-Za-z0-9._-]，
+#   可带单个尾部 [字母数字] 后缀如 `[1M]`——Claude Code 完整 model id 的上下文窗口标记；
 #   拒绝换行/控制字符/shell 元字符 `$ ` ` " ' ; | & ( ) < > 空白等），校验失败即丢弃覆盖、
 #   stderr 告警、回落缺省——恶意值永不进入输出。最终输出仍额外经 printf %q 编码
-#   （纵深防御，非唯一防线）。
+#   （纵深防御，非唯一防线；bracket 经 %q 转义后 eval 不触发 glob 展开）。
 set -u
 
 ROOT=""
@@ -99,8 +100,20 @@ _default_get() {  # $1=fence(model-tier-defaults|effort-tier-defaults) $2="<key.
 }
 
 # ────────────────────────────── 4. 模型 ID 字符集校验（eval 注入闸门） ──────────────────────────────
-_valid_model_id() {  # $1=candidate；仅 [A-Za-z0-9._-]、首字符字母数字、非空
+_valid_model_id() {  # $1=candidate；主体仅 [A-Za-z0-9._-]、首字符字母数字、非空；
+                     # 可带单个尾部 [字母数字] 后缀（如 claude-opus-4-6[1M] 的上下文窗口标记，
+                     # 完整 model id 的一部分——与 init.py::_valid_model_id 同一有界口径，D5/D10）。
+                     # 输出侧 printf %q 会转义 bracket，eval 时不会被当 glob 展开（纵深防御）。
+  local base="$1" suffix=""
   case "$1" in
+    *\[*\])
+      base="${1%\[*\]}"                          # 最短尾匹配剥离一层 [..]；残余括号留在 base 被拒
+      suffix="${1##*\[}"; suffix="${suffix%]}"
+      [ -n "$suffix" ] || return 1               # a[] → 拒
+      case "$suffix" in *[!A-Za-z0-9]*) return 1 ;; esac
+      ;;
+  esac
+  case "$base" in
     '') return 1 ;;
     *[!A-Za-z0-9._-]*) return 1 ;;
     [!A-Za-z0-9]*) return 1 ;;

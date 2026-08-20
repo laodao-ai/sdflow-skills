@@ -57,7 +57,7 @@ rules:
 # 生效，Codex 宿主下不生效（MUST NOT 把 Claude 模型名塞给 Codex 机队）。缺省请勿填。
 model-tiers:
   claude:
-    strong: claude-opus-4-6
+    strong: claude-opus-4-6[1M]
 #     mid: <claude-model-id>
 #     light: <claude-model-id>
 #   codex:

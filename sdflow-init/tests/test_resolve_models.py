@@ -117,10 +117,10 @@ def parse_exports(stdout):
         if line.startswith("export SDFLOW_"):
             body = line[len("export "):]
             k, _, v = body.partition("=")
-            # 值经 bash printf %q 编码；剥一层最外层单引号做粗略反解析（够测试断言用）
-            if v.startswith("'") and v.endswith("'") and len(v) >= 2:
-                v = v[1:-1]
-            out[k] = v
+            # 值经 bash printf %q 编码（单引号包裹或反斜杠转义两种形态，如 `[1M]` 后缀
+            # 会编码成 `\[1M\]`）；用 shlex 做与 eval 同语义的反解析——断言契约是 eval 后的值。
+            tokens = shlex.split(v)
+            out[k] = tokens[0] if tokens else ""
     return out
 
 

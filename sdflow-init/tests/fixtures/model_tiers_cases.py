@@ -238,4 +238,35 @@ CASES = [
             dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
         ],
     ),
+    # ─── 方括号尾后缀（如 [1M] 上下文窗口标记）——完整 model id 的合法形态 ─────────────
+    dict(
+        # Claude Code 完整 model id 可带上下文窗口尾后缀（claude-opus-4-6[1M]）——
+        # 字符集闸门放行该有界形态（主体 charset + 单个 [字母数字] 尾后缀），两侧 MUST 一致放行。
+        # 输出侧 printf %q 转义 bracket，eval 不触发 glob 展开。
+        name="bracket_window_suffix_valid",
+        yaml_block="""model-tiers:
+  claude:
+    strong: claude-opus-4-6[1M]
+""",
+        lint_clean=True,
+        lint_reason_substrs=[],
+        resolver=[
+            dict(host="claude", strong="claude-opus-4-6[1M]", mid="sonnet", light="haiku"),
+            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+        ],
+    ),
+    dict(
+        # 括号后缀不是自由通道：后缀必须收尾、括号内仅字母数字——尾后缀之后还挂字符即畸形，
+        # 两侧 MUST 一致拒绝（lint 违规 + resolver 丢弃覆盖回落缺省）。
+        name="bracket_suffix_not_terminal_rejected",
+        yaml_block="""model-tiers:
+  claude:
+    strong: claude-opus-4-6[1M]x
+""",
+        lint_clean=False,
+        lint_reason_substrs=["claude.strong"],
+        resolver=[
+            dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
+        ],
+    ),
 ]

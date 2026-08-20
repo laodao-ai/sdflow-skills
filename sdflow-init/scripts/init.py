@@ -666,9 +666,17 @@ RULES_REQUIRED_SUBKEYS = ("proposal", "specs", "design", "tasks")
 
 def _valid_model_id(v):
     """model-tiers 值的合法字符集校验（与 resolve-models.sh::_valid_model_id 同一有界口径，
-    跨语言各自本地重实现——add-codex-host-support D5/D10：值只准 [A-Za-z0-9._-]、首字符字母
-    数字、非空，拒绝换行/控制字符/shell 元字符，防 eval 注入面的值经消费仓 config 回灌到
-    resolve-models.sh 的输出。"""
+    跨语言各自本地重实现——add-codex-host-support D5/D10：主体只准 [A-Za-z0-9._-]、首字符字母
+    数字、非空，可带单个尾部方括号后缀（括号内仅字母数字、非空，如 `claude-opus-4-6[1M]` 的
+    上下文窗口标记——完整 model id 的一部分，不得要求用户削值），拒绝换行/控制字符/shell
+    元字符，防 eval 注入面的值经消费仓 config 回灌到 resolve-models.sh 的输出（输出侧另有
+    printf %q 纵深防御，bracket 不会在 eval 时被当 glob 展开）。"""
+    if not v:
+        return False
+    if v.endswith("]") and "[" in v:
+        v, _, suffix = v[:-1].partition("[")   # 首个 [ 切分：残余括号会落进 suffix 被拒
+        if not suffix or not all(c.isalnum() and c.isascii() for c in suffix):
+            return False
     if not v:
         return False
     if not (v[0].isalnum() and v[0].isascii()):
@@ -822,7 +830,8 @@ def lint_config(root):
                 f"（`claude:`/`codex:` 须为空的嵌套块头，值另起 strong/mid/light 缩进行；纯注释头合法）")
         bad_values = [f"{k}={v!r}" for k, v in sorted(entries.items()) if not _valid_model_id(v)]
         if bad_values:
-            reasons.append(f"model-tiers: 值非法模型ID {bad_values}（须为 [A-Za-z0-9._-]+，首字符字母数字）")
+            reasons.append(f"model-tiers: 值非法模型ID {bad_values}"
+                           "（须为 [A-Za-z0-9._-]+，首字符字母数字，可带单个 [字母数字] 尾后缀如 [1M]）")
 
     metrics = cfg.get("metrics")
     if metrics is not None:  # 条件化：块整段缺失 → 跳过（放行）
