@@ -24,4 +24,4 @@
 - [x] 4.1 CLAUDE.md「OpenSpec 双重角色」段补 `openspec/roadmaps/{name}/` 目录角色行（原只提 sdflow-roadmap skill、无目录角色）
 
 ## 5. 归档本变更
-- [ ] 5.1 `/opsx:archive plan-workflow-cost-optimization`
+- [x] 5.1 `/opsx:archive plan-workflow-cost-optimization`（回填 2026-08-20：本 change 现位于 `openspec/changes/archive/`，归档动作已完成）

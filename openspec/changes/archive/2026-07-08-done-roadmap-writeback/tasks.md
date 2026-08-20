@@ -27,7 +27,7 @@
 
 ## 4. 关联约定入规则（R2）
 
-- [ ] 4.1 （若关联约定入 workflow 规则）改 `sdflow-init/assets/workflow/` 权威源 + `sdflow-init update` 回灌（bundle 纪律）；命名约定 `implement-{roadmap}-pN` 若需强制则在 roadmap/触发规则登记〔R2〕 — **未做（条件未触发）**：关联约定落在 `sdflow-done/SKILL.md` §2.2 + spec-workflow spec（skill 自包含），未推 workflow bundle 规则；命名约定 `implement-{roadmap}-pN` 为**软约定**（前缀解析兜底 marker，不符则退现状），非强制门。若日后要跨仓强制则再开 change。
+4.1（条件任务，未触发，改写为无复选框说明段）：（若关联约定入 workflow 规则）改 `sdflow-init/assets/workflow/` 权威源 + `sdflow-init update` 回灌（bundle 纪律）；命名约定 `implement-{roadmap}-pN` 若需强制则在 roadmap/触发规则登记〔R2〕 — **未做（条件未触发）**：关联约定落在 `sdflow-done/SKILL.md` §2.2 + spec-workflow spec（skill 自包含），未推 workflow bundle 规则；命名约定 `implement-{roadmap}-pN` 为**软约定**（前缀解析兜底 marker，不符则退现状），非强制门。若日后要跨仓强制则再开 change。（回填 2026-08-20：确未做，非过门假勾）
 
 ## 5. 验证（TG-18）
 

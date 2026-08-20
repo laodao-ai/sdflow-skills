@@ -41,4 +41,4 @@
 
 - [x] 6.1 README「Skills 列表」增 sdflow-implement 行（编排类）；docs/ 历史快照不回改，活文档全量表述同步显式留 Phase B（在 hand-off 记明）验证：README 与顶层目录一致
 - [x] 6.2 dev checkout 重跑 `bash setup.sh`（新增顶层 skill 建链接，adr/0005）；确认 `~/.claude/skills/sdflow-implement/` 与 `~/.codex/skills/sdflow-implement/` 生效；发布边界按 push→运行 checkout pull→立即 setup 纪律执行 验证：setup 输出无异常、无孤儿
-- [ ] 6.3 测后还原与发布窗口〔spec-review-amendment F9/B1/B2〕：运行 checkout（~/.skills/sdflow-skills）重跑 `bash setup.sh` 还原全局 symlink（adr/0005 协议下半场）；CLAUDE.md 发布边界补「既有 SKILL 路由新增 skill」反向窗口句（pull 后链序即生效、新 skill 链接须 setup 后才存在）验证：`readlink ~/.claude/skills/sdflow-ship` 指回运行 checkout（**部分完成**：CLAUDE.md 反向窗口句已落〔task10〕；运行 checkout 还原属 merge+push 后发布边界步，push 后立即经 /sdflow-upgrade 执行并以 readlink 验证——见 hand-off）
+- [x] 6.3 测后还原与发布窗口〔spec-review-amendment F9/B1/B2〕：运行 checkout（~/.skills/sdflow-skills）重跑 `bash setup.sh` 还原全局 symlink（adr/0005 协议下半场）；CLAUDE.md 发布边界补「既有 SKILL 路由新增 skill」反向窗口句（pull 后链序即生效、新 skill 链接须 setup 后才存在）验证：`readlink ~/.claude/skills/sdflow-ship` 指回运行 checkout（回填 2026-08-20：CLAUDE.md 反向窗口句已落〔task10〕；本机现场核验 `readlink ~/.claude/skills/sdflow-ship` → `/Users/cheneyzhao/.skills/sdflow-skills/sdflow-ship`，已还原且随后续每次 setup.sh 持续维持）
