@@ -180,6 +180,7 @@ A 澄清──共识初成──▶ B 拷问（起手即建分支 + change 目�
 - 写或核验决策纪要时读取 [`references/decision-memo-schema.md`](references/decision-memo-schema.md)；
   命中 ADR/术语提议条件时读取 [`references/adr-and-glossary-templates.md`](references/adr-and-glossary-templates.md)。
 - B.7 item 3 做 scope 内聚检查时读取 [`references/scope-cohesion-check.md`](references/scope-cohesion-check.md)。
+- 展开 0.2/0.3/FF-0/C.2/C.4 的判据表或背景细节时读取 [`references/execution-protocol-details.md`](references/execution-protocol-details.md)。
 
 ---
 
@@ -199,19 +200,18 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
 
 ### 0.2 档位解析（**四步一步不少**，MUST NOT 自造简写）
 
-裸 `eval "$(…)"` 会被脚本缺失静默吞（`eval ""` 返回 0），且同 shell 上一轮的 `SDFLOW_*` 旧值
-原样留存 ⇒ 拿旧宿主假绿。故：
-
 - **(a) 清脏**：`unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT`
 - **(b) 预检**：`[ -x ~/.sdflow/hack/resolve-models.sh ]` 不成立 → **fail-loud 硬停**
   「resolve-models.sh 未安装——先在运行 checkout（`~/.skills/sdflow-skills`）跑 `bash setup.sh`」
 - **(c) 捕获退出码再 eval**：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`；
   非 0 → fail-loud 硬停并原样转发 stderr；否则 `eval "$MODELS_ENV"; EVAL_RC=$?` —— **`eval` 自身
-  的退出码也 MUST 立即检查**，`EVAL_RC` 非 0 → fail-loud 硬停（报出 `EVAL_RC`），MUST NOT 带着
-  半成品环境继续做 (d)〔impl-review-fix FIX-3 · 面治：resolver 输出可以先设好合法 host/tiers、
-  再跟一条非法命令 ⇒ eval 退 127 而 (d) 全 PASS；本 SKILL 的 (c) 与四个编排 SKILL 同缺陷同修〕
+  的退出码也 MUST 立即检查**，非 0 → fail-loud 硬停（报出 `EVAL_RC`），MUST NOT 带着
+  半成品环境继续做 (d)。
 - **(d) eval 后校验**：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空；host≠unknown 时
   三个 `$SDFLOW_TIER_*` MUST 非空。**空值 = resolver 根本没跑成，MUST NOT 回落当 `unknown` 处置。**
+
+四步一步不能少的假绿场景与 impl-review-fix FIX-3 引用见
+[`references/execution-protocol-details.md`](references/execution-protocol-details.md)。
 
 **`$SDFLOW_HOST="codex"`** ⇒ 默认仍由主 session 亲查、亲写。Codex 当前只观察到用户显式触发已被接受，
 且没有本 session 可调用的 Skill 执行面；**MUST NOT 把接口缺席写成模型调用已被拒绝**。
@@ -219,18 +219,10 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
 ### 0.3 重入探测（MUST 在相位 A 之前）
 
 探测 ① 当前分支名（`feat/{change}` ⇒ 取 `{change}`）② `openspec/changes/` 下的在途目录。命中任一
-⇒ 对该 change **无条件**读 `openspec status --change <name> --json` 的 `isComplete`，三态分治
-（未命中 → 正常进入相位 A）。「继续还是新开」**必须问人**：两种意图导致**实质不同的产物**。
-
-| `isComplete` | 纪要 | 态 | 动作 |
-|---|---|---|---|
-| `false` | **无** | `B-draft`（草稿都没落成） | 继续 ⇒ **回相位 B**：A 的共识随上下文丢了，先重述锚点纪要再拷问 |
-| `false` | **有** | `B-draft`/`B-finalized`/`C-partial` | 问话附分支名 + 纪要已有 N 条承重约束；继续 ⇒ 跳过 A，核验纪要（C.1）后进入 C |
-| `true` | 任意 | `complete` | **拒绝重生成**，呈现该 change 与出口序列；要改走评审或新 change |
-
-🔴 **MUST NOT 拿「有没有 `decision-memo.md`」当探测前提**——B 起手建完目录到第一次落盘之间崩溃，
-留下的正是第一行那种**没有纪要**的在途 change；**MUST NOT 只探 `isComplete=false`**，那让
-`complete` 只剩一句声明、没有对应的操作判定。
+⇒ 对该 change **无条件**读 `openspec status --change <name> --json` 的 `isComplete`，按
+[`references/execution-protocol-details.md`](references/execution-protocol-details.md) 的
+isComplete 三态判定表分治（未命中 → 正常进入相位 A）。「继续还是新开」**必须问人**：两种意图导致
+**实质不同的产物**；**MUST NOT 只探 `isComplete=false`**，也 **MUST NOT 拿「有没有 `decision-memo.md`」当探测前提**（细节见同一 reference）。
 
 ### 0.4 相位状态机
 
@@ -279,8 +271,8 @@ git status --porcelain
 ```
 
 含与本 change 无关的条目 ⇒ **halt 并向人说明检测到的条目**，给三个选项（stash / 先提交 /
-确认带过来）。**MUST NOT 静默继续。** 理由：下一步 `git checkout -b` 会把脏改动带上新分支，
-而 `checkpoint-commit.sh` 的无条件 `git add -A` 会把它们全部提交。历史依据仅在审计时读取
+确认带过来）。**MUST NOT 静默继续**（下一步 `checkout -b` 与 `checkpoint-commit.sh` 的
+`git add -A` 会把脏改动一并带上新分支并提交）。历史依据仅在审计时读取
 [`references/evolution-notes.md`](references/evolution-notes.md)。
 
 **② FF-0 三分支判定**
@@ -291,11 +283,9 @@ git status --porcelain
 | 已在 `feat/{本 change}` | 跳过（**真幂等**） |
 | **其它 feature 分支** | **halt 问人**：从当前切出 / 回 base 切出 / 就地继续 |
 
-全局 FF-0 hook 只在整条 Bash 命令完整匹配**单条直接 literal**创建调用时，才用 payload
-`cwd` 执行上述三分支。
-正向有限 grammar 只包含 `openspec new change <合法字面量>` 与 `openspec change new <合法字面量>`，容忍水平空白、单/双引号与单个 `--json` 变体。未命中该 grammar 的 wrapper、目录切换、compound、换行、前后散文、无效 literal/option 或动态名一律记录 `command-unverifiable`，不尝试细分原因或解释 shell。
-此未判定路径只输出 `additionalContext`，**MUST NOT 解析 shell**，也不设置 `permissionDecision`；
-多处创建调用的 stacking deny 先于 cwd 未判定。
+全局 FF-0 hook 仅在整条 Bash 命令完整匹配单条直接 literal 创建调用时才生效；grammar 细节
+（正向 grammar、未判定路径处置、stacking deny 优先级）见
+[`references/execution-protocol-details.md`](references/execution-protocol-details.md)。
 
 🔴 **MUST NOT 沿用「已在 feature 分支就跳过」的弱判据**——那会让第二个 change 落在前一个 change
 的分支上。`git checkout -b` 失败（分支已存在）⇒ fallback `git checkout feat/{change}`；再失败即如实报告。
@@ -306,11 +296,9 @@ git status --porcelain
 openspec new change "<name>"
 ```
 
-change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话写不出」，故进 B 时目标态必然已明确。
-🔴 **MUST NOT 用暂定名后改名**：openspec CLI **无 rename change 命令**（实查：仅
-`new change` / `archive`），手工 `git mv` + 改 `.openspec.yaml` 即手搓 change 目录结构。
-拷问若推翻目标态导致名字不再贴切 ⇒ 留一个名字略偏的目录，**按通则④判为可接受边角**（删分支即净）。
-
+change 名此时即可定（A.2 禁止清单已保证目标态一句话可写出）。🔴 **MUST NOT 用暂定名后改名**
+（openspec CLI 无 rename change 命令，实查仅 `new change`/`archive`；手工 `git mv` + 改
+`.openspec.yaml` 即手搓结构）——拷问若推翻目标态致名字偏 ⇒ **按通则④判为可接受边角**（删分支即净）。
 `new change` 非零退出 ⇒ 检查 `.openspec.yaml` / `openspec status` / 新建路径，
 **精确报告 partial state，MUST NOT 假定其原子性**。
 
@@ -318,8 +306,8 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 
 目录一建成就**当场**写出 `decision-memo.md`：身份 frontmatter（`schema_version` / `change` /
 `branch` / `generated_at`；`decision_hash` **留空**——定稿才算，见 B.8 ⑤）+ 空的 `## 承重约束` /
-`## 拍板决策`。🔴 少了这一步，③ 与 B.4 首次落盘之间的崩溃会留下一个**没有纪要的在途 change**，
-而重入探测以纪要为前提就认不出它（0.3）。草稿必然过不了 C.1 判 4 ⇒ 走那里既有的「缺失 ⇒ 退回 B 补定稿」。
+`## 拍板决策`。🔴 少了这一步，③④ 之间崩溃会留下**没有纪要的在途 change**（重入探测认不出它，
+见 0.3）；草稿过不了 C.1 判 4 ⇒ 走既有的「缺失 ⇒ 退回 B 补定稿」。
 
 ### B.2 锚点纪要（对话内，不落盘）
 
@@ -358,20 +346,19 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 
 ### B.6 ADR / 术语惰性提议钩子
 
-拷问中命中 ADR 三条件（难逆转 + 缺上下文会令人意外 + 有真实权衡）⇒ **提议**落 `openspec/adr/`；
-发现术语冲突或模糊语言 ⇒ **提议**更新 `openspec/CONTEXT.md`。
-🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
+拷问中命中 ADR 三条件 ⇒ **提议**落 `openspec/adr/`；发现术语冲突或模糊语言 ⇒ **提议**更新
+`openspec/CONTEXT.md`。🔴 **两者未经人确认 MUST NOT 自动写入。** 三条件判据与模板见
 [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
 
 ### B.7 收敛前检查（B.6 升级：从「临场感知」→ 显式检查点）
 
 收敛前，把 `decision-memo.md` 已拍板的**每条决策**过一遍：
 
-1. **ADR 三条件**：难逆转 + 缺上下文会令人意外 + 有真实权衡 ⇒ 该决策需要一条 ADR（提议落 `openspec/adr/`）。
-2. **术语冲突判据**：该决策引入/使用的术语与 `openspec/CONTEXT.md` 已有定义是否冲突或模糊 ⇒ 需更新 CONTEXT.md。
+1. **ADR 三条件**（同 B.6 判据）⇒ 该决策需要一条 ADR。
+2. **术语冲突判据**（同 B.6）：该决策引入/使用的术语与 `openspec/CONTEXT.md` 已有定义是否冲突或模糊 ⇒ 需更新 CONTEXT.md。
 3. scope 内聚检查：MUST 读 `references/scope-cohesion-check.md` 判据；发现偏离 MUST 呈现给人拍板，MUST NOT 静默调整范围。
 
-🔴 同 B.6：item 1/2 两者未经人确认 MUST NOT 自动写入，判据与模板同引 B.6 所示文件。
+🔴 同 B.6：item 1/2 未经人确认 MUST NOT 自动写入，判据与模板同引 B.6 所示文件。
 
 **与 B.6 的区别**：B.6 是拷问过程中的惰性钩子（命中就提议）；本步是**收敛前逐条回扫**——B.6 漏掉的、
 或在后续拷问中语义发生变化的决策，在此兜底捕获。
@@ -403,26 +390,17 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
    重算纪要正文（frontmatter 之外全文）hash，与 frontmatter 比对；`generated_at` 一并
    **读出来呈现给人**（不可解析或落在未来 ⇒ 同样请人确认）。
 
-任一不过 ⇒ **拒绝进入生成，退回相位 B**，并向人说明缺口。
-身份不符（判 3）或 hash 不符（判 4）⇒ **呈现旧 memo 摘要 + `generated_at` 给人确认**
-（复用还是重做 B），**MUST NOT 静默复用**——上一次废弃运行留下的非空 memo，
-在「只查存在且非空」的判据下是全绿的；而 hash 不符意味着**定稿之后 memo 被手改过**，
-此时 memo 承载的共识与人记得的已经不是同一份。
-🔴 `decision_hash` / `generated_at` **缺失**是另一回事：那是相位 B 收敛两步没走完 ⇒
-**退回 B 补定稿**，MUST NOT 按「身份不匹配」去问人复用与否。
+任一不过 ⇒ **拒绝进入生成，退回相位 B**，并向人说明缺口。判 3/判 4 不过 ⇒ **呈现旧 memo
+摘要 + `generated_at` 给人确认**（复用还是重做 B），**MUST NOT 静默复用**——非空 memo 在
+「只查存在且非空」下全绿，但 hash 不符意味着**定稿后被手改过**，memo 已非人记得的那份共识。
+🔴 `decision_hash`/`generated_at` **缺失**是另一回事（B 收敛两步没走完）⇒ **退回 B 补定稿**，
+MUST NOT 按「身份不匹配」去问人复用与否。
 
 ### C.2 强制阅读清单（schema 依赖图优先，缺口回退超集）
 
-| 生成 | MUST 先全文读 |
-|---|---|
-| `proposal.md` | `decision-memo.md` |
-| `design.md` | `decision-memo.md` + `proposal.md` |
-| `specs/**` | `decision-memo.md` + `proposal.md` + **`design.md`** |
-| `tasks.md` | `decision-memo.md` + `proposal.md` + `design.md` + `specs/**` |
-
-每步读 `dependencies` 对象列表（含 `id`/`done`/`path`/`description`）并比较上表。
-图已覆盖按图读；图不足则回退**写死超集**：`specs` 读 `proposal.md`+`design.md`，`tasks` 读
-`proposal.md`+`design.md`+`specs/**`，不得跳过；纪要输入。
+每步读 `dependencies` 对象列表（含 `id`/`done`/`path`/`description`），按
+[`references/execution-protocol-details.md`](references/execution-protocol-details.md)
+的判据表核对本产物 MUST 先全文读哪些既有产物。图已覆盖按图读；图不足则回退写死超集，不得跳过。
 
 ### C.3 逐产物生成协议（串行，一次一个）
 
@@ -430,23 +408,22 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
    ```bash
    openspec instructions <artifact> --change "<name>" --json
    ```
-2. **最小 schema 断言**：必需字段 `artifactId`(str) · `instruction`(str) · `template`(str) ·
-   `resolvedOutputPath`(str) · `dependencies`(list)。`dependencies` MUST 是对象列表，每项含
-   `id` / `done` / `path` / `description`；`context` / 当前 artifact 的 `rules` 若存在，
-   MUST 分别为字符串 / 列表；生成方 MUST 把二者作为生成约束应用，MUST NOT 复制进产物。
-   其中 workflow 引用须经 `~/.sdflow/hack/resolve-workflow.sh --root <repo>` 解析后全文读。
-   任一必需字段缺失或字段类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，
+2. **最小 schema 断言**：必需字段 `artifactId`/`instruction`/`template`/`resolvedOutputPath`(str)
+   + `dependencies`(list，每项含 `id`/`done`/`path`/`description`)；
+   `context` / 当前 artifact 的 `rules` 若存在须为 str/list，生成方 MUST 把二者作为生成约束应用、MUST NOT 复制进产物
+   （workflow 引用经 `~/.sdflow/hack/resolve-workflow.sh --root <repo>` 解析后全文读）。
+   任一必需字段缺失或类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，
    **MUST NOT 重试同一调用**。
 3. **先处理载荷语义，再写入**：
    - 成对的 `<!-- sdflow:delegation:start -->` / `<!-- sdflow:delegation:end -->` 区块须在**应用载荷前**整段剥离，MUST NOT 解析 Markdown；均无是 no-op，缺失/乱序/不成对则 fail-closed 报 problem+cause+fix。
-   - `resolvedOutputPath` 为 glob（如 `specs/**/*.md`）时只是模式；按 instruction 推导具体`specs/<capability>/spec.md`。既有产物只取 `status --json` 的 `artifactPaths.<id>.existingOutputPaths`。
-   - 生成前读 status；`status` 为 `skipped` 时跳过，MUST NOT 创建任何对应文件，并从依赖阅读清单移除该 artifact。
+   - `resolvedOutputPath` 为 glob 时只是模式，按 instruction 推导具体 `specs/<capability>/spec.md`；既有产物只取 `status --json` 的 `artifactPaths.<id>.existingOutputPaths`。
+   - 生成前读 status；`skipped` 时跳过，MUST NOT 创建任何对应文件，并从依赖阅读清单移除该 artifact。
 4. **路径净化**（`resolvedOutputPath` 来自第三方 CLI，直接当写入目标 = confused deputy）：
    canonicalize 后 MUST 满足 —— ① 严格位于 `openspec/changes/<name>/` 内 ② 落在 artifact
-   allowlist（`proposal.md` / `design.md` / `tasks.md` / `specs/**/*.md`）③ **从仓根到目标
-   逐组件都不是 symlink**（含 change 目录及祖先；拒 symlink 逃逸）。任一不满足 ⇒ 拒写并 fail-closed 报告。
-4. **写入**：临时文件 → **原子替换**（同目录 `.tmp-*` + rename）。MUST NOT 就地半截覆盖。
-5. **写后核验（C.4）**。
+   allowlist（`proposal.md`/`design.md`/`tasks.md`/`specs/**/*.md`）③ 仓根到目标**逐组件都不是
+   symlink**（含 change 目录及祖先，拒 symlink 逃逸）。任一不满足 ⇒ 拒写并 fail-closed 报告。
+5. **写入**：临时文件 → **原子替换**（同目录 `.tmp-*` + rename）。MUST NOT 就地半截覆盖。
+6. **写后核验（C.4）**。
 
 默认主 session 亲写；仅在人明确要求启用外派时读取
 [`references/delegation-protocol.md`](references/delegation-protocol.md)。
@@ -462,8 +439,8 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 - `validate --strict` 不过 ⇒ 判该产物**未完成**，进重试/亲写阶梯。**MUST NOT「文件存在即跳过」。**
 - **MUST NOT 手搓 Markdown 解析器**去判任一者。
 
-🔴 **诚实边界**：CLI 1.5.0 的 `validate --strict` 只校验 `specs/*/spec.md` delta；
-其余三份截断仍可能双绿，只能终审读回判定，MUST NOT 声称它能挡住半截 design.md。
+🔴 **诚实边界**：CLI 1.5.0 的 `validate --strict` 覆盖范围有已知限制，见
+[`references/execution-protocol-details.md`](references/execution-protocol-details.md)。
 
 ---
 
@@ -495,8 +472,8 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 ## 降级与诊断
 
 失败或降级 MUST 如实进入完成报告，且包含 **problem + cause + fix**；openspec CLI 不可用或
-`instructions --json` schema 不兼容时 fail-closed 中止。仅在发生失败、降级或需要诊断时读取
-[`references/degradation-ladder.md`](references/degradation-ladder.md)，按其中错误分类、退避和失败模式表处置。
+`instructions --json` schema 不兼容时 fail-closed 中止。错误分类、退避与失败模式表见上方
+按需资料路由的 [`references/degradation-ladder.md`](references/degradation-ladder.md)。
 
 ---
 
