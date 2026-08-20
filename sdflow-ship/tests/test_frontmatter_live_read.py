@@ -2,18 +2,29 @@
 # 坏→UNKNOWN(6) 不回退；absent（无 frontmatter / 无 ship-gate 键）→ 既有无锚语义（不回退 inline，
 # 正文残留 inline 锚被完全忽略）。归档读半场仍 dual-read inline（永久，见 test_gate_anchor_scope）。
 # 沿用 test_gate_*.py 的 fixture 构造法：写 openspec/changes/{c}/ 报告 + 跑 decide，断言退出码/verdict。
-from conftest import commit_all, mkchange, head_sha, write_report
+from conftest import commit_all, mkchange, head_sha, write_report, fingerprint
 from test_gate_preflight import run_gate
 from test_gate_tail import impl_done
+
+
+def _cr_pass_anchored(repo):
+    """`code-review-report.md` 的 code_review:pass frontmatter，锚为当前 HEAD 上的
+    code 域内容指纹（与 ship_gate.fingerprint_entries 物理同源）。多个用例只需要这一步
+    干净通过、不关心 cr 陈旧与否，抽成共享 helper。"""
+    sha, manifest = fingerprint(repo, head_sha(repo), "code")
+    return (f'---\nship-gate:\n  code_review: pass\n  reviewed_sha: {sha}\n'
+            f'  reviewed_manifest: "{manifest}"\n---\n# 代码审报告\n')
 
 
 def test_live_verify_frontmatter_pass(repo):
     # verify-report frontmatter verify: PASS → 走 frontmatter 读出 PASS → 正常推进（RUN_VERIFY 收尾）
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+        _cr_pass_anchored(repo), encoding="utf-8")
+    v_sha, v_manifest = fingerprint(repo, head_sha(repo), "code")
     d.joinpath("verify-report.md").write_text(
-        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+        f'---\nship-gate:\n  verify: PASS\n  reviewed_sha: {v_sha}\n'
+        f'  reviewed_manifest: "{v_manifest}"\n---\n# 验证报告\n', encoding="utf-8")
     commit_all(repo, "cr+verify")
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "RUN_VERIFY"
@@ -26,7 +37,7 @@ def test_live_verify_inline_retired_absent(repo):
     # 这是 D1 退役的直接对照：同一 fixture 在 Task2 判 VERIFY_FAIL(5)，Task6 判 STEP_IN_PROGRESS(0)。
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+        _cr_pass_anchored(repo), encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "<!-- ship-gate: verify=FAIL -->\n", encoding="utf-8")
     commit_all(repo, "cr+verify")
@@ -54,7 +65,7 @@ def test_live_verify_bad_no_fallback(repo):
     # UNKNOWN，断言证明坏 frontmatter 不被 inline 兜底、正文 inline 锚不被读。
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+        _cr_pass_anchored(repo), encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "---\nship-gate:\n  verify: MAYBE\n---\n<!-- ship-gate: verify=PASS -->\n",
         encoding="utf-8")
@@ -70,7 +81,7 @@ def test_live_verify_body_mention_immune(repo):
     # absent → live 只读 frontmatter，正文提及不命中 → STEP_IN_PROGRESS（非误读 PASS 推进）。
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+        _cr_pass_anchored(repo), encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "# 验证报告\n正文提及 ship-gate: verify: PASS 但这不是 frontmatter\n",
         encoding="utf-8")
@@ -146,7 +157,8 @@ def test_live_design_approved_frontmatter(repo):
     d = mkchange(repo)
     d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     commit_all(repo, "seed")          # [harden-gate-git-layer Task1] 先有盘面才锚得住
-    write_report(d, "spec-review-report.md", head_sha(repo),
+    sha, manifest = fingerprint(repo, head_sha(repo), "design")
+    write_report(d, "spec-review-report.md", sha, manifest,
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report")
     code, js, _ = run_gate(repo)
@@ -170,7 +182,7 @@ def test_live_dup_key_unknown(repo):
     # 重复 verify 键 → duplicate-key → UNKNOWN(6)（verify 早检拦下，不取最后一个）
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+        _cr_pass_anchored(repo), encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n", encoding="utf-8")
     commit_all(repo, "cr+verify")
@@ -211,7 +223,7 @@ def test_live_unclosed_verify_step_in_progress_with_hint(repo):
     # **不 UNKNOWN(6)**（坐实无闭合首块不再硬崩），reason 含结构提示。
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+        _cr_pass_anchored(repo), encoding="utf-8")
     d.joinpath("verify-report.md").write_text(UNCLOSED, encoding="utf-8")
     commit_all(repo, "verify-unclosed")
     code, js, _ = run_gate(repo)

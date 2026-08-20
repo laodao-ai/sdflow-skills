@@ -1,6 +1,6 @@
 import json, subprocess, sys
 from pathlib import Path
-from conftest import commit_all, mkchange, head_sha, write_report
+from conftest import commit_all, mkchange, head_sha, write_report, fingerprint
 
 GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
 
@@ -29,7 +29,8 @@ def test_pass_gate_when_anchor_present(repo):
     # [harden-gate-git-layer Task1] 两段提交：先有盘面可锚，报告才写得出 reviewed_sha
     d = mkchange(repo)
     commit_all(repo, "seed")
-    write_report(d, "spec-review-report.md", head_sha(repo),
+    sha, manifest = fingerprint(repo, head_sha(repo), "design")
+    write_report(d, "spec-review-report.md", sha, manifest,
                  body="# 报告\n", design_approved="true")
     commit_all(repo, "spec-review report")
     code, js, human = run_gate(repo)

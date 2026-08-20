@@ -9,14 +9,14 @@ toolkit 源仓的权威源改动（权威源位于顶层条目 `sdflow-init` 之
 本文件补两条反向工程验证测试（tasks 5.3/5.4），MUST NOT 省略——防止「删腿后行为其实
 变了」被误判为无害重构。
 """
-from conftest import commit_all, mkchange, head_sha, write_report
+from conftest import commit_all, mkchange, head_sha, write_report, fingerprint
 from test_gate_impl_progress import _sg
 
 
 def _anchor_review_report(repo, d):
-    """落一份带 reviewed_sha 锚的 code-review-report.md（frontmatter 锚 = 写盘时的 HEAD），提交。"""
-    sha = head_sha(repo)
-    write_report(d, "code-review-report.md", sha=sha, code_review="pass")
+    """落一份带内容锚的 code-review-report.md（锚 = 写盘时 HEAD 上的 code 域指纹），提交。"""
+    sha, manifest = fingerprint(repo, head_sha(repo), "code")
+    write_report(d, "code-review-report.md", sha=sha, manifest=manifest, code_review="pass")
     commit_all(repo, "code-review-report")
     return sha
 

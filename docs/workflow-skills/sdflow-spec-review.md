@@ -54,7 +54,7 @@ flowchart TD
 
 **两套锚分工（勿混述为一套）**：
 ①**正文 4 类 v1 锚**（step1-broad-review / hr-tg / outside-voice / lens-metric）归 `anchor_lint.py` 机验。**诚实拦截力**：此门只挡「同一会话内忘记跑这步」，**挡不住「整段跳过本步」**；`findings=N` 等数值与合并池实收数的一致性仍是**主 session 信任边界**、非机械可验——脚本不谎称保证数值正确。
-②**ship-gate 机判锚**在报告头部 **frontmatter 首块**（`ship-gate:` → `design_approved: true|false` + `reviewed_sha`，严格 bool/40 位 OID），归 `ship_gate.py` 读——只认文件首块、只认 `ship-gate:` 直接子键层；live 读坏 frontmatter fail-closed UNKNOWN(6)。
+②**ship-gate 机判锚**在报告头部 **frontmatter 首块**（`ship-gate:` → `design_approved: true|false` + 内容锚 `reviewed_sha`（监视域 manifest 的 sha256，64 位 hex）+ `reviewed_manifest`（manifest 的 base64 编码，双字段互锁，`anchor_writeback.py` 权威计算写入，MUST NOT 手写）），归 `ship_gate.py` 读——只认文件首块、只认 `ship-gate:` 直接子键层；live 读坏 frontmatter fail-closed UNKNOWN(6)。
 
 **反馈回路免责**：本 skill 只落 lens-metric 锚——跨 change 归档后的锚聚合、按采纳率/独立率复评、显著性提示一律归 `/sdflow-retro`（只读聚合）；是否砍镜/降采样/收紧触发/淘汰某镜**永远人决**，本 skill 不自行判断或执行。
 

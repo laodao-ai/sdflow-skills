@@ -1,22 +1,27 @@
-"""[harden-gate-git-layer Task1 · ADR-1] 录锚层：`reviewed_sha` 是失鲜判定的唯一真相源。
+"""〔sweep-pool-debt D3/D4〕内容锚层：`reviewed_sha`（监视域 manifest 的 sha256，64-hex）+
+`reviewed_manifest`（manifest 的 base64 编码）是失鲜判定的唯一真相源，双字段密码学互锁。
 
-覆盖 tasks 5.6a（缺失）/ 5.6b（格式非法）/ 5.6c（对象不存在或非 commit）/ 5.6d（结论在锚缺），
-外加两层校验的分层证据（语法级留在纯文本 parser、语义级在 read_reviewed_sha）与「反推锚已退役」。
+覆盖：缺失（missing）/ 格式非法（invalid，含旧 40-hex 格式锚）/ 与 manifest 不互证（invalid）/
+结论在锚缺，外加两层校验的分层证据（语法级留在纯文本 parser、语义级在 `_read_anchor`）与
+「反推锚已退役」「锚不再解析为任何 git 对象」。
 
 口径：退出码类断言一律经 CLI 公共入口（`main()`）求值，不调内部 helper——
 `fix-design-gate-freshness-proxy` 的 rename 用例即栽在「只调内部 helper，真洞存在时仍绿」。
 """
+import base64
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from conftest import commit_all, mkchange, head_sha, write_report, sg_frontmatter
+from conftest import commit_all, mkchange, head_sha, write_report, sg_frontmatter, fingerprint
 from test_gate_preflight import run_gate
 from test_gate_impl_progress import approved_change, PLAN2_TICKETS, _sg
 
-GOOD_SHA = "0123456789abcdef0123456789abcdef01234567"   # 语法合法、语义上本仓解析不到
+GOOD_SHA = "0123456789abcdef0123456789abcdef01234567"   # 语法合法（40-hex，旧格式）——
+                                                          # live 侧现在恰恰因为"是 40 位"而非法
 
 
 def _git(repo, *args):
@@ -25,7 +30,7 @@ def _git(repo, *args):
 
 
 def _seeded(repo):
-    """建一个「四件套已落盘提交」的仓，返回 (change 目录, 被批准盘面的 sha)。"""
+    """建一个「四件套已落盘提交」的仓，返回 (change 目录, 该提交 sha)。"""
     d = mkchange(repo)
     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     (d / "design.md").write_text("# d\n", encoding="utf-8")
@@ -36,9 +41,9 @@ def _seeded(repo):
 # ── 5.6a / 5.6d：锚缺失 ───────────────────────────────────────────────────
 
 def test_missing_anchor_is_unknown_and_names_the_field(repo):
-    # 5.6d：结论字段在（design_approved: true）、锚字段缺 → UNKNOWN(6)，诊断点名缺的是 reviewed_sha。
+    # 5.6d：结论字段在（design_approved: true）、锚字段缺 → UNKNOWN(6)，诊断点名缺的字段。
     d, _sha = _seeded(repo)
-    write_report(d, "spec-review-report.md", None,       # sha=None ⇒ 不写 reviewed_sha
+    write_report(d, "spec-review-report.md",       # sha=None ⇒ 不写任何锚字段
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (no anchor)")
     code, js, _ = run_gate(repo)
@@ -47,11 +52,24 @@ def test_missing_anchor_is_unknown_and_names_the_field(repo):
     assert js["cause_category"] == "anchor-missing"
 
 
+def test_missing_manifest_only_is_unknown_and_names_the_field(repo):
+    # 双字段互锁：只写 reviewed_sha、不写 reviewed_manifest ⇒ 同样判缺锚。
+    d, sha = _seeded(repo)
+    real_sha, _manifest = fingerprint(repo, sha, "design")
+    write_report(d, "spec-review-report.md", real_sha, None,
+                 body="# 设计审报告\n", design_approved="true")
+    commit_all(repo, "spec-review report (sha only, no manifest)")
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN"
+    assert "reviewed_manifest" in js["reason"]
+    assert js["cause_category"] == "anchor-missing"
+
+
 def test_missing_anchor_does_not_fall_back_to_inferred_anchor(repo):
     # 5.6a 的承重半场：缺锚 MUST NOT 回退反推式锚。旧实现（report_last_sha）在这个盘面上
     # 能推出锚、判 fresh 并放行到 RUN_PLAN；新实现 MUST 是 UNKNOWN(6)。
     d, _sha = _seeded(repo)
-    write_report(d, "spec-review-report.md", None,
+    write_report(d, "spec-review-report.md",
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (no anchor)")
     code, js, _ = run_gate(repo)
@@ -66,10 +84,10 @@ BAD_SYNTAX = [
     ("0123456", "缩写 SHA"),
     ("HEAD", "符号式 revision"),
     ("refs/heads/main", "ref 名"),
-    ("0123456789ABCDEF0123456789ABCDEF01234567", "大写 hex（非单一规范形）"),
+    ("0123456789ABCDEF0123456789ABCDEF01234567", "大写 hex（非单一规范形，40 位）"),
     ("0123456789abcdef0123456789abcdef0123456", "39 位（差一位）"),
     ("0123456789abcdef0123456789abcdef012345678", "41 位（多一位）"),
-    ("g123456789abcdef0123456789abcdef01234567", "含非 hex 字符"),
+    ("g123456789abcdef0123456789abcdef01234567", "含非 hex 字符（40 位）"),
 ]
 
 
@@ -81,11 +99,10 @@ def test_syntactically_invalid_anchor_is_unknown(repo, bad, why):
     commit_all(repo, "spec-review report (bad anchor)")
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN", f"{why} 竟未被拦下"
-    # [fix1 · F2] 只断 code==6 太弱：missing / unresolvable 两组都断了 cause_category，独缺本组，
+    # [fix1 · F2] 只断 code==6 太弱：missing 组已断了 cause_category，独缺本组，
     # 于是「生产路径拿到的是通用坏-frontmatter 措辞、无 anchor-invalid 专属诊断」（F1）从这里漏过去。
-    # anchor-invalid 原本唯一的强断言在直调内部 helper 的用例里——正是本文件开头口径要防的假绿形态。
     assert js["cause_category"] == "anchor-invalid", f"{why} 未走 anchor-invalid 专属诊断"
-    assert "40 位小写 hex" in js["reason"], f"{why} 缺该类专属可行动措辞"
+    assert "64 位小写 hex" in js["reason"], f"{why} 缺该类专属可行动措辞"
 
 
 @pytest.mark.parametrize("bad,why", BAD_SYNTAX, ids=[c[0][:12] for c in BAD_SYNTAX])
@@ -97,70 +114,99 @@ def test_syntax_layer_lives_in_the_pure_text_parser(bad, why):
     assert state == {} and err == ("reviewed_sha", "out-of-domain"), f"{why} 未在语法层被拒"
 
 
-def test_syntax_layer_accepts_full_lowercase_oid():
-    state, err = _sg.parse_ship_gate_frontmatter(
+def test_syntax_layer_accepts_full_lowercase_oid_both_lengths():
+    # 〔DT-1 校验分层〕语法层放宽为「40 或 64 位小写 hex」——40-hex（旧归档格式）与
+    # 64-hex（新内容锚格式）在**解析层**都合法，语义分流（"64 位是唯一 live 有效格式"）
+    # 是 `_read_anchor` 的职责，不是这一层的。
+    state40, err40 = _sg.parse_ship_gate_frontmatter(
         sg_frontmatter(GOOD_SHA, design_approved="true"))
-    assert err is None and state["reviewed_sha"] == GOOD_SHA
-    assert state["design_approved"] is True          # 与结论字段同层、同块解析出来
+    assert err40 is None and state40["reviewed_sha"] == GOOD_SHA
+    assert state40["design_approved"] is True          # 与结论字段同层、同块解析出来
+
+    sha64 = "a" * 64
+    state64, err64 = _sg.parse_ship_gate_frontmatter(
+        sg_frontmatter(sha64, design_approved="true"))
+    assert err64 is None and state64["reviewed_sha"] == sha64
 
 
-# ── 5.6c：语义级——对象不存在 / 不是 commit ───────────────────────────────
+# ── 5.6c：语义级——live 侧要求 64-hex + manifest 互证（不再解析任何 git 对象）───
 
-def test_anchor_object_absent_is_unknown(repo):
-    d, _sha = _seeded(repo)
-    write_report(d, "spec-review-report.md", GOOD_SHA,   # 语法合法，本仓无此对象
+def test_old_format_40_hex_anchor_is_unknown_on_live(repo):
+    # 〔sweep-pool-debt〕旧格式（40-hex commit-OID）锚在 live 侧判非法——不再尝试把它解析
+    # 为 git 对象（该语义级检查已随内容锚整体删除），而是直接按"不是 64 位"拒绝。manifest
+    # 字段须同时给出（任意语法合法值即可，不必真互证）——否则会先撞"锚缺失"，测不到这一格。
+    d, sha = _seeded(repo)
+    _real_sha, real_manifest = fingerprint(repo, sha, "design")
+    write_report(d, "spec-review-report.md", GOOD_SHA, real_manifest,
                  body="# 设计审报告\n", design_approved="true")
-    commit_all(repo, "spec-review report (dangling anchor)")
+    commit_all(repo, "spec-review report (old 40-hex anchor)")
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN"
-    assert js["cause_category"] == "anchor-unresolvable"
-    assert "force-push" in js["reason"]               # 该类的专属可行动措辞
+    assert js["cause_category"] == "anchor-invalid"
+    assert "重跑写锚脚本" in js["reason"]
 
 
-@pytest.mark.parametrize("kind", ["blob", "tree"])
-def test_anchor_pointing_at_non_commit_object_is_unknown(repo, kind):
-    # 语法级放行（是真 40 位 OID）、语义级 MUST 拦下：`^{commit}` 后缀使 blob/tree 落进 rc≠0。
-    d, _sha = _seeded(repo)
-    if kind == "blob":
-        oid = _git(repo, "hash-object", "-w", str(d / "proposal.md"))
-    else:
-        oid = _git(repo, "rev-parse", "HEAD^{tree}")
-    assert len(oid) == 40
-    write_report(d, "spec-review-report.md", oid,
+def test_manifest_not_matching_sha_is_unknown(repo):
+    """双字段不互证（64-hex 语法合法，但与 reviewed_manifest 解码后的 sha256 对不上）
+    ⇒ UNKNOWN(6)，anchor-invalid。"""
+    d, sha = _seeded(repo)
+    real_sha, real_manifest = fingerprint(repo, sha, "design")
+    tampered_sha = ("0" if real_sha[0] != "0" else "1") + real_sha[1:]   # 翻一位
+    write_report(d, "spec-review-report.md", tampered_sha, real_manifest,
                  body="# 设计审报告\n", design_approved="true")
-    commit_all(repo, f"spec-review report ({kind} anchor)")
+    commit_all(repo, "spec-review report (tampered anchor)")
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN"
-    assert js["cause_category"] == "anchor-unresolvable"
+    assert js["cause_category"] == "anchor-invalid"
+
+
+def test_manifest_not_valid_base64_is_unknown(repo):
+    d, sha = _seeded(repo)
+    real_sha, _real_manifest = fingerprint(repo, sha, "design")
+    write_report(d, "spec-review-report.md", real_sha, "not-base64-!!!",
+                 body="# 设计审报告\n", design_approved="true")
+    commit_all(repo, "spec-review report (bad base64 manifest)")
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN"
+    assert js["cause_category"] == "anchor-invalid"
 
 
 def test_semantic_layer_reads_valid_anchor(repo):
-    # 分层证据②：语义级在 read_reviewed_sha（需 root，做 git 调用）。正例返回锚本身。
+    # 分层证据②：语义级在 `_read_anchor`（需 root，做互证）。正例返回锚本身。
     d, sha = _seeded(repo)
-    write_report(d, "spec-review-report.md", sha,
+    real_sha, real_manifest = fingerprint(repo, sha, "design")
+    write_report(d, "spec-review-report.md", real_sha, real_manifest,
                  body="# 设计审报告\n", design_approved="true")
     rel = "openspec/changes/demo/spec-review-report.md"
-    assert _sg.read_reviewed_sha(repo, rel) == sha
+    assert _sg.read_reviewed_sha(repo, rel) == real_sha
 
 
-@pytest.mark.parametrize("anchor,category", [
-    (None, "anchor-missing"),
-    ("HEAD", "anchor-invalid"),
-    (GOOD_SHA, "anchor-unresolvable"),
-])
-def test_semantic_layer_raises_typed_payload(repo, anchor, category):
-    # GateIndeterminate MUST 携带结构化 payload：category 供 main() 机械分派，三类各不相同。
-    d, _sha = _seeded(repo)
-    write_report(d, "spec-review-report.md", anchor,
-                 body="# 设计审报告\n", design_approved="true")
+@pytest.mark.parametrize("case", ["missing", "old-40-hex", "tampered"])
+def test_semantic_layer_raises_typed_payload(repo, case):
+    # GateIndeterminate MUST 携带结构化 payload：category 供 main() 机械分派。
+    d, sha = _seeded(repo)
+    real_sha, real_manifest = fingerprint(repo, sha, "design")
+    if case == "missing":
+        write_report(d, "spec-review-report.md",
+                     body="# 设计审报告\n", design_approved="true")
+        expected = "anchor-missing"
+    elif case == "old-40-hex":
+        write_report(d, "spec-review-report.md", GOOD_SHA, real_manifest,
+                     body="# 设计审报告\n", design_approved="true")
+        expected = "anchor-invalid"
+    else:
+        tampered = ("0" if real_sha[0] != "0" else "1") + real_sha[1:]
+        write_report(d, "spec-review-report.md", tampered, real_manifest,
+                     body="# 设计审报告\n", design_approved="true")
+        expected = "anchor-invalid"
     rel = "openspec/changes/demo/spec-review-report.md"
     with pytest.raises(_sg.GateIndeterminate) as ei:
         _sg.read_reviewed_sha(repo, rel)
-    assert ei.value.category == category
+    assert ei.value.category == expected
 
 
 def test_indeterminate_reasons_are_mutually_distinguishable():
-    # 五类原因各给**各自可行动**的诊断——MUST NOT 用一句「git 调用失败」打天下。
+    # 各类原因各给**各自可行动**的诊断——MUST NOT 用一句「git 调用失败」打天下。
     reasons = {c: _sg._indeterminate_reason(_sg.GateIndeterminate("x", c))
                for c in _sg._INDETERMINATE_ADVICE}
     assert len(set(reasons.values())) == len(reasons), "存在两类原因给出同一句诊断"
@@ -172,7 +218,7 @@ def test_indeterminate_reasons_are_mutually_distinguishable():
 def test_code_review_report_missing_anchor_is_unknown(repo):
     from test_gate_tail import impl_done
     d = impl_done(repo)
-    write_report(d, "code-review-report.md", None,
+    write_report(d, "code-review-report.md",
                  body="# 代码审报告\n", code_review="pass")
     commit_all(repo, "cr report (no anchor)")
     code, js, _ = run_gate(repo)
@@ -182,9 +228,10 @@ def test_code_review_report_missing_anchor_is_unknown(repo):
 def test_verify_report_missing_anchor_is_unknown(repo):
     from test_gate_tail import impl_done
     d = impl_done(repo)
-    write_report(d, "code-review-report.md", head_sha(repo),
+    sha, manifest = fingerprint(repo, head_sha(repo), "code")
+    write_report(d, "code-review-report.md", sha, manifest,
                  body="# 代码审报告\n", code_review="pass")
-    write_report(d, "verify-report.md", None,
+    write_report(d, "verify-report.md",
                  body="# 验证报告\n", verify="PASS")
     commit_all(repo, "reports (verify without anchor)")
     code, js, _ = run_gate(repo)
@@ -201,11 +248,21 @@ def test_inferred_anchor_helper_is_gone():
     assert "report_last_sha(" not in src, "仓内仍有 report_last_sha 调用点"
 
 
+def test_anchor_never_resolved_as_git_object():
+    """〔sweep-pool-debt〕锚已从 commit-sha 把手改为内容 digest——`_read_anchor` 的实现
+    MUST NOT 再调用 `cat-file -e ... ^{commit}` 之类把锚值当 git ref 解析的代码。"""
+    src = inspect_source(_sg._read_anchor)
+    assert "cat-file" not in src and "^{commit}" not in src
+
+
+def inspect_source(fn):
+    import inspect
+    return inspect.getsource(fn)
+
+
 def test_touching_the_report_does_not_move_the_anchor(repo):
     # 5.5 的核心不变量（本票半场）：锚是**录下来的常量**，任何后续提交顺带碰一下报告文件
     # 都推不动它。旧反推实现在此盘面上会把锚前移到「排版提交」，从而把锚前的设计改动埋掉。
-    # ⚠ 本条的变异手段与其余不同源：新实现里没有「反推逻辑」可删（复活 report_last_sha
-    #   直接违反 Compliance），故以**旧实现为参照物**做对比——见 impl-report Task1 §变异证明。
     d = approved_change(repo, plan=PLAN2_TICKETS)
     (d / "design.md").write_text("# 拍板后偷改设计\n", encoding="utf-8")
     commit_all(repo, "docs: 改设计（未重审）")
@@ -225,14 +282,12 @@ def test_fixture_two_stage_model_puts_artifacts_before_report(repo):
     assert subjects[0] == "spec-review report (approved)"       # 报告单独一段
     assert "seed change artifacts" in subjects                   # 四件套先落盘
     anchor = _sg.read_reviewed_sha(repo, "openspec/changes/demo/spec-review-report.md")
-    # 锚指向的提交 MUST 已含被批准的四件套，且 MUST NOT 是报告那一提交
-    assert anchor != head_sha(repo)
-    assert _git(repo, "cat-file", "-t", anchor) == "commit"
-    assert "proposal.md" in _git(repo, "ls-tree", "-r", "--name-only", anchor)
+    # 锚是内容指纹（64-hex），不是任何 commit 对象；仍可核验其对应"被批准盘面"的内容互证
+    assert len(anchor) == 64
 
 
 def test_fixture_third_stage_models_pre_approval_revision(repo):
-    # 4.1b：三段模型（四件套 → 二次修订 → 报告）。锚指修订**之后** ⇒ 拍板即自洽，不失鲜。
+    # 4.1b：三段模型（四件套 → 二次修订 → 报告）。锚含修订**之后** ⇒ 拍板即自洽，不失鲜。
     def revise(d):
         (d / "design.md").write_text("# 拍板前二次修订\n", encoding="utf-8")
 
@@ -245,8 +300,7 @@ def test_fixture_third_stage_models_pre_approval_revision(repo):
 
 def test_fixture_third_stage_can_express_adr7b_selflock(repo):
     # 4.1b 的存在理由：两段模型表达不出 ADR-7(b) 的自锁形态。锚指修订**之前**的提交
-    # ⇒ 拍板刚完成、第一次跑 gate 就 REFUSE_START。本用例证明基座能构造出该盘面
-    # （守 ADR-7(b) 的完整端到端用例属 5.17，在评审 SKILL 时序票内）。
+    # ⇒ 拍板刚完成、第一次跑 gate 就 REFUSE_START。
     def revise(d):
         (d / "design.md").write_text("# 拍板前二次修订（未单独落盘的等价形态）\n",
                                      encoding="utf-8")
@@ -257,17 +311,9 @@ def test_fixture_third_stage_can_express_adr7b_selflock(repo):
 
 
 # ══ [harden-gate-git-layer Task6 · ADR-7(b) · 测试 5.17] design 域拍板前二次修订，端到端 ══
-#
-# Step3 checkpoint 之后、拍板回写之前再改 design.md（二次修订）。ADR-7(b) 时序把该修订
-# **单独 checkpoint 提交**后再回写锚 ⇒ reviewed_sha 指向**包含**该修订的提交 ⇒ 拍板后首次
-# gate 调用不被拒；反之（修订与回写落进同一提交，锚只能取修订前）⇒ 拍板刚完成即 REFUSE_START。
-#
-# 🔴 变异角色：下方 `_anchored_before_self_locks` 既是 ADR-7(b) 时序纪律的对照物，又是真实的
-#   ship_gate design 域守卫变异体——它落在实现窗口（plan 在、无 checkpoint → CONTINUE_IMPL），
-#   拆掉 design 域失鲜求值（emit_windowed / ls-tree 映射比较任一）后其 REFUSE_START 断言即转红。
 
 def test_adr7b_second_revision_anchored_after_is_not_refused(repo):
-    """[5.17 正例] 二次修订单独落盘、锚指含修订的提交 ⇒ 拍板后首次 gate 不被拒。"""
+    """[5.17 正例] 二次修订单独落盘、锚含修订的内容指纹 ⇒ 拍板后首次 gate 不被拒。"""
     def revise(d):
         (d / "design.md").write_text("# 拍板前二次修订（已单独落盘）\n", encoding="utf-8")
 
@@ -279,9 +325,9 @@ def test_adr7b_second_revision_anchored_after_is_not_refused(repo):
 
 
 def test_adr7b_second_revision_anchored_before_self_locks(repo):
-    """[5.17 变异证明] 让锚指向二次修订**之前**的提交（模拟修订与 frontmatter 回写落进同一
-    次提交的错误时序）⇒ 修订落在锚之后、且在实现窗口内 ⇒ design 域失鲜 ⇒ 拍板刚完成、第一次
-    跑 gate 就 REFUSE_START(exit 3)。本用例即「让锚指向改动前的提交 ⇒ 用例变红」的落地。"""
+    """[5.17 变异证明] 让锚指向二次修订**之前**提交的内容指纹（模拟修订与 frontmatter
+    回写落进同一次提交的错误时序）⇒ 修订落在锚之后、且在实现窗口内 ⇒ design 域失鲜 ⇒
+    拍板刚完成、第一次跑 gate 就 REFUSE_START(exit 3)。"""
     def revise(d):
         (d / "design.md").write_text("# 拍板前二次修订（未单独落盘的等价形态）\n",
                                      encoding="utf-8")
