@@ -390,8 +390,9 @@ change 名此时即可定（A.2 禁止清单已保证目标态一句话可写出
    重算纪要正文（frontmatter 之外全文）hash，与 frontmatter 比对；`generated_at` 一并
    **读出来呈现给人**（不可解析或落在未来 ⇒ 同样请人确认）。
 
-任一不过 ⇒ **拒绝进入生成，退回相位 B**，并向人说明缺口。判 3/判 4 不过 ⇒ **呈现旧 memo
-摘要 + `generated_at` 给人确认**（复用还是重做 B），**MUST NOT 静默复用**——非空 memo 在
+任一不过 ⇒ **拒绝进入生成，退回相位 B**，并向人说明缺口。
+身份不符（判 3）或 hash 不符（判 4）⇒ **呈现旧 memo 摘要 + `generated_at` 给人确认**
+（复用还是重做 B），**MUST NOT 静默复用**——非空 memo 在
 「只查存在且非空」下全绿，但 hash 不符意味着**定稿后被手改过**，memo 已非人记得的那份共识。
 🔴 `decision_hash`/`generated_at` **缺失**是另一回事（B 收敛两步没走完）⇒ **退回 B 补定稿**，
 MUST NOT 按「身份不匹配」去问人复用与否。
@@ -400,7 +401,9 @@ MUST NOT 按「身份不匹配」去问人复用与否。
 
 每步读 `dependencies` 对象列表（含 `id`/`done`/`path`/`description`），按
 [`references/execution-protocol-details.md`](references/execution-protocol-details.md)
-的判据表核对本产物 MUST 先全文读哪些既有产物。图已覆盖按图读；图不足则回退写死超集，不得跳过。
+的判据表核对本产物 MUST 先全文读哪些既有产物：`proposal.md`+`design.md`+`specs/**` 三份是
+`tasks.md` 需要的既有产物集合。图已覆盖按图读；图不足则回退写死超集：`specs` 读
+`proposal.md`+`design.md`，`tasks` 读 `proposal.md`+`design.md`+`specs/**`，不得跳过。
 
 ### C.3 逐产物生成协议（串行，一次一个）
 
@@ -408,16 +411,17 @@ MUST NOT 按「身份不匹配」去问人复用与否。
    ```bash
    openspec instructions <artifact> --change "<name>" --json
    ```
-2. **最小 schema 断言**：必需字段 `artifactId`/`instruction`/`template`/`resolvedOutputPath`(str)
-   + `dependencies`(list，每项含 `id`/`done`/`path`/`description`)；
-   `context` / 当前 artifact 的 `rules` 若存在须为 str/list，生成方 MUST 把二者作为生成约束应用、MUST NOT 复制进产物
+2. **最小 schema 断言**：必需字段 `artifactId`(str) · `instruction`(str) · `template`(str) ·
+   `resolvedOutputPath`(str) · `dependencies`(list)。`dependencies` MUST 是对象列表，每项含
+   `id` / `done` / `path` / `description`；`context` / 当前 artifact 的 `rules` 若存在，
+   MUST 分别为字符串 / 列表；生成方 MUST 把二者作为生成约束应用，MUST NOT 复制进产物
    （workflow 引用经 `~/.sdflow/hack/resolve-workflow.sh --root <repo>` 解析后全文读）。
-   任一必需字段缺失或类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，
+   任一必需字段缺失或字段类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，
    **MUST NOT 重试同一调用**。
 3. **先处理载荷语义，再写入**：
    - 成对的 `<!-- sdflow:delegation:start -->` / `<!-- sdflow:delegation:end -->` 区块须在**应用载荷前**整段剥离，MUST NOT 解析 Markdown；均无是 no-op，缺失/乱序/不成对则 fail-closed 报 problem+cause+fix。
    - `resolvedOutputPath` 为 glob 时只是模式，按 instruction 推导具体 `specs/<capability>/spec.md`；既有产物只取 `status --json` 的 `artifactPaths.<id>.existingOutputPaths`。
-   - 生成前读 status；`skipped` 时跳过，MUST NOT 创建任何对应文件，并从依赖阅读清单移除该 artifact。
+   - 生成前读 status；`status` 为 `skipped` 时跳过，MUST NOT 创建任何对应文件，并从依赖阅读清单移除该 artifact。
 4. **路径净化**（`resolvedOutputPath` 来自第三方 CLI，直接当写入目标 = confused deputy）：
    canonicalize 后 MUST 满足 —— ① 严格位于 `openspec/changes/<name>/` 内 ② 落在 artifact
    allowlist（`proposal.md`/`design.md`/`tasks.md`/`specs/**/*.md`）③ 仓根到目标**逐组件都不是
