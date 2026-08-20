@@ -194,10 +194,10 @@ design 域监视集 SHALL 为 `proposal.md` / `design.md` / `specs/`——`tasks
 
 机械层 MUST NOT 使用下列任一方式判定「被审内容是否改变」：`git log --name-only`、`git diff-tree -m`、`git diff-tree --cc`、负向 pathspec、整棵树的 sha。这些方式已累计产出实测复现的缺陷（详见 `openspec/adr/0026`），且互为解药兼病灶、可被外部 config/env 翻转。
 
-机械层 MUST 改为直接比较内容，且锚侧内容由报告 frontmatter 记录的**内容锚**承载〔sweep-pool-debt D3〕——`reviewed_manifest`（监视域 `path → (mode, type, oid)` 规范行清单，按 path 排序）+ `reviewed_sha`（manifest 规范字节流的 sha256，64 位 hex），比较不再解析任何 commit：
+机械层 MUST 改为直接比较内容，且锚侧内容由报告 frontmatter 记录的**内容锚**承载〔sweep-pool-debt D3〕——`reviewed_manifest`（监视域 `path → (mode, type, oid)` 规范记录清单，按**原始 path 字节序**排序）+ `reviewed_sha`（manifest 规范字节流的 sha256，64 位 hex），比较不再解析任何 commit。**manifest 规范编码 MUST 字节保真**〔spec-review-amendment〕：记录取 `ls-tree -z` 原始 path 字节（git 合法路径可含 Tab / 换行 / 非 UTF-8 字节），frontmatter 存储用单行字节保真编码（如 base64 规范字节流），digest 对解码后原始字节计算；MUST NOT 依赖 YAML 文本行清单的转义/归一化承载 manifest（编码欠定义 ⇒ 同内容不同 digest 的假失鲜，或异路径折叠为同记录的假等值）；互证 = 解码字节流的 sha256 == `reviewed_sha`：
 
 - **design 域** MUST 以 HEAD 侧重算的监视集 manifest 求 digest，与锚 digest 等值比较；不等即失鲜。监视集 SHALL 为 change 目录内 `proposal.md` / `design.md` / `specs/`（`tasks.md` 不在集内〔D2〕）。诊断 MUST 以锚 manifest 与 HEAD 侧枚举的差集点名路径（配 `git log -1 -- <路径>` 点名提交）。HEAD 侧枚举 MUST 完整覆盖监视集——「锚有而 HEAD 已删」「HEAD 新增」均体现为 manifest 差异，两方向均判失鲜，MUST NOT fail-open。
-- **code 域** MUST 比较 `git ls-tree` 顶层条目映射（排除 `openspec` 条目后）的同构内容锚。
+- **code 域** MUST 比较 `git ls-tree` 顶层条目映射（排除 `openspec` 条目后）的同构内容锚——锚值同为 manifest digest，gate MUST 以 HEAD 侧重算 digest 与锚等值比较，MUST NOT 将锚值作为 git ref 解析（与 design 域共用同一指纹实现）〔spec-review-amendment：现实现 code 分支以锚 sha 取 `ls_tree_map`，迁移 MUST 覆盖该分支，否则 verify/code-review 锚检查在新格式下恒 UNKNOWN〕。
 - 失鲜判定 SHALL 为纯指纹等值，MUST NOT 保留任何按提交范围求值的豁免通道（合法尾流修订走 producer 重锚协议〔D9〕）。
 
 #### Scenario: 实现期不得让设计门失鲜
@@ -218,6 +218,12 @@ design 域监视集 SHALL 为 `proposal.md` / `design.md` / `specs/`——`tasks
 - **WHEN** `tasks.md` 的复选框状态被翻转（不触及 `proposal.md` / `design.md` / `specs/`）
 - **THEN** gate MUST 判 design 域 fresh，且与当前处于哪个阶段无关——`tasks.md` 不在监视集内，本结论不依赖任何内容判据〔sweep-pool-debt D2〕
 - **AND** 原勾选框内容豁免判据（标记归一化 / 行位置对齐 / 保真读取 / fence 锚定）随监视集调整**整体退役并物理删除**，MUST NOT 留死代码
+
+#### Scenario: 控制字符与非 UTF-8 路径下 manifest 稳定〔spec-review-amendment〕
+
+- **WHEN** 监视域内存在含 Tab / 换行 / 非 UTF-8 字节的路径（git 合法路径域），或监视文件内容含 CRLF
+- **THEN** 写锚与验锚两侧对同一盘面 MUST 得到字节相同的 manifest 与相同 digest（round-trip 无损）；不同路径 MUST NOT 折叠为同一 manifest 记录
+- **AND** MUST 有 round-trip 用例覆盖 Tab、换行、非 UTF-8 路径与 CRLF 内容
 
 #### Scenario: 合并把已批准产物换回锚前旧内容
 
@@ -277,12 +283,19 @@ design 域监视集 SHALL 为 `proposal.md` / `design.md` / `specs/`——`tasks
 - **THEN** gate MUST 判 `UNKNOWN`（exit 6），MUST NOT 回退到任何反推式锚、MUST NOT 判 fresh
 - **AND** 格式与互证校验 MUST 为纯文本层（无需 git 调用），供 live 读与归档文本读共用
 - **AND** reader 契约 MUST 与 producer 同批落地：只落 producer 会使新锚永不被读取，只落 reader 会使存量报告全部 fail-closed
-- **AND** 存量旧格式锚（40 位 commit OID）的报告 MUST 要求重跑写锚（结论字段随对应门的既有流程处置），MUST NOT 为兼容而实现双读
+- **AND** 存量旧格式锚（40 位 commit OID）的 **live** 报告 MUST 要求重跑写锚（结论字段随对应门的既有流程处置），MUST NOT 为兼容而实现双读；归档报告不可变、无法重跑，其处置见下「归档报告旧 40-hex 锚不阻断 SHIPPED」Scenario〔spec-review-amendment〕
+
+#### Scenario: 归档报告旧 40-hex 锚不阻断 SHIPPED〔spec-review-amendment〕
+
+- **WHEN** 某归档目录 `verify-report.md` frontmatter 含 `verify: PASS` 且携旧格式 `reviewed_sha`（40 位 commit OID，归档于本迁移前；归档不可变，无法重锚）
+- **THEN** `archived_verify_state` MUST 识别 `verify: PASS` → 支持 SHIPPED；归档读点对 `reviewed_sha` / `reviewed_manifest` 的值格式与互证 MUST NOT 参与「坏 frontmatter」判定（归档只消费 `verify` 结论）——MUST NOT 因旧锚字段令存量归档报告（现 34 份携 40-hex 锚）整体判 `none` 而致 SHIPPED 大面积回归
+- **AND** live 读点不受本条影响：live 的 64-hex + 互证校验照常 fail-closed
+- **AND** MUST 有归档 fixture 用例（40-hex `reviewed_sha` + `verify: PASS` → SHIPPED），其变异证明 = 令归档读点也执行 64-hex 值校验 ⇒ 用例变红
 
 #### Scenario: 结论字段与锚 MUST 原子写入
 
 - **WHEN** producer 写入评审结论字段（如 `design_approved`）与锚字段
-- **THEN** 二者 MUST 在同一次文件写入中落盘
+- **THEN** 二者 MUST 在同一次文件写入中落盘——写锚脚本 MUST 支持同批写入结论字段，producer 以一次脚本调用同时落结论+锚（单次原子替换）；MUST NOT 先手写结论字段、再调脚本补锚〔spec-review-amendment：脚本只写锚字段的形态与本条正面冲突〕
 - **AND** 否则中断可产生「结论字段已在、锚缺失」的中间态：该态下结论字段判定通过、锚读取却 fail-closed，撞门者得不到「缺的是哪个字段」的指引
 
 ### Requirement: 内容比较 MUST 区分读失败与内容为空
@@ -377,4 +390,4 @@ git 子进程 MUST 中和一切能改变判定输入的外部可控态：配置�
 
 **Reason**: 失鲜锚迁移为内容锚（manifest + digest，sweep-pool-debt D2/D3/D9）后，本 Requirement 的「勾选框以外的一切 tasks.md 改动照判失鲜」等场景与目标态行为正面矛盾，而场景级删除无 delta 通道，故整块退役、由 ADDED 的「阶段三编排台账确定性（ship_gate·内容锚）」原位取代。
 
-**Migration**: 未变场景原文全部迁入 ADDED 块；变更点 = design 域监视集移出 `tasks.md`（D2）、勾选框内容豁免与 `checkpoint(impl-review)` subject 豁免通道退役改 producer 重锚协议（D9）、REFUSE_START 诊断分类按指纹判据更新。消费方（`ship_gate.py` 与其测试）随本 change 票 1 同批迁移。
+**Migration**: 未变场景原文全部迁入 ADDED 块；变更点 = design 域监视集移出 `tasks.md`（D2）、勾选框内容豁免与 `checkpoint(impl-review)` subject 豁免通道退役改 producer 重锚协议（D9）、REFUSE_START 诊断分类按指纹判据更新。消费方（`ship_gate.py` 与其测试）随本 change 票 1 同批迁移。〔spec-review-amendment 定性订正〕subject 豁免通道的 **gate 端代码已于先前 impl-review-fix change 物理删除**（本 spec 原文对其的描述是滞后死文字）——该部分变更点实为 spec 文本追认代码现状 + producer 重锚协议**新建**，非 gate 行为变更；勾框内容豁免的代码仍在、随票 1 真删。
