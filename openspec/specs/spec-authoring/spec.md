@@ -425,7 +425,7 @@ openspec CLI 不可用、报错或 schema 不兼容 SHALL fail-closed 中止并�
 - **WHEN** change 的 `.openspec.yaml` 声明 `skip_specs: true`，`status --json` 报 `specs` 的 `status` 为 `"skipped"`
 - **THEN** 相位 C 跳过 specs 产物、不创建 `specs/` 下任何文件，且 tasks 的强制阅读清单不再要求读 specs；`validate --strict` 通过
 
-### Requirement: SA-17 相位 B scope 内聚检查与相位 C 切片建议生成〔harden-ticket-slicing〕
+### Requirement: SA-18 相位 B scope 内聚检查与相位 C 切片建议生成〔harden-ticket-slicing〕
 
 相位 B 收敛前检查（ADR/术语回扫的同一检查点）SHALL 增加 **scope 内聚检查**：按 change 拆分标准（单一源 `openspec/workflow/reference/change-decomposition-standard.md`，经 resolver 解析，指针引用 MUST NOT 复制标准文本）核目标态范围 = **一个完整内聚的阶段结果**——砍窄、加宽、混拼不相关功能均为偏离；发现偏离 SHALL 连同拆分/合并建议呈现给人拍板，MUST NOT 静默调整范围。
 
