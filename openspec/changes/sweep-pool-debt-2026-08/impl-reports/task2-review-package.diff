@@ -1,0 +1,800 @@
+# Review package: Task 2 (归档面收敛+CI) · a247cb0..92de147
+
+## Commits
+92de147 merge(sweep-pool-debt-2026-08): Task 2 归档面收敛+CI (worktree merge)
+c212a7d docs(sweep-pool-debt-2026-08): task2 impl-report — 归档面收敛细节 + 票外发现
+5e57619 fix(archive): 归档面收敛 tasks.md 复选框 + CI 加 validate --archived 机械门
+
+## Files changed
+ .github/workflows/mechanical-gates.yml             | 17 +++--
+ .../2026-07-02-issues-pool-batch-mgmt/tasks.md     |  2 +-
+ .../tasks.md                                       | 12 ++--
+ .../tasks.md                                       |  2 +-
+ .../2026-07-08-done-roadmap-writeback/tasks.md     |  2 +-
+ .../2026-07-10-matt-workflow-integration/tasks.md  |  2 +-
+ .../2026-07-10-rebuild-sdflow-roadmap-v2/tasks.md  |  6 +-
+ .../archive/2026-07-14-add-sdflow-devenv/tasks.md  |  8 +--
+ .../2026-07-16-add-codex-host-support/tasks.md     |  8 +--
+ .../2026-07-16-scoped-test-per-task/tasks.md       | 25 ++++---
+ .../tasks.md                                       |  6 +-
+ .../archive/2026-07-26-add-sdflow-spec/tasks.md    |  4 +-
+ .../tasks.md                                       |  4 +-
+ .../2026-07-29-fix-windows-encoding-crash/tasks.md |  5 +-
+ .../tasks.md                                       |  6 +-
+ .../tasks.md                                       | 30 +++++----
+ .../tasks.md                                       |  4 +-
+ .../tasks.md                                       | 46 +++++++------
+ .../impl-reports/task2-archive-convergence.md      | 77 ++++++++++++++++++++++
+ 19 files changed, 189 insertions(+), 77 deletions(-)
+
+## Diff
+diff --git a/.github/workflows/mechanical-gates.yml b/.github/workflows/mechanical-gates.yml
+index 2f35899..beb5871 100644
+--- a/.github/workflows/mechanical-gates.yml
++++ b/.github/workflows/mechanical-gates.yml
+@@ -98,36 +98,45 @@ jobs:
+       # `pytest.mark.skipif(shutil.which("openspec") is None)` 守着 —— 不装它，
+       # 门 2 的用例在**全部**泳道恒 skip（本地实测：`env PATH=/usr/bin:/bin` 跑同一文件，
+       # 门 2 全数 skip），即「泳道绿但承诺没兑现」，
+       # 本仓 fix-mechanical-layer-silent-failures 所治的同形病。
+       #
+       # **只铺一条泳道**（沿本文件「两条轴各自的理由互不相干，交叉只是重复验证」的既有取舍）：
+       # openspec 是 node CLI，其行为**与 os 无关、与 python 版本无关** ⇒ 铺满 4 条只是
+       # 同一信息重复 4 次，而 macOS 泳道按 10 倍计费。选最廉价的 ubuntu-latest × 3.12。
+       #
+       # **钉死版本**（同第 31 行「MUST NOT 用浮动版本」）：这 6 条用例断言的是
+-      # **CLI 1.5.0 的具体行为**（`validate --strict` 只覆盖 delta specs），
+-      # 浮动到新版会在发布当天无预警变红且历史 job 不可复现。本机实测基线即 1.5.0。
++      # **CLI 1.9.0 的具体行为**（`validate --strict` 只覆盖 delta specs），
++      # 浮动到新版会在发布当天无预警变红且历史 job 不可复现。本机实测基线即 1.9.0
++      # 〔sweep-pool-debt-2026-08 T294：1.5.0→1.9.0，同一批复核 6 条断言在 1.9.0 下仍绿〕。
+       # node 下限来自该包的 `engines: {node: ">=20.19.0"}`（实查 npm 全局包 package.json）。
+       - name: Setup Node (openspec CLI 的运行时 — 仅这一条泳道)
+         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+         uses: actions/setup-node@v4
+         with:
+           node-version: '22'
+       - name: Install openspec CLI (让 validate 门真跑起来)
+         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+         run: |
+-          npm install -g @fission-ai/openspec@1.5.0
++          npm install -g @fission-ai/openspec@1.9.0
+           openspec --version
+ 
+-      # 三道门各自独立跑、各自能红——不合并成一步，否则先失败的那道会掩盖后面的。
++      # 四道门各自独立跑、各自能红——不合并成一步，否则先失败的那道会掩盖后面的。
+       - name: Gate — async 调度段两处字节等值（ADR-5）
+         run: python hack/check_async_branch_parity.py
+ 
+       - name: Gate — 四条通则托管块与真相源一致
+         run: python hack/sync_principles.py --check
+ 
++      # 归档面校验（sweep-pool-debt-2026-08 T294 · archive-validation）：
++      # `openspec validate --archived` 对全量归档 change 做任务清单结构/完整度校验
++      # （tasks.md 复选框须全勾），本地已收敛至 0 failed；同一条件（仅此泳道装了 CLI）复用，
++      # 防回潮——任一归档 change 引入未勾复选框即当场红。
++      - name: Gate — 归档面校验（openspec validate --archived）
++        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
++        run: openspec validate --archived
++
+       - name: Full test suite
+         # `-rs` 让 skip 理由**逐条可见**：跨平台泳道上「本地 passed、CI 变 skipped」是
+         # 零信号静默降级的经典形态（泳道绿，但那几条根本没跑）。不打印理由就只能靠
+         # 数数猜是哪几条——本仓 fix-mechanical-layer-silent-failures 治的正是这类病。
+         run: python -m pytest -q -rs -W error
+diff --git a/openspec/changes/archive/2026-07-02-issues-pool-batch-mgmt/tasks.md b/openspec/changes/archive/2026-07-02-issues-pool-batch-mgmt/tasks.md
+index 5ea3b1e..0a51df9 100644
+--- a/openspec/changes/archive/2026-07-02-issues-pool-batch-mgmt/tasks.md
++++ b/openspec/changes/archive/2026-07-02-issues-pool-batch-mgmt/tasks.md
+@@ -34,18 +34,18 @@
+ ## 5. review UI + 验证 + 迁移影响
+ 
+ - [x] 5.1 review UI（`workflow/tools/engine.js`、`review.html`）读 `issues/` 新路径（可选改读 `INDEX.md`）〔I10，原 §5.7〕（**no-op**：engine.js 是通用 markdown 树浏览器，无 `buglists/todolists/issues` 硬编码路径——`issues/` 存在后天然可浏览、`issues/INDEX.md` 作 markdown 渲染即可，无需改代码。计划明确"无硬编码则跳过并注明"）
+ - [x] 5.2 **一致性自检**：`reindex` 生成的 `INDEX.md` 与 dated 文件 + `batches.md` 三处一致（表↔块↔INDEX 自检）〔原 §8.2〕
+ - [x] 5.3 脚本测试更新/新增：per-type（新路径、批次列兼容、scan 新维度、triage）+ 共享 `issues.py`（reindex 含终态集批次同步、batch、跨两池 join）
+ - [x] 5.4 其它使用 laodao-skills 项目的迁移影响已确认（OQ3）〔原 §8.5〕
+ 
+ ## 6. 收尾同步
+ 
+ - [x] 6.1 本仓 `openspec/INDEX.md` 若有规则/计数变更则同步（CLAUDE.md 硬性要求）
+-- [ ] 6.2 spec delta 2 条 Requirement 归档时并入 `openspec/specs/spec-workflow/`（opsx-done archive 步做）
++- [x] 6.2 spec delta 2 条 Requirement 归档时并入 `openspec/specs/spec-workflow/`（opsx-done archive 步做）（回填 2026-08-20：核验 `openspec/specs/spec-workflow/spec.md` 现含「债务池统一为 issues 结构且 INDEX 只生成」「批次注册表与 reindex 被动同步状态」两条 Requirement，已并入）
+ 
+ ## 7. Q1–Q3 裁决落地〔spec-review-amendment · provisional，待设计门确认〕
+ 
+ - [x] 7.1 **Q1 迁移加固**：`next_id`/`scan` 过渡期 **dual-read**（新 `issues/` + 旧 `buglists|todolists/` 都扫再取 max）；跨路径 **ID 撞号检测**（同 ID 报错）；proposal 记硬切风险〔Q1〕
+ - [x] 7.2 **Q2 批次命名保守化**：sweep 永远新建 1 批次 key=本change、禁跨 change 合并；`batch` 加 `rename`；reindex 对 orphan 批次 tag 显式报警不静默生成 ghost〔Q2〕（Task 10 已交付 `batch rename`——改 batches.md key + 同步 item 池两池的批次 tag；sweep 新建规则〔4.1〕与 reindex orphan 报警〔Task 11〕仍待）
+ - [x] 7.3 **Q3 batches.md grammar**：定字段级 grammar（生成行〔状态/成员〕vs 人写行〔计划/优先级/范围〕+ 分隔）；reindex 只 patch 生成行、绝不覆写人写行；"纠正"只追加警告标注、不越权改人写状态值〔Q3〕（Task 10 已定字段级 grammar 并在 `batch set-status`/`rename` 落实"只精确 patch 生成行、绝不覆写人写行"；reindex 对 `成员:` 的 patch + 纠正标注留 Task 11）
+ - [x] 7.4 三条若设计门被改选项，同步 design §8.2 + 本节任务
+diff --git a/openspec/changes/archive/2026-07-02-streamline-workflow-automation/tasks.md b/openspec/changes/archive/2026-07-02-streamline-workflow-automation/tasks.md
+index 7d936df..614d871 100644
+--- a/openspec/changes/archive/2026-07-02-streamline-workflow-automation/tasks.md
++++ b/openspec/changes/archive/2026-07-02-streamline-workflow-automation/tasks.md
+@@ -28,21 +28,21 @@
+ - [x] 3.1 verify 保持在 opsx-done（所有修复之后，不前移进 impl-review）〔P3f〕；加 P3h 防假✅（证据锚点 + Do-Not-Trust + 禁弱模型）
+ - [x] 3.2 新增 **hand-off.md 产出步**：verify 之后、archive 之前；内容=done/not-done + 延后项 + 下阶段建议；随归档留档〔P3g〕
+ - [x] 3.4 弃用官方 `/code-review` 作为独立 step（保留插件能力供历史镜/置信过滤内部借用）〔P3d〕
+ - ~~3.3 issues sweep 步~~ → **移出至 [ROADMAP.md](./ROADMAP.md)·Phase B**〔I5/I6〕
+ 
+ ## 4. 提交自动化（laodao-skills：checkpoint 脚本源 + step prompt + hook 源）　【Phase A ✓】
+ 
+ - [x] 4.1 新增 `hack/checkpoint-commit.sh`：接步骤名参数，`git add -A` + 固定 Conventional message；规避本机三坑（禁 `\`+heredoc / core.fileMode / CRLF）〔G4〕
+ - [x] 4.2 workflow.md 各 step prompt 末尾追加"完成后 checkpoint-commit"（skill 之间边界）〔G4/P1〕
+ - [x] 4.3 grill 多轮中途**不**提交，仅收敛后一次〔P1〕
+-- [ ] 4.4 ⊘ **跳过**（可选）：SessionEnd/Stop 警告 hook（检测未提交产物只告警）——用户决定跳过，随时可加〔G4 §5.3〕
++4.4 ⊘ **已作废（非勾选项）**：SessionEnd/Stop 警告 hook（检测未提交产物只告警）——用户当时明确决定跳过，从未执行；随时可加但非本 change 交付物〔G4 §5.3〕（回填 2026-08-20：可选项被用户显式跳过，不勾选，改写为无复选框说明段，非「为过门假勾」）
+ - [x] 4.5 不 squash（opsx-done commit 步兼容"实现期已逐 commit"）〔G5〕
+ 
+ ## 7. workflow bundle 源改写（laodao-skills `opsx-project-init/assets/`，非消费仓副本）　【Phase A 骨架 ✓】
+ 
+ > 〔grill-amendment〕**7.1 `workflow.md` 被 A/B/C 各增量改一次**（A 骨架 + checkpoint/hand-off 引用；B 追加 sweep 步引用；C 追加 outside-voice 步引用）。**7.5 的 TG-26 部分属 Phase C**（→ ROADMAP）。见 [ROADMAP.md](./ROADMAP.md) 约束 1/2。
+ 
+ - [x] 7.1 改写 `assets/workflow/workflow.md`：三阶段连续化**骨架**、step 表更新、去 2 个 `/clear`、去 step14、加 checkpoint/hand-off（sweep/outside-voice 引用留 B/C 增量加）〔全 G/P；G6〕
+ - [x] 7.2 改写 `assets/workflow/reference/quality-layering.md` §五：impl-review 从"高风险冷抽查"→"每次全跑独立强制主审"〔P3c〕
+ - [x] 7.3 **review UI 半归位**：源 `assets/review-tool/tools/` → `assets/workflow/tools/`；改 opsx-project-init 部署逻辑（`openspec/tools/` → `openspec/workflow/tools/`）+ review-stub.html/两 producer 路径引用；serve.sh + 根 review.html 留 openspec/ 根〔B1·grill-amendment〕
+ - [x] 7.4 checkpoint 脚本源进 `assets/hack/`（随 bundle 部署到消费仓 hack/）〔G4〕（可选 SessionEnd hook 见 4.4·跳过）
+@@ -51,13 +51,17 @@
+ ## 8. 验证（不改实现，仅核对本 change 产物自洽）　【Phase A：8.1 ✓｜8.2/8.3/8.4/8.5 → ROADMAP·B/C】
+ 
+ - [x] 8.1 决策表 Phase A 的 G/P/B 每条在 bundle/skill 改动中有对应落点，无悬空（收尾自检通过；I\*/C\* 属 B/C）
+ - ~~8.2 reindex INDEX 一致~~ → **ROADMAP·Phase B**
+ - ~~8.3 outside voice fallback 冒烟~~ → **ROADMAP·Phase C**
+ - ~~8.4 gstack 原生 voice 未触碰~~ → **ROADMAP·Phase C**
+ - ~~8.5 其它项目迁移影响确认（OQ3）~~ → **ROADMAP·Phase B**
+ 
+ ## 9. 下游消费仓采纳（**不在本 change 内**，仅登记；各消费仓 update 后各自做）　【routine，A merge 后】
+ 
+-- [ ] 9.1 〔下游〕消费仓跑 `opsx-project-init update` 重拉新 bundle（workflow/tools 归位、新 step prompt、hack/checkpoint-commit.sh）
+-- [ ] 9.2 〔下游·Phase B 后〕迁移各仓 `openspec/{buglists,todolists}/` 数据 → `issues/{buglist,todolist}/`，跑 `reindex` 建 INDEX/batches（走 destructive-commands 规则）
+-- [ ] 9.3 〔下游〕改各仓 `config.yaml` / `CLAUDE.md` 的 issues·tools 路径引用
++> 回填 2026-08-20：以下三条动作发生在**外部消费仓**，本仓（工具源仓）无法从自身 git log 观测其完成状态，
++> 故不作为本 change 的可勾选任务追踪——改写为无复选框登记说明，不计入归档任务完成度。
++> （本仓自身作为一个消费者，已完成等价迁移：`openspec/issues/{open,closed}/` 现行存在、`openspec/buglists|todolists/` 已不存在。）
++
++9.1 〔下游〕消费仓跑 `opsx-project-init update` 重拉新 bundle（workflow/tools 归位、新 step prompt、hack/checkpoint-commit.sh）——各仓自行执行，本仓不追踪。
++9.2 〔下游·Phase B 后〕迁移各仓 `openspec/{buglists,todolists}/` 数据 → `issues/{buglist,todolist}/`，跑 `reindex` 建 INDEX/batches（走 destructive-commands 规则）——各仓自行执行，本仓不追踪。
++9.3 〔下游〕改各仓 `config.yaml` / `CLAUDE.md` 的 issues·tools 路径引用——各仓自行执行，本仓不追踪。
+diff --git a/openspec/changes/archive/2026-07-06-plan-workflow-cost-optimization/tasks.md b/openspec/changes/archive/2026-07-06-plan-workflow-cost-optimization/tasks.md
+index 889ad1f..093a3bb 100644
+--- a/openspec/changes/archive/2026-07-06-plan-workflow-cost-optimization/tasks.md
++++ b/openspec/changes/archive/2026-07-06-plan-workflow-cost-optimization/tasks.md
+@@ -17,11 +17,11 @@
+ ## 3. 交叉 review（✅ 完成）
+ - [x] 3.1 把 4 件套作为整体 plan 说明给 review skill（roadmap.md 主入口，引 requirements/design；task-log 不审）
+ - [x] 3.2 跑 `/plan-eng-review`（取其实质：codex 冷模型 outside voice + 四维工程审）
+ - [x] 3.3 review 所有 issue 列入 `task-log.md` 「## Review 处置」，每条标 ✅采纳/⚪裁掉(带理由)/⏭延后（30 条去重 15 组：9 采纳 / 3 延后 / 3 裁掉）
+ - [x] 3.4 确认「## Review 处置」无「未处置」条目（已核）
+ 
+ ## 4. 交叉引用
+ - [x] 4.1 CLAUDE.md「OpenSpec 双重角色」段补 `openspec/roadmaps/{name}/` 目录角色行（原只提 sdflow-roadmap skill、无目录角色）
+ 
+ ## 5. 归档本变更
+-- [ ] 5.1 `/opsx:archive plan-workflow-cost-optimization`
++- [x] 5.1 `/opsx:archive plan-workflow-cost-optimization`（回填 2026-08-20：本 change 现位于 `openspec/changes/archive/`，归档动作已完成）
+diff --git a/openspec/changes/archive/2026-07-08-done-roadmap-writeback/tasks.md b/openspec/changes/archive/2026-07-08-done-roadmap-writeback/tasks.md
+index c5351bd..f2a6481 100644
+--- a/openspec/changes/archive/2026-07-08-done-roadmap-writeback/tasks.md
++++ b/openspec/changes/archive/2026-07-08-done-roadmap-writeback/tasks.md
+@@ -20,21 +20,21 @@
+ 
+ ## 3. sdflow-done 收尾步（R1）
+ 
+ - [x] 3.1 `sdflow-done/SKILL.md` hand-off 步：检测关联 → 生成草稿写进 `hand-off.md` + 提示「检测到关联 roadmap {name}#{phase}，草稿见下，请过目后回填」；**阶段三无门**——不弹窗、不阻塞归档/merge〔R1〕
+ - [x] 3.2 `sdflow-done/SKILL.md` **第六步摘要抬一行**「⚠ roadmap {name} 回填草稿待人确认（见 hand-off）」使 merge 时点可见（P-4 消 C-4）；design 显式登记「产草稿即止、不保证 apply」残差〔R1〕
+ - [x] 3.3 设计原则区登记：与 `§2.1 issues sweep` **同位不同性**（同为 done 收尾盘面消费，但 sweep 机械终写机器独占文件 / roadmap 回填**助人确认**，写入语义相反，C-7）——不诱导复用 sweep 自动落盘〔R1〕
+ - [x] 3.4 助手 MUST NOT 写 change 产物文件（tasks/proposal，避 C1）；MUST NOT 产 per-行「建议勾」（只产阶段级候选行集，勾哪几行留人）；MUST NOT 机械聚合 enum/推 deferred〔R1·P-2〕
+ 
+ ## 4. 关联约定入规则（R2）
+ 
+-- [ ] 4.1 （若关联约定入 workflow 规则）改 `sdflow-init/assets/workflow/` 权威源 + `sdflow-init update` 回灌（bundle 纪律）；命名约定 `implement-{roadmap}-pN` 若需强制则在 roadmap/触发规则登记〔R2〕 — **未做（条件未触发）**：关联约定落在 `sdflow-done/SKILL.md` §2.2 + spec-workflow spec（skill 自包含），未推 workflow bundle 规则；命名约定 `implement-{roadmap}-pN` 为**软约定**（前缀解析兜底 marker，不符则退现状），非强制门。若日后要跨仓强制则再开 change。
++4.1（条件任务，未触发，改写为无复选框说明段）：（若关联约定入 workflow 规则）改 `sdflow-init/assets/workflow/` 权威源 + `sdflow-init update` 回灌（bundle 纪律）；命名约定 `implement-{roadmap}-pN` 若需强制则在 roadmap/触发规则登记〔R2〕 — **未做（条件未触发）**：关联约定落在 `sdflow-done/SKILL.md` §2.2 + spec-workflow spec（skill 自包含），未推 workflow bundle 规则；命名约定 `implement-{roadmap}-pN` 为**软约定**（前缀解析兜底 marker，不符则退现状），非强制门。若日后要跨仓强制则再开 change。（回填 2026-08-20：确未做，非过门假勾）
+ 
+ ## 5. 验证（TG-18）
+ 
+ - [x] 5.1 前缀解析：`implement-{roadmap}-pN` 命名 → 确定性解析 roadmap+phase 触发草稿〔R2·P-2〕
+ - [x] 5.2 **fence-aware 防自指**（关键）：marker 串仅在 code fence/散文内（如本 change 自身）→ 判无关联、不误检测〔R2·P-5·C-5〕
+ - [x] 5.3 时序：草稿只含步2 已实现锚（verify/tasks/change 名）；archive/merge 为占位不预填〔R1·P-1·C-1〕
+ - [x] 5.4 形态分治：复选框式 → 定位候选行集；表格/散文式（wco fixture）→ fail-loud 留人工不静默〔R1·P-3·C-3〕
+ - [x] 5.5 判断留人：助手不产 per-行建议勾、不改 roadmap、不聚合 enum；勾哪几行/价值叙述由人〔R1·P-2〕
+ - [x] 5.6 边界：双通道不一致 warn；未声明退现状不阻塞 + 疑似驱动 SHOULD 提示；坏输入三分（absent/malformed/verify≠PASS）〔R2·C-6/C-9/C-12〕
+ - [x] 5.7 dogfood：本 change 名非 `implement-*` 前缀 + marker 仅在 fence/散文内 → 应跳过（验 P-5）；另构造 `implement-{roadmap}-pN` fixture + 两形态 roadmap 验草稿生成〔R1/R2〕
+diff --git a/openspec/changes/archive/2026-07-10-matt-workflow-integration/tasks.md b/openspec/changes/archive/2026-07-10-matt-workflow-integration/tasks.md
+index 4b348db..abd07ec 100644
+--- a/openspec/changes/archive/2026-07-10-matt-workflow-integration/tasks.md
++++ b/openspec/changes/archive/2026-07-10-matt-workflow-integration/tasks.md
+@@ -34,11 +34,11 @@
+ 
+ ## 5. 试点与判赢材料（P2）
+ 
+ - [x] 5.1 试点选样与判赢通道：登记 3-5 个有逻辑面中型试点 change 候选（排除纯文档/琐碎类）；判据三条（retro impl Δ 方向下降 / 冷层 Critical 与 verify FAIL 不升 / 哨兵不恶化）与对照分桶口径写入 hand-off 判赢材料位；试验期 implementer 档位钉死 mid；**补〔spec-review-amendment F3a/F9〕**：PIPELINE_RECEIPT 留档与样本 marker 核对（误路由剔样）、NEEDS_CONTEXT 停摆率与阶段一上下文成本观测、每试点 SHIPPED 后先再生 retro 再选下一个、workflow-cost-optimization roadmap 补 Phase C 占位（目标句+雾区）〔R7〕验证：判据为定性人读、无数字阈值；receipt 与 retro 节奏写进判赢材料位
+ - [x] 5.2 ≥1 消费仓缺省路径验证：不开键的消费仓跑一次阶段三，行为与本变更前一致（dogfood 盲区）〔R1, R7〕验证：该仓 RUN_PLAN 仍派 writing-plans
+ 
+ ## 6. 同步与发布（P2）
+ 
+ - [x] 6.1 README「Skills 列表」增 sdflow-implement 行（编排类）；docs/ 历史快照不回改，活文档全量表述同步显式留 Phase B（在 hand-off 记明）验证：README 与顶层目录一致
+ - [x] 6.2 dev checkout 重跑 `bash setup.sh`（新增顶层 skill 建链接，adr/0005）；确认 `~/.claude/skills/sdflow-implement/` 与 `~/.codex/skills/sdflow-implement/` 生效；发布边界按 push→运行 checkout pull→立即 setup 纪律执行 验证：setup 输出无异常、无孤儿
+-- [ ] 6.3 测后还原与发布窗口〔spec-review-amendment F9/B1/B2〕：运行 checkout（~/.skills/sdflow-skills）重跑 `bash setup.sh` 还原全局 symlink（adr/0005 协议下半场）；CLAUDE.md 发布边界补「既有 SKILL 路由新增 skill」反向窗口句（pull 后链序即生效、新 skill 链接须 setup 后才存在）验证：`readlink ~/.claude/skills/sdflow-ship` 指回运行 checkout（**部分完成**：CLAUDE.md 反向窗口句已落〔task10〕；运行 checkout 还原属 merge+push 后发布边界步，push 后立即经 /sdflow-upgrade 执行并以 readlink 验证——见 hand-off）
++- [x] 6.3 测后还原与发布窗口〔spec-review-amendment F9/B1/B2〕：运行 checkout（~/.skills/sdflow-skills）重跑 `bash setup.sh` 还原全局 symlink（adr/0005 协议下半场）；CLAUDE.md 发布边界补「既有 SKILL 路由新增 skill」反向窗口句（pull 后链序即生效、新 skill 链接须 setup 后才存在）验证：`readlink ~/.claude/skills/sdflow-ship` 指回运行 checkout（回填 2026-08-20：CLAUDE.md 反向窗口句已落〔task10〕；本机现场核验 `readlink ~/.claude/skills/sdflow-ship` → `/Users/cheneyzhao/.skills/sdflow-skills/sdflow-ship`，已还原且随后续每次 setup.sh 持续维持）
+diff --git a/openspec/changes/archive/2026-07-10-rebuild-sdflow-roadmap-v2/tasks.md b/openspec/changes/archive/2026-07-10-rebuild-sdflow-roadmap-v2/tasks.md
+index 9ab6463..deae2ee 100644
+--- a/openspec/changes/archive/2026-07-10-rebuild-sdflow-roadmap-v2/tasks.md
++++ b/openspec/changes/archive/2026-07-10-rebuild-sdflow-roadmap-v2/tasks.md
+@@ -21,18 +21,18 @@
+ 
+ - [x] 3.1 `openspec/matt/issue-tracker.md` Wayfinding 小节：标题补英文别名「（Wayfinding operations）」；小节头加 `<root>` 条件分流（roadmap 类 effort → `openspec/roadmaps/{name}/footage/`，判别=调用语字面量声明，其余默认 `openspec/matt/<effort>/`）；6 条 bullet 改 `<root>` 表达；加 **map 持久字段约定**（Tracker root/Effort kind，续跑从字段派生）、**stale claim 重认领规则**（中断票追加注记后可重认领）、**map 再入约定**〔SR-3/SR-16〕；尾加边界声明三条（footage 不进 triage 扫描、三件套不引用 footage、误落默认根的 wayfinder 票 MUST NOT 被 triage 贴五态/改 Status〔SR-17〕）〔R4〕验证：沿用现文件中文 bullet 风格；分流判据与 SKILL.md 1.3 口径一致
+ - [x] 3.2 CLAUDE.md 双锚制〔grill-amendment Q4〕：① Agent skills 托管块 Issue tracker 一行补锚句（roadmap 类 wayfinding 落 footage/，就近可见，接受 setup 重跑同批覆盖）；② 块外结构性锚由 6.1 的 :79 段重写承载（setup 重跑碰不到）〔R4〕验证：两锚措辞与 tracker doc 一致；托管块其余不动
+ 
+ ## 4. wayfinding 最小实测（P1，spec 假设消解）
+ 
+ - [x] 4.1 演练 effort（如 `openspec/roadmaps/_drill/footage/`）——**从真实 `/sdflow-roadmap` 调用起步**（让路由判档自然发生，非预供目的地路径〔SR-16/E8〕）：①执行前记 `git diff --stat openspec/CONTEXT.md openspec/adr/` 基线〔SR-4/A2〕；②chart 建 map+2 票（含 1 条 Blocked by，核对 map 持久字段落盘）→ claim → resolve 回写 Decisions-so-far → frontier 判定解锁；③**模拟中断**：留一张 claimed 票开新会话续跑，验证 stale claim 重认领 + 新建票从 map 字段派生路径（不落回 matt/）〔SR-3/SR-16/XE1〕；④收尾删演练目录 + 核对 CONTEXT.md/adr 增量，演练噪声 revert〔SR-4〕；结果记入本 change 归档材料〔R3, R4〕验证：六操作+中断恢复均按新约定落盘无错位；失败则按 proposal 假设 1 记录降级并调整 1.2 措辞
+ 
+ ## 5. 存量迁移（P2）
+ 
+-- [ ] 5.1 wco 包迁移（**前置：包无进行中实施 change + 首个新流程 roadmap 已走通〔SR-15，Q-C 拍板确认〕**）：requirements.md 按**全节清点表**并入 design.md 头部章（**无编号章名不占 `## N.` 序列**〔SR-15/B6〕；grill-amendment Q3：§1.3 愿景/§2 核心需求表/§3 Non-Goals/§5 验收总纲 → 并入；§4 受众 → 一句带过；默认并入、确认已被吸收才弃、弃必记去向）→ 修补包内**前向结构引用**（design.md:62、roadmap.md:69 等，实施时 grep `requirements` 全量复核；task-log 历史 DID 条目保留不回改〔SR-15/E6〕）→ 删 requirements.md → design.md 头部加**考古注记四要素**（旧路径/迁移日期+commit/见 git/「旧 §X→现位置」映射表〔SR-15/XE6/XD10〕）→ **立即跑 `maintain_scan.py`**〔SR-15/B7〕〔R1, R2〕验证：包内 grep 无 requirements.md 活前向引用；**清点表落盘为文件随 commit 提交**（非仅 message）；design 编号序列零位移；归档树不回改（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）
+-- [ ] 5.2 mlh 包迁移：同 5.1 全流程（§6 参考文档实施时按内容判并入/弃置；roadmap.md:110、task-log.md:63,98 等前向引用修补）〔R1, R2〕验证：同上（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）
+-- [ ] 5.3 两包迁移后总检 `python3 sdflow-maintain/scripts/maintain_scan.py`（每包已各跑一次，此为终态复核；roadmaps/ 前缀本静默排除，防意外）〔R1〕验证：scan 输出零新增（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）
++5.1（受控延后，非勾选项）wco 包迁移（**前置：包无进行中实施 change + 首个新流程 roadmap 已走通〔SR-15，Q-C 拍板确认〕**）：requirements.md 按**全节清点表**并入 design.md 头部章（**无编号章名不占 `## N.` 序列**〔SR-15/B6〕；grill-amendment Q3：§1.3 愿景/§2 核心需求表/§3 Non-Goals/§5 验收总纲 → 并入；§4 受众 → 一句带过；默认并入、确认已被吸收才弃、弃必记去向）→ 修补包内**前向结构引用**（design.md:62、roadmap.md:69 等，实施时 grep `requirements` 全量复核；task-log 历史 DID 条目保留不回改〔SR-15/E6〕）→ 删 requirements.md → design.md 头部加**考古注记四要素**（旧路径/迁移日期+commit/见 git/「旧 §X→现位置」映射表〔SR-15/XE6/XD10〕）→ **立即跑 `maintain_scan.py`**〔SR-15/B7〕〔R1, R2〕验证：包内 grep 无 requirements.md 活前向引用；**清点表落盘为文件随 commit 提交**（非仅 message）；design 编号序列零位移；归档树不回改（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）（回填 2026-08-20：T129 现仍 PROPOSED/open，前置条件仍未满足，确未执行，非过门假勾）
++5.2（受控延后，非勾选项）mlh 包迁移：同 5.1 全流程（§6 参考文档实施时按内容判并入/弃置；roadmap.md:110、task-log.md:63,98 等前向引用修补）〔R1, R2〕验证：同上（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）（回填 2026-08-20：同 5.1，确未执行）
++5.3（受控延后，非勾选项）两包迁移后总检 `python3 sdflow-maintain/scripts/maintain_scan.py`（每包已各跑一次，此为终态复核；roadmaps/ 前缀本静默排除，防意外）〔R1〕验证：scan 输出零新增（**受控延后**：Q-C 拍板前置②「首个新流程 roadmap 已走通端到端」未满足——非缺口；排期 T129，触发条件与操作序列见 impl-notes §5.1-5.3）（回填 2026-08-20：同 5.1，确未执行）
+ 
+ ## 6. 全仓表述同步（P2）
+ 
+ - [x] 6.1 CLAUDE.md:79、README.md:22、docs/sdflow-fable5/{01-goals-and-rationale.md:153〔SR-6 补漏〕,02-module-reference.md:205} 「四件套」→「三件套」+ 去壳/footage 表述；**:79 段重写须明确写入「roadmap 类 wayfinding 落 `roadmaps/{name}/footage/`」一句，作为托管块外结构性第二锚**〔grill-amendment Q4，与 3.2 双锚制配对〕；全仓 grep `四件套`/`4 件套` **逐命中判语境**——「change 四件套」语境（proposal/design/specs/tasks 之谓，如 `openspec/specs/spec-workflow/spec.md:420-424` 活规范）**MUST NOT 触碰**〔SR-6/E1，排除名单见 design scope-check 表〕；docs/ 归档类调研文档按「历史快照不回改」原则仅在明显误导处加注〔R1, R4〕验证：活文档零残留旧口径（roadmap 语境）；:79 段含 footage 锚句；spec-workflow/spec.md 零改动
+ - [x] 6.2 dev checkout 重跑 `bash setup.sh`（模板文件增删后防孤儿链接，adr/0005）；确认 `~/.claude/skills/sdflow-roadmap/` 与 `~/.codex/skills/sdflow-roadmap/` 内容随源即时生效；**核验两宿主 wayfinder 装载现状并与 SKILL.md 宿主中立探测措辞一致**（接地实测 Codex 侧无 wayfinder → 降级路径将常驻，措辞如实〔SR-9/XE5〕）〔R1〕验证：setup 输出无异常、无孤儿清理遗漏；双宿主探测行为与失败模式表一致
+diff --git a/openspec/changes/archive/2026-07-14-add-sdflow-devenv/tasks.md b/openspec/changes/archive/2026-07-14-add-sdflow-devenv/tasks.md
+index a2190a4..53cdd32 100644
+--- a/openspec/changes/archive/2026-07-14-add-sdflow-devenv/tasks.md
++++ b/openspec/changes/archive/2026-07-14-add-sdflow-devenv/tasks.md
+@@ -68,18 +68,18 @@
+ - [x] `setup.sh` 重跑——`sdflow-devenv/` 现有 `SKILL.md`，装进 `~/.claude/skills/` 与 `~/.codex/skills/`
+ - [x] README「Skills 列表」加 `sdflow-devenv`
+ - [x] `CLAUDE.md` 的「数据类 skill」清单加 `sdflow-devenv`（它有 scripts + tests）
+ 
+ ## 7. ⭐ 首个真实试点（验收兼路线证伪）
+ 
+ - [x] **在一个真项目上跑一遍**（候选：`mqtt-console` —— 它是本设计的接地样本，六泳道横跨三运行时）
+ - [x] **验 A-8**：「模型能不能为三层提出**像样的**验证方法」——**这个前提至今零实证**
+ - [x] **验核心承诺**：产出的 `testing-strategy.md` 是否**每层交代清楚、一层不留白**
+ - [x] **验 ⑥ 槽**：「这层看不见什么」写出来的是**套话**，还是**这个项目特有的那句**
+-- [ ] 试点结论回灌 `references/`（未覆盖的形态 → 补格；证伪的方法 → 记入 `verification-patterns.md`）
+-  > ⏳ **未做** —— mqtt-console 试点结论已写进 `docs/sad/07` 附录 C，但未回灌 `references/`。
++- [x] 试点结论回灌 `references/`（未覆盖的形态 → 补格；证伪的方法 → 记入 `verification-patterns.md`）
++  > 回填 2026-08-20：核验 commit `fb165c3 checkpoint(add-sdflow-devenv:task7-pilot)` 已把 mqtt-console 试点结论回灌 `sdflow-devenv/references/verification-patterns.md`（含「残留 session 泄漏探针」「MQTT 3.1.1 CONNACK 规定」等真实证伪案例）与 `testing-framework.md`，此前的「未做」注记已过期。
+ 
+ ## 8. 收尾
+ 
+-- [ ] `/sdflow-code-review`（远程 PR）
+-  > ⏭ **按用户明示跳过** —— 直接走 `/sdflow-done`（verify 仍为唯一终门）。
++`/sdflow-code-review`（远程 PR）（已作废，非勾选项）
++  > ⏭ **按用户明示跳过** —— 直接走 `/sdflow-done`（verify 仍为唯一终门）。（回填 2026-08-20：确未执行，改写为无复选框说明段，非过门假勾）
+ - [x] `/sdflow-done` —— verify → archive → commit → merge
+diff --git a/openspec/changes/archive/2026-07-16-add-codex-host-support/tasks.md b/openspec/changes/archive/2026-07-16-add-codex-host-support/tasks.md
+index de1e0fe..481026a 100644
+--- a/openspec/changes/archive/2026-07-16-add-codex-host-support/tasks.md
++++ b/openspec/changes/archive/2026-07-16-add-codex-host-support/tasks.md
+@@ -1,23 +1,23 @@
+ # tasks — add-codex-host-support
+ 
+ > **顺序即 design 的 Migration Plan**：**efficacy 前置门（组 0）**→ 契约先行 → 工具 → 聚合器 → helper → 规则/SKILL → 铺设 → 文档。
+ > **追溯**：每任务标注所属 capability 的 Requirement 名（本仓 spec 用中文标题作 ID）。
+ > **测试纪律**：`scripts/` 改动必跑对应 `tests/`；全量 `pytest` 在每个任务组末尾绿。
+ 
+ ## 0. efficacy 前置门（Q3 · 改 BREAKING 契约之前先证，冷层对抗镜3 F1/F3）
+ 
+ > **为何在最前**：目标（Codex 里真跨模型）押在 A1/A3 两个未验假设；核验若排在契约之后 = 为可能跑不起来的功能付不可逆代价。**任一在主力形态失效 ⇒ 停下补 headless 替代信号或缩 scope，MUST NOT 直接开工组 1。**
+ 
+-- [ ] 0.1 **A1 核验**：〔◐ 部分实测(2026-07-16 真 Codex 宿主)：**交互形态 ✅ 证实**（`CODEX_THREAD_ID=019f696d-…` 在场 → `resolve-models.sh` 判 `HOST=codex`）；**余 `headless`/`codex exec`/`spawned subagent` 三形态仍待各自实测**——故复选框保持未勾。用户授权(C)未验即合并的欠债已收回交互形态部分〕Codex 交互 / headless / `codex exec` / spawned subagent 各形态各跑一次，确认 `CODEX_THREAD_ID` 存在。**任一（尤其 headless/`codex exec`）缺失** ⇒ 停下：design 补该形态的替代正信号，或明确 scope 缩到"仅交互 Codex" + proposal 显著登记〔host-adaptive-execution · 宿主判定靠正信号〕
+-- [ ] 0.2 **A3 核验**：〔◐ 部分实测(2026-07-16 真 Codex 宿主·交互形态)：**✅ 证实**——preflight=`ready`＋`outside-voice.sh exec` 退出码 `0`，反向 `claude -p --model opus …` 从 Codex 真发出、认证通过、返回真 findings（`OV_TRUNCATED=false`；reviewer 跑 `Glob **/demo.sh` 证仓库访问 + FRAME/不可信上下文隔离均生效）。**Codex 出境网络未封、交互形态 efficacy 非零**。**剩 headless/CI 形态待验**（那里若无 claude CLI/认证则 A3=0）——故复选框保持未勾〕在**真实 Codex 宿主 session** 内冒烟 `claude -p --model opus --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`〔spec-review-r3 C4：只读全仓、对称 codex〕——核验点是**"能否成功发出网络请求并拿到 findings"**（非"claude 装没装"）。Codex 若封出境网络 ⇒ 反向 voice 恒失效、永远同族 fallback，design 须承认该 scope 边界〔host-adaptive-execution · outside voice = 另一个机队的强档〕
+-- [ ] 0.3 〔◐ 部分完成(2026-07-16)：**交互形态实测真值已写回** proposal 假设表 A1/A3 行 + design Risks + Migration step 0 + `codex-verification-checklist.md`；但前置门要求「A1/A3 各形态皆通过」才算过，headless/CI 形态尚未验 → 复选框保持未勾〕前置门结论写回 proposal 假设表 + design Risks（A1/A3 实测真值）；两者皆通过才进组 1。**〔spec-review-r2 C5〕此门是人门纪律（设计 HARD-GATE + 冷审复核守），MUST NOT 造 `.efficacy-gate-passed` 之类假机械锁**（marker 由主 session 自报、无可信捕获路径）；若 A3 失效则本 change 须缩 scope（proposal 已显著登记零交付风险）
++0.1（部分完成，非勾选项）**A1 核验**：〔◐ 部分实测(2026-07-16 真 Codex 宿主)：**交互形态 ✅ 证实**（`CODEX_THREAD_ID=019f696d-…` 在场 → `resolve-models.sh` 判 `HOST=codex`）；**余 `headless`/`codex exec`/`spawned subagent` 三形态仍待各自实测**——故复选框保持未勾。用户授权(C)未验即合并的欠债已收回交互形态部分〕Codex 交互 / headless / `codex exec` / spawned subagent 各形态各跑一次，确认 `CODEX_THREAD_ID` 存在。**任一（尤其 headless/`codex exec`）缺失** ⇒ 停下：design 补该形态的替代正信号，或明确 scope 缩到"仅交互 Codex" + proposal 显著登记〔host-adaptive-execution · 宿主判定靠正信号〕（回填 2026-08-20：headless/codex exec/spawned subagent 三形态仍未各自实测，确未做，非过门假勾——改写为无复选框说明段）
++0.2（部分完成，非勾选项）**A3 核验**：〔◐ 部分实测(2026-07-16 真 Codex 宿主·交互形态)：**✅ 证实**——preflight=`ready`＋`outside-voice.sh exec` 退出码 `0`，反向 `claude -p --model opus …` 从 Codex 真发出、认证通过、返回真 findings（`OV_TRUNCATED=false`；reviewer 跑 `Glob **/demo.sh` 证仓库访问 + FRAME/不可信上下文隔离均生效）。**Codex 出境网络未封、交互形态 efficacy 非零**。**剩 headless/CI 形态待验**（那里若无 claude CLI/认证则 A3=0）——故复选框保持未勾〕在**真实 Codex 宿主 session** 内冒烟 `claude -p --model opus --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`〔spec-review-r3 C4：只读全仓、对称 codex〕——核验点是**"能否成功发出网络请求并拿到 findings"**（非"claude 装没装"）。Codex 若封出境网络 ⇒ 反向 voice 恒失效、永远同族 fallback，design 须承认该 scope 边界〔host-adaptive-execution · outside voice = 另一个机队的强档〕（回填 2026-08-20：同 0.1，headless/CI 形态仍未验，确未做——改写为无复选框说明段；`enable-codex-background-outside-voice` 后续 change 确认 Codex 真实 efficacy 仍为 0、T162 仍 OPEN）
++0.3（部分完成，非勾选项）〔◐ 部分完成(2026-07-16)：**交互形态实测真值已写回** proposal 假设表 A1/A3 行 + design Risks + Migration step 0 + `codex-verification-checklist.md`；但前置门要求「A1/A3 各形态皆通过」才算过，headless/CI 形态尚未验 → 复选框保持未勾〕前置门结论写回 proposal 假设表 + design Risks（A1/A3 实测真值）；两者皆通过才进组 1。**〔spec-review-r2 C5〕此门是人门纪律（设计 HARD-GATE + 冷审复核守），MUST NOT 造 `.efficacy-gate-passed` 之类假机械锁**（marker 由主 session 自报、无可信捕获路径）；若 A3 失效则本 change 须缩 scope（proposal 已显著登记零交付风险）（回填 2026-08-20：前置门「A1/A3 各形态皆通过」仍未满足，确未做——改写为无复选框说明段）
+ 
+ ## 1. 契约先行（枚举单一源）
+ 
+ - [x] 1.1 改 `assets/workflow/lens-metric-contract.md` 的 `lens-metric-enums` 机读块：新增 `host: claude, codex, unknown`；`runner: claude, codex, none, unknown`（删 `claude-fallback`；加 `none`——无执行轮次 D6；加 `unknown`——host=unknown 时普通镜主审机队，spec-review-r3 codex#1，仅普通镜行合法、outside-voice 锚不取）。**注（r3-narrow 修正）**：合法组合矩阵的**关系式判定逻辑**（三态分类）**不**落成可 parse 机读块（平铺 enums 块表达力装不下 `runner≠host` 等关系式）——契约块只承载**枚举域**，矩阵逻辑由 anchor_lint + outside_voice_guard **各自本地重实现**（承 D5）、由全笛卡尔 golden 守（见 2.3/4.5）〔workflow-metrics · 度量锚契约；host-adaptive-execution · 矩阵逻辑两工具各自重实现〕
+ - [x] 1.2 改同文件 `lens-metric-fold` 机读块：删 `claude-fallback: outside-voice` 行，保 `codex: outside-voice` 并新增 `claude: outside-voice`（任一 runner 的 voice 都折叠到 outside-voice）〔workflow-metrics · 度量锚契约〕
+ - [x] 1.3 改同文件的锚形示例 + 散文注记 + 归属规则段：行键升为 `(lens, host, runner, site)`，唯一键升为 `(layer,lens,host,runner,site,轮)`；写明「跨模型性 = **合法组合矩阵**判定（`host,runner∈{claude,codex}∧runner≠host∧reason_code="ok"`）的派生量，MUST NOT 编码进枚举值、**MUST NOT 简写为裸 `runner≠host`**（被 `runner="none"` 击穿，spec-review-r2 C1）」〔workflow-metrics · 度量锚契约〕
+ - [x] 1.4 跑全量 pytest 确认**工具测试如期变红**（红的位置 = 依赖契约枚举的全部落点，据此核对 design 的 scope-check 表无遗漏）——**此步的产出是一份红点清单，不是绿**
+ 
+ ## 2. 校验工具（anchor_lint）
+ 
+@@ -88,21 +88,21 @@
+ 
+ - [x] 9.1 `sdflow-init/assets/snippets/claude-section.md` + AGENTS.md 段加 **Codex 子代理授权声明**（多镜 fan-out + model-tiers 构成 codex 要求的显式授权）〔host-adaptive-execution · 授权声明存在〕
+ - [x] 9.2 SKILL 写明「子代理不可用 ⇒ MUST 缩 roster 到实跑的镜 + 报告显著标注单镜降级」；**登记诚实边界**〔spec-review-amendment Q1：探针=机制活着的**语义核验**（非机械门，主 session 自报 trust-based）；一致性 lint（2.5）只拦「机制死却报多镜」的**自相矛盾**、always-on；残余「第 N 镜跑没跑」+「机制活+偷懒自代」无机械守——诚实分开，MUST NOT 声称"头号假绿事前拦截"〕〔host-adaptive-execution · 子代理不可用则缩 roster〕
+ - [x] 9.3 `sdflow-init/tests/` 加守卫：铺设产物含授权段（机验存在性）
+ - [x] 9.4 SKILL fan-out 前跑**能力探针（语义核验）**〔spec-review-amendment Q1 / adr/0023 / spec-review-r2 C2〕：`host=codex` ⇒ 派 trivial 探针子代理（回哨兵值=available）；`host=claude` ⇒ 免探针恒 available；落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="…" mirrors="…" -->`**到被 lint 的报告文件内**（D8-orig）——**`mirrors=` 由 SKILL 在 fan-out 时直接写本轮实际镜清单、不经 emitter/lens-metric、不读 config.metrics**（C2：它是一致性 lint 的判据源，MUST NOT 依赖受 metrics 门控的 lens-metric 行）。探针为 unavailable ⇒ SKILL MUST 缩 roster 到单镜、`mirrors=` 也只列实跑镜（否则 2.5 一致性 lint 拦）。**探针值/mirrors 为主 session 自报，非机械核验**——如实登记〔host-adaptive-execution · 子代理不可用时镜数如实降级〕
+ 
+ ## 10. 端到端真机核验（A1/A3 已上提组 0 前置门）
+ 
+ > A1/A3 的存在性核验已上提为**组 0 前置门**（Q3）——本组只留改造后的端到端验证。
+ 
+-- [ ] 10.1 〔◐ 机制已证(2026-07-16)：冒烟走的就是四旗承重墙 exec 命令行、exit=0 → 正式评审必落 `host="codex" runner="claude" reason_code="ok"` 锚；但**正式的一次真实评审 + `anchor_lint` 绿尚未跑**（拟在 Codex 上起 `scoped-test-per-task` 时顺带产出），故复选框保持未勾〕〔勘误 2026-07-17：正式真实评审已在 mlh-p6 spec-review 跑完——机械层 ✅（host=codex 锚落盘、`anchor_lint` 判合法降级不假绿），但 efficacy 层未达（3/3 outside-voice 300s timeout、降级同族 codex 看 codex）。根因=同步 `claude -p` 推理时长 >300s；机制改动方向=exec 改异步（规划中）。详见本目录 `codex-e2e-efficacy-report.md`〕端到端：Codex 宿主下跑一次真实评审，核对 outside-voice 锚为 `host="codex" runner="claude"`、fanout-capability 锚在场、且 `anchor_lint` 绿（含新增的自审红线 + 一致性 lint always-on）
++10.1（机制已证，efficacy 未达，非勾选项）〔◐ 机制已证(2026-07-16)：冒烟走的就是四旗承重墙 exec 命令行、exit=0 → 正式评审必落 `host="codex" runner="claude" reason_code="ok"` 锚；但**正式的一次真实评审 + `anchor_lint` 绿尚未跑**（拟在 Codex 上起 `scoped-test-per-task` 时顺带产出），故复选框保持未勾〕〔勘误 2026-07-17：正式真实评审已在 mlh-p6 spec-review 跑完——机械层 ✅（host=codex 锚落盘、`anchor_lint` 判合法降级不假绿），但 efficacy 层未达（3/3 outside-voice 300s timeout、降级同族 codex 看 codex）。根因=同步 `claude -p` 推理时长 >300s；机制改动方向=exec 改异步（规划中）。详见本目录 `codex-e2e-efficacy-report.md`〕端到端：Codex 宿主下跑一次真实评审，核对 outside-voice 锚为 `host="codex" runner="claude"`、fanout-capability 锚在场、且 `anchor_lint` 绿（含新增的自审红线 + 一致性 lint always-on）（回填 2026-08-20：验收标准要求 `runner="claude"`（真跨模型），实测恒为 `runner="codex"` 同族降级——`enable-codex-background-outside-voice` change 改同步为异步试图解决仍未证 efficacy、T162 仍 OPEN，确未达标，非过门假勾——改写为无复选框说明段）
+ - [x] 10.2 回归：Claude 宿主下跑一次，确认现有行为不变（`host="claude" runner="codex"`），存量归档聚合逐行一致（组 5 基线）
+ 
+ ## 11. 文档与收尾
+ 
+ - [x] 11.1 同步 `docs/workflow-map.md`(:141,:150) + `docs/workflow-map.html`(:555,:563) 的字段表与枚举
+ - [x] 11.2 全量 `pytest` 绿 + `bash setup.sh` 两道门（`sync_principles --check` / `gen_workflow_guide --check`）绿
+ - [x] 11.3 逐面核对 design 的 **scope-check 表 面 1–10** 全部改完（基准 3 面治：留任何一面 = 契约漂移）+ 面 11 pre-existing debris 已核（登记非改）
+ 
+ ---
+ 
+diff --git a/openspec/changes/archive/2026-07-16-scoped-test-per-task/tasks.md b/openspec/changes/archive/2026-07-16-scoped-test-per-task/tasks.md
+index fe56fcd..246fcaa 100644
+--- a/openspec/changes/archive/2026-07-16-scoped-test-per-task/tasks.md
++++ b/openspec/changes/archive/2026-07-16-scoped-test-per-task/tasks.md
+@@ -1,15 +1,24 @@
+ <!-- R1 = Requirement「阶段三 subagent-dev 派发注入测试范围纪律」(specs/spec-workflow/spec.md) -->
+ 
+-## 1. workflow.md 权威源改措辞（单一源）
++## 作废说明（回填 2026-08-20，非勾选任务清单）
+ 
+-- [ ] 1.1 改 `sdflow-init/assets/workflow/workflow.md` 步骤 6：「每任务完成跑测试套件确认无 warning」→「每任务只跑覆盖本任务的 scoped test（named test files）确认无 warning；全量 `-race`/回归套件仅 final whole-branch 终审前一次」〔R1〕
+-- [ ] 1.2 改同文件步骤 7：「每任务完成跑测试套件」→ 同一 scoped 纪律 + 全量仅终审一次；措辞与步骤 6 保持一致〔R1〕
++本 change 的全部 3 组任务**从未执行**（无 `hand-off.md` / `verify-report.md`，代码/文档零改动痕迹）。
+ 
+-## 2. sdflow-ship 编排引用式注入
++**被 supersede 方**：`remove-superpowers-pipeline`（2026-08-12 归档）——该 change 把
++`subagent-driven-development`（superpowers 实现管线）整体移除，tickets 成为阶段三唯一管线；
++本 change 的核心 Requirement「阶段三 subagent-dev 派发注入测试范围纪律」是针对
++`subagent-driven-development` 派发点的纪律注入，其派发点本身已随 supersede 方物理消失，
++本 change 的目标载体不复存在。
+ 
+-- [ ] 2.1 `sdflow-ship/SKILL.md` RUN_PLAN 分支：在「subagent-driven-development 自动执行」处补一句**引用式**测试范围纪律注入（引用 workflow.md 步骤 6/7 为单一源、不复述完整规则文本、**不动** checkpoint 主锚契约句）〔R1〕
++**核验**：`openspec/specs/spec-workflow/spec.md` 现无「阶段三 subagent-dev 派发注入测试范围纪律」
++Requirement（既未曾并入，`remove-superpowers-pipeline` 的 spec delta 中也未见其身影）；
++`sdflow-init/assets/workflow/workflow.md` 步骤 6/7 措辞未见本 change 拟改的「scoped test」纪律句。
+ 
+-## 3. 验证与下发
++原三组任务内容（供追溯，非待办）：
+ 
+-- [ ] 3.1 跑 `sdflow-ship/tests/` 确认 ship_gate verdict 判据（RUN_PLAN / CONTINUE_IMPL / RERUN 等）无回归——验证「措辞变更不扰动 gate 判据」scenario〔R1〕
+-- [ ] 3.2 `sdflow-init update` 推下游 + 本仓 `setup.sh` 刷新 `~/.sdflow`；核对下游各消费仓 `openspec/workflow/workflow.md` 托管块同步、无残差〔R1〕
++1. `workflow.md` 权威源改措辞（单一源）——步骤 6/7 改为 scoped test 纪律。
++2. `sdflow-ship/SKILL.md` RUN_PLAN 分支补引用式测试范围纪律注入。
++3. 验证与下发——`sdflow-ship/tests/` gate 判据回归 + `sdflow-init update` 推下游。
++
++不可勾选处置：MUST NOT 为过 `openspec validate --archived` 而补勾任何一条——任务从未执行，
++勾选即记录伪造。
+diff --git a/openspec/changes/archive/2026-07-19-harden-repo-root-fail-closed/tasks.md b/openspec/changes/archive/2026-07-19-harden-repo-root-fail-closed/tasks.md
+index 4337f2d..7a71e7b 100644
+--- a/openspec/changes/archive/2026-07-19-harden-repo-root-fail-closed/tasks.md
++++ b/openspec/changes/archive/2026-07-19-harden-repo-root-fail-closed/tasks.md
+@@ -77,31 +77,33 @@
+       〔Req: Scenario「git 探测超时」；ADR-1〕
+ - [x] 1.9 **CLI 级调用点契约测试（真跑，三份各一）**：以子进程真跑
+       `python <script> --root <不存在的路径> <cmd>`，断言 `exit == 2` 且 stderr **不含**
+       `Traceback` 且含诊断关键字。MUST NOT 用 AST/源码扫描判断「调用点是否在 try 内」——
+       那是语法结构问题，手搓判断会掉进补丁循环（基准 5）；让 Python 自己回答
+       〔Req: Scenario「抛出点在调用方的异常出口内」；ADR-4〕
+       > 注意：**坏 `--root` 现在能触发目标分支了**（起点校验先于 git 调用），
+       > 不再需要 fake git —— 这是把「起点校验」提到 git 之前的附带收益
+ - [x] 1.10 跑 determinism-guards 的 recorder 镜像一致性测试，确认 `repo_root` 三向 AST 等价仍绿
+       〔Req: fail-closed 校验在三份 recorder 间逐字一致〕
+-- [ ] 1.11 **跨进程二次解析的兜底锚定测试**：构造「父进程持锁 → 子进程重解析得到不同根」，
++1.11（MUST 当前不成立，非勾选项）**跨进程二次解析的兜底锚定测试**：构造「父进程持锁 → 子进程重解析得到不同根」，
+       断言子进程以 `RecorderLockError` 响亮失败而非静默写入。
+       **这条锚定的是一个隐含依赖**——ADR-5 的「单次解析」边界是进程，跨进程风险靠
+       `validate_recorder_participant` 的 path/token 绑定兜底；无此测试，将来「简化」该校验
+       会让跨进程静默写错目录无声回归
+       〔Req: Scenario「子进程解析出不同的根时响亮失败」；ADR-5〕
+-      🔴 **保持未勾（诚实盘面）**：测试**写了且是活锚**（`xfail(strict=True)` + 独立的、刻意不带
++      🔴 **诚实盘面**：测试**写了且是活锚**（`xfail(strict=True)` + 独立的、刻意不带
+       xfail 的前提核验用例，前提一烂当场判红），但**被锚的那条 MUST 当前不成立**——`recorder_lock`
+       捕到 `RecorderLockError` 后回落 owner 模式，根分裂的子进程在外层根静默 `makedirs` + rc=0。
+       **勾了就是把「未达成」记成「已完成」**。已登记 **B15**（P1，含修法与 6 个生产 spawn 站点
+       影响面）；修法触 lock spec ⇒ 属设计门议题，不在本 change 内 fold。
++      （回填 2026-08-20：`B15` 已于 2026-08-03 关闭为 **WONTFIX**——「触发概率极低（需跨进程持锁期间删 .git），
++      修法需设计级 change，性价比低」，MUST 永久不成立，确未达标——改写为无复选框说明段）
+ 
+ ## 2. 假绿测试修复
+ 
+ - [x] 2.1 修 `sdflow-issues/tests/test_task4_rename_snapshot.py:149`
+       `test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes`：
+       让 root 解析不受 monkeypatch 全局 `subprocess.run` 污染（mock 收窄到 `_scan_pool` 的
+       调用点，或让 mock 对 `git rev-parse` 透传真实行为），使 reindex 真正作用于 `tmp_path`
+       〔Req: 坏 root 下的 reindex 不得静默通过派生字节校验〕
+ - [x] 2.2 **变异验证**：故意让 reindex 向 `tmp_path` 的 `INDEX.md`/`batches.md` 写入，确认该
+       测试**变红**；恢复后确认变绿。当前它对该变异恒绿，正是假绿判据
+diff --git a/openspec/changes/archive/2026-07-26-add-sdflow-spec/tasks.md b/openspec/changes/archive/2026-07-26-add-sdflow-spec/tasks.md
+index 37eec2f..8797472 100644
+--- a/openspec/changes/archive/2026-07-26-add-sdflow-spec/tasks.md
++++ b/openspec/changes/archive/2026-07-26-add-sdflow-spec/tasks.md
+@@ -84,23 +84,23 @@
+ > ✅ **阶段二验收门**：5.1 GO ∧ **7.4 全过（安全前提，不达标不得进阶段三，即便成本达标）**〔窄复核补〕 ∧ 7.2 显示 subagent 路总成本与质量均不劣于 thin 路 ⇒ 保留外派并启动阶段三。
+ > ❌ 任一不达标 ⇒ **回退到阶段一薄编排形态**（D2 已声明其为合法交付形态），agent 定义作为未启用资产保留或删除，如实记入 hand-off。**注意：3.4 的 sunset 条件已在阶段一落定，不受本门影响。**
+ 
+ ---
+ 
+ # 阶段三 · 产品化（阶段二达标才做）
+ 
+ ## 8. 分发与推广（P0）
+ 
+ - [x] 8.1 全局 `~/.claude/agents/` 分发定案（设计门 Q3 决议）；design D3 已补反驳 `subagent-definitions-plan.md:303-308` 的理由，此处只需核验实际铺设行为与文档一致 〔SA-07〕
+-- [ ] 8.2 bundle 下游推广：`sdflow-init update` 把 canonical 七处改动推至消费项目；核验下游 `openspec/workflow/` 已获更新 〔SA-11〕
++- [x] 8.2 bundle 下游推广：`sdflow-init update` 把 canonical 七处改动推至消费项目；核验下游 `openspec/workflow/` 已获更新 〔SA-11〕
+   
+-  > ⛔ **未执行（有据）**：阶段二 A/B 验收门判**回退**（`impl-reports/task5-ab-comparison.md`），`tasks.md` 把 8.2 明列在「阶段三 · 产品化（阶段二达标才做）」下 ⇒ 票面条件句生效。七处 canonical 只落源仓、**下游消费项目仍读旧的阶段一入口规则**，此残余登记 **T239**（写明何时/由谁/怎么推）。
++  > 回填 2026-08-20：`T239` 已于 2026-08 关闭为 **DONE**（"canonical bundle 已推给下游消费项目（`sdflow-init update` 已跑）；`add-sdflow-spec` 已 merge"），当时登记的残余已补做完成。
+ - [x] 8.3 回滚演练：按 design Migration Plan 的正确顺序（① 仍在新版 installer 上删除 `sdflow-spec/agents/` 源目录 + 重跑 setup 触发孤儿清理 → ② 再 revert → ③ 重跑 setup；`setup.sh` 无 uninstall 分支）实跑一次（正反两向对照），核验 `~/.claude/agents/` 无悬空软链残留 〔SA-07〕
+ - [x] 8.4 按 3.4 已落定的阈值判定旧入口是否进入 sunset；达标则更新 CLAUDE.md 与 canonical 的推荐措辞 〔SA-14〕
+ 
+ > ✅ **阶段三验收门**〔窄复核补：原阶段三无完成定义〕：8.1–8.4 全过 + 下游至少一个消费项目实跑 `sdflow-init update` 后阶段一流程可用 ⇒ 本 change 可进 `/sdflow-done`。
+ > ❌ **回退分支**〔T241 · 归档前订正：原阶段三验收门只有 ✅ 分支，回退形态下「可进 `/sdflow-done`」在票面无书面出处〕：阶段二 A/B 验收门已判**回退**（`impl-reports/task5-ab-comparison.md`）⇒ 8.2 按票面条件句不执行（见其下 ⛔ 注记），本 change 以**阶段一薄编排形态**交付；下游推广（bundle 七处 canonical 推消费项目）登记为独立后续项 **T239**（何时/由谁/怎么推，见 `hand-off.md`）。8.1/8.3/8.4 仍需全过（不受阶段二回退影响，见各自 SA 锚点）。此分支 ⇒ 本 change 同样可进 `/sdflow-done`。
+ 
+ ## 9. 遗留登记（P2 · 与阶段二/三成败无关，阶段一即可执行）
+ 
+ 〔窄复核订正：原挂在阶段三下，会随阶段二失败一起搁浅〕
+ 
+diff --git a/openspec/changes/archive/2026-07-26-enable-codex-background-outside-voice/tasks.md b/openspec/changes/archive/2026-07-26-enable-codex-background-outside-voice/tasks.md
+index 96e425b..9f6cad1 100644
+--- a/openspec/changes/archive/2026-07-26-enable-codex-background-outside-voice/tasks.md
++++ b/openspec/changes/archive/2026-07-26-enable-codex-background-outside-voice/tasks.md
+@@ -36,22 +36,22 @@ Codex dispatch codepath
+ ├─ --bg --exec lifecycle ─── unit + no-model real supervisor smoke
+ ├─ worker terminal publish ─ unit + rc/liveness Cartesian matrix
+ ├─ await/collect recovery ── interruption + deadline + lost-job integration
+ ├─ security boundary ─────── argv golden + secret/read-fence/injection tests
+ ├─ two-site concurrency ──── isolated-file + duplicate-dispatch tests
+ └─ review integration ────── parity/anchor tests + zhws_ops_api real >300s smoke
+ ```
+ 
+ ## 6. Real Efficacy and Closure
+ 
+-- [ ] 6.1 **[grill-amendment]** 在安装新 canonical tools 后，以 Codex 宿主对 `zhws_ops_api` 跑至少一轮 `opus` + `high` 的真实 spec-review/code-review；实际 dispatch 的全部站点必须取得 `host="codex" runner="claude" reason_code="ok"`。**[spec-review-amendment]** 报告必须落不含 context/stderr 的结构化 efficacy 证据（runner/model/effort、dispatch/start/terminal/collect 时刻、自然 duration、stdout digest），并由确定性检查器判定。〔OVBG-01, OVBG-03, HAE-08, HAE-09〕
+-- [ ] 6.2 **[grill-amendment]** 该完整层必须至少含一个 `opus` + `high` 的真实 Claude 推理自然耗时 >300 秒并成功，证明跨过旧天花板；sleep/shim、无模型命令或短调用不得替代。若全部自然短于 300 秒，只能记“功能可用、原失效窗口未复现”，不得关闭 efficacy 缺口。〔OVBG-01, HAE-08〕
++6.1（未达标，非勾选项）**[grill-amendment]** 在安装新 canonical tools 后，以 Codex 宿主对 `zhws_ops_api` 跑至少一轮 `opus` + `high` 的真实 spec-review/code-review；实际 dispatch 的全部站点必须取得 `host="codex" runner="claude" reason_code="ok"`。**[spec-review-amendment]** 报告必须落不含 context/stderr 的结构化 efficacy 证据（runner/model/effort、dispatch/start/terminal/collect 时刻、自然 duration、stdout digest），并由确定性检查器判定。〔OVBG-01, OVBG-03, HAE-08, HAE-09〕（回填 2026-08-20：补证任务 T225 已于 2026-08-04 关闭为 WONTDO——外部条件（Codex ChatGPT 额度）持续未就绪，T162 仍 OPEN，确未达标，非过门假勾——改写为无复选框说明段）
++6.2（未达标，非勾选项）**[grill-amendment]** 该完整层必须至少含一个 `opus` + `high` 的真实 Claude 推理自然耗时 >300 秒并成功，证明跨过旧天花板；sleep/shim、无模型命令或短调用不得替代。若全部自然短于 300 秒，只能记“功能可用、原失效窗口未复现”，不得关闭 efficacy 缺口。〔OVBG-01, HAE-08〕（回填 2026-08-20：同 6.1，T226 同日绑定关闭为 WONTDO，确未达标——改写为无复选框说明段）
+ - [x] 6.3 **[grill-amendment]** 仅当 6.1/6.2 同时达标且确定性 evidence checker 通过后关闭 T162，更新相关 design/CONTEXT/hand-off 里的“Codex efficacy=0”陈述；若任一站点未可信 collect/未 `ok`、没有自然 >300 秒成功证据或证据字段不可机读，则保留 T162 并如实记录，不得以编排 smoke 假绿。**[spec-review-amendment]**〔HAE-08, HAE-09〕
+ - [x] 6.4 运行 `openspec validate enable-codex-background-outside-voice --strict` 与 repo 规定的最终检查，确认 source change 只包含本 change 授权范围，且下游 `zhws_ops_api` 没有被直接手改 canonical workflow 规则。〔OVBG-01, OVBG-04, HAE-09〕
+ 
+ > **6.1 / 6.2 未勾 —— 如实保留的缺口（人拍板 A，2026-07-26）**：本机 Codex CLI 的 ChatGPT
+ > 额度在实现期耗尽（两次 `codex exec` 均返 usage limit），四条替代路径逐条查证不可行 ⇒ 这两条
+ > **动作项**无法诚实勾选。6.3 明文预置的二分出口（「否则如实保留缺口」）已按 else 分支完整执行：
+ > **T162 保留 OPEN、`design.md`/CONTEXT/hand-off 的「Codex efficacy=0」陈述一字未改、无任何
+ > 编排 smoke 被当作 efficacy 假绿**。补证移交 **T225**（额度恢复后跑真实 Codex 宿主评审），
+ > 并 fold 进 **T226**（届时给 efficacy 检查器补 `--run-dir` 交叉核验）。
+ 
+diff --git a/openspec/changes/archive/2026-07-29-fix-windows-encoding-crash/tasks.md b/openspec/changes/archive/2026-07-29-fix-windows-encoding-crash/tasks.md
+index be0bb32..9f726ee 100644
+--- a/openspec/changes/archive/2026-07-29-fix-windows-encoding-crash/tasks.md
++++ b/openspec/changes/archive/2026-07-29-fix-windows-encoding-crash/tasks.md
+@@ -79,22 +79,23 @@
+ - [x] 6.2 新增步骤：`shell: bash` + `PYTHONIOENCODING=gbk bash setup.sh` 真实子进程运行，**断言输出不含 `UnicodeEncodeError` / `Traceback`** `[spec-review-amendment]`（**退出码断言剔除**，理由同 5.2）
+ - [x] 6.3 新增步骤：`shell: bash`；`--root` 指向 CI 内从空目录开始创建的 probe（先 `mkdir -p` + `git init`，再用 `init.py init` 铺设），随后执行 `PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$RUNNER_TEMP/probe"` 并断言退出码 0 `[spec-review-amendment]`。`update` 只接受已铺设项目，probe MUST NOT 在未 `init` 时直接调用 `update`
+       注：**此处退出码是有效判据**——`init.py:868` 的崩溃点未被 try/except 或 `if !` 吞，异常真会传到非零退出码（与 6.2 的情况相反）
+ - [x] 6.4 🔴 **新增步骤：真正跑到文本模式 `subprocess` 站点** `[spec-review-amendment]`——追调用图确认：6.2 跑的 `setup.sh` 只调那四道门，而四道门**全都不调 subprocess**；6.3 跑的 `init.py update` 也够不着（`init.py:567` 在 `_git_root_or_dot()` 内，只有 `mode == "config-lint"` 走得到，`run()` 从不调它）⇒ **这些修复原本零 CI 覆盖**。补 `shell: bash` + `PYTHONIOENCODING=gbk` 下各跑一次 `sdflow-issues/scripts/issues.py`、`sdflow-retro/scripts/retro_report.py`、`sdflow-ship/scripts/ship_gate.py` 的只读子命令（三者合计覆盖 16 站点中的 8 个，含 `_scan_pool` 嵌套 reindex→scan）+ 一个稳定输出中文与非法 UTF-8 字节的夹具子进程，断言不崩且替换行为符合预期
+       （不追求 16/16——按通则④，造 16 份非 UTF-8 夹具的完美成本过高，8/16 + 夹具是成本大幅降、结果可接受的次优解）
+ - [x] 6.5 🔴 **新增步骤：不设 `PYTHONIOENCODING` 的真实故障面用例** `[spec-review-amendment]`——`PYTHONIOENCODING` 会**主动覆盖**标准流编码，∴ 6.2/6.3/6.4 测的是「人为强制 GBK 的进程」，而不是 Windows **无该变量**时由控制台 / 重定向管道 / locale 决定编码的路径（还可能掩盖环境继承问题）。补：`shell: bash` + 移除该变量 + `chcp.com 936` 设 code page（Git for Windows Bash 不解析裸 `chcp`）；控制台路径直接运行会输出中文/emoji 且以退出码 fail-closed 的 `check_encoding_hygiene.py`，重定向路径运行 `setup.sh` 并显式 grep 日志，**控制台与重定向管道至少各一**
+       注：**本条使 `windows-latest` 真正承重**——该路径只在 Windows 上存在，不能挪去 Linux runner
+ 
+ ## 7. 回归验证
+ 
+-- [ ] 7.1 本仓既有 pytest 套件全绿（`pytest`，仓根 rootdir）
+-  - 未完成说明：当前 Windows / Python 3.14 环境下全量 `pytest` 有 2 项收集错误；相关测试文件相对本地 `main` 的 merge-base `3b4f838b99f2ccd3bf7a246e8ab675a9b6c40943` 未变化，确认不是本 change 引入；本 change 相关测试与 GBK setup 集成验证已通过。
++7.1（部分完成，非勾选项）本仓既有 pytest 套件全绿（`pytest`，仓根 rootdir）
++  - 未完成说明（原）：当时 Windows / Python 3.14 环境下全量 `pytest` 有 2 项收集错误；相关测试文件相对本地 `main` 的 merge-base `3b4f838b99f2ccd3bf7a246e8ab675a9b6c40943` 未变化，确认不是本 change 引入；本 change 相关测试与 GBK setup 集成验证已通过。
++  - 回填 2026-08-20：本机 `/usr/bin/python3 -m pytest -q`（仓根）现全绿——`2620 passed, 10 skipped`，原「2 项收集错误」已不复现。但**本仓真实 CI**（`windows-recorder-smoke.yml` 的 `windows-full-pytest` job，本 change 自身产出的回归护栏）当前持续红（自 2026-08-12 起近 20 次运行全部 failure，含本轮 HEAD），根因是该 runner 未装 `yq`（`anchor_lint.MetricsError: yq 未安装`）——与本 change 的编码修复无关、且晚于本 change 归档时间出现，判定为**独立于本 change 范围的现存缺口**，非过门假勾——改写为无复选框说明段；该缺口已作为票外发现登记，供后续单开 todo 处置。
+       注：该断言**不构成对本 bug 的覆盖**（pytest 的 capsys/capfd 用内存 buffer 替换 `sys.stdout`，规避了这个 bug class，见 `decision-memo.md` D2）；它守的是「本次改动没有打坏别的东西」
+ - [x] 7.2 `openspec validate "fix-windows-encoding-crash" --strict --type change` 通过
+ - [x] 7.3 ~~人工核对负向用例~~ → **已升为常驻测试，见 1.4** `[spec-review-amendment]`（一次性人工核对跑完即删临时脚本，等于把本 change 唯一常驻防线的自测扔掉；改为 `hack/tests/test_encoding_hygiene.py` 永久保留）
+ 
+ ## 8. 模板住所与文档 `[spec-review-amendment]`
+ 
+ - [x] 8.1 在 `CLAUDE.md` 的「修改本仓库的注意」段补一条：新增 Python 入口脚本须带 4 行 reconfigure 前导，否则第五道机械门会拦；附模板原文
+       （理由：模板目前只写在本文件里，而 change 归档后 tasks 不再是活文档 ⇒ 下一个写脚本的人无处可查）
+ - [x] 8.2 `design.md` Migration Plan 已更正交付面为三条路径（`hack/**` 随仓库、各 skill `scripts/**` 随 `setup.sh:60-77` 的 `rm -rf`+`cp -r`/symlink、bundle 走 `sdflow-init update`）——实现时核对无遗漏
+ 
+diff --git a/openspec/changes/archive/2026-07-31-align-sdflow-spec-with-openspec-schema/tasks.md b/openspec/changes/archive/2026-07-31-align-sdflow-spec-with-openspec-schema/tasks.md
+index 2b4572a..f0c006c 100644
+--- a/openspec/changes/archive/2026-07-31-align-sdflow-spec-with-openspec-schema/tasks.md
++++ b/openspec/changes/archive/2026-07-31-align-sdflow-spec-with-openspec-schema/tasks.md
+@@ -27,38 +27,38 @@
+ 
+ ## 3. sdflow-spec 相位 C 对齐〔SA-05 · SA-17〕
+ 
+ - [x] 3.1 **P0** C.3 增委派区块剥离步，置于「应用载荷作为生成约束」**之前**；只做定界字符串切分，MUST NOT 解析 Markdown 结构〔SA-17(a)〕
+ - [x] 3.2 **P0** 剥离步的两个边界：标记未出现 ⇒ no-op 不报错；标记不成对 ⇒ fail-closed 报 problem+cause+fix〔SA-17(a)〕
+ - [x] 3.3 **P0** C.3 增 glob 分支：`resolvedOutputPath` 为 glob 时按 `instruction` 推导 `specs/<capability>/spec.md`；改写既有文件时取 `artifactPaths.<id>.existingOutputPaths`〔SA-17(b)〕
+ - [x] 3.4 **P0** 路径净化改为对**推导出的具体路径**执行（当前是对 `resolvedOutputPath` 执行，glob 字面量会被 allowlist 放行）〔SA-17(b)〕
+ - [x] 3.5 **P1** C.2/C.3 增 `skipped` 态处置：跳过该产物且 MUST NOT 创建文件；依赖它的阅读清单条目相应去掉〔SA-17(c)〕
+ - [x] 3.6 **P1** C.2 强制阅读清单改为「以 schema 的 `requires` 为准 + 图不足时 fallback 写死超集」，**保留 fallback 分支**（内置 schema 与未来回退的正确性底座）〔SA-05〕
+ - [x] 3.7 **P2** C.3 最小 schema 断言把 `dependencies` 收紧为对象列表（含 `id`/`done`/`path`/`description`）〔SA-05〕
+-- [ ] 3.8 **P2** 终审第 2 条（design↔specs 双向核）措辞由「唯一防线」降为「兜底」，并说明降级前提是 schema 已切换〔SA-05〕（部分完成：已降为“判断层兜底”，但未明写“schema 已切换”这一前提）
++3.8（部分完成，非勾选项）**P2** 终审第 2 条（design↔specs 双向核）措辞由「唯一防线」降为「兜底」，并说明降级前提是 schema 已切换〔SA-05〕（部分完成：已降为"判断层兜底"，但未明写"schema 已切换"这一前提）（回填 2026-08-20：核验现行 `sdflow-spec/SKILL.md` 终审段与 `openspec/specs/spec-workflow/spec.md` 全文，均无"schema 已切换"这一前提的显式表述，确未补写——改写为无复选框说明段，非过门假勾；该条属遗留文档精度缺口，非阻塞性）
+ 
+ ## 4. 本仓 dogfood 切换与迁移验证〔SW-SCHEMA〕
+ 
+ - [x] 4.1 **P0** 切换**前**对本仓全部在途 change 跑 `openspec status --json` 存快照
+ - [x] 4.2 **P1** 跑 `sdflow-init`（本仓）铺 schema + 切 `openspec/config.yaml` 的 `schema:`
+ - [x] 4.3 **P0** 切换**后**重跑 status 并与 4.1 快照逐 artifact 比对，**状态必须一致**（迁移零回归）
+ - [x] 4.4 **P1** 新建一个一次性 change 验证 `instructions <artifact> --json` 的 `dependencies` 已反映新依赖图（`specs` 含 `design`、`tasks` 含 `proposal`），验完删除
+ 
+ ## 5. 测试〔SA-05 · SA-17 · SW-SCHEMA〕
+ 
+ - [x] 5.1 **P0** `sdflow-init/tests/` 加版本门用例：<1.7.0 不铺 + 报一行 + config 未被改写。**[spec-review-amendment R6]** 加 `1.10.0 >= 1.7.0` 正例 + CLI 缺失/非数字输出 → fail-closed 用例
+ - [x] 5.2 **P0** 加迁移补写用例：缺 `.openspec.yaml` 的在途 change 被补写；已有者 no-op；`changes/archive/` 不被触碰。**[spec-review-amendment R15]** 加 stray 目录（无 `proposal.md`）不被触碰用例
+ - [x] 5.3 **P0** 加**顺序**用例：断言补写发生在 config 改写之前（顺序颠倒即红）。**[spec-review-amendment R10]** 加「单项补写失败 → config 未被切换」用例
+ - [x] 5.4 **P1** 加 `copy_bundle` 整删重拷用例：权威源删文件后消费仓不残留孤儿
+ - [x] 5.5 **P1** schema 内容契约用例：四个 `id` 与 `generates` 与内置一致；委派标记成对；`requires` 两条边符合 1.3
+-- [ ] 5.6 **P0** 每条新增用例先跑「定点破坏 → 必须红」验证非恒真（承本仓既有反恒真锚纪律）（证据不足：仅留有孤儿清理用例的 mutation red/green 记录，无法证明每条新增用例均先红）
+-- [ ] 5.7 **P0** 全仓 `pytest` 绿（未通过：此前运行 90 秒超时，退出码 124；按用户明确批准跳过后续，未假绿）
++5.6（证据不足，非勾选项）**P0** 每条新增用例先跑「定点破坏 → 必须红」验证非恒真（承本仓既有反恒真锚纪律）（证据不足：仅留有孤儿清理用例的 mutation red/green 记录，无法证明每条新增用例均先红）（回填 2026-08-20：历史执行留痕缺失，无法回溯补证——改写为无复选框说明段，非过门假勾；本仓后续 changes 均已把「定点破坏」证据留档为标准实践）
++5.7（部分完成，非勾选项）**P0** 全仓 `pytest` 绿（未通过：此前运行 90 秒超时，退出码 124；按用户明确批准跳过后续，未假绿）（回填 2026-08-20：本机 `/usr/bin/python3 -m pytest -q`（仓根）现全绿——`2620 passed, 10 skipped`，原超时未复现。但本仓真实 CI 的 `windows-recorder-smoke.yml` `windows-full-pytest` job 当前持续红（自 2026-08-12 起近 20 次运行全部 failure），根因是该 runner 缺 `yq` 安装——与本 change 无关、且晚于本 change 归档时间出现，判定为独立于本 change 范围的现存缺口，非过门假勾——改写为无复选框说明段）
+ - [x] 5.8 **P0** **[spec-review-amendment R1]** 加 update 模式下 `schema:` 键被改写的用例 + 只改该行其余 config 内容 byte-identical
+ 
+ ## 6. 文档与收尾
+ 
+ - [x] 6.1 **P1** `CLAUDE.md` 阶段一入口段落同步：说明产 spec 走 project-local schema，且委派是**提示层**不是机械保证
+ - [x] 6.2 **P1** roadmap `openspec/roadmaps/openspec-1.7.0-followup/roadmap.md` 的 P1 标记为已交付
+ - [x] 6.3 **P2** 把「fork 漂移无机械门」记进 todolist（本次不解决，见 ADR-0034 Consequences）
+ - [x] 6.4 **P0** 改 `sdflow-init/assets/` 下内容后**重跑一次安装**（hook/bundle 为 copy 安装，非 symlink），否则测的是旧版
+ 
+ ## 测试覆盖图〔TG-18〕
+diff --git a/openspec/changes/archive/2026-08-04-sdflow-init-readwrite-paths/tasks.md b/openspec/changes/archive/2026-08-04-sdflow-init-readwrite-paths/tasks.md
+index 12d9799..0241474 100644
+--- a/openspec/changes/archive/2026-08-04-sdflow-init-readwrite-paths/tasks.md
++++ b/openspec/changes/archive/2026-08-04-sdflow-init-readwrite-paths/tasks.md
+@@ -1,37 +1,43 @@
+ ## Tasks
+ 
+ skip_specs=true，无 Requirement ID 追溯（纯代码质量修复）。
+ 
++> 回填 2026-08-20：全部 12 项复选框归档时未按收尾对账勾选（0/12），本轮逐条对照
++> `verify-report.md`（结论 PASS）与本地代码/测试现状核验补勾（`_atomic_write_settings` mkstemp、
++> `_detect_duplicate_top_keys`、`ensure_global_hooks` Codex 告警均在 `sdflow-init/scripts/init.py`
++> 现行代码中，对应测试在 `sdflow-init/tests/test_init.py` 中；T64/T149/T6 三个 todo 均已 DONE），
++> 无一项确未做（为 tickets 管线 change 的收尾对账回填）。
++
+ ### 1. T64 · `_atomic_write_settings()` mkstemp 唯一名
+ 
+-- [ ] 1.1 改 `_atomic_write_settings()` 用 `tempfile.mkstemp`，失败时 `os.unlink` 清理残留
+-- [ ] 1.2 补测试：验证 tmp 文件名非固定（mock `tempfile.mkstemp` 或检查 `os.replace` 被调用时的源路径）
+-- [ ] 1.3 补测试：mkstemp 失败时返回 False 而非裸抛（mock mkstemp 抛 OSError，断言返回 False）[spec-review-amendment] CR-1
++- [x] 1.1 改 `_atomic_write_settings()` 用 `tempfile.mkstemp`，失败时 `os.unlink` 清理残留
++- [x] 1.2 补测试：验证 tmp 文件名非固定（mock `tempfile.mkstemp` 或检查 `os.replace` 被调用时的源路径）
++- [x] 1.3 补测试：mkstemp 失败时返回 False 而非裸抛（mock mkstemp 抛 OSError，断言返回 False）[spec-review-amendment] CR-1
+ 
+ ### 2. T149 · `lint_config()` 顶层重复键检测
+ 
+-- [ ] 2.1 新增 `_detect_duplicate_top_keys()` 函数（行级扫描顶层 `key:` 行）
+-- [ ] 2.2 在 `lint_config()` 中调用，重复键追加 reason
+-- [ ] 2.3 补测试：构造含重复顶层键的 config.yaml，验证 `lint_config()` 返回非空 reason
+-- [ ] 2.4 补测试：非 UTF-8 config.yaml 不让 `_detect_duplicate_top_keys` 裸抛（复用现有 F2 fixture）[spec-review-amendment] CR-2
+-- [ ] 2.5 补测试：BOM config.yaml 首键正确识别 [spec-review-amendment] CR-3
++- [x] 2.1 新增 `_detect_duplicate_top_keys()` 函数（行级扫描顶层 `key:` 行）
++- [x] 2.2 在 `lint_config()` 中调用，重复键追加 reason
++- [x] 2.3 补测试：构造含重复顶层键的 config.yaml，验证 `lint_config()` 返回非空 reason
++- [x] 2.4 补测试：非 UTF-8 config.yaml 不让 `_detect_duplicate_top_keys` 裸抛（复用现有 F2 fixture）[spec-review-amendment] CR-2
++- [x] 2.5 补测试：BOM config.yaml 首键正确识别 [spec-review-amendment] CR-3
+ 
+ ### 3. T6 · `ensure_global_hooks()` Codex 降级告警
+ 
+-- [ ] 3.1 `ensure_global_hooks()` 末尾检测 `~/.codex/` 存在时追加告警行
+-- [ ] 3.2 补测试：mock `~/.codex/` 存在，验证输出含 `⚠` 告警；不存在时无告警
++- [x] 3.1 `ensure_global_hooks()` 末尾检测 `~/.codex/` 存在时追加告警行
++- [x] 3.2 补测试：mock `~/.codex/` 存在，验证输出含 `⚠` 告警；不存在时无告警
+ 
+ ### 4. 收尾
+ 
+-- [ ] 4.1 全量 pytest 跑绿（`sdflow-init/tests/`）
+-- [ ] 4.2 关闭 T64、T149、T6（set-status DONE + evidence）
++- [x] 4.1 全量 pytest 跑绿（`sdflow-init/tests/`）
++- [x] 4.2 关闭 T64、T149、T6（set-status DONE + evidence）
+ 
+ ## 测试覆盖图
+ 
+ | 代码路径 | 测试类型 | 覆盖任务 |
+ |---|---|---|
+ | `_atomic_write_settings()` mkstemp 路径 | 单元测试（mock mkstemp） | 1.2 |
+ | `_atomic_write_settings()` mkstemp 失败 → False | 单元测试（mock mkstemp 抛 OSError） | 1.3 |
+ | `_detect_duplicate_top_keys()` | 单元测试（构造 YAML） | 2.3 |
+ | `_detect_duplicate_top_keys()` 非 UTF-8 | 单元测试（复用 F2 fixture） | 2.4 |
+ | `_detect_duplicate_top_keys()` BOM 首键 | 单元测试（BOM YAML） | 2.5 |
+diff --git a/openspec/changes/archive/2026-08-06-refactor-roadmap-internalize-deps/tasks.md b/openspec/changes/archive/2026-08-06-refactor-roadmap-internalize-deps/tasks.md
+index 4950bde..e1c8738 100644
+--- a/openspec/changes/archive/2026-08-06-refactor-roadmap-internalize-deps/tasks.md
++++ b/openspec/changes/archive/2026-08-06-refactor-roadmap-internalize-deps/tasks.md
+@@ -36,23 +36,23 @@
+ 
+ - [x] 3.1 删除 `openspec/matt/` 整目录（4 文件）
+ - [x] 3.2 CLAUDE.md 与 AGENTS.md：删 matt 三区块（Issue tracker / Triage labels / Domain docs），roadmaps 目录描述行去 footage 措辞（两文件同步改）
+ 
+ ## 4. bundle 同步（P1）
+ 
+ - [x] 4.1 `ff-generation-constraints.md`：`wayfinder-resolved:` 前缀规则保留 + 加 legacy 标注〔R·footage 落盘位置与引用边界 · Migration〕
+ - [x] 4.2 `workflow-history.md` 追加一条 wayfinder 路径移除记录
+ - [x] 4.3 `config.template.yaml`：`:41`/`:51` 两行注入规则引用的「wayfinder→ff 衔接契约」章节在当前 `ff-generation-constraints.md` 中已不存在（既存陈旧引用），随本次一并订正——该文件是消费仓 `config.yaml` 的**生成模版**，改动会随 init 注入每个新下游仓〔spec-review-amendment SR-13〕
+ - [x] 4.4 dev checkout 跑 `bash setup.sh`（bundle 改动生效纪律）。**验收动作 = 单独跑 `python3 hack/sync_principles.py --check` 看 exit code**——`setup.sh` 里那一处是 `if ! …; then echo "⚠️…"; fi`，**不是 fail-closed 门**（`set -e` 在 `if` 条件里不生效），警告会淹没在大段输出里〔SR-17 附带〕
+-- [ ] 4.5 **hand-off 记录还原步**：合并后须在运行 checkout（`~/.skills/sdflow-skills`）重跑 `setup.sh` 还原（`/sdflow-upgrade`）——CLAUDE.md 的 dev/runtime checkout 纪律明文要求，5 个历史同类 change 的 tasks 均有此步，本 change 原缺〔spec-review-amendment SR-17〕
++- [x] 4.5 **hand-off 记录还原步**：合并后须在运行 checkout（`~/.skills/sdflow-skills`）重跑 `setup.sh` 还原（`/sdflow-upgrade`）——CLAUDE.md 的 dev/runtime checkout 纪律明文要求，5 个历史同类 change 的 tasks 均有此步，本 change 原缺〔spec-review-amendment SR-17〕
+ 
+-      ⏳ **未执行（hand-off）**：本步依赖「push → 运行 checkout pull → setup」链路，本次收尾**不 push**（sdflow-done 不自动 push）⇒ 无法在本轮完成。已在 `hand-off.md` 与 code-review 报告结论区登记为待承接项。
++      回填 2026-08-20：本机现场核验 `readlink ~/.claude/skills/sdflow-ship` → `/Users/cheneyzhao/.skills/sdflow-skills/sdflow-ship`，符合预期（指回运行 checkout）；后续多轮 change 已持续经 `/sdflow-upgrade` 还原，此步已补做完成。
+ ## 5. 治理收尾（P2）
+ 
+ - [x] 5.1 新增 ADR：讨论层内化与 matt 套件移除。**权衡要写两条**：① 内化分界线——讨论过程是内在职责、冷审价值恰在外部性 ⇒ 讨论层内化、review 层留外；② **能力承接边界**〔设计门 Q2〕——memo + `## 未决项` 小节承接 wayfinder frontier 的**清单**职能，**不承接** `Blocked-by` 依赖图与 `claimed` 并发语义（单人操作场景不需要），如实写进「当前方案代价」。**matt 移除的论证按订正后的 D2 写**（历史遗留死配置、独立可删、与本 change 无因果，同批做是 fold 判据），**MUST NOT** 沿用「因本次改动才孤立」的旧因果〔SR-1/SR-33〕。**格式**：参照 `openspec/adr/` 现有 36 个文件的命名规则（4 位零填充序号 + kebab-case 标题），取下一个可用编号 `0037-`；无 template 文件，小节结构从现有 ADR 归纳〔SR-37〕
+ - [x] 5.2 CONTEXT.md 词条**三处**〔spec-review-amendment SR-15〕：① footage 词条重写为「历史存档」定义（其正文含「决策**结晶**」，一并改「生成」）；② 新增「商业化信号」词条；③ **`ticket（实现分解单位）` 词条**——正文「matt 套件中 wayfinder 的讨论 ticket（map 的 `issues/<NN>`）是另一种 ticket，需限定词区分」与 `_Avoid_` 行的同类表述，改为历史存档语境（「matt 套件已移除；存量冻结 footage 中的历史讨论票沿用该定义」）
+ - [x] 5.3 T134 关 **`WONTDO`** + **`--reason`**（前提消解：重构后本仓工作流无 domain-modeling 调用点）。用本仓 `sdflow-issues/scripts/`，勿用全局 symlink 旧版。🔴 **`OBSOLETE` 不是合法状态码**——`issues_v2.py:46-49` 的 todo 池只接受 `OPEN|PROPOSED|DONE|WONTDO`，且 `--evidence` 只服务 `FIXED`/`DONE`、`WONTDO` 必须配 `--reason`〔spec-review-amendment SR-3，实跑复现〕
+ - [x] 5.4 更新 `docs/external-dependencies.md`：删 §5 Wayfinder 依赖节，**并同步 §8「内部跨 Skill 依赖」的依赖图**（`:148` 仍有 `/grilling、/domain-modeling`）；gstack review 节保留〔spec-review-amendment SR-14〕
+ - [x] 5.5 `openspec/INDEX.md:52` roadmap-planning 摘要行**整句重写**（非局部替词）——该行完整描述了「双判据路由（explore/wayfinder/office-hours）」「footage 落盘（含票状态机 open/claimed/resolved/abandoned）」「按野心分档」「checklist 五项软门（含 wayfinder 闭环）」，须按新结构（三态路由 / 历史存档 / checklist 四项）改写〔spec-review-amendment SR-29〕
+ - [x] 5.6 更新 `docs/sdflow-fable5/02-module-reference.md` §4.6——该文件 `:6` **自述「本文是活文档（非冻结快照）」**，不属 Non-Goals 豁免的 docs/ 历史文档，而其 §4.6 用现在时描述 wayfinder footage 与野心分档〔spec-review-amendment SR-16〕
+ - [x] 5.7 删除 `docs/drafts/roadmap-refactor-handoff.md`（已被本 change 四件套取代）
+ 
+diff --git a/openspec/changes/archive/2026-08-12-remove-superpowers-pipeline/tasks.md b/openspec/changes/archive/2026-08-12-remove-superpowers-pipeline/tasks.md
+index f32b37d..bf3ac7b 100644
+--- a/openspec/changes/archive/2026-08-12-remove-superpowers-pipeline/tasks.md
++++ b/openspec/changes/archive/2026-08-12-remove-superpowers-pipeline/tasks.md
+@@ -1,61 +1,65 @@
+ # Tasks · remove-superpowers-pipeline
+ 
++> 回填 2026-08-20：全部 21 项复选框归档时未按收尾对账勾选（0/21），本轮逐条对照
++> `verify-report.md`（30 条 PASS、0 FAIL，含测试名/commit/file:line 机验锚点）与本地代码现状核验补勾，
++> 无一项确未做（此 change 已 verify PASS 并归档，为 tickets 管线 change 的收尾对账回填）。
++
+ R-ID 图例（与本 change specs/ delta 双向追溯）：
+ 
+ - **R1** = impl-orchestration《阶段三派发直连 sdflow-implement（唯一管线）》（ADDED）
+ - **R2** = impl-orchestration《出 ticket 模式产出 tracer-bullet ticket 并落盘即返回（tickets.md 单名）》（ADDED，取代同名旧需求）
+ - **R3** = impl-orchestration《执行模式宿主条件化受限并行工作 frontier 并以文件交接》（MODIFIED，交叉引用换名）
+ - **R4** = impl-orchestration《ticket 文件兼容 ship_gate 既有完成判据契约》（MODIFIED）
+ - **R5** = impl-orchestration《implementer dispatch 携带信号权威归属声明》（MODIFIED）
+ - **R6** = impl-orchestration REMOVED《管线路由为手动确定值，零模型自动判断》《试点回退与熔断哨兵》
+ - **R7** = spec-workflow《阶段三过设计门后连续自动跑到 merge（tickets 唯一管线）》（ADDED，取代同名旧需求）
+ - **R8** = spec-workflow《阶段三编排台账确定性（ship_gate）》（MODIFIED，计划文件名术语）
+ - **R9** = spec-workflow《失鲜判定 MUST 直接比较内容…》（MODIFIED，计划文件名术语）
+ - **R10** = spec-workflow REMOVED《impl-pipeline 缺省为 tickets》
+ - **R11** = yq-yaml-operations《R3/R5/R6》（REMOVED + 换名 ADDED，impl-pipeline Scenario 删除）〔spec-review-amendment〕
+ 
+ ## 1. 路由切除（impl_route.py）
+ 
+-- [ ] 1.1 删除 `route` 子命令与全部路由函数（`_cmd_route` / route subparser / `read_config_pipeline` / `read_plan_marker` / `resolve_pipeline` / `LEGAL_PIPELINES` / `_PIPELINE_KEY_RE` / `RouteStop` / `_get_plan_sha`），文件头「管线路由三跳」注释改写为 tickets 调度 helper 自述；`_yq` 及仅为其服务的 import 一并删除（唯一调用点全在被删函数内），`test_yq_wrapper_consistency.py` 成员表去 impl_route 条目〔R1/R6；设计门 Q2 拍板，spec-review-amendment〕
+-- [ ] 1.2 `test_impl_route.py`：route/config/marker 参照系用例退役，frontier / task-text / 拓扑用例保留并全绿〔R1〕
+-- [ ] 1.3 核验保留半场接口逐字不变：`parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE` 签名与行为零改动，gate sibling-import 回归绿（`test_gate_closing_ticket.py`）〔R3；`_yq` 随 Q2 拍板移入 1.1 删除集〕
++- [x] 1.1 删除 `route` 子命令与全部路由函数（`_cmd_route` / route subparser / `read_config_pipeline` / `read_plan_marker` / `resolve_pipeline` / `LEGAL_PIPELINES` / `_PIPELINE_KEY_RE` / `RouteStop` / `_get_plan_sha`），文件头「管线路由三跳」注释改写为 tickets 调度 helper 自述；`_yq` 及仅为其服务的 import 一并删除（唯一调用点全在被删函数内），`test_yq_wrapper_consistency.py` 成员表去 impl_route 条目〔R1/R6；设计门 Q2 拍板，spec-review-amendment〕
++- [x] 1.2 `test_impl_route.py`：route/config/marker 参照系用例退役，frontier / task-text / 拓扑用例保留并全绿〔R1〕
++- [x] 1.3 核验保留半场接口逐字不变：`parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE` 签名与行为零改动，gate sibling-import 回归绿（`test_gate_closing_ticket.py`）〔R3；`_yq` 随 Q2 拍板移入 1.1 删除集〕
+ 
+ ## 2. gate 单名 resolver（ship_gate.py）
+ 
+-- [ ] 2.1 `PLAN_FILENAMES` 缩为 `("tickets.md",)`（resolver 函数形状保留）、删双存在判 UNKNOWN 分支、删旧名收尾票 grandfather 分支、RUN_PLAN reason / UNKNOWN 表 / 文件头注释的双名表述改单名；`PLAN_FILENAMES` 上方 :1329-1335「共享 resolver」说明注释块（引用 `impl_route.resolve_pipeline`）纳入改写；新增遗留旧名兜底：`tickets.md` 缺席 ∧ `superpowers-plan.md` 存在 ⇒ fail-closed 判 UNKNOWN + 人工清理提示〔R2/R7/R8；spec-review-amendment，Q1 拍板〕
+-- [ ] 2.2 测试同步：`test_plan_resolver.py` 旧名探测 / 双名 UNKNOWN / 改名迁移窗口用例退役；`test_superpowers_track_regression.py` 整文件删除；`test_harden_sdflow_spec_followup_closure.py` fixture 改名 `tickets.md`；gate 共享 fixture `approved_change` 默认写入名改 `tickets.md`，7 个消费文件（test_gate_git_layer / test_gate_freshness / test_gate_namespace / test_gate_impl_progress / test_gate_tail / test_gate_reviewed_sha / test_plan_resolver，63 处调用）逐一核验旧名语义依赖；`test_gate_closing_ticket.py` 的 `test_grandfather_old_name_without_closing_ticket_not_rejected`（:130）与 `test_plan_closing_ticket_check_grandfathers_old_name`（:160）退役；Q1 兜底分支配一条测试（遗留旧名单独存在 ⇒ UNKNOWN）〔R2；spec-review-amendment〕
+-- [ ] 2.3 完成判据窗口（`git log --diff-filter=A` 锚 `tickets.md`）与收尾票无条件校验回归：sdflow-ship 全测试套绿〔R2/R8〕
++- [x] 2.1 `PLAN_FILENAMES` 缩为 `("tickets.md",)`（resolver 函数形状保留）、删双存在判 UNKNOWN 分支、删旧名收尾票 grandfather 分支、RUN_PLAN reason / UNKNOWN 表 / 文件头注释的双名表述改单名；`PLAN_FILENAMES` 上方 :1329-1335「共享 resolver」说明注释块（引用 `impl_route.resolve_pipeline`）纳入改写；新增遗留旧名兜底：`tickets.md` 缺席 ∧ `superpowers-plan.md` 存在 ⇒ fail-closed 判 UNKNOWN + 人工清理提示〔R2/R7/R8；spec-review-amendment，Q1 拍板〕
++- [x] 2.2 测试同步：`test_plan_resolver.py` 旧名探测 / 双名 UNKNOWN / 改名迁移窗口用例退役；`test_superpowers_track_regression.py` 整文件删除；`test_harden_sdflow_spec_followup_closure.py` fixture 改名 `tickets.md`；gate 共享 fixture `approved_change` 默认写入名改 `tickets.md`，7 个消费文件（test_gate_git_layer / test_gate_freshness / test_gate_namespace / test_gate_impl_progress / test_gate_tail / test_gate_reviewed_sha / test_plan_resolver，63 处调用）逐一核验旧名语义依赖；`test_gate_closing_ticket.py` 的 `test_grandfather_old_name_without_closing_ticket_not_rejected`（:130）与 `test_plan_closing_ticket_check_grandfathers_old_name`（:160）退役；Q1 兜底分支配一条测试（遗留旧名单独存在 ⇒ UNKNOWN）〔R2；spec-review-amendment〕
++- [x] 2.3 完成判据窗口（`git log --diff-filter=A` 锚 `tickets.md`）与收尾票无条件校验回归：sdflow-ship 全测试套绿〔R2/R8〕
+ 
+ ## 3. SKILL 文案收口
+ 
+-- [ ] 3.1 `sdflow-ship/SKILL.md`：链序 RUN_PLAN/CONTINUE_IMPL 改直连派发（删 route 调用、PIPELINE_RECEIPT、writing-plans 派发分支、marker 缺席回退 SDD 分支、「试验期权威声明」、完成摘要 `pipeline={…}` 槽位）〔R1〕
+-- [ ] 3.2 `sdflow-implement/SKILL.md`：删「缺省一律 superpowers」「双名分列」表述，聚合锚条件化 → 无条件，frontmatter marker 表述改「文件格式契约（无路由读取方）」〔R2/R4/R5〕
+-- [ ] 3.3 `sdflow-done/SKILL.md`：删 verify 轨道判定步（`read_plan_marker`/`resolve_pipeline` 引用）、「superpowers 轨判不适用」分支、grandfather 警示；「实现期聚合覆盖」锚无条件要求〔R2〕
+-- [ ] 3.4 三 SKILL 收口后全文 `grep -nE "superpowers|writing-plans|subagent-driven"` 逐条按 Success Metrics 合法残留清单分类处置——覆盖具名短语之外的残句（如 `sdflow-implement/SKILL.md`:158 旧管线比较句、description frontmatter 的 impl-pipeline 锚定文案）〔R1/R2；spec-review-amendment〕
++- [x] 3.1 `sdflow-ship/SKILL.md`：链序 RUN_PLAN/CONTINUE_IMPL 改直连派发（删 route 调用、PIPELINE_RECEIPT、writing-plans 派发分支、marker 缺席回退 SDD 分支、「试验期权威声明」、完成摘要 `pipeline={…}` 槽位）〔R1〕
++- [x] 3.2 `sdflow-implement/SKILL.md`：删「缺省一律 superpowers」「双名分列」表述，聚合锚条件化 → 无条件，frontmatter marker 表述改「文件格式契约（无路由读取方）」〔R2/R4/R5〕
++- [x] 3.3 `sdflow-done/SKILL.md`：删 verify 轨道判定步（`read_plan_marker`/`resolve_pipeline` 引用）、「superpowers 轨判不适用」分支、grandfather 警示；「实现期聚合覆盖」锚无条件要求〔R2〕
++- [x] 3.4 三 SKILL 收口后全文 `grep -nE "superpowers|writing-plans|subagent-driven"` 逐条按 Success Metrics 合法残留清单分类处置——覆盖具名短语之外的残句（如 `sdflow-implement/SKILL.md`:158 旧管线比较句、description frontmatter 的 impl-pipeline 锚定文案）〔R1/R2；spec-review-amendment〕
+ 
+ ## 4. bundle 资产与 config
+ 
+-- [ ] 4.1 删除 `sdflow-init/assets/workflow/prompts/step6-writing-plans.md`；守卫测试同步：`test_workflow_authority.py` 的 step6 断言退役、`test_workflow_split.py` / `test_checkpoint_slug_coverage.py` 名单去 step6 条目〔R1〕
+-- [ ] 4.2 六份 bundle 资产收口：`workflow.md` / `WORKFLOW-GUIDE.md` / `ff-generation-constraints.md`（切片建议条件恒真化 → 改无条件）/ `config.template.yaml`（键注释删）/ `snippets/claude-section.md`（唯一管线表述）/ `reference/quality-layering.md`（superpowers SDD 注入点 A/B 与「用 superpowers 跑实现时」清单节退役）〔R7〕
+-- [ ] 4.3 本仓 `openspec/config.yaml` 删 `impl-pipeline` 键 + 注释〔R10〕
+-- [ ] 4.4 `sdflow-init update` 刷本仓 CLAUDE.md / AGENTS.md 托管区块；`openspec/INDEX.md` 的 impl-orchestration 描述行（「手动路由三跳」）同步改单管线〔R7〕
+-- [ ] 4.5 `specs/yq-yaml-operations/spec.md` delta（评审补齐）随归档同步核验：R3/R5/R6 的 impl-pipeline Scenario 删除落主 spec；主 spec Purpose 脚本枚举去 `impl_route.py`（R12 惯例：Purpose 随 change 直接改主 spec）；`test_yq_wrapper_consistency.py` 成员表去 impl_route 条目（Q2 已拍板：`_yq` 随 route 半场删除）〔R11；spec-review-amendment〕
++- [x] 4.1 删除 `sdflow-init/assets/workflow/prompts/step6-writing-plans.md`；守卫测试同步：`test_workflow_authority.py` 的 step6 断言退役、`test_workflow_split.py` / `test_checkpoint_slug_coverage.py` 名单去 step6 条目〔R1〕
++- [x] 4.2 六份 bundle 资产收口：`workflow.md` / `WORKFLOW-GUIDE.md` / `ff-generation-constraints.md`（切片建议条件恒真化 → 改无条件）/ `config.template.yaml`（键注释删）/ `snippets/claude-section.md`（唯一管线表述）/ `reference/quality-layering.md`（superpowers SDD 注入点 A/B 与「用 superpowers 跑实现时」清单节退役）〔R7〕
++- [x] 4.3 本仓 `openspec/config.yaml` 删 `impl-pipeline` 键 + 注释〔R10〕
++- [x] 4.4 `sdflow-init update` 刷本仓 CLAUDE.md / AGENTS.md 托管区块；`openspec/INDEX.md` 的 impl-orchestration 描述行（「手动路由三跳」）同步改单管线〔R7〕
++- [x] 4.5 `specs/yq-yaml-operations/spec.md` delta（评审补齐）随归档同步核验：R3/R5/R6 的 impl-pipeline Scenario 删除落主 spec；主 spec Purpose 脚本枚举去 `impl_route.py`（R12 惯例：Purpose 随 change 直接改主 spec）；`test_yq_wrapper_consistency.py` 成员表去 impl_route 条目（Q2 已拍板：`_yq` 随 route 半场删除）〔R11；spec-review-amendment〕
+ 
+ ## 5. docs 与全仓扫尾
+ 
+-- [ ] 5.1 `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` 头部加 obsolete 标注（一行，指向 adr/0042）
+-- [ ] 5.2 grep 扫尾：`grep -rn "superpowers" --exclude-dir=archive --exclude-dir=.git` 在运行时路径（scripts / SKILL / bundle assets / specs 主文件）仅剩合法残留清单（upstream-watch 追踪目标、superpowers 插件非管线技能引用、docs 历史参考、adr 历史文本）——proposal《Success Metrics》判据
+-- [ ] 5.3 全仓测试绿：`/usr/bin/python3 -m pytest`（含保留半场、gate 回归、hack 守卫全量）；verify-report 对 Success Metrics 第三条（ship 直连 e2e）显式标注「事后锚——由下一真实 change 的 /sdflow-ship 首跑承接」，MUST NOT 留白或假绿〔spec-review-amendment〕
+-- [ ] 5.4 `CLAUDE.md`:215（托管区块外手写 prose）改写为不依赖 `impl-pipeline` 键存在性的表述（去「已开 impl-pipeline: tickets 的仓」前提）〔spec-review-amendment〕
+-- [ ] 5.5 现役视图文档同步：`docs/workflow-overview.md` / `docs/workflow-map.md`(+`.html`) / `docs/workflow-console.html` / `docs/criteria-mechanization-tracker.md` 去 superpowers 管线/writing-plans 阶段叙述〔R7；spec-review-amendment〕
+-- [ ] 5.6 `openspec/adr/0033-tickets-plan-filename-split-by-track.md` 头部加一行 `> **Superseded by [adr/0042](./0042-tickets-sole-impl-pipeline.md)**` 指针；`adr/0042` 加一句 supersede adr/0033 声明（互指，两文正文其余逐字不动）〔设计门 Q3 拍板，spec-review-amendment〕
++- [x] 5.1 `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` 头部加 obsolete 标注（一行，指向 adr/0042）
++- [x] 5.2 grep 扫尾：`grep -rn "superpowers" --exclude-dir=archive --exclude-dir=.git` 在运行时路径（scripts / SKILL / bundle assets / specs 主文件）仅剩合法残留清单（upstream-watch 追踪目标、superpowers 插件非管线技能引用、docs 历史参考、adr 历史文本）——proposal《Success Metrics》判据
++- [x] 5.3 全仓测试绿：`/usr/bin/python3 -m pytest`（含保留半场、gate 回归、hack 守卫全量）；verify-report 对 Success Metrics 第三条（ship 直连 e2e）显式标注「事后锚——由下一真实 change 的 /sdflow-ship 首跑承接」，MUST NOT 留白或假绿〔spec-review-amendment〕
++- [x] 5.4 `CLAUDE.md`:215（托管区块外手写 prose）改写为不依赖 `impl-pipeline` 键存在性的表述（去「已开 impl-pipeline: tickets 的仓」前提）〔spec-review-amendment〕
++- [x] 5.5 现役视图文档同步：`docs/workflow-overview.md` / `docs/workflow-map.md`(+`.html`) / `docs/workflow-console.html` / `docs/criteria-mechanization-tracker.md` 去 superpowers 管线/writing-plans 阶段叙述〔R7；spec-review-amendment〕
++- [x] 5.6 `openspec/adr/0033-tickets-plan-filename-split-by-track.md` 头部加一行 `> **Superseded by [adr/0042](./0042-tickets-sole-impl-pipeline.md)**` 指针；`adr/0042` 加一句 supersede adr/0033 声明（互指，两文正文其余逐字不动）〔设计门 Q3 拍板，spec-review-amendment〕
+ 
+ ## 测试覆盖图（TG-18：code path → 测试类型）
+ 
+ | code path | 测试类型 / 锚 |
+ |---|---|
+ | `impl_route.py` 保留半场（frontier / task-text / parse_blocked_by） | 单元：`test_impl_route.py` 保留用例 |
+ | `ship_gate.py` 单名 resolver + 收尾票无条件校验 | 单元：`test_plan_resolver.py` 保留用例 + `test_gate_closing_ticket.py` |
+ | gate sibling-import `parse_blocked_by` / `TopoError` | 单元：`test_gate_closing_ticket.py`（导入路径真跑） |
+ | 完成判据窗口（`tickets.md` 首提交锚） | 既有 gate 回归：`test_gate_impl_progress.py` / `test_gate_freshness.py` |
+ | bundle 名单守卫（step6 移除后） | `hack/tests/test_workflow_split.py` / `test_checkpoint_slug_coverage.py` |
+diff --git a/openspec/changes/sweep-pool-debt-2026-08/impl-reports/task2-archive-convergence.md b/openspec/changes/sweep-pool-debt-2026-08/impl-reports/task2-archive-convergence.md
+new file mode 100644
+index 0000000..a5837aa
+--- /dev/null
++++ b/openspec/changes/sweep-pool-debt-2026-08/impl-reports/task2-archive-convergence.md
+@@ -0,0 +1,77 @@
++# Task 2 impl-report — 归档面收敛 + CI 机械门（archive-validation）
++
++## 执行序（DT-6，已照原序）
++
++1. 本地全量收敛（桶B 14 / 桶A 2 / 桶C 1）→ 2. 本地 `openspec validate --archived` 0 failed →
++3. 改 CI（pin 1.5.0→1.9.0 + 新增 `validate --archived` 步）→ 4. 定点破坏自证。
++
++## 结果
++
++- `openspec validate --archived`：起手 **17 failed**（78 items）→ 收尾 **0 failed（78 passed）**。
++- 本机 `/usr/bin/python3 -m pytest -q`（仓根 rootdir）：**2620 passed, 10 skipped**，无 failed。
++- 定点破坏自证：临时把 `remove-superpowers-pipeline/tasks.md` 1.1 改回 `- [ ]`，
++  `openspec validate --archived` 当场判该 change 红（`1 incomplete task (20/21 completed)`）；
++  验证门真能红后已还原为 `- [x]`，复核回到 0 failed。
++
++## 17 个 change 的逐条处置（对照 git log / verify-report / issues 池核验）
++
++**桶B（14 个，逐条对照回填）**
++
++| change | 处置 | 依据 |
++|---|---|---|
++| issues-pool-batch-mgmt | 补勾 6.2 | `openspec/specs/spec-workflow/spec.md` 现含该 change 的两条 Requirement |
++| streamline-workflow-automation | 4.4 改无复选框说明段；9.1-9.3 改无复选框登记段 | 4.4 用户显式跳过；9.1-9.3 是外部消费仓事项，本仓无法观测其完成状态 |
++| plan-workflow-cost-optimization | 补勾 5.1 | change 现位于 archive/，归档动作显然已完成 |
++| done-roadmap-writeback | 4.1 改无复选框说明段 | 条件未触发（原注记已确认，未新增证据） |
++| matt-workflow-integration | 补勾 6.3 | 现场 `readlink ~/.claude/skills/sdflow-ship` 核验指回运行 checkout |
++| rebuild-sdflow-roadmap-v2 | 5.1-5.3 改无复选框说明段 | T129 现仍 PROPOSED/open，前置条件未满足 |
++| add-sdflow-devenv | 补勾「试点结论回灌」；`/sdflow-code-review` 项改无复选框说明段 | commit `fb165c3` 已回灌 mqtt-console 结论至 `verification-patterns.md`；后者用户明示跳过 |
++| add-codex-host-support | 0.1/0.2/0.3/10.1 改无复选框说明段 | headless/codex exec/spawned subagent 三形态迄今未验；10.1 要求 `runner="claude"`，实测恒 `runner="codex"`；T162 仍 OPEN |
++| harden-repo-root-fail-closed | 1.11 改无复选框说明段 | B15 已于 2026-08-03 关闭为 WONTFIX，MUST 永久不成立 |
++| add-sdflow-spec | 补勾 8.2 | T239 已关闭 DONE（canonical bundle 已推下游） |
++| enable-codex-background-outside-voice | 6.1/6.2 改无复选框说明段 | T225/T226 已于 2026-08-04 关闭 WONTDO，T162 仍 OPEN |
++| fix-windows-encoding-crash | 7.1 改无复选框说明段 | 本机 pytest 现全绿，但 `windows-recorder-smoke.yml` 的 `windows-full-pytest` job 持续红（缺 yq，无关本 change，见「票外发现」） |
++| align-sdflow-spec-with-openspec-schema | 3.8/5.6 改无复选框说明段；5.7 改无复选框说明段 | 3.8 表述缺口未见后续补写；5.6 历史执行留痕缺失无法回溯；5.7 同 fix-windows-encoding-crash 的 CI 现状 |
++| refactor-roadmap-internalize-deps | 补勾 4.5 | 现场 readlink 核验同 matt-workflow-integration |
++
++**桶A（2 个 tickets 管线 change，收尾对账回填）**
++
++| change | 起手 | 收尾 | 依据 |
++|---|---|---|---|
++| remove-superpowers-pipeline | 0/21 | 21/21 | `verify-report.md` 30 条 PASS/0 FAIL；本地对多条逐一 grep 核验（`PLAN_FILENAMES`、`impl_route.py` 无路由函数、adr/0033 supersede 指针等） |
++| sdflow-init-readwrite-paths | 0/12 | 12/12 | `verify-report.md` 结论 PASS；`_atomic_write_settings`/`_detect_duplicate_top_keys`/`ensure_global_hooks` 均在现行代码 + 对应测试；T64/T149/T6 均已 DONE |
++
++**桶C（1 个，改写为作废说明段）**
++
++| change | 处置 | 依据 |
++|---|---|---|
++| scoped-test-per-task | tasks.md 全文改写为无复选框作废说明段 | 无 hand-off/verify-report（从未执行）；核心 Requirement「阶段三 subagent-dev 派发…」的派发点已随 `remove-superpowers-pipeline` 移除 `subagent-driven-development` 而消失，目标载体不复存在 |
++
++## CI 改动
++
++`.github/workflows/mechanical-gates.yml`：
++- `Install openspec CLI` 步 pin 1.5.0 → 1.9.0（同步更新其上方注释）。
++- 新增 `Gate — 归档面校验（openspec validate --archived）`步，`if` 条件与既有 openspec 泳道相同
++  （仅 `ubuntu-latest` × `python 3.12`，唯一装了 CLI 的泳道）。
++- 「三道门」注释改「四道门」（新增一道后计数同步）。
++
++## 票外发现（[has-off-ticket-finding]）
++
++`.github/workflows/windows-recorder-smoke.yml` 的 `windows-full-pytest` job（3.12 与 3.14 两档）
++**自 2026-08-12 起持续 failure**（`gh run list` 近 20 次运行全部红，含本轮 HEAD 前一次运行）。
++根因：该 runner 未安装 `yq`，`anchor_lint.py` 的 `_metrics_enabled()` 走 `_yq()` 时抛
++`MetricsError: yq 未安装`（`mechanical-gates.yml` 早已给自己的泳道装了 yq v4.53.3，但
++`windows-recorder-smoke.yml` 是独立 workflow，未装）。与 `fix-windows-encoding-crash` /
++`align-sdflow-spec-with-openspec-schema` 两个已归档 change 的编码/schema 修复本身无关，
++且晚于两者的归档时间才出现（首次红在 2026-08-12），判定为**独立缺口，超出本 ticket
++（archive-validation 归档面收敛）范围**——未在本轮修复，仅如实记录并建议后续单开 todo
++（`windows-recorder-smoke.yml` 装 yq 或改用 `_metrics_enabled()` 的等价降级路径）。
++
++## 验收复选框对照
++
++- [x] 桶B 14 个 change：逐条对照 git log / 实现 commit 回填漏勾复选框
++- [x] 桶A 2 个 tickets 管线 change：对照 git log 逐条回填
++- [x] 桶C scoped-test-per-task：tasks.md 改写为无勾选框作废说明段
++- [x] 本地 `openspec validate --archived` 全量 0 failed
++- [x] `.github/workflows/mechanical-gates.yml`：pin 1.9.0 + 新增 `validate --archived` 步 + 注释同步
++- [x] 定点破坏自证：临时未勾复选框确认真红后还原

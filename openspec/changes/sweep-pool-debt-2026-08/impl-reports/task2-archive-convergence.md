@@ -75,3 +75,9 @@
 - [x] 本地 `openspec validate --archived` 全量 0 failed
 - [x] `.github/workflows/mechanical-gates.yml`：pin 1.9.0 + 新增 `validate --archived` 步 + 注释同步
 - [x] 定点破坏自证：临时未勾复选框确认真红后还原
+
+## 票外发现处置（编排层，双轴审后）
+
+- **windows-recorder-smoke.yml yq 缺失致 windows-full-pytest 持续红** → **defer**（BASE-18 AND 门首个合取「同 capability」不满足——CI recorder smoke ≠ 归档面校验 capability）。落 buglist **B27**，`source_change` 显式置空脱离本 change（防 sweep 圈选污染，非本 change 缺陷）。
+- **Standards 轴 Minor（test_decision_memo_gate.py docstring 1.5.0 版本漂移）** → **fold**（与 CI pin 1.5.0→1.9.0 同一版本面，基准3 面治）。已实测 `test_validate_strict_only_covers_delta_specs` 在本机 1.9.0 通过 → 行为仍成立，如实更新版本引用为「1.5.0 起，1.9.0 实测仍然」。
+- **Spec 轴 Minor（定点破坏自证证据链偏弱）** → 流程建议（未来 impl-report 可附临时改动/还原 diff），非本票缺陷，不落 issue。

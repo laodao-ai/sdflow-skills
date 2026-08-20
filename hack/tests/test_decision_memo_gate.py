@@ -14,7 +14,7 @@
     本门用真的 `openspec` CLI 跑一遍，证明这条判据**真的挡得住**。
 
     ⚠️ **覆盖边界（实测钉住，见 `test_validate_strict_only_covers_delta_specs`）**：
-    CLI 1.5.0 的 `validate <change> --strict` **只校验 `specs/*/spec.md` 的 delta 结构**——
+    CLI 1.5.0 起（1.9.0 实测仍然，本测试守护）的 `validate <change> --strict` **只校验 `specs/*/spec.md` 的 delta 结构**——
     `proposal.md` / `design.md` / `tasks.md` 的内容它**根本不读**（proposal.md 整份删掉
     照样报 valid）。故「半截 design.md」这一形态**无机械门**，只能靠终审人判。
     该事实由本文件机械钉住 —— openspec 哪天扩了覆盖面，那条用例会红，提示回来改文档。
@@ -606,7 +606,7 @@ def test_status_says_done_while_validate_says_red(tmp_path):
 def test_validate_strict_only_covers_delta_specs(tmp_path, kind, kwargs):
     """⭐ **覆盖边界钉子**：`validate --strict` 只校验 `specs/*/spec.md` 的 delta 结构。
 
-    实证（CLI 1.5.0）：`dist/core/validation/validator.js` 全文无 `design` 字样；
+    实证（CLI 1.5.0，CI 现 pin 1.9.0，实测仍然）：`dist/core/validation/validator.js` 全文无 `design` 字样；
     change 路径实际只跑 `validateChangeDeltaSpecs`——`proposal.md` 整份删掉照样报 valid。
 
     ⇒ SA-05 Scenario「生成 design.md 命中输出上限 → validate 不过」**对 design.md 不成立**；
