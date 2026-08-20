@@ -275,7 +275,7 @@ design 域监视集 SHALL 为 `proposal.md` / `design.md` / `specs/`——`tasks
 - **WHEN** producer（任一评审 SKILL）需要把锚写进报告 frontmatter
 - **THEN** MUST 调用写锚脚本完成计算与写入（原子替换），MUST NOT 让 LLM 手抄/手写锚值
 - **AND** 写锚脚本与 gate 验锚 MUST 共用同一指纹实现（物理同源），MUST NOT 各自实现口径
-- **AND** **诚实边界**：脚本只保证锚**值**的正确性（消除手抄错值与伪造值）；**调用时机**仍由 producer 自报，MUST NOT 将本条表述为时机的机械保证
+- **AND** **诚实边界**〔spec-review-amendment R2 收窄〕：脚本保证锚**值**的正确性（消除手抄错值与不一致篡改），并机械拦截「监视集有未提交改动时写锚」（见「写锚时监视集脏 MUST 拒写」Scenario）；**「批准动作本身是否已发生」**仍由 producer 自报（无确定性信号），MUST NOT 将本条表述为完整时机的机械保证
 
 #### Scenario: 锚缺失或非法时 fail-closed
 
@@ -290,6 +290,7 @@ design 域监视集 SHALL 为 `proposal.md` / `design.md` / `specs/`——`tasks
 - **WHEN** 某归档目录 `verify-report.md` frontmatter 含 `verify: PASS` 且携旧格式 `reviewed_sha`（40 位 commit OID，归档于本迁移前；归档不可变，无法重锚）
 - **THEN** `archived_verify_state` MUST 识别 `verify: PASS` → 支持 SHIPPED；归档读点对 `reviewed_sha` / `reviewed_manifest` 的值格式与互证 MUST NOT 参与「坏 frontmatter」判定（归档只消费 `verify` 结论）——MUST NOT 因旧锚字段令存量归档报告（现 34 份携 40-hex 锚）整体判 `none` 而致 SHIPPED 大面积回归
 - **AND** live 读点不受本条影响：live 的 64-hex + 互证校验照常 fail-closed
+- **AND** 实现形态 SHALL 为**校验分层**〔spec-review-amendment R1〕：解析层对 `reviewed_sha` 只做语法校验（40 或 64 位小写 hex）、`reviewed_manifest` 做单行 base64 语法校验，解析核 MUST NOT 为归档 fork 出模式参数（承 A4 共核纪律）；64-hex 与 manifest 互证的语义强制 MUST 只落在 live 锚读取层
 - **AND** MUST 有归档 fixture 用例（40-hex `reviewed_sha` + `verify: PASS` → SHIPPED），其变异证明 = 令归档读点也执行 64-hex 值校验 ⇒ 用例变红
 
 #### Scenario: 结论字段与锚 MUST 原子写入
@@ -319,6 +320,13 @@ design 域监视集 SHALL 为 `proposal.md` / `design.md` / `specs/`——`tasks
 
 - **WHEN** 写锚脚本枚举监视域得到空集（如 change 目录缺 `proposal.md` / `design.md`）或枚举调用失败
 - **THEN** 脚本 MUST fail-loud 拒绝写入，MUST NOT 落一个空集 digest 锚——空集锚会使后续「监视域从无到有」的变化被误判，且掩盖枚举失败
+
+#### Scenario: 写锚时监视集脏 MUST 拒写〔spec-review-amendment R2〕
+
+- **WHEN** 写锚脚本运行时监视集路径存在未提交改动（`git status --porcelain -- <监视集>` 非空）
+- **THEN** 脚本 MUST fail-loud 拒写并提示「先提交修订再写锚」——锚取自 HEAD，脏树写锚 = 锚绑不含在场修订的盘面，结论落盘后首次判定即失鲜自锁（原「二次修订 MUST 先单独落盘」书面纪律由此收进机械层）
+- **AND** 逃生口（如 `--allow-dirty`）若提供 MUST 为显式越权留痕形态，MUST NOT 成为默认路径
+- **AND** MUST 有用例：脏监视集 → 非零退出不写入；干净树 → 正常写入
 
 ### Requirement: gate 的 git 调用失败 MUST 落在退出码契约集内，且不受外部态影响
 

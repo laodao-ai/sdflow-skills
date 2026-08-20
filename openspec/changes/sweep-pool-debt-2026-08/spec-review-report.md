@@ -44,6 +44,7 @@
 - **D9 · 数字口径订正（接地镜 + 对抗镜③）**——消费面 21 文件（漏 `openspec/specs/openspec-170-followup/spec.md` 与 `docs/workflow-skills/sdflow-spec-review.md`）、测试文件 11 非 10、可删面 ~100 行非 60–80。已修：proposal ×3 处 + tasks 1.6/1.8。
 - **D10 · D2 缓解表述收窄（strategy）**——「两层旁路可捕」→ 完成度/偏离对账，非文本完整性检测。已修：design Risks 行。
 - **D11 · ADR 落地形式（strategy）**——定为新增独立 ADR 文件 + adr/0026 头部 superseded-by 指针（仓惯例）。已修：tasks 1.8。
+- **D13 · R1/R2 二次优化（主审复核轮，2026-08-20 人已同意折入）**——R1：「归档读点分流」改为**校验分层**（解析层 40|64 语法放宽 + 语义强制上移 live 读点；解析核不 fork，承 A4 共核，对存量零回归）；R2：写锚脚本**脏树守卫**（监视集未提交改动即拒写，ADR-7(b) 书面纪律机械化，D4 诚实边界收窄为「批准动作是否发生」）。已落 design DT-1/DT-3、tasks 1.3/1.5、spec delta（分层 AND + 脏树拒写 Scenario + 诚实边界收窄），单独 checkpoint（拍板前二次修订时序）。
 - **D12 · 正向核验记录**：`import ship_gate` 零副作用可行（plan-eng 实测）；DT-1 命名对照满足 DX-03；memo C1/C3–C8/C11 及 design Context 全部行号接地镜逐条核实相符；`validate --archived` 实跑 61 passed / 17 failed 与 proposal 一致。
 
 ### [需拍板]
