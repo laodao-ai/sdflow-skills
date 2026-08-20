@@ -267,11 +267,13 @@ skills 清单）**存活并命中缓存**。
 **缺的正是 ④「方案尽量简化，不为低概率小影响纠结完美方案」——而 grill 恰恰是定范围的那一步。**
 一次一问、逐条拷问的格式天然容易把每个边角挖到底，④ 正是防这个的。
 
-**修法**：把 `~/.skills/sdflow-skills/sdflow-init/assets/hack/skill-principles.md` 的当前四条版本
-重贴进 `grill-with-docs/SKILL.md` 的 `sdflow:principles` 区块。一次复制粘贴。
+**处置：不修，这条已不构成风险**（2026-08-20 拍板）。`grill-with-docs` 已被 `/sdflow-spec`
+相位 B 的内置拷问取代、**不在本工作流的任何路径上**（`external-dependencies.md` §5）——
+一个不被调用的 skill 里通则停在第几版，不影响任何一次运行。
 
-**根治**：该 skill 不受 `sync_principles.py` 管辖（第三方 skill，不在 `PROJECT_TARGETS` 里），
-所以每次升级都会重新漂移。要么纳入注入链路，要么接受"每次升级手动重贴"并记进 checklist。
+**且 MUST NOT 去修**：它是仓外第三方文件，本仓不负维护责任，贴进去每次升级都会被覆盖
+（`sync_principles.py` 的 `PROJECT_TARGETS` 本就不含它，这是设计而非遗漏）。
+本条自此为历史观测记录，不是待办。
 
 ## 7. 事实来源标注
 
