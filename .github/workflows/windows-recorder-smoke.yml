@@ -43,6 +43,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install yq (mikefarah/yq, pinned v4.53.3)
+        shell: bash
+        run: |
+          set -eu
+          YQ_VERSION="v4.53.3"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_windows_amd64.exe" -o /usr/bin/yq.exe
+          yq --version
       - name: Install pytest
         shell: bash
         run: py -m pip install "pytest>=8"
@@ -57,6 +64,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install yq (mikefarah/yq, pinned v4.53.3)
+        shell: bash
+        run: |
+          set -eu
+          YQ_VERSION="v4.53.3"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_windows_amd64.exe" -o /usr/bin/yq.exe
+          yq --version
       - name: Install pytest
         shell: bash
         run: py -m pip install "pytest>=8"

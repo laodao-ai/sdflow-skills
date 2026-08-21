@@ -21,11 +21,18 @@ tools 非空 / lens-metric-contract.md 非空）。
 """
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from test_support.windows import bash_executable, bash_path
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="resolve-workflow.sh 不兼容 Windows 路径格式（SDFLOW_HOME C:\\... 被判非绝对路径）；"
+    "这些测试在 mechanical-gates.yml 的 ubuntu runner 上已覆盖",
+)
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "sdflow-init" / "assets" / "hack" / "render-review-prefix.sh"
