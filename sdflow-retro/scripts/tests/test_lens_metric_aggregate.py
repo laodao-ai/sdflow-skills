@@ -1,0 +1,438 @@
+import importlib.util
+from pathlib import Path
+
+_p = Path(__file__).resolve().parents[1] / "lens_metric_aggregate.py"
+_spec = importlib.util.spec_from_file_location("lma", _p)
+lma = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(lma)
+
+ANCHOR = ('<!-- sdflow:lens-metric v1 layer="code-review" lens="domain" '
+          'runner="claude" site="—" findings="5" 采纳="3" 裁掉="1" defer="1" '
+          '独立="2" sev="致0/高2/中2/低1" -->')
+
+def test_parse_valid_anchor():
+    f = lma.parse_anchor(ANCHOR)
+    assert f["layer"] == "code-review" and f["lens"] == "domain"
+    assert f["findings"] == "5" and f["采纳"] == "3" and f["独立"] == "2"
+    assert f["sev"] == "致0/高2/中2/低1" and f["site"] == "—"
+
+def test_non_anchor_line_returns_none():
+    assert lma.parse_anchor("普通一行文字，含 lens-metric 字样但非锚") is None
+    assert lma.parse_anchor("- 列表项 sdflow:lens-metric v1 内联提及") is None  # 非行首前缀
+    # 真哨兵：完整锚前缀出现在行中但非行首（startswith 正确=None；裸 in 会误取→捕获退化）
+    assert lma.parse_anchor('foo bar <!-- sdflow:lens-metric v1 layer="x" lens="domain" -->') is None
+
+def test_fence_block_lines_skipped():
+    text = "正文\n```\n" + ANCHOR + "\n```\n正文2\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines  # fence 内不产出
+
+def test_anchor_outside_fence_yielded():
+    text = "正文\n" + ANCHOR + "\n"
+    assert ANCHOR in list(lma._fence_aware_lines(text))
+
+def test_parse_report_only_non_fenced(tmp_path):
+    p = tmp_path / "x-review-report.md"
+    p.write_text("真锚:\n" + ANCHOR + "\n示例(fence 内不取):\n```\n" + ANCHOR + "\n```\n", encoding="utf-8")
+    rows = lma.parse_report(p)
+    assert len(rows) == 1  # 只取 fence 外那一行
+
+def test_malformed_anchor_does_not_corrupt(tmp_path):
+    # 措辞漂移/裸 substring 陷阱：缺引号、字段名漂移都不应抛异常或误取半行
+    bad = '<!-- sdflow:lens-metric v1 layer=code-review lens=domain -->'  # 无引号
+    p = tmp_path / "y-review-report.md"; p.write_text(bad + "\n", encoding="utf-8")
+    rows = lma.parse_report(p)
+    assert rows == [] or all("layer" not in r or r.get("layer") for r in rows)  # 不腐坏
+
+def test_sev_subformat_robust():
+    # [impl-review-fix F5] 措辞诚实化：sev 聚合器根本不消费（render_table 不读取
+    # sev 字段，只落锚存证供人工/未来消费者读取）——这里只验证解析层原样保留整串
+    # 不腐坏，不存在"子解析健壮性在渲染层校验"这回事。
+    a = ANCHOR.replace('sev="致0/高2/中2/低1"', 'sev="高2/致0"')
+    assert lma.parse_anchor(a)["sev"] == "高2/致0"
+
+
+def _write(tmp_path, change, *anchors):
+    d = tmp_path / "archive" / change; d.mkdir(parents=True)
+    (d / "code-review-report.md").write_text("\n".join(anchors) + "\n", encoding="utf-8")
+
+def _a(lens, findings, 采纳, 独立, site="—", layer="code-review", runner="claude"):
+    return (f'<!-- sdflow:lens-metric v1 layer="{layer}" lens="{lens}" runner="{runner}" '
+            f'site="{site}" findings="{findings}" 采纳="{采纳}" 裁掉="0" defer="0" '
+            f'独立="{独立}" sev="致0/高{采纳}/中0/低0" -->')
+
+def test_aggregate_two_changes(tmp_path):
+    _write(tmp_path, "c1", _a("domain", 5, 3, 2), _a("adversarial", 4, 2, 1))
+    _write(tmp_path, "c2", _a("domain", 6, 4, 3))
+    rows, no_anchor, parse_failed = lma.aggregate(tmp_path / "archive")
+    assert len(rows) == 3 and no_anchor == [] and parse_failed == []
+
+def test_no_anchor_report_counted(tmp_path):
+    _write(tmp_path, "c1", _a("domain", 5, 3, 2))
+    old = tmp_path / "archive" / "old"; old.mkdir(parents=True)
+    (old / "code-review-report.md").write_text("旧格式 voice分桶: codex 采纳3/裁掉0\n", encoding="utf-8")
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    assert "old" in no_anchor  # 显式计无锚样本，不静默跳过
+
+def test_aggregate_missing_archive_returns_empty(tmp_path):
+    # T61：aggregate 对缺失 archive 目录显式返回空三元组契约（不抛）。把「缺目录→空」
+    # 从 Path.glob 的偶然实现行为升成 aggregate 的显式契约，两处 call site
+    # （surfacing_block / build_report 聚合③）才能安全删掉不可达的死 try/except。
+    # 诚实留档：修前 glob 亦返空（行为等价），本测试锁契约、防未来重构回退，非 before/after 反证。
+    assert lma.aggregate(tmp_path / "no-such-archive") == ([], [], [])
+
+
+def test_aggregate_file_as_root_returns_empty(tmp_path):
+    # T61：archive_root 恰是文件（非目录）时同样返空不抛——显式 is_dir 守卫覆盖此退化输入。
+    f = tmp_path / "not-a-dir"
+    f.write_text("x", encoding="utf-8")
+    assert lma.aggregate(f) == ([], [], [])
+
+
+def test_render_table_has_independent_and_flags(tmp_path):
+    # 独立列非空 + 出现轮数≥10 标记（构造 domain 出现 10 轮）
+    for i in range(10):
+        _write(tmp_path, f"c{i}", _a("domain", 5, 3, 2))
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    assert "独立" in table and "≥10" in table  # 表含独立列 + N≥10 标记
+    assert "无锚样本" in table  # 无锚计数呈现
+    # 真哨兵：Σ独立=10轮×2=20 真值入表（防独立聚合退化,非仅列名存在）
+    assert "| 20 |" in table
+    # 补充：Σfindings=10轮×5=50 也真入表（防端到端数值退化）
+    assert "| 50 |" in table
+
+def test_out_of_enum_lens_flagged(tmp_path):
+    _write(tmp_path, "c1", _a("对抗镜1", 3, 1, 1))  # 未折叠的非法值
+    rows, _, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, [])
+    assert "越域" in table or "invalid" in table.lower()  # 非法 lens 值被标记不静默
+
+def test_out_of_enum_layer_flagged(tmp_path):
+    # [impl-review-fix F2] 此前只测非法 lens，未测非法 layer 分支
+    _write(tmp_path, "c1", _a("domain", 3, 1, 1, layer="foo-review"))  # 未在 LAYER_ENUM 内
+    rows, _, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, [])
+    assert "越域" in table  # 非法 layer 值同样被标记不静默
+
+def test_no_synthetic_score(tmp_path):
+    _write(tmp_path, "c1", _a("domain", 5, 3, 2))
+    rows, _, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, [])
+    assert "综合分" not in table and "价值分" not in table  # 描述性多列,无合成分
+
+
+def test_runner_distinguishes_outside_voice(tmp_path):
+    # [impl-review-fix CF-1，add-codex-host-support:task5 更新] 契约键是
+    # (layer,lens,host,runner,site)——codex 与 claude-fallback（v1 已废弃枚举值，
+    # 兼容读作 host=claude,runner=claude）是两个不同分组，同 site 的 outside-voice
+    # 不可合并成一行。「claude-fallback」字面量本身经兼容读后不再出现于渲染表
+    # （被重映射为 "claude"，见 test_no_claude_fallback_enum_value_leaks_into_rendered_table）。
+    _write(tmp_path, "c1",
+           _a("outside-voice", 3, 2, 2, site="code-voice", runner="codex"),
+           _a("outside-voice", 4, 1, 1, site="code-voice", runner="claude-fallback"))
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    lines = [l for l in table.splitlines() if "outside-voice" in l]
+    assert len(lines) == 2  # 未被错误合并成一行
+    assert any("codex" in l for l in lines) and any("claude" in l for l in lines)
+    assert not any("claude-fallback" in l for l in lines)  # 已废弃枚举值不应字面残留
+    # 真哨兵：各自独立的 Σfindings（3 与 4）都完整入表，不是合并后的 7
+    assert any("| 3 |" in l for l in lines) and any("| 4 |" in l for l in lines)
+
+
+def test_bad_encoding_report_does_not_crash_aggregate(tmp_path):
+    # [impl-review-fix CF-2] 一个编码坏字节的 archived 报告不应拖垮全仓聚合，
+    # 应被单独计入「解析失败」桶，其余 report 照常聚合。
+    _write(tmp_path, "c1", _a("domain", 5, 3, 2))
+    bad = tmp_path / "archive" / "bad"; bad.mkdir(parents=True)
+    (bad / "code-review-report.md").write_bytes(b"\xff\xfe\x00broken non-utf8 bytes")
+    rows, no_anchor, parse_failed = lma.aggregate(tmp_path / "archive")  # 不应抛异常
+    assert "bad" in parse_failed
+    assert len(rows) == 1  # 好文件不受坏文件牵连
+    table = lma.render_table(rows, no_anchor, parse_failed)
+    assert "解析失败" in table and "bad" in table  # 显式呈现，不静默丢
+
+
+def test_nested_fence_length_aware_no_leak():
+    # [impl-review-fix CF-4] design.md 这类文档常用 4-反引号外层包 3-反引号内层
+    # 示范锚。此前的单一 bool 翻转会在内层 3-``` 处误判"已跳出 fence"，把示范锚
+    # 当真数据吃进；现按确切反引号长度处理，内层锚不应被漏出。
+    text = ("正文\n"
+            "````\n"                # 外层开：4 个反引号
+            "示例(内层 3-``` 演示锚):\n"
+            "```\n"                 # 内层开：3 个反引号（不构成外层闭合，3<4）
+            + ANCHOR + "\n"
+            "```\n"                 # 内层关：3 个反引号（同样不构成外层闭合）
+            "````\n"                # 外层关：4 个反引号，真正闭合
+            "正文2\n")
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines  # 内层锚不漏出
+    assert "正文" in lines and "正文2" in lines  # fence 外内容仍正常产出
+
+
+def test_illegal_numeric_value_flagged(tmp_path):
+    # [impl-review-fix CF-5] "3.0" 是浮点串,不是契约要求的 int——此前 _int 静默
+    # 吞成 0（采纳率算错），现须显式标 ⚠数值非法。
+    _write(tmp_path, "c1", _a("domain", 5, "3.0", 2))
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    assert "⚠数值非法" in table
+
+
+def test_negative_numeric_value_flagged(tmp_path):
+    # [impl-review-fix CF-5] 负值同样违反契约 int≥0,此前会被原样求和(采纳率变负)。
+    _write(tmp_path, "c2", _a("domain", 5, -1, 2))
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    assert "⚠数值非法" in table
+
+def test_review_rounds_threshold_is_shared_constant():
+    # T59 反证：≥10 待复评阈值须为单一共享常量（此前 render_table + surfacing_block
+    # 两处各硬编码 10，调整易改一处漏一处致口径漂移）。修前 FAIL：无此常量（AttributeError）。
+    assert lma.REVIEW_ROUNDS_THRESHOLD == 10
+
+
+def test_render_table_threshold_uses_shared_constant(monkeypatch):
+    # T59 反证：render_table 的 ≥N flag 须引用共享常量而非硬编码 10。
+    # 把常量临时降到 3、构造同键 3 轮，应被 flag。修前硬编码 10 → 3 轮不 flag → FAIL。
+    monkeypatch.setattr(lma, "REVIEW_ROUNDS_THRESHOLD", 3)
+    rows = [lma.parse_anchor(_a("domain", 5, 3, 2)) for _ in range(3)]
+    table = lma.render_table(rows, [])
+    assert "待复评" in table
+
+
+def test_fence_aware_ignores_tilde_fence():
+    # T58 反证：CommonMark ~~~ tilde fence 内的示范锚必须被跳过（此前只认 ``` 反引号，
+    # ~~~ 代码块里的示范 lens-metric 锚会被误计入聚合）。
+    # 修前 FAIL：~~~ 不被识别为 fence，锚被原样产出当真数据。
+    text = "正文\n~~~\n" + ANCHOR + "\n~~~\n正文2\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines                      # ~~~ 内锚不产出
+    assert "正文" in lines and "正文2" in lines       # fence 外内容仍正常产出
+
+
+def test_tilde_fence_not_closed_by_backtick():
+    # T58 反证：~~~ 开启的 fence 内出现 ``` 不构成闭合（CommonMark 要求同字符闭合）。
+    # 修前 FAIL：~~~ 根本不被当 fence（锚被产出），且随后 ``` 的误闭合逻辑吞掉块外内容。
+    text = "~~~\n" + ANCHOR + "\n```\n仍在 tilde 块内\n~~~\n块外\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines                      # ~~~ 块内锚不漏出
+    assert "仍在 tilde 块内" not in lines            # ``` 不闭合 ~~~ 块
+    assert "块外" in lines                          # ~~~ 才是真正闭合，块外内容产出
+
+
+def test_backtick_fence_not_closed_by_tilde():
+    # T58 反证（对称）：``` 开启的 fence 内出现 ~~~ 不构成闭合。
+    text = "```\n" + ANCHOR + "\n~~~\n仍在反引号块内\n```\n块外\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines
+    assert "仍在反引号块内" not in lines             # ~~~ 不闭合 ``` 块
+    assert "块外" in lines
+
+
+def test_closing_fence_with_trailing_content_not_a_close():
+    # [impl-review-fix] 对抗镜1 爆点1：CommonMark 闭合 fence 之后只能有空白，
+    # `` ``` extra `` 不是合法闭合。此前前缀匹配把它当闭合 → 状态失同步（既可漏真锚
+    # 又可混假锚，且污染扩散到文件剩余部分）。修前 FAIL：`` ``` extra `` 误闭合。
+    text = "```\n" + ANCHOR + "\n``` extra\n仍在 fence 内\n```\n块外\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines                # 内锚不漏出
+    assert "仍在 fence 内" not in lines         # `` ``` extra `` 非法闭合，仍在块内
+    assert "块外" in lines                     # 裸 ``` 才是真正闭合
+
+
+def test_indented_4spaces_not_a_fence():
+    # [impl-review-fix] 对抗镜1 爆点2：CommonMark ≥4 空格缩进是代码块、非 fence 开启。
+    # 此前 \s* 吞任意缩进 → 缩进的 ``` 被误判 fence，吞掉其后 fence 外真锚。
+    # 修前 FAIL：4 空格缩进 ``` 被当 fence，ANCHOR 被吞。
+    text = "普通段落\n    ```\n" + ANCHOR + "\n    ```\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR in lines                    # 4 空格缩进非 fence，真锚应产出
+
+
+def test_3space_indent_still_a_fence():
+    # [impl-review-fix] 边界锁：≤3 空格缩进仍是合法 CommonMark fence，锚被跳过。
+    text = "x\n   ```\n" + ANCHOR + "\n   ```\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines
+
+
+def test_aggregate_is_dir_oserror_returns_empty(tmp_path, monkeypatch):
+    # [impl-review-fix] 对抗镜2：is_dir() 自身在父目录 EACCES 时抛 OSError（非返 False），
+    # 「返空不抛」契约须真正兑现——否则删掉的 call-site OSError catch 不再兜底 → 冒泡崩溃。
+    # 修前 FAIL：is_dir 抛 PermissionError 直接穿透 aggregate。
+    def _boom(self):
+        raise PermissionError("denied")
+    monkeypatch.setattr(lma.Path, "is_dir", _boom)
+    assert lma.aggregate(tmp_path / "archive") == ([], [], [])
+
+
+def test_aggregate_glob_oserror_returns_empty(tmp_path, monkeypatch):
+    # [impl-review-fix] codex outside-voice：「返空不抛」契约须覆盖 glob 遍历异常，
+    # 不止 is_dir——is_dir 与 glob 是两处独立异常源。call-site catch 已删，glob 中途
+    # PermissionError 会冒泡崩 build_report。修前 FAIL：is_dir 通过后 glob 抛错穿透 aggregate。
+    (tmp_path / "archive").mkdir()
+
+    def _boom(self, pattern):
+        raise PermissionError("denied during traversal")
+    monkeypatch.setattr(lma.Path, "glob", _boom)
+    assert lma.aggregate(tmp_path / "archive") == ([], [], [])
+
+
+def test_unclosed_fence_swallows_trailing_anchors(tmp_path):
+    # 诚实留档：奇数个 ``` （未闭合 fence）会把其后所有行都视为 fence 内，
+    # 导致尾部锚被漏计（少计而非误取，方向偏保守，暂可接受）。
+    anchor2 = _a("adversarial", 4, 2, 1)
+    text = _a("domain", 5, 3, 2) + "\n```\n" + anchor2 + "\n"  # 只开未关
+    p = tmp_path / "archive" / "c1"; p.mkdir(parents=True)
+    (p / "code-review-report.md").write_text(text, encoding="utf-8")
+    rows = lma.parse_report(p / "code-review-report.md")
+    assert len(rows) == 1  # 第二个锚因未闭合 fence 被漏计,不是被误取
+
+
+# [mlh-p2-anchor-lint Task 4] aggregator 硬编码 enum 对契约块一致性 + 双解析器交叉断言。
+# 注：文件顶部已用 importlib 把 lens_metric_aggregate.py 按绝对路径加载为 `lma`
+# （非常规 `import lens_metric_aggregate`，因 scripts/ 未必在 sys.path 上）——此处复用
+# 该既有 `lma`，不再重复 `import lens_metric_aggregate as lma`（会与顶部加载方式冲突/多余）。
+_REPO = Path(__file__).resolve().parents[3]                # 仓根：tests/scripts/sdflow-retro/仓根
+_CONTRACT = _REPO / "sdflow-init" / "assets" / "workflow" / "lens-metric-contract.md"
+_ANCHOR_LINT = _REPO / "sdflow-init" / "assets" / "workflow" / "tools" / "anchor_lint.py"
+
+
+def _parse_enum_block_minimal(contract_path):
+    """极简契约 lens-metric-enums 块解析（不 import anchor_lint，独立实现）。"""
+    text = Path(contract_path).read_text(encoding="utf-8")
+    lines, out, in_block = text.splitlines(), {}, False
+    for ln in lines:
+        if not in_block:
+            if ln.strip().startswith("```lens-metric-enums") or ln.strip().startswith("~~~lens-metric-enums"):
+                in_block = True
+            continue
+        if ln.strip().startswith("```") or ln.strip().startswith("~~~"):
+            break
+        if ":" in ln:
+            k, v = ln.split(":", 1)
+            out[k.strip()] = {x.strip() for x in v.split(",") if x.strip()}
+    return out
+
+
+def test_aggregator_enum_matches_contract():
+    block = _parse_enum_block_minimal(_CONTRACT)
+    assert lma.LAYER_ENUM == block["layer"]
+    assert lma.LENS_ENUM == block["lens"]
+
+
+def test_dual_parser_cross_assert():
+    """交叉断言：anchor_lint.load_enums 与本测试 mini-parser 对同一契约解出的 layer/lens/runner 相等。"""
+    spec = importlib.util.spec_from_file_location("anchor_lint", _ANCHOR_LINT)
+    al = importlib.util.module_from_spec(spec); spec.loader.exec_module(al)
+    e = al.load_enums(_CONTRACT)
+    block = _parse_enum_block_minimal(_CONTRACT)
+    assert e["layer"] == block["layer"]
+    assert e["lens"] == block["lens"]
+    assert e["runner"] == block["runner"]
+
+
+# [add-codex-host-support task5] 聚合器双代兼容读锚行——分组键升 (layer,lens,host,
+# runner,site)，旧锚 runner="claude-fallback" 兼容读作 (host=claude,runner=claude)，
+# 无 host 字段兼容读作 host=claude（design ADR-2/ADR-3 兼容读表；spec workflow-retro
+# 「聚合器双代兼容读锚行」全 4 Scenario）。
+
+
+def test_group_key_is_five_tuple_with_host():
+    # 分组键升维：(layer,lens,host,runner,site)——新锚含 host 字段直接透传。
+    r = {"layer": "code-review", "lens": "outside-voice", "host": "codex",
+         "runner": "claude", "site": "code-voice"}
+    assert lma.group_key(r) == ("code-review", "outside-voice", "codex", "claude", "code-voice")
+
+
+def test_group_key_compat_claude_fallback_maps_to_host_claude_runner_claude():
+    # 兼容读规则①：runner="claude-fallback"（v1 废弃枚举值，无 host 字段）
+    # → (host="claude", runner="claude")——不静默丢行、不保留已废弃枚举值。
+    r = {"layer": "code-review", "lens": "outside-voice", "runner": "claude-fallback",
+         "site": "code-voice"}
+    assert lma.group_key(r) == ("code-review", "outside-voice", "claude", "claude", "code-voice")
+
+
+def test_group_key_compat_missing_host_defaults_to_claude():
+    # 兼容读规则②：v1 锚行无 host 字段（runner 非 claude-fallback，如 codex）
+    # → host="claude"（历史上所有轮次均为 Claude 宿主，事实非假设）。
+    r = {"layer": "code-review", "lens": "outside-voice", "runner": "codex", "site": "code-voice"}
+    assert lma.group_key(r) == ("code-review", "outside-voice", "claude", "codex", "code-voice")
+
+
+def test_render_table_has_host_column():
+    # render_table 表头须新增 host 列（新旧锚均可分组展示）。
+    _write_module = lma
+    rows = [lma.parse_anchor(_a("domain", 5, 3, 2))]
+    table = lma.render_table(rows, [])
+    assert "| layer | lens | host | runner | site |" in table
+
+
+def test_render_table_host_codex_row_rendered(tmp_path):
+    anchor = ('<!-- sdflow:lens-metric v1 layer="code-review" lens="outside-voice" '
+              'host="codex" runner="claude" site="code-voice" findings="3" 采纳="2" '
+              '裁掉="0" defer="1" 独立="1" sev="致0/高2/中0/低0" -->')
+    _write(tmp_path, "c1", anchor)
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    lines = [l for l in table.splitlines() if "outside-voice" in l]
+    assert len(lines) == 1
+    assert "codex" in lines[0] and "claude" in lines[0]
+
+
+def test_mixed_v1_v2_anchors_group_separately_no_crash(tmp_path):
+    # 新旧锚混合仓：v1 (runner="claude-fallback"，无 host) 与 v2 (host="codex")
+    # 须各自正确分组，不因字段数不同 parse 失败、不混成一行。
+    v1_anchor = _a("outside-voice", 4, 1, 1, site="code-voice", runner="claude-fallback")
+    v2_anchor = ('<!-- sdflow:lens-metric v1 layer="code-review" lens="outside-voice" '
+                 'host="codex" runner="claude" site="code-voice" findings="3" 采纳="2" '
+                 '裁掉="0" defer="1" 独立="1" sev="致0/高2/中0/低0" -->')
+    _write(tmp_path, "c1", v1_anchor, v2_anchor)
+    rows, no_anchor, parse_failed = lma.aggregate(tmp_path / "archive")
+    assert parse_failed == []
+    assert len(rows) == 2
+    table = lma.render_table(rows, no_anchor)
+    lines = [l for l in table.splitlines() if "outside-voice" in l]
+    assert len(lines) == 2  # 未被错误合并成一行
+    # v1 兼容读为 host=claude,runner=claude；v2 原样 host=codex,runner=claude
+    assert any("| code-review | outside-voice | claude | claude | code-voice |" in l for l in lines)
+    assert any("| code-review | outside-voice | codex | claude | code-voice |" in l for l in lines)
+
+
+def test_no_claude_fallback_enum_value_leaks_into_rendered_table(tmp_path):
+    # 兼容读须彻底替换掉已废弃枚举值——渲染表里不应再出现字面 "claude-fallback"
+    # （否则等于只加了 host 列、没有真正做兼容重映射）。
+    _write(tmp_path, "c1", _a("outside-voice", 4, 1, 1, site="code-voice", runner="claude-fallback"))
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    assert "claude-fallback" not in table
+
+
+def test_fence_core_cross_equivalence():
+    # [impl-review-fix] F10 fence 核交叉断言：两个独立实现（anchor_lint.fence_outside_lines
+    # 与 lens_metric_aggregate._fence_aware_lines）对同一批边界样本必须逐样本产出等价的
+    # fence-outside 行序列——防止两处重实现的 fence 语义悄悄漂移。
+    spec = importlib.util.spec_from_file_location("anchor_lint", _ANCHOR_LINT)
+    al = importlib.util.module_from_spec(spec); spec.loader.exec_module(al)
+
+    samples = [
+        # 1) 未闭合 fence：尾部行按两实现约定的偏保守语义都应视为 fence 内（不产出）
+        "正文\n```\n" + ANCHOR + "\n",
+        # 2) ~~~ vs ``` ：tilde fence 内容跳过，非同字符不构成闭合
+        "a\n~~~\n" + ANCHOR + "\n```\n仍在 tilde 块内\n~~~\n块外\n",
+        # 3) 0-3 空格缩进仍是合法 fence
+        "x\n   ```\n" + ANCHOR + "\n   ```\n块外\n",
+        # 4) 4 空格缩进不构成 fence（代码块，非 fence 开启）
+        "普通段落\n    ```\n" + ANCHOR + "\n    ```\n",
+        # 5) 闭合行带尾内容非法闭合（CommonMark：闭合行 marker 后只能有空白）
+        "```\n" + ANCHOR + "\n``` extra\n仍在 fence 内\n```\n块外\n",
+        # 6) 闭合 marker 比开启更长仍合法闭合（≥ 同字符 marker 长度即可）
+        "```\n" + ANCHOR + "\n`````\n块外\n",
+        # 7) 4-反引号外层包 3-反引号内层：内层不构成外层闭合
+        "正文\n````\n```\n" + ANCHOR + "\n```\n````\n正文2\n",
+        # 8) 普通行，无 fence
+        "普通行1\n普通行2\n",
+    ]
+    for s in samples:
+        assert list(al.fence_outside_lines(s)) == list(lma._fence_aware_lines(s)), repr(s)

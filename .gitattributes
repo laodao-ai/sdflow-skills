@@ -1,0 +1,6 @@
+# 行尾策略：仓内一律 LF，不看贡献者的 core.autocrlf。
+* text=auto eol=lf
+
+# 例外：Windows 原生脚本保持 CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf

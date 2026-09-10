@@ -1,0 +1,121 @@
+name: Windows recorder and encoding smoke
+
+on:
+  push:
+    paths:
+      - ".github/workflows/windows-recorder-smoke.yml"
+      - "setup.sh"
+      - "hack/**"
+      - "sdflow-architecture/scripts/**"
+      - "sdflow-devenv/scripts/**"
+      - "sdflow-done/scripts/**"
+      - "sdflow-implement/scripts/**"
+      - "sdflow-init/assets/**"
+      - "sdflow-init/scripts/**"
+      - "sdflow-issues/**"
+      - "sdflow-retro/scripts/**"
+      - "sdflow-ship/scripts/**"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-recorder-smoke.yml"
+      - "setup.sh"
+      - "hack/**"
+      - "sdflow-architecture/scripts/**"
+      - "sdflow-devenv/scripts/**"
+      - "sdflow-done/scripts/**"
+      - "sdflow-implement/scripts/**"
+      - "sdflow-init/assets/**"
+      - "sdflow-init/scripts/**"
+      - "sdflow-issues/**"
+      - "sdflow-retro/scripts/**"
+      - "sdflow-ship/scripts/**"
+  workflow_dispatch:
+
+jobs:
+  windows-full-pytest:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install yq (mikefarah/yq, pinned v4.53.3)
+        shell: bash
+        run: |
+          set -eu
+          YQ_VERSION="v4.53.3"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_windows_amd64.exe" -o /usr/bin/yq.exe
+          yq --version
+      - name: Install pytest
+        shell: bash
+        run: py -m pip install "pytest>=8"
+      - name: Run full pytest suite
+        shell: bash
+        run: py -m pytest -q
+
+  windows-recorder-and-encoding-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install yq (mikefarah/yq, pinned v4.53.3)
+        shell: bash
+        run: |
+          set -eu
+          YQ_VERSION="v4.53.3"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_windows_amd64.exe" -o /usr/bin/yq.exe
+          yq --version
+      - name: Install pytest
+        shell: bash
+        run: py -m pip install "pytest>=8"
+      - name: Run actual Windows local-disk recorder smoke
+        shell: bash
+        run: py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error
+      - name: Run setup with a forced GBK child process
+        shell: bash
+        run: |
+          output="$(PYTHONIOENCODING=gbk bash setup.sh 2>&1)"
+          printf '%s\n' "$output"
+          ! grep -Eq 'UnicodeEncodeError|Traceback' <<<"$output"
+          python3 hack/check_encoding_hygiene.py
+      - name: Run init update with a forced GBK child process
+        shell: bash
+        run: |
+          probe="$RUNNER_TEMP/init-encoding-probe"
+          mkdir -p "$probe"
+          git -C "$probe" init
+          python3 sdflow-init/scripts/init.py init --root "$probe"
+          PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$probe"
+      - name: Exercise UTF-8 text subprocess call sites (issues_v2.py, retro_report.py, ship_gate.py) and invalid-byte replacement
+        shell: bash
+        run: |
+          probe="$RUNNER_TEMP/issues-v2-encoding-probe"
+          mkdir -p "$probe/openspec/issues/open" "$probe/openspec/issues/closed"
+          git -C "$probe" init -q
+          git -C "$probe" config user.email test@example.com
+          git -C "$probe" config user.name test
+          git -C "$probe" commit -q --allow-empty -m init
+          add_out="$(PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" add --pool bug --json '{"module":"m","summary":"s","priority":"P1"}')"
+          issue_id="$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['id'])" "$add_out")"
+          PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" set-status --id "$issue_id" --to FIXED --evidence "smoke"
+          PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" reindex
+          PYTHONIOENCODING=gbk python3 sdflow-retro/scripts/retro_report.py --root .
+          set +e
+          PYTHONIOENCODING=gbk python3 sdflow-ship/scripts/ship_gate.py --root . --change fix-windows-encoding-crash
+          gate_status=$?
+          set -e
+          test "$gate_status" -eq 0 -o "$gate_status" -eq 3 -o "$gate_status" -eq 4 -o "$gate_status" -eq 5 -o "$gate_status" -eq 6
+          python3 -c 'import subprocess, sys; r = subprocess.run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(bytes([0x80]))"], capture_output=True, text=True, encoding="utf-8", errors="replace"); assert r.stdout == "\ufffd"'
+      - name: Exercise cp936 console and redirected setup output without PYTHONIOENCODING
+        shell: bash
+        run: |
+          chcp.com 936
+          env -u PYTHONIOENCODING python3 hack/check_encoding_hygiene.py
+          env -u PYTHONIOENCODING bash setup.sh > "$RUNNER_TEMP/setup-cp936.log" 2>&1
+          ! grep -Eq 'UnicodeEncodeError|Traceback' "$RUNNER_TEMP/setup-cp936.log"

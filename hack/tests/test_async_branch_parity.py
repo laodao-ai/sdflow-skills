@@ -1,0 +1,504 @@
+"""守两个评审 SKILL 的 async host 调度段【逐字节相同】。
+
+【为什么需要这个测试】
+async 分支被【复制】进 sdflow-spec-review / sdflow-code-review 两个 SKILL.md。
+两份若漂 —— 一个宿主路径会静默行为分叉（退出码判读 / barrier 语义 / 降级口径不一致），
+而这是 load-bearing 的正确性，不是风格问题。
+—— CLAUDE.md 基准 1：能用「可固化规则 + 脚本」保证的一致性，MUST 机械化。
+   复制是必要的（两个 SKILL 是独立分发单元），但复制【不能靠手】。
+
+【语法面】
+只认两个 marker token（start / end），单行字面量匹配，有界（基准 5）。
+MUST NOT 演化成「解析 Markdown 结构」。
+"""
+import argparse
+import importlib.util
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import check_async_branch_parity as P  # noqa: E402
+
+REPO = Path(__file__).resolve().parents[2]
+
+# job helper 本体：段内写死的**机械常量**（子命令名、版本下限、必填 flag）MUST 从这里取，
+# MUST NOT 在测试里抄第二份 —— 抄了就是「helper 提版 / 改名后 SKILL 陈旧而测试照绿」。
+_JOB_PY = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice-job.py"
+_JOB_SPEC = importlib.util.spec_from_file_location(
+    "sdflow_ov_job_for_parity_tests", _JOB_PY)
+JOB = importlib.util.module_from_spec(_JOB_SPEC)
+_JOB_SPEC.loader.exec_module(JOB)
+
+
+def _subparsers_action():
+    for action in JOB.build_parser()._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return action
+    raise AssertionError("outside-voice-job.py 的 build_parser 已无 subparsers")
+
+
+def _write(tmp_path, name, interior, *, start=P.START_LINE_PREFIX + " x -->",
+           end=P.END_LINE):
+    p = tmp_path / name
+    p.write_text(f"head\n{start}\n{interior}{end}\nfoot\n", encoding="utf-8")
+    return p
+
+
+# ── 真仓状态 ────────────────────────────────────────────────────────────────
+
+def test_repo_sites_are_byte_identical():
+    """⭐ 两个评审 SKILL 的 marker 段逐字节一致 —— 漂了就红。"""
+    assert P.main([]) == 0
+
+
+def test_both_sites_carry_the_markers():
+    """两处 marker 都真的存在（不是「都没有 ∴ 都一致」的空绿）。"""
+    for rel in P.SITES:
+        text = (REPO / rel).read_text(encoding="utf-8")
+        assert P.START_LINE_PREFIX in text, rel
+        assert P.END_LINE in text, rel
+
+
+def test_interior_is_non_empty():
+    """段内正文不是空的 —— 防「把内容删光换个空绿」。
+
+    判据落在【去掉 marker 行后的正文】上：整段恒含两行 marker，拿整段判空恒真。
+    """
+    for rel in P.SITES:
+        assert P.interior(P.extract(REPO / rel)).strip(), rel
+
+
+def test_interior_names_no_review_skill():
+    """圈内 MUST NOT 出现任一评审 SKILL 的文件名 / skill 名（Task 2 约定）。
+
+    同一串字节要在两处【各自语义正确】，∴ 指代对方一律写「另一评审 SKILL」。
+    """
+    for rel in P.SITES:
+        interior = P.extract(REPO / rel)
+        for bad in P.FORBIDDEN_IN_SEGMENT:
+            assert bad not in interior, f"{rel} 段内出现 {bad}"
+
+
+# ── 漂移检测 ────────────────────────────────────────────────────────────────
+
+def test_one_byte_difference_is_red(tmp_path):
+    a = _write(tmp_path, "a.md", "line one\nline two\n")
+    b = _write(tmp_path, "b.md", "line one\nline twO\n")
+    assert P.compare([a, b]) == 1
+
+
+def test_identical_is_green(tmp_path):
+    a = _write(tmp_path, "a.md", "line one\nline two\n")
+    b = _write(tmp_path, "b.md", "line one\nline two\n")
+    assert P.compare([a, b]) == 0
+
+
+def test_marker_line_text_drift_is_red(tmp_path):
+    """marker 起始行自身的文字也参与比对 —— 它承载「圈内放什么」的口径。"""
+    a = _write(tmp_path, "a.md", "x\n", start=P.START_LINE_PREFIX + " AAA -->")
+    b = _write(tmp_path, "b.md", "x\n", start=P.START_LINE_PREFIX + " BBB -->")
+    assert P.compare([a, b]) == 1
+
+
+# ── marker 形态错误：各自明确报错，MUST NOT 静默放行 ────────────────────────
+
+def _bare(tmp_path, name, body):
+    p = tmp_path / name
+    p.write_text(body, encoding="utf-8")
+    return p
+
+
+def test_missing_markers_entirely_is_red(tmp_path):
+    a = _write(tmp_path, "a.md", "x\n")
+    b = _bare(tmp_path, "b.md", "no markers here\n")
+    assert P.compare([a, b]) == 1
+
+
+def test_start_without_end_is_red(tmp_path):
+    a = _write(tmp_path, "a.md", "x\n")
+    b = _bare(tmp_path, "b.md", f"{P.START_LINE_PREFIX} x -->\nx\n")
+    assert P.compare([a, b]) == 1
+
+
+def test_end_without_start_is_red(tmp_path):
+    a = _write(tmp_path, "a.md", "x\n")
+    b = _bare(tmp_path, "b.md", f"x\n{P.END_LINE}\n")
+    assert P.compare([a, b]) == 1
+
+
+def test_two_marker_pairs_is_red(tmp_path):
+    """出现两对 marker → 报错，MUST NOT 取第一对静默放行。"""
+    a = _write(tmp_path, "a.md", "x\n")
+    dup = (f"{P.START_LINE_PREFIX} x -->\nx\n{P.END_LINE}\n"
+           f"{P.START_LINE_PREFIX} x -->\nx\n{P.END_LINE}\n")
+    b = _bare(tmp_path, "b.md", dup)
+    assert P.compare([a, b]) == 1
+
+
+def test_end_before_start_raises(tmp_path):
+    """end 在 start 之前 → MUST 抛 MarkerError（而不是「碰巧因为段不等而红」）。
+
+    直接打在 extract 上：走 compare 时「返回空段 ∴ 不等 ∴ 红」会掩盖守卫被删。
+    """
+    b = _bare(tmp_path, "b.md", f"{P.END_LINE}\nx\n{P.START_LINE_PREFIX} x -->\n")
+    with pytest.raises(P.MarkerError):
+        P.extract(b)
+
+
+def test_end_before_start_is_red(tmp_path):
+    a = _write(tmp_path, "a.md", "x\n")
+    b = _bare(tmp_path, "b.md", f"{P.END_LINE}\nx\n{P.START_LINE_PREFIX} x -->\n")
+    assert P.compare([a, b]) == 1
+
+
+# ── 合成用例：圈内站点名（FORBIDDEN_IN_SEGMENT）────────────────────────────
+
+@pytest.mark.parametrize("bad", P.FORBIDDEN_IN_SEGMENT)
+def test_forbidden_token_in_interior_is_red(tmp_path, bad):
+    """两侧内容【完全相同】但段内写死了某一侧的语境 → 仍 MUST 红。
+
+    等值门本身拦不住这种（两边一样嘛），靠 FORBIDDEN_IN_SEGMENT 那条分支。
+    ∴ 用例必须走 compare()，否则那条分支从未被执行（真仓恰好干净）。
+    """
+    body = f"派给 {bad} 处理\n"
+    a = _write(tmp_path, "a.md", body)
+    b = _write(tmp_path, "b.md", body)
+    assert P.compare([a, b]) == 1
+
+
+def test_clean_interior_with_neutral_wording_is_green(tmp_path):
+    """对照组：改写成「另一评审 SKILL」即绿 —— 证上条红的原因就是那个 token。"""
+    body = "派给另一评审 SKILL 处理\n"
+    a = _write(tmp_path, "a.md", body)
+    b = _write(tmp_path, "b.md", body)
+    assert P.compare([a, b]) == 0
+
+
+# ── 合成用例：空段 ─────────────────────────────────────────────────────────
+
+def test_empty_interior_is_red(tmp_path):
+    """两侧 marker 都在、正文都被删光 → 「都空 ∴ 都一致」MUST NOT 判绿。"""
+    a = _write(tmp_path, "a.md", "")
+    b = _write(tmp_path, "b.md", "")
+    assert P.compare([a, b]) == 1
+
+
+def test_whitespace_only_interior_is_red(tmp_path):
+    """只剩空白也算空 —— 别用一行空格绕过。"""
+    a = _write(tmp_path, "a.md", "   \n\n")
+    b = _write(tmp_path, "b.md", "   \n\n")
+    assert P.compare([a, b]) == 1
+
+
+# ── start marker token 边界 ────────────────────────────────────────────────
+
+def test_start_prefix_requires_token_boundary(tmp_path):
+    """`...:startX -->` 不是 start —— 无 token 边界会误认相邻 token。"""
+    b = _bare(tmp_path, "b.md",
+              f"<!-- sdflow:async-branch:startX -->\nx\n{P.END_LINE}\n")
+    with pytest.raises(P.MarkerError):
+        P.extract(b)
+
+
+def test_start_line_must_close_on_same_line(tmp_path):
+    """start 行本行内必须闭合 `-->` —— 半截行不算 marker。"""
+    b = _bare(tmp_path, "b.md",
+              f"{P.START_LINE_PREFIX}未闭合\nx\n{P.END_LINE}\n")
+    with pytest.raises(P.MarkerError):
+        P.extract(b)
+
+
+def test_extract_raises_on_malformed(tmp_path):
+    b = _bare(tmp_path, "b.md", "nothing\n")
+    try:
+        P.extract(b)
+    except P.MarkerError:
+        return
+    raise AssertionError("畸形 marker 必须抛 MarkerError，不得静默返回")
+
+
+# ── CLI 契约 ───────────────────────────────────────────────────────────────
+
+def test_cli_exits_nonzero_on_drift(tmp_path):
+    a = _write(tmp_path, "a.md", "x\n")
+    b = _write(tmp_path, "b.md", "y\n")
+    r = subprocess.run(
+        [sys.executable, str(REPO / "hack" / "check_async_branch_parity.py"),
+         str(a), str(b)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert r.returncode != 0
+
+
+def test_cli_exits_zero_on_repo():
+    r = subprocess.run(
+        [sys.executable, str(REPO / "hack" / "check_async_branch_parity.py")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_setup_sh_runs_the_gate():
+    """门必须真被跑到 —— 「存在但没人跑的门」= 不存在的门。"""
+    assert "check_async_branch_parity.py" in (REPO / "setup.sh").read_text(
+        encoding="utf-8")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 段内内容契约（enable-codex-background-outside-voice Task 5）
+#
+# 等值门只保证「两侧一样」，不保证「一样的那份是对的」。本节是段内**内容**的
+# golden：一条负向（Codex 同步 300 秒兼容分支已删除）+ 若干条正向（后台通道的调用
+# 协议、fallback 闸门、既有不变量）。两侧逐条各断言一次 —— MUST NOT 只查 SITES[0]
+# 再靠等值门推另一侧（等值门若被误删，这里就成了单侧盲区）。
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _segments():
+    return [(rel, P.interior(P.extract(REPO / rel))) for rel in P.SITES]
+
+
+def _matrix_rows(seg):
+    """段内的表格行（有界语法面：只认「trim 后以 | 开头」，MUST NOT 解析 Markdown 结构）。"""
+    return [l for l in seg.splitlines() if l.lstrip().startswith("|")]
+
+
+def _the_line_with(rel, seg, key):
+    """→ 段内**唯一**含 `key` 的那一行（trim 过）。0 行或 ≥2 行都判红。
+
+    【为什么必须落到「行」上】fix1 前本节的断言全是「子串出现在段内任意处」——
+    实测把整条 MUST 行删掉仍全绿，因为那几个短子串在**别的行**里也有。
+    ∴ 同一条指令的各个要件 MUST 被验证**共处一行**，否则断言拦不住「拆散 / 删行」。
+    """
+    hits = [l.strip() for l in seg.splitlines() if key in l]
+    assert len(hits) == 1, f"{rel}: 期望恰好 1 行含 {key!r}，实得 {len(hits)}"
+    return hits[0]
+
+
+def test_codex_sync_300s_compat_branch_is_deleted():
+    """🔴 负向 golden：执行模式矩阵里 MUST NOT 再有「codex ⇒ 同步 300 秒」那一行。
+
+    该分支已知 efficacy=0（HAE-08 grill-amendment 明写「不得以尽力兼容旧版为由恢复」）。
+    判据落在**矩阵行**上：codex 的行里既不许出现 `sync`，也不许出现同步档的 300 秒。
+    """
+    for rel, seg in _segments():
+        for row in _matrix_rows(seg):
+            if "codex" not in row:
+                continue
+            # 先摘掉 `async` 再找 `sync`：`async` 本身含 `sync` 子串，不摘会把
+            # 「codex 走 async」误判成「codex 走 sync」（假红，且方向正好相反）。
+            assert "sync" not in row.replace("async", ""), \
+                f"{rel}: codex 行仍写着 sync —— {row}"
+            assert "300" not in row, f"{rel}: codex 行仍带同步 300 秒档 —— {row}"
+
+
+# ④ 的 codex dispatch 命令 —— **段内唯一的可执行形态**，SKILL 明写「MUST 逐字照搬」。
+# ∴ 这里的 golden 是**整行字面**：fix1 前只查四个词是否出现在段内任意处，实测把子命令
+# 改成 `submit`、丢掉 `--repo-root`、把 `--effort high` 改成 `medium` 之后依然全绿。
+_DISPATCH_COMMAND_LINE = (
+    '`python3 ~/.sdflow/hack/outside-voice-job.py dispatch '
+    '--run-dir "{run-dir}" --site <site> --context-file "<f>" --repo-root "<repo-root>" '
+    '--runner <runner> --model <model> '
+    '--effort high --timeout <T>`'
+)
+
+_JOB_CALL_RE = re.compile(r"outside-voice-job\.py\s+([a-z][a-z-]*)")
+
+
+def test_codex_branch_goes_through_the_background_job_helper():
+    """正向：Codex 分支 MUST 调 job helper 的子命令，MUST NOT 自己拼 `claude --bg`。
+
+    子命令名**不在这里手抄第二份** —— 与 helper 的 `add_parser` 名交叉断言：
+    段内写的每个子命令都必须真实存在，四个生命周期子命令都必须被写到。
+    """
+    real = set(_subparsers_action().choices)
+    assert {"dispatch", "await", "collect", "cleanup"} <= real, \
+        f"helper 自身已无这些子命令：{sorted({'dispatch','await','collect','cleanup'} - real)}"
+    for rel, seg in _segments():
+        assert "outside-voice-job.py" in seg, rel
+        named = set(_JOB_CALL_RE.findall(seg))
+        assert named <= real, f"{rel}: 段内写了 helper 并不存在的子命令 {sorted(named - real)}"
+        assert {"dispatch", "await", "collect", "cleanup"} <= named, \
+            f"{rel}: 段内缺子命令 {sorted({'dispatch','await','collect','cleanup'} - named)}"
+
+
+def test_codex_dispatch_command_line_is_byte_exact():
+    """🔴 ④ 的 dispatch 命令：**整行字面** golden（本票声明的最高风险面）。"""
+    for rel, seg in _segments():
+        line = _the_line_with(rel, seg, "outside-voice-job.py dispatch")
+        assert line == _DISPATCH_COMMAND_LINE, f"{rel}: dispatch 命令行已漂 ——\n{line}"
+
+
+def test_dispatch_command_flags_agree_with_the_helper_parser():
+    """交叉断言：命令行用的 flag MUST 都被 helper 的 dispatch 子解析器接受，
+    且 helper 的**必填**参数一个不许漏（丢 `--repo-root` 这类当场红，无需手抄清单）。"""
+    dispatch = _subparsers_action().choices["dispatch"]
+    accepted = set(dispatch._option_string_actions)
+    required = {a.option_strings[0] for a in dispatch._actions
+                if getattr(a, "required", False) and a.option_strings}
+    used = set(re.findall(r"--[a-z][a-z-]*", _DISPATCH_COMMAND_LINE))
+    assert used <= accepted, f"命令行用了 helper 不认的 flag：{sorted(used - accepted)}"
+    assert required <= used, f"命令行漏了 helper 的必填参数：{sorted(required - used)}"
+
+
+def test_codex_branch_gates_auto_fallback_on_unknown_cost():
+    """🔴 Task 3 交接 C1：`unknown_cost=true` ⇒ MUST NOT 自动同族 fallback，改报 orphan + cleanup。
+
+    要件 MUST 共处**同一行**：fix1 前四个子串各自散落在别的行里也能满足，
+    实测把这条 MUST 整行删掉仍 35 passed。
+    """
+    for rel, seg in _segments():
+        line = _the_line_with(rel, seg, "MUST NOT 自动同族 fallback")
+        for need in (
+            "`unknown_cost=true`",
+            "`orphan_warning`",
+            'cleanup --run-dir "<d>" --site <s> --cancel',
+            "`fallback_allowed=true`",
+            # 🔴 锚形 MUST 钉死：不钉死则该站点落不出**合法**锚 ——
+            # (host, none, exec-error, 0) 被 anchor_lint 判 illegal，
+            # 而 runner=host 等于谎称同族 fallback 真跑过。
+            '在此之前该站点 MUST 落锚行 host="$SDFLOW_HOST" runner="none" '
+            'findings="0" reason_code="fallback-unavailable"',
+            "MUST NOT 落 `ok`",
+            "MUST NOT 落 `timeout`",
+            "MUST NOT 落 `exec-error`",
+        ):
+            assert need in line, f"{rel}: unknown_cost 条款缺 {need!r} ——\n{line}"
+
+
+def test_reserved_await_does_not_loop_forever():
+    """🔴 `terminal=false ∧ unknown_cost=true`（RESERVED）MUST NOT 再 await。
+
+    helper 的 `PENDING_STATES` 含 RESERVED ⇒ 它恒 `terminal=false`，且 helper 自注
+    「永远不会自行到达终态」。段内若只写「terminal=false ⇒ 再调一次 await」，
+    照字面执行就是无限 re-await —— 而 SKILL 从未提 `state` 字段，模型无判别手段。
+    """
+    assert JOB.STATE_RESERVED in JOB.PENDING_STATES, \
+        "helper 已把 RESERVED 移出 PENDING_STATES —— 本条款的前提变了，同步复核 SKILL"
+    for rel, seg in _segments():
+        go_on = _the_line_with(rel, seg, "MUST 再调一次 await")
+        assert "`unknown_cost=false`" in go_on, f"{rel}: 续等条件未排除 unknown_cost ——\n{go_on}"
+        stop = _the_line_with(rel, seg, "MUST NOT 再调 await")
+        for need in ("`terminal=false`", "`unknown_cost=true`", "RESERVED",
+                     "永远不会自行到达终态"):
+            assert need in stop, f"{rel}: RESERVED 止损条款缺 {need!r} ——\n{stop}"
+
+
+def test_dispatch_hard_failure_lands_a_legal_no_exec_anchor():
+    """`fallback_allowed=false` 的 dispatch 失败：措辞与真实 payload 对齐 + 锚形合法。
+
+    dispatch 的失败 payload 全部经 `_reject()` 产出 —— 只有 `detail`，**没有**
+    `orphan_warning`；且它自己的 `reason_code`（`exec-error` / `preflight-error`）
+    属同族降级码集，搬进锚行会与 `runner="none"` 组合成 illegal。
+    """
+    for rel, seg in _segments():
+        gate = _the_line_with(rel, seg, "`fallback_allowed=false`")
+        assert "没有 `orphan_warning` 字段" in gate, f"{rel}: 仍声称 dispatch payload 有 orphan warning\n{gate}"
+        anchor = _the_line_with(rel, seg, "与 F8 同属矩阵的")
+        assert ('该站点的锚行 MUST 落 host="$SDFLOW_HOST" runner="none" findings="0" '
+                'reason_code="fallback-unavailable"') in anchor, f"{rel}:\n{anchor}"
+
+
+def test_exit_code_table_exception_row_pins_the_same_anchor_shape():
+    """⑦ 的 `unknown_cost` 例外行 MUST 与 ⑥ 同一口径（MUST NOT 留第二份说法）。"""
+    for rel, seg in _segments():
+        row = _the_line_with(rel, seg, "唯一例外是")
+        assert ('host="$SDFLOW_HOST" runner="none" findings="0" '
+                'reason_code="fallback-unavailable"') in row, f"{rel}:\n{row}"
+        assert "**MUST NOT** 落 `exec-error`" in row, f"{rel}:\n{row}"
+
+
+def test_sync_wait_for_claude_compat_path_is_deleted_in_prose_too():
+    """🔴 负向 golden 的**散文面**：兼容分支的复活不只有矩阵行一种形态。
+
+    ②④⑤⑥⑦⑨ 全是散文 MUST，矩阵只是其中一处 —— 「散文不构成可执行指令」被 SKILL
+    自身结构证伪。该禁令是段内唯一字面串，一条 assert 即可守（与既有正向 golden 同级成本）。
+    实测：把矩阵行改成散文 MAY 兼容分支 + 删掉这句 → 全绿。
+    """
+    for rel, seg in _segments():
+        assert "MUST NOT 回落任何「同步等 Claude」的长路径" in seg, rel
+        assert "efficacy=0" in seg, rel
+
+
+def test_skill_side_timeout_clamp_is_retained():
+    """🔴 Task 2 交接：越界 config MUST 回落默认 900（**不** fail-closed 罢工）。
+
+    job helper 对越界 `--timeout` 是硬拒绝 ⇒ 若 SKILL 侧的 clamp 被删，config 打错一个字
+    就从「回落默认」变成「usage-error 罢工」。
+    """
+    for rel, seg in _segments():
+        assert "回落默认 `900`" in seg, rel
+        assert "MUST NOT fail-closed 罢工" in seg, rel
+
+
+def test_barrier_invariants_survive():
+    """既有不变量（HAE-09）：RUNNING 不早退、timeout 只由真实 124 产生、回收后不重派。"""
+    for rel, seg in _segments():
+        assert "MUST NOT 自造轮询循环" in seg, rel
+        assert "只允许由实际" in seg and "124" in seg, rel
+        # 🔴 3 字前缀 `MUST NOT 重` 是空断言：段内该串另有出处（④ 的「MUST NOT 重派」），
+        # 实测删掉「MUST NOT 重新 dispatch（重派 = 第二次计费）」整句仍 35 passed。
+        assert "MUST NOT 重新 dispatch" in seg, rel
+
+
+def test_stderr_never_reaches_findings_or_the_tracked_report():
+    for rel, seg in _segments():
+        assert "stderr" in seg
+        assert "MUST NOT 逐字转录" in seg, rel
+
+
+def test_usage_notes_cover_version_policy_preview_and_platform_boundary():
+    """使用说明各项 + 单链分发（capability manifest 由 `bash setup.sh` 刷新）。
+
+    版本下限**从 helper 的 `MIN_CLAUDE_VERSION` 取**，MUST NOT 在这里抄字面值 ——
+    抄了就成了「helper 提版后 SKILL 陈旧而 golden 照绿」（基准 1：有确定性信号 ⇒ 机械化）。
+
+    `fix-probe-scan-precision` task1：skew 探测段删除后，「两条分发链」措辞订正为单链
+    表述——consumer 仓 `openspec/workflow/tools/` 走 `sdflow-init update` 的第二条链
+    不再在本段被提及，故不再断言 `sdflow-init update`；`setup.sh` + manifest skew 修法
+    仍是本段的正文，断言改为这两个新关键词。
+    """
+    min_version = ".".join(str(x) for x in JOB.MIN_CLAUDE_VERSION)
+    for rel, seg in _segments():
+        assert min_version in seg, \
+            f"{rel}: 段内的 Claude Code 版本下限已与 helper 的 MIN_CLAUDE_VERSION={min_version} 脱节"
+        assert "disableAgentView" in seg, rel
+        assert "research preview" in seg or "research-preview" in seg, rel
+        assert "POSIX" in seg, rel
+        assert "setup.sh" in seg and "manifest skew" in seg, rel
+        assert "sdflow-init update" not in seg, rel
+
+
+# ── marker 段外：dispatch manifest 与锚行契约（两侧各自断言）──────────────────
+
+def test_dispatch_manifest_records_job_id_and_attempt_nonce():
+    """Codex 后台 dispatch 的 job id / site / attempt nonce MUST 落 dispatch manifest。
+
+    🔴 **格式串的 `%s` 个数是硬判据**：POSIX `printf` 在实参多于转换符时**复用格式串**——
+    留 4 个实参却把格式写回 `'%s\\t%s\\t%s\\n'`，落盘的不是「少一列」而是**每次多一行
+    `<nonce>\\t\\t`**，而 run-dir + site + attempt_nonce 是 unknown-cost 之后**唯一**
+    可核身份。fix1 前只查子串，该变异实测全绿。
+    """
+    for rel in P.SITES:
+        text = (REPO / rel).read_text(encoding="utf-8")
+        line = [l for l in text.splitlines() if "dispatch-manifest.tsv" in l and "printf" in l]
+        assert line, rel
+        joined = "\n".join(line)
+        assert "attempt_nonce" in joined or "<attempt-nonce>" in joined, f"{rel}: {joined}"
+        assert "job_id" in joined or "<job-id>" in joined, f"{rel}: {joined}"
+        fmt = re.search(r"printf '([^']*)'", joined)
+        assert fmt, f"{rel}: 未找到单引号包住的 printf 格式串 —— {joined}"
+        assert fmt.group(1).count("%s") == 4, \
+            f"{rel}: dispatch-manifest 是 4 列，格式串却有 {fmt.group(1).count('%s')} 个 %s —— {fmt.group(1)!r}"
+        # 实参段 = 格式串之后、重定向 `>>` 之前（重定向目标也是双引号串，不算实参）。
+        args = re.findall(r'"[^"]*"', joined.split("'", 2)[-1].split(">>")[0])
+        assert len(args) == 4, f"{rel}: 期望 4 个实参，实得 {len(args)} —— {args}"
+
+
+def test_anchor_line_reason_code_enum_is_unchanged():
+    """锚行契约与 `reason_code` 枚举 MUST 保持不变（HAE-09）。"""
+    enum = ('reason_code="ok|not-installed|preflight-error|timeout|exec-error|'
+            'host-unknown|secret-hit|fallback-unavailable"')
+    for rel in P.SITES:
+        assert enum in (REPO / rel).read_text(encoding="utf-8"), rel

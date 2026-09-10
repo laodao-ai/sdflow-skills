@@ -1,0 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.idea/
+.vscode/
+.worktrees/
+.claude/worktrees/
+*.swp
+*.swo
+
+# Node
+node_modules/
+
+# Skill 优化/eval 运行时 scratch（skill-creator 生成）
+*-workspace/
+
+# outside-voice 调试留档不入库（评审四源命中: 全量 diff/潜在敏感内容防经 checkpoint add -A 永久入历史）[impl-review-fix]
+**/.outside-voice/
+
+# Python 运行期产物（防 checkpoint-commit.sh 的 git add -A 把测试/运行生成的字节码缓存
+# 裹进手写 commit——batch-triage 大扫除批一项一 commit 协议同根因风险）[impl-review-fix]
+__pycache__/
+*.pyc
+.pytest_cache/
+/openspec/issues/.recorder.lock
+
+# FF-0 守卫的一次性 ack 哨兵（人 touch、hook 读到即删）——本地令牌，不该入库
+/openspec/.ff0-ack
+
+# sdflow-upstream-watch facts 中间产物（collect 写、advance 读，一轮一份，非留存状态）
+/openspec/upstream/.facts/
