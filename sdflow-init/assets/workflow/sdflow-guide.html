@@ -409,7 +409,7 @@
 <section id="skills">
   <div class="kicker">04 · SKILLS</div>
   <h2>Skills 全景</h2>
-  <p>15 个 skill 按角色分组。<strong>数据类</strong>带 <code>scripts/</code>（Python 脚本保证确定性，多数配 pytest）；
+  <p>全部 skill 按角色分组。<strong>数据类</strong>带 <code>scripts/</code>（Python 脚本保证确定性，多数配 pytest）；
   <strong>编排类</strong>是纯 Markdown 指令，驱动主 session 调度子代理。</p>
 
   <div class="table-wrap">
@@ -433,8 +433,6 @@
         <tr class="group-row"><td colspan="3">记录与复盘（横切，可独立使用）</td></tr>
         <tr><td><code>sdflow-issues</code></td><td><span class="type-pill type-data">数据类</span></td><td>bug 池 + todo 池统一台账：一个 issue 一个文件，脚本保 ID 与索引一致</td></tr>
         <tr><td><code>sdflow-retro</code></td><td><span class="type-pill type-data">数据类</span></td><td>只读再生「评审流程值不值」的成本×价值复盘报告，只呈现不决策</td></tr>
-        <tr class="group-row"><td colspan="3">仅服务本仓</td></tr>
-        <tr><td><code>sdflow-upstream-watch</code></td><td><span class="type-pill type-data">数据类</span></td><td>追踪四个上游源 delta 出三分诊报告；外仓调用被 cwd 守卫拒绝</td></tr>
       </tbody>
     </table>
   </div>
@@ -504,7 +502,7 @@ CLAUDE.md / AGENTS.md            <span class="comment"># 注入托管块：强�
     <table>
       <thead><tr><th>落点</th><th>内容</th><th>方式</th></tr></thead>
       <tbody>
-        <tr><td><code>~/.claude/skills/</code></td><td>全部 15 个 skill</td><td>绝对路径 symlink（改源即时生效）</td></tr>
+        <tr><td><code>~/.claude/skills/</code></td><td>全部顶层 skill</td><td>绝对路径 symlink（改源即时生效）</td></tr>
         <tr><td><code>~/.codex/skills/</code></td><td>同上（Codex 宿主）</td><td>同上；Windows 用 copy + marker</td></tr>
         <tr><td><code>~/.claude/agents/</code></td><td>3 个角色定义 + 5 个 effort 档位定义</td><td>逐文件软链；全局命名空间，守卫最严</td></tr>
         <tr><td><code>~/.sdflow/</code></td><td>canonical <code>workflow/</code> + <code>hack/</code> 辅助脚本</td><td>workflow 软链；hack 是<strong>拷贝</strong>——改源后必须重跑 setup</td></tr>
