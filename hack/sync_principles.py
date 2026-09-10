@@ -217,10 +217,23 @@ def main(argv=None):
     ]
 
     drift = []
+    absent = []
     total = 0
     for group_targets, start, end in groups:
-        total += len(group_targets)
         for p, src in group_targets:
+            # 【投放面不在本 checkout 里】：发布快照剔除了 CLAUDE.md / AGENTS.md
+            # （开发期资产，见 .agents/skills/sdflow-publish 的 DROP_PATHS），而 setup.sh
+            # 在使用者机器上照跑本门 ⇒ 裸 read_text 会 FileNotFoundError，让「报告漂移」
+            # 变成「整个 --check 崩掉」，使用者装完第一眼看到一段 traceback。
+            # 与上面 relpath 那条注释是同一类教训：**判定用的辅助操作，不该有能力中止判定。**
+            # 不存在 ⇒ 不计入 total、不算漂移，末尾单列一行说明。
+            if not p.exists():
+                try:
+                    absent.append(os.path.relpath(p, REPO))
+                except ValueError:
+                    absent.append(str(p))
+                continue
+            total += 1
             cur = p.read_text(encoding="utf-8")
             want = render(cur, src, start, end)
             if cur == want:
@@ -236,8 +249,9 @@ def main(argv=None):
             if args.apply:
                 p.write_text(want, encoding="utf-8")
 
+    absent_note = f"（{len(absent)} 个投放面不在本 checkout，已跳过：{', '.join(absent)}）" if absent else ""
     if not drift:
-        print(f"[sync_principles] ✅ {total} 个投放面全部与真相源一致（四条通则 + 广审镜定义）")
+        print(f"[sync_principles] ✅ {total} 个投放面全部与真相源一致（四条通则 + 广审镜定义）{absent_note}")
         return 0
 
     if args.apply:

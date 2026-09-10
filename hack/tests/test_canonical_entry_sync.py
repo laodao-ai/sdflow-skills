@@ -30,8 +30,19 @@ v1 版本守住那套设计在**七处**载体间不分叉。`simplify-workflow`
 """
 import re
 from pathlib import Path
+import pytest
 
 REPO = Path(__file__).resolve().parents[2]
+
+# 【发布 clone 边界】本门守的是**本仓两份人读载体**（CLAUDE.md / AGENTS.md）的一致性，
+# 而发布快照把它们剔除了（开发期资产，见 .agents/skills/sdflow-publish 的 DROP_PATHS）
+# ⇒ 使用者 clone 下来跑 pytest 时这批门无从守。完整仓里照跑照红；缺载体时显式 skip
+# 并说明——MUST NOT 静默 pass。
+_HAS_CARRIERS = (REPO / "CLAUDE.md").exists() and (REPO / "AGENTS.md").exists()
+needs_human_carriers = pytest.mark.skipif(
+    not _HAS_CARRIERS,
+    reason="本门守本仓 CLAUDE.md / AGENTS.md 双载体一致性；发布 clone 不含它们",
+)
 WF = REPO / "sdflow-init" / "assets" / "workflow"
 
 WORKFLOW = WF / "workflow.md"
@@ -110,6 +121,7 @@ def test_canonical_carries_no_retired_branch_language():
             )
 
 
+@needs_human_carriers
 def test_human_carriers_entry_section_has_no_retired_branch_language():
     for name, path in HUMAN_SIDE.items():
         section = entry_section(path)
@@ -123,11 +135,13 @@ def test_human_carriers_entry_section_has_no_retired_branch_language():
 #     纪律继承自 v1：两份是同一条规则的两个手抄副本，唯一的兜底原本只是一句
 #     prose「改一处就改另一处」，而「会想起去查那句 prose 的人本来就不会漏改」。
 
+@needs_human_carriers
 def test_entry_section_exists_in_both_human_carriers():
     for name, path in HUMAN_SIDE.items():
         assert entry_section(path).strip(), f"{name} 的阶段一入口小节是空的"
 
 
+@needs_human_carriers
 def test_two_human_carriers_are_verbatim_identical():
     claude = entry_section(HUMAN_SIDE["CLAUDE.md"])
     agents = entry_section(HUMAN_SIDE["AGENTS.md"])
@@ -137,6 +151,7 @@ def test_two_human_carriers_are_verbatim_identical():
     )
 
 
+@needs_human_carriers
 def test_human_carriers_state_the_auto_trigger_rule():
     for name, path in HUMAN_SIDE.items():
         section = entry_section(path)
@@ -163,6 +178,7 @@ def _codex_auth_section(p):
     return re.sub(r"<!--\s*opsx-init:\w+\s*-->", "", section)
 
 
+@needs_human_carriers
 def test_codex_auth_section_parity():
     sources = {
         "CLAUDE.md": REPO / "CLAUDE.md",

@@ -24,8 +24,19 @@ Codex 宿主下的评审要么每次都拿不到子代理权限、要么在没�
 """
 import importlib.util
 from pathlib import Path
+import pytest
 
 REPO = Path(__file__).resolve().parents[2]
+
+# 【发布 clone 边界】本门守的是**本仓两份人读载体**（CLAUDE.md / AGENTS.md）的一致性，
+# 而发布快照把它们剔除了（开发期资产，见 .agents/skills/sdflow-publish 的 DROP_PATHS）
+# ⇒ 使用者 clone 下来跑 pytest 时这批门无从守。完整仓里照跑照红；缺载体时显式 skip
+# 并说明——MUST NOT 静默 pass。
+_HAS_CARRIERS = (REPO / "CLAUDE.md").exists() and (REPO / "AGENTS.md").exists()
+needs_human_carriers = pytest.mark.skipif(
+    not _HAS_CARRIERS,
+    reason="本门守本仓 CLAUDE.md / AGENTS.md 双载体一致性；发布 clone 不含它们",
+)
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 SNIPPET = ASSETS / "snippets" / "claude-section.md"
 AGENTS = REPO / "AGENTS.md"
@@ -69,6 +80,7 @@ def test_snippet_authorization_names_probe_semantic_boundary():
     assert "单镜降级" in t
 
 
+@needs_human_carriers
 def test_agents_md_dogfood_mirrors_authorization():
     """本仓 AGENTS.md 的 opsx-init 托管块是 claude-section.md 的铺设结果（dogfood）——
     若只改了源快照、忘了回灌铺设产物，本仓自己的 Codex 宿主评审就拿不到授权

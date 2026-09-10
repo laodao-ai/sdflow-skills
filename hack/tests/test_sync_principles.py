@@ -10,13 +10,25 @@
 import subprocess
 import sys
 from pathlib import Path
+import pytest
 
 from test_support.windows import bash_executable, bash_path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import sync_principles as SP  # noqa: E402
 
+# 【发布 clone 边界】本门守的是**本仓两份人读载体**（CLAUDE.md / AGENTS.md）的一致性，
+# 而发布快照把它们剔除了（开发期资产，见 .agents/skills/sdflow-publish 的 DROP_PATHS）
+# ⇒ 使用者 clone 下来跑 pytest 时这批门无从守。完整仓里照跑照红；缺载体时显式 skip
+# 并说明——MUST NOT 静默 pass。
+_HAS_CARRIERS = (SP.REPO / "CLAUDE.md").exists() and (SP.REPO / "AGENTS.md").exists()
+needs_human_carriers = pytest.mark.skipif(
+    not _HAS_CARRIERS,
+    reason="本门守本仓 CLAUDE.md / AGENTS.md 双载体一致性；发布 clone 不含它们",
+)
 
+
+@needs_human_carriers
 def test_every_skill_carries_the_principles():
     """⭐ 每一个顶层 SKILL.md 都与真相源逐字节一致 —— 漂了就红。
 
@@ -95,6 +107,7 @@ def test_render_updates_every_block_not_just_the_first():
     assert SP.render(out, SP.SOURCE_PROJECT) == out, "render 必须幂等"
 
 
+@needs_human_carriers
 def test_every_block_in_project_targets_matches_source():
     """本仓 CLAUDE.md / AGENTS.md / claude-section.md 的【每一份】块 == 真相源全文。"""
     body = SP.block(SP.SOURCE_PROJECT).strip()
@@ -161,6 +174,7 @@ def test_the_delivery_surface_points_at_the_real_agents_dir():
     assert SP.AGENT_TARGETS[0].is_dir()
 
 
+@needs_human_carriers
 def test_a_new_agent_file_turns_check_red(tmp_path, monkeypatch):
     """⭐⭐ 定点用例：往投放面目录放一个**新** `.md` ⇒ `--check` MUST 变红。
 
@@ -231,6 +245,7 @@ def test_broad_mirror_targets_are_the_two_skills():
     }
 
 
+@needs_human_carriers
 def test_both_skills_carry_the_broad_mirror_def_byte_for_byte():
     """⭐ 两个 SKILL.md 的托管块与真相源逐字节一致——漂了就该被 --check 抓到。"""
     assert SP.main(["--check"]) == 0
@@ -244,6 +259,7 @@ def test_both_skills_carry_the_broad_mirror_def_byte_for_byte():
             assert got == body, f"{p.name} 第 {s + 1} 行起的托管块与真相源不一致"
 
 
+@needs_human_carriers
 def test_broad_mirror_drift_turns_check_red_and_apply_fixes_it(tmp_path):
     """⭐⭐ 定点用例：托管块被手改坏 ⇒ `--check` MUST 变红；`--apply` MUST 修复。
 
@@ -277,12 +293,15 @@ def test_broad_mirror_render_is_idempotent():
     assert "尾部" in out
 
 
-def test_setup_sh_check_message_covers_both_marker_families():
-    """setup.sh 门禁文案不应只提「四条通则」——它现在也守 broad-mirror-def 漂移。
+def test_check_covers_both_marker_families():
+    """一次 `--check` 要同时覆盖两个 marker 家族（四条通则 + 广审镜定义）。
 
-    【为什么查这个】：门禁调用点未变（仍是同一次 `sync_principles.py --check`），
-    但漂移原因可能是两个家族之一；文案若硬编码只提通则，broad-mirror-def 漂移时
-    人读到的提示会文不对题。
+    【原版查的是什么、为什么退役】：原来断言 setup.sh 里含 `sync_principles.py --check`
+    ——那时门禁的调用点在**安装脚本**里。但这道门守的是「通则真相源改了、投放面没同步」，
+    **这个场景只在开发 checkout 成立**：发布包里投放面全是随包分发的只读副本，用户既不
+    编辑真相源也没有同步动作，报出"漂移"他也无从修。调用点已从 setup.sh 移除（门本身
+    不动，由 pytest + CI 跑），断言 setup.sh 内容的这条随之退役。
+    改为直接验被守的东西：一次 --check 覆盖两个家族。
     """
-    text = (SP.REPO / "setup.sh").read_text(encoding="utf-8")
-    assert "hack/sync_principles.py" in text and "--check" in text
+    assert SP.main(["--check"]) == 0
+    assert len(SP.targets()) > 0 and len(SP.broad_mirror_targets()) > 0
