@@ -6,8 +6,8 @@ v1 版本守住那套设计在**七处**载体间不分叉。`simplify-workflow`
 （explore 条件 → `/sdflow-spec` 自动触发 → HARD-GATE → ship），双轨设计连同它的 SA-14/D10
 锚点一并退役——继续守一个已被删除的设计只会制造恒假的红灯，而非价值。
 
-本文件 v2 不是删除重来，而是**保留仍然成立的部分**（人读侧/AI 读侧/Codex 授权段三处载体
-仍须互相同步——这条一致性纪律本身没变，变的只是同步的内容），并把 v1 那批「presence」断言
+本文件 v2 不是删除重来，而是**保留仍然成立的部分**（人读侧/AI 读侧仍须互相同步），
+并把 v1 那批「presence」断言
 换成 v2 的两类断言：
   ① presence：新的自动触发规则、唯一线性路径措辞，canonical 与人读侧必须**同字**出现；
   ② absence：分支 A/B、`disable-model-invocation`、旧三步 sunset 阈值等已退役措辞，
@@ -22,9 +22,9 @@ v1 版本守住那套设计在**七处**载体间不分叉。`simplify-workflow`
 【与 v1 的差异一览】
 - 删除：`test_generation_process_has_two_branches` 等 11 条锚「分支 A/B 存在」的用例
   （双轨已被移除，presence 断言的参照系不存在，继续留着只会制造恒红或需要手工跳过）。
-- 保留：三处载体互相同步的 parity 类用例（`test_entry_section_exists_in_both_human_carriers`
-  / `test_two_human_carriers_are_verbatim_identical` / `test_codex_auth_section_parity`）——
-  这条纪律与双轨设计正交，simplify-workflow 后依然成立。
+- 保留：人读侧入口互相同步的 parity 类用例（`test_entry_section_exists_in_both_human_carriers`
+  / `test_two_human_carriers_are_verbatim_identical`）——这条纪律与双轨设计正交，
+  simplify-workflow 后依然成立。
 - 新增：absence 类回归守卫，覆盖 `simplify-workflow` 明确要清理的关键词
   （分支 A / 分支 B / disable-model-invocation / RUN_SOP / embedded-test-sop 条件触发语言）。
 """
@@ -47,8 +47,6 @@ WF = REPO / "sdflow-init" / "assets" / "workflow"
 
 WORKFLOW = WF / "workflow.md"
 GENERATION = WF / "generation-process.md"
-CLAUDE_SECTION = REPO / "sdflow-init" / "assets" / "snippets" / "claude-section.md"
-
 HUMAN_SIDE = {
     "CLAUDE.md": REPO / "CLAUDE.md",
     "AGENTS.md": REPO / "AGENTS.md",
@@ -160,38 +158,4 @@ def test_human_carriers_state_the_auto_trigger_rule():
         )
         assert flat("模型 MUST NOT 自主判断") in flat(section), (
             f"{name} 的阶段一入口小节没有「模型 MUST NOT 自主判断该开 change 了」这条禁令"
-        )
-
-
-# ── ④ Codex 子代理授权段 parity（T260，与双轨设计正交，v1 原样保留）───────
-
-CODEX_AUTH_HEADING = "## Codex 子代理授权"
-
-
-def _codex_auth_section(p):
-    text = p.read_text(encoding="utf-8")
-    start = text.find(CODEX_AUTH_HEADING)
-    if start < 0:
-        return None
-    end = text.find("\n## ", start + 1)
-    section = text[start:] if end < 0 else text[start:end]
-    return re.sub(r"<!--\s*opsx-init:\w+\s*-->", "", section)
-
-
-@needs_human_carriers
-def test_codex_auth_section_parity():
-    sources = {
-        "CLAUDE.md": REPO / "CLAUDE.md",
-        "AGENTS.md": REPO / "AGENTS.md",
-        "claude-section.md": CLAUDE_SECTION,
-    }
-    sections = {}
-    for name, path in sources.items():
-        sec = _codex_auth_section(path)
-        assert sec is not None, f"{name} 里没有「{CODEX_AUTH_HEADING}」这一节"
-        sections[name] = sec
-    canonical = flat(sections["CLAUDE.md"])
-    for name, sec in sections.items():
-        assert flat(sec) == canonical, (
-            f"{name} 的 Codex 子代理授权段与 CLAUDE.md 不一致（压掉空白后比对）"
         )

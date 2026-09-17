@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
 
 from model_tiers_cases import CASES as MODEL_TIERS_CASES  # noqa: E402  共享畸形输入语料，见该文件 docstring
+from effort_tiers_cases import CASES as EFFORT_TIERS_CASES  # noqa: E402  HAE-11 resolver 共享语料
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 
@@ -269,8 +270,7 @@ context: |
 
 
 class TestConfigLintEffortTiers:
-    """implement-workflow-optimization-2026-08-p4：effort-tiers 顶层块——**仅** `claude.{strong,
-    mid,light}`（codex 无 effort 原语、无扁平旧格式），叶子值须 ∈ {low,medium,high,xhigh,max}。"""
+    """HAE-11：effort-tiers 顶层块使用 fleet 分键，且不接受扁平旧格式。"""
 
     def test_no_effort_tiers_block_passes(self, tmp_path):
         """条件化放行：无 effort-tiers 块 → 0（消费仓正常态，非违规）。"""
@@ -298,21 +298,26 @@ class TestConfigLintEffortTiers:
             r = _run_lint(root)
             assert r.returncode == 0, f"{val}: {r.stderr}"
 
-    def test_codex_key_is_out_of_domain(self, tmp_path):
-        """codex 无 effort 原语——`effort-tiers.codex.*` MUST 报越域，不得像 model-tiers 那样
-        被当成合法机队键静默接受。"""
+    def test_codex_block_accepts_ultra(self, tmp_path):
         _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
   codex:
-    strong: high
+    strong: ultra
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode == 0, r.stderr
+
+    def test_claude_ultra_is_rejected(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
+  claude:
+    strong: ultra
 """)
         r = _run_lint(tmp_path)
         assert r.returncode != 0
-        assert "effort-tiers" in r.stderr
-        assert "codex" in r.stderr
+        assert "claude.strong" in r.stderr
 
     def test_flat_legacy_format_is_out_of_domain(self, tmp_path):
         """effort-tiers 无扁平旧格式（与 model-tiers 不同，无历史遗留包袱）——顶层直接写
-        `strong:`/`mid:`/`light:`（无 `claude:` 机队头）MUST 报越域，不得被静默接受为 flat 覆盖。"""
+        `strong:`/`mid:`/`light:`（无机队头）MUST 报越域，不得被静默接受为 flat 覆盖。"""
         _write_config(tmp_path, VALID_RULES_BLOCK + """effort-tiers:
   strong: high
 """)
@@ -370,6 +375,14 @@ class TestConfigLintEffortTiers:
         assert r.returncode != 0
         assert "effort-tiers" in r.stderr
 
+    @pytest.mark.parametrize("case", EFFORT_TIERS_CASES, ids=lambda case: case["name"])
+    def test_shared_effort_fixture_has_matching_lint_outcome(self, tmp_path, case):
+        _write_config(tmp_path, VALID_RULES_BLOCK + case["yaml_block"])
+        r = _run_lint(tmp_path)
+        assert (r.returncode == 0) is case["lint_clean"], r.stderr
+        if not case["lint_clean"]:
+            assert "effort-tiers" in r.stderr
+
 
 class TestEffortTiersFromDict:
     """白盒锁（直测 `_effort_tiers_from_dict` 的 entries/bad/bad_headers 归属），同
@@ -385,13 +398,11 @@ class TestEffortTiersFromDict:
         assert entries == {"claude.strong": "high", "claude.mid": "medium"}
         assert not bad and not bad_headers
 
-    def test_codex_key_goes_to_bad_not_entries(self):
-        """与 `_model_tiers_from_dict` 的关键差异：`codex` 不在 `EFFORT_FLEET_KEYS` 里，
-        整个 `codex: {...}` 块须落 `bad`（越域顶层键），MUST NOT 产生任何 `codex.*` entries。"""
+    def test_fleet_entries_are_attributed_without_crosstalk(self):
         entries, bad, bad_headers = self._parse(
-            {"claude": {"strong": "high"}, "codex": {"strong": "high"}})
-        assert entries == {"claude.strong": "high"}
-        assert "codex" in bad
+            {"claude": {"strong": "high"}, "codex": {"strong": "ultra"}})
+        assert entries == {"claude.strong": "high", "codex.strong": "ultra"}
+        assert not bad
         assert not bad_headers
 
     def test_flat_top_level_keys_go_to_bad_not_entries(self):

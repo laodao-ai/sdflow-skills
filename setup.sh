@@ -739,6 +739,15 @@ check_dependencies() {
   fi
 }
 
+# 安装会改全局 skills、agents 与 canonical；两份派发契约先在源树 fail-closed 校验，
+# 任何一份漂移都不得留下半次安装。
+if [ -z "$_py" ]; then
+  echo "错误：安装前派发契约检查需要 Python 3.7+"
+  exit 1
+fi
+"$_py" "$REPO_DIR/hack/check_async_branch_parity.py"
+"$_py" "$REPO_DIR/hack/check_tier_resolution_parity.py"
+
 for d in "${TARGET_DIRS[@]}"; do
   install_into "$d"
   cleanup_migrated_skills "$d"
@@ -790,4 +799,3 @@ if [ "$IS_WINDOWS" -eq 1 ]; then
 else
   echo "  mode: symlink (Unix)"
 fi
-

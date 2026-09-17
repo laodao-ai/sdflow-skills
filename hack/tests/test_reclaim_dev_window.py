@@ -27,6 +27,7 @@
   由其它测试与 symlink 本身保证）。
 """
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -46,6 +47,16 @@ REAL_SKILLS = Path(os.path.expanduser("~")) / ".claude" / "skills"
 # 造假 checkout 时最少要有的东西：一个可安装 skill + 让 is_our_checkout_path 认得出的两个特征文件。
 _FINGERPRINT_REL = "sdflow-init/assets/hack/skill-principles.md"
 _PROBE_SKILL = "sdflow-ship"
+_GATE_SCRIPTS = (
+    "hack/check_async_branch_parity.py",
+    "hack/check_tier_resolution_parity.py",
+)
+_GATE_SKILLS = (
+    "sdflow-implement/SKILL.md",
+    "sdflow-done/SKILL.md",
+    "sdflow-spec-review/SKILL.md",
+    "sdflow-code-review/SKILL.md",
+)
 
 
 def _real_skills_snapshot():
@@ -59,9 +70,14 @@ def _real_skills_snapshot():
 
 
 def _make_checkout(root: Path, *, fingerprint: bool = True) -> Path:
-    """造一个最小 sdflow-skills checkout：setup.sh（真源码拷贝）+ 特征文件 + 一个 skill。"""
+    """造可运行的最小 checkout，含 setup 安装前 fail-closed gate 的真实脚本和输入。"""
     root.mkdir(parents=True, exist_ok=True)
     (root / "setup.sh").write_bytes((REPO / "setup.sh").read_bytes())
+    for rel in (*_GATE_SCRIPTS, *_GATE_SKILLS):
+        src = REPO / rel
+        dst = root / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
     if fingerprint:
         fp = root / _FINGERPRINT_REL
         fp.parent.mkdir(parents=True, exist_ok=True)

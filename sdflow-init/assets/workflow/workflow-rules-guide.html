@@ -256,7 +256,7 @@
   <div class="diagram"><pre>
 sdflow-init/assets/workflow/
 │
-├─ <strong>规则文件</strong>（7 个 .md）         ← 流程骨架 + 生成/评审约束，全部<em>领域无关</em>
+├─ <strong>规则文件</strong>（8 个 .md）         ← 流程骨架 + 生成/评审约束，全部<em>领域无关</em>
 │    workflow.md                     端到端流程唯一线性路径
 │    trigger-catalog.md              触发词单一源（TG-NN），领域枢纽
 │    generation-process.md           生成过程规则（三杠杆中唯一非 config 可固化的）
@@ -264,6 +264,7 @@ sdflow-init/assets/workflow/
 │    design-diagrams.md              设计期画图规则
 │    spec-review.md                  评审残差规则（只审 prevention 焊不住的）
 │    model-tiers.md                  模型档位映射（strong/mid/light 两机队）
+│    subagent-dispatch-contract.md   已决定派发后的容量、回退与结果收集
 │
 ├─ <strong>机械层工具</strong>（6 个 .py + tests）  ← 确定性门禁/校验，脚本 owns 一致性
 │    tools/anchor_lint.py            lens-metric 锚契约校验
@@ -298,7 +299,7 @@ sdflow-init/assets/workflow/
 
 <!-- §2 规则文件 -->
 <section class="section" id="rules">
-  <h2><span class="num">二、</span>规则文件（7 个核心规则）</h2>
+  <h2><span class="num">二、</span>规则文件（8 个核心规则）</h2>
 
   <p>这些是工作流的「宪法」——编排 skill 在运行时读取它们来决定行为。全部<strong>领域无关</strong>（领域特定内容在 checklists 里）。</p>
 
@@ -385,6 +386,17 @@ sdflow-init/assets/workflow/
       </div>
     </div>
 
+    <div class="rule-card">
+      <div class="rule-card-header">
+        <span class="rule-card-name">subagent-dispatch-contract.md</span>
+        <span class="pill pill-rule">规则</span>
+      </div>
+      <p><strong>共享派发契约</strong>——五个编排入口在已经决定派发后，共用完整任务清单、容量分批、effort 回退和终态结果双门。</p>
+      <div class="key-content">
+        <strong>边界：</strong>容量只改变批次；<code>completed</code> 还须有本轮有效且可归属的结果才算成功
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -456,7 +468,7 @@ sdflow-init/assets/workflow/
     <p><strong>通用段</strong>（照搬）：规则集指引、生成软约束（rules），全项目统一。</p>
     <p><strong>本项目段</strong>（自填）：tech stack、命中领域（<code>backend</code> / <code>frontend</code>(+<code>frontend-react</code>) / <code>embedded</code> / <code>llm</code>）、硬边界。领域声明决定评审时叠加哪套领域清单。</p>
     <div class="key-content">
-      <strong>可选覆盖段：</strong><code>model-tiers.claude/codex.{strong,mid,light}</code>（换模型）· <code>effort-tiers.claude.{strong,mid,light}</code>（调 effort）· <code>metrics.enabled</code>（开关复盘度量）
+      <strong>可选覆盖段：</strong><code>model-tiers.claude/codex.{strong,mid,light}</code>（换模型）· <code>effort-tiers.claude/codex.{strong,mid,light}</code>（调 effort）· <code>metrics.enabled</code>（开关复盘度量）
     </div>
   </div>
 </section>

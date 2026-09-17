@@ -14,6 +14,7 @@
 | `design-diagrams` | [workflow/design-diagrams.md](./workflow/design-diagrams.md) | 设计/spec 阶段画哪些图、何时画、什么形态（C4 + 行为图，触发条件化） |
 | `spec-review` | [workflow/spec-review.md](./workflow/spec-review.md) | spec 评审（Detection 层）：只做 prevention 残差，trigger 驱动 + 独立 + 读码核验 |
 | `model-tiers` | [workflow/model-tiers.md](./workflow/model-tiers.md) | 模型档位映射（强/中/弱职责 + canonical 缺省 + config 覆盖语义） |
+| `subagent-dispatch-contract` | [workflow/subagent-dispatch-contract.md](./workflow/subagent-dispatch-contract.md) | 已决定派发后的完整任务清单、容量分批、effort 回退、终态与本轮结果双门 |
 
 设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-NN + domains，含 devex、frontend(+frontend-react)）。
 代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-NN + domains，含 frontend(+frontend-react)）。

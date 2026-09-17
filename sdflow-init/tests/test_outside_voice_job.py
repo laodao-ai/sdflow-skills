@@ -841,6 +841,17 @@ def test_dispatch_fails_closed_when_preflight_not_ready(job_home, fake_claude, r
     assert not (repo["run_dir"] / "design-voice.reserve").exists()
 
 
+def test_dispatch_accepts_a_model_id_with_a_context_window_suffix(job_home, fake_claude, repo):
+    """`resolve-models.sh` 产出的完整 Claude model id 必须可派发，不能误判为非法。"""
+    model = "claude-opus-4-6[1M]"
+    proc = _run_job(job_home, _dispatch_args(repo, job_home, model=model), _env(fake_claude))
+    payload = _json_stdout(proc)
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert payload["model"] == model
+    assert json.loads((repo["run_dir"] / "design-voice.job.json").read_text(encoding="utf-8"))["model"] == model
+
+
 def test_reject_defaults_to_fail_closed_fallback():
     """🔴 `_reject()` 的 `fallback_allowed` 默认 MUST 是 False。
 

@@ -302,10 +302,13 @@ def test_empty_host_and_unknown_are_reported_differently():
         assert "unknown = 跑成但判不出宿主、空 = 工具没装没跑成" in seg, rel
 
 
-def test_tier_required_only_when_host_known():
-    """(d) 步：host≠unknown 时才要求三档非空——unknown 本身是合法枚举值。"""
+def test_model_and_effort_tiers_required_only_when_host_known():
+    """(d) 步：host≠unknown 时 model 与 effort 三档均非空。"""
     for rel, seg in _segments():
-        assert "host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空" in seg, rel
+        assert (
+            "host≠unknown 时三 `$SDFLOW_TIER_*` 与三 `$SDFLOW_EFFORT_*` MUST 非空"
+            in seg
+        ), rel
         assert "MUST 精确 ∈ {claude,codex,unknown} 且非空" in seg, rel
 
 

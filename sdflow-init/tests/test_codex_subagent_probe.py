@@ -1,12 +1,7 @@
-"""守 Task 9（add-codex-host-support）「消费项目铺设 + fan-out 能力探针」的铺设产物。
+"""守 Task 9（add-codex-host-support）的 fan-out 能力探针。
 
 【为什么需要机械守】
-Codex 宿主默认**不**派子代理（安全默认）——两个评审 SKILL 的多镜 fan-out 要在 Codex 宿主下工作，
-必须先有一处**显式**授权（spec `host-adaptive-execution`「子代理不可用时镜数如实降级」Requirement：
-「`sdflow-init` 铺给消费项目的 AGENTS.md 段与两个评审 SKILL SHALL 显式声明该授权」）。
-授权文字若漏铺（`sdflow-init` 铺设产物里没有）或漏写（SKILL 里没有 fan-out 前的探针协议），
-Codex 宿主下的评审要么每次都拿不到子代理权限、要么在没有能力核验的情况下裸 fan-out——
-两者都不是本 change 想要的目标态，故须机验存在性。
+两个评审 SKILL 明确要求 fan-out，仍须保留派发前的能力探针与诚实降级协议。
 
 【探针的诚实边界，本文件同样守住】
 探针（trivial 子代理判定"机制活着没"）是**语义核验，非机械门**（ADR-4/adr/0023，§0.0）——
@@ -24,25 +19,28 @@ Codex 宿主下的评审要么每次都拿不到子代理权限、要么在没�
 """
 import importlib.util
 from pathlib import Path
+
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-
-# 【发布 clone 边界】本门守的是**本仓两份人读载体**（CLAUDE.md / AGENTS.md）的一致性，
-# 而发布快照把它们剔除了（开发期资产，见 .agents/skills/sdflow-publish 的 DROP_PATHS）
-# ⇒ 使用者 clone 下来跑 pytest 时这批门无从守。完整仓里照跑照红；缺载体时显式 skip
-# 并说明——MUST NOT 静默 pass。
-_HAS_CARRIERS = (REPO / "CLAUDE.md").exists() and (REPO / "AGENTS.md").exists()
-needs_human_carriers = pytest.mark.skipif(
-    not _HAS_CARRIERS,
-    reason="本门守本仓 CLAUDE.md / AGENTS.md 双载体一致性；发布 clone 不含它们",
-)
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
-SNIPPET = ASSETS / "snippets" / "claude-section.md"
-AGENTS = REPO / "AGENTS.md"
 SPEC_REVIEW_SKILL = REPO / "sdflow-spec-review" / "SKILL.md"
 CODE_REVIEW_SKILL = REPO / "sdflow-code-review" / "SKILL.md"
 ANCHOR_LINT = ASSETS / "workflow" / "tools" / "anchor_lint.py"
+PUBLIC_DELEGATION_POLICY_CARRIER = ASSETS / "snippets" / "claude-section.md"
+HUMAN_DELEGATION_POLICY_CARRIERS = (
+    REPO / "AGENTS.md",
+    REPO / "CLAUDE.md",
+)
+needs_human_carriers = pytest.mark.skipif(
+    not all(path.is_file() for path in HUMAN_DELEGATION_POLICY_CARRIERS),
+    reason="本门核对项目人读载体中的 Codex 派发策略；发布 clone 不含 AGENTS.md / CLAUDE.md",
+)
+DELEGATION_POLICY_FORBIDDEN = (
+    "## Codex 子代理授权",
+    "Codex 宿主默认不派子代理",
+    "仅限这三处",
+)
 
 
 def _anchor_lint_mod():
@@ -52,50 +50,6 @@ def _anchor_lint_mod():
     return m
 
 
-# ---------- 铺设产物：claude-section.md（单一源） + AGENTS.md（本仓 dogfood 铺设结果）----------
-
-def test_snippet_declares_codex_subagent_authorization():
-    """claude-section.md（sdflow-init 铺给消费项目、经 opsx-init 托管块注入 AGENTS.md 的单一源）
-    MUST 含 Codex 子代理授权段：授权范围（两个评审 SKILL 的 fan-out）+ spawn_agent 的
-    task-specific reason 与 model-tiers 的绑定。"""
-    t = SNIPPET.read_text(encoding="utf-8")
-    assert "Codex 子代理授权" in t
-    assert "spawn_agent" in t
-    assert "task-specific reason" in t
-    assert "model-tiers.md" in t
-    assert "sdflow-spec-review" in t and "sdflow-code-review" in t
-    # harden-implement-review-loop Task 1（H11/C13）：sdflow-implement 的 implementer/Standards轴/
-    # Spec轴/fix 派发同样补进授权范围，第三处
-    assert "sdflow-implement" in t
-    # 授权非无限放开——MUST 显式限定范围，防止被读成"任意 skill 可随便 spawn_agent"
-    assert "仅限这三处" in t
-
-
-def test_snippet_authorization_names_probe_semantic_boundary():
-    """授权段紧邻处 MUST 提醒探针是语义核验非机械门——授权和诚实边界不能分离铺设
-    （只铺授权、不铺边界，会让读者以为探针=机械保证）。"""
-    t = SNIPPET.read_text(encoding="utf-8")
-    assert "语义核验" in t
-    assert "非机械" in t or "MUST NOT 被当作机械保证" in t
-    assert "单镜降级" in t
-
-
-@needs_human_carriers
-def test_agents_md_dogfood_mirrors_authorization():
-    """本仓 AGENTS.md 的 opsx-init 托管块是 claude-section.md 的铺设结果（dogfood）——
-    若只改了源快照、忘了回灌铺设产物，本仓自己的 Codex 宿主评审就拿不到授权
-    （dogfood-blind-spot：源仓 config/文档 掩盖消费仓默认态，同一坑）。"""
-    t = AGENTS.read_text(encoding="utf-8")
-    assert "Codex 子代理授权" in t
-    assert "spawn_agent" in t
-    assert "task-specific reason" in t
-    assert "sdflow-spec-review" in t and "sdflow-code-review" in t
-    # AGENTS.md 段落须落在 sdflow-init 维护的 opsx-init 托管块内（不是随手写在托管块外）
-    start = t.index("<!-- opsx-init:start")
-    end = t.index("<!-- opsx-init:end")
-    assert start < t.index("Codex 子代理授权") < end
-
-
 # ---------- 两评审 SKILL：fan-out 前探针协议 ----------
 
 def _skill_text(path):
@@ -103,15 +57,31 @@ def _skill_text(path):
     return path.read_text(encoding="utf-8")
 
 
+def _assert_no_codex_delegation_policy(paths):
+    for path in paths:
+        text = _skill_text(path)
+        for phrase in DELEGATION_POLICY_FORBIDDEN:
+            assert phrase not in text, f"{path}: 不应包含项目级子代理规则：{phrase}"
+
+
+def test_public_template_does_not_add_codex_delegation_policy():
+    """公开项目模板不设置 Codex 子代理授权、白名单或默认禁用规则。"""
+    _assert_no_codex_delegation_policy((PUBLIC_DELEGATION_POLICY_CARRIER,))
+
+
+@needs_human_carriers
+def test_project_instructions_do_not_add_codex_delegation_policy():
+    """开发仓项目说明不设置 Codex 子代理授权、白名单或默认禁用规则。"""
+    _assert_no_codex_delegation_policy(HUMAN_DELEGATION_POLICY_CARRIERS)
+
+
 def test_both_skills_probe_precedes_fanout_dispatch():
     """探针 MUST 在实际派出 fan-out 子代理之前跑——
     机验文档顺序：能力探针小节的文本位置须早于 fan-out 派发表格。
-    spec-review 用「单批 dispatch（一条消息内派出本轮全部镜」（absorb-gstack-autoplan DD1：
-    旧「两段 dispatch」串行分治已退役，广审双镜与领域/对抗/接地/design-voice 单批全并行）；
-    code-review 用「fan-out（一条消息内全部派出」。"""
+    两份评审 SKILL 都用当前稳定的完整 roster 容量分批文案，且两处均位于能力探针之后。"""
     fanout_needles = {
-        SPEC_REVIEW_SKILL: "单批 dispatch（一条消息内派出本轮全部镜",
-        CODE_REVIEW_SKILL: "fan-out（一条消息内全部派出",
+        SPEC_REVIEW_SKILL: "完整 roster 分批 dispatch",
+        CODE_REVIEW_SKILL: "fan-out（完整 roster 按容量分批派出",
     }
     for path in (SPEC_REVIEW_SKILL, CODE_REVIEW_SKILL):
         t = _skill_text(path)

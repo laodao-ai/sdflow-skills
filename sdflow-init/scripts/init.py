@@ -659,8 +659,11 @@ def _marker_schema(marker):
 
 TIER_ALLOWED_SUBKEYS = {"strong", "mid", "light"}
 TIER_FLEET_KEYS = {"claude", "codex"}          # add-codex-host-support ADR-8：按机队分键
-EFFORT_FLEET_KEYS = {"claude"}                 # host-adaptive-execution delta：仅 claude 机队有 effort 原语
-EFFORT_ALLOWED_VALUES = {"low", "medium", "high", "xhigh", "max"}
+EFFORT_FLEET_KEYS = {"claude", "codex"}
+EFFORT_ALLOWED_VALUES = {
+    "claude": {"low", "medium", "high", "xhigh", "max"},
+    "codex": {"low", "medium", "high", "xhigh", "max", "ultra"},
+}
 RULES_REQUIRED_SUBKEYS = ("proposal", "specs", "design", "tasks")
 
 
@@ -721,18 +724,14 @@ def _model_tiers_from_dict(raw):
     return entries, bad, bad_headers
 
 
-def _valid_effort_value(v):
-    """effort-tiers 值域校验：封闭集合 {low,medium,high,xhigh,max}（与
-    resolve-models.sh::_valid_effort_value 同口径——effort 是封闭域，比 model-tiers 的自由字符集
-    校验更严；implement-workflow-optimization-2026-08-p4 design「effort-tiers 新 config 键 SHALL
-    同步接入 init.py lint_config……与 resolver 解析同口径」）。"""
-    return v in EFFORT_ALLOWED_VALUES
+def _valid_effort_value(fleet, value):
+    """按机队校验 effort 封闭枚举，口径同 resolve-models.sh。"""
+    return value in EFFORT_ALLOWED_VALUES.get(fleet, set())
 
 
 def _effort_tiers_from_dict(raw):
     """effort-tiers 顶层块的业务校验，口径同 `_model_tiers_from_dict` 但两处收窄：
-    ① 唯一合法机队键 = `claude`（`codex` 越域——codex 无 effort 原语，'不写键即 n/a'，写了
-    `codex:` 属显式误用而非合法降级，MUST 报违规而非静默忽略）；
+    ① 合法机队键为 `claude` 与 `codex`，各自使用独立合法枚举；
     ② **无扁平旧格式**——effort-tiers 是本 change 新引入的键、无历史遗留包袱，
     MUST NOT 复用 model-tiers 那条为迁移期旧配置保留的扁平兼容分支（顶层非 `claude` 的其余键，
     包括看似「扁平」的 `strong`/`mid`/`light` 顶层键，一律计入越域，而非归 `flat.*`）。
@@ -778,9 +777,9 @@ def lint_config(root):
     light}` 或扁平旧格式 `{strong,mid,light}`（ADR-8），二级键须 ⊆ {claude,codex,strong,mid,light}，
     且叶子键的**值**须为合法模型 ID（add-codex-host-support D5：拒绝空值/非法字符，防 eval 注入面
     经消费仓 config 回灌） ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false} ⑤ 顶层
-    `effort-tiers:`（若存在，implement-workflow-optimization-2026-08-p4）——**仅** `claude.{strong,
-    mid,light}`（`codex` 越域，无扁平旧格式），叶子键的**值**须 ∈ {low,medium,high,xhigh,max}
-    （封闭域，与 resolve-models.sh 解析同口径）。
+    `effort-tiers:`（若存在）——`{claude,codex}.{strong,mid,light}`，无扁平旧格式；Claude
+    值域为 {low,medium,high,xhigh,max}，Codex 值域额外含 ultra（封闭域，与
+    resolve-models.sh 解析同口径）。
 
     yq 不可用（未装/非 mikefarah）→ `_check_yq()` 前置门给出一条带安装指引的 reason（不崩溃/
     不退出，`lint_config` 的公开契约就是「返回 reason 列表」）。config.yaml 缺失/不可读/整份
@@ -839,19 +838,42 @@ def lint_config(root):
         if not isinstance(enabled, bool):
             reasons.append("metrics: enabled 值非法或缺失（须为 true|false）")
 
-    if cfg.get("effort-tiers") is not None:  # 条件化：块整段缺失 → 跳过（放行）
-        entries, bad, bad_headers = _effort_tiers_from_dict(cfg["effort-tiers"])
-        if bad:
+    if "effort-tiers" in cfg:  # 键存在即校验；null/list/scalar 不是「块缺失」
+        raw_effort_tiers = cfg["effort-tiers"]
+        if not isinstance(raw_effort_tiers, dict):
             reasons.append(
-                f"effort-tiers: 子键越域 {sorted(bad)}"
-                f"（顶层须 ⊆ {{claude}}——codex 无 effort 原语、无扁平旧格式，机队子块叶子键须 ⊆ {{strong,mid,light}}）")
-        if bad_headers:
+                "effort-tiers: 顶层块类型非法"
+                "（须为 claude/codex 嵌套 mapping，不能为 null、标量或列表）")
+        elif _yq('.["effort-tiers"] | style', cfg_path, default="") == "flow":
             reasons.append(
-                f"effort-tiers: 机队头带尾随内容 {sorted(bad_headers)}"
-                f"（`claude:` 须为空的嵌套块头，值另起 strong/mid/light 缩进行；纯注释头合法）")
-        bad_values = [f"{k}={v!r}" for k, v in sorted(entries.items()) if not _valid_effort_value(v)]
-        if bad_values:
-            reasons.append(f"effort-tiers: 值非法 {bad_values}（须 ∈ {{low,medium,high,xhigh,max}}）")
+                "effort-tiers: 不支持 YAML flow mapping"
+                "（resolver 只消费缩进式 claude/codex 嵌套块）")
+        elif any(
+            _yq(f'.["effort-tiers"].{fleet} | style', cfg_path, default="") == "flow"
+            for fleet in EFFORT_FLEET_KEYS
+        ):
+            reasons.append(
+                "effort-tiers: 不支持 YAML flow mapping"
+                "（resolver 只消费缩进式 claude/codex 嵌套块）")
+        else:
+            entries, bad, bad_headers = _effort_tiers_from_dict(raw_effort_tiers)
+            if bad:
+                reasons.append(
+                    f"effort-tiers: 子键越域 {sorted(bad)}"
+                    f"（顶层须 ⊆ {{claude,codex}}，无扁平旧格式，机队子块叶子键须 ⊆ {{strong,mid,light}}）")
+            if bad_headers:
+                reasons.append(
+                    f"effort-tiers: 机队头带尾随内容 {sorted(bad_headers)}"
+                    f"（`claude:`/`codex:` 须为空的嵌套块头，值另起 strong/mid/light 缩进行；纯注释头合法）")
+            bad_values = [
+                f"{key}={value!r}" for key, value in sorted(entries.items())
+                if not _valid_effort_value(key.partition(".")[0], value)
+            ]
+            if bad_values:
+                reasons.append(
+                    f"effort-tiers: 值非法 {bad_values}"
+                    "（claude 须 ∈ {low,medium,high,xhigh,max}；"
+                    "codex 须 ∈ {low,medium,high,xhigh,max,ultra}）")
 
     return reasons
 

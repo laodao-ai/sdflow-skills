@@ -22,6 +22,7 @@ from test_support.windows import bash_executable, bash_path
 
 sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
 from model_tiers_cases import CASES as MODEL_TIERS_CASES  # noqa: E402 共享畸形输入语料
+from effort_tiers_cases import CASES as EFFORT_TIERS_CASES  # noqa: E402 共享 HAE-11 语料
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "sdflow-init" / "assets" / "hack" / "resolve-models.sh"
@@ -36,14 +37,15 @@ _JOB_SPEC.loader.exec_module(JOB)
 
 def make_bundle_repo(tmp_path, claude=("opus", "sonnet", "haiku"),
                       codex=("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"),
-                      effort=("high", "medium", "low")):
+                      effort=("high", "medium", "low"),
+                      codex_effort=("high", "medium", "low")):
     """项目根 + 一个自包含的假全局 canonical bundle（fix-probe-scan-precision：本地 pin 判定
     已从 resolve-workflow.sh 删除，两步链只剩「全局 canonical → 显式降级」——bundle 须放进
     `tmp_path/sdflow-home/workflow/`，经 `run_resolve`/`eval_resolve` 默认设置的 SDFLOW_HOME
     命中）。含 model-tiers.md 机读块——resolve-models.sh 靠它定位档位缺省。sane() 扩面（同 change）
     要求 tools/ 非空 + lens-metric-contract.md 非空，一并造好，否则全局 canonical 判「不完整」
-    exit 2，档位解析拿不到 model-tiers.md。effort 三元组 = effort-tier-defaults 机读块
-    （implement-workflow-optimization-2026-08-p4 Task 1，仅 claude 机队，键路径 claude.{strong,mid,light}）。"""
+    exit 2，档位解析拿不到 model-tiers.md。effort 三元组 = effort-tier-defaults 机读块，
+    两机队均含 `strong/mid/light`。"""
     root = tmp_path / "repo"
     root.mkdir(parents=True)
     wf = tmp_path / "sdflow-home" / "workflow"
@@ -62,6 +64,7 @@ def make_bundle_repo(tmp_path, claude=("opus", "sonnet", "haiku"),
         f"codex.strong: {codex[0]}\ncodex.mid: {codex[1]}\ncodex.light: {codex[2]}\n"
         "```\n\n```effort-tier-defaults\n"
         f"claude.strong: {effort[0]}\nclaude.mid: {effort[1]}\nclaude.light: {effort[2]}\n"
+        f"codex.strong: {codex_effort[0]}\ncodex.mid: {codex_effort[1]}\ncodex.light: {codex_effort[2]}\n"
         "```\n",
         encoding="utf-8",
     )
@@ -294,14 +297,7 @@ class TestFleetKeyedOverride:
 
 
 class TestEffortTierDefaults:
-    """implement-workflow-optimization-2026-08-p4 Task 1（HAE-1）：effort 维解析与导出全链。
-
-    effort 机读块键路径仅含 `claude.{strong,mid,light}`（codex 无对应物，不写键即 n/a）；
-    codex/unknown 宿主显式初始化三变量为空串，MUST NOT 复用 model tier 的 unknown 回落逻辑
-    （unknown 回落 claude canonical 缺省是 model tier 专属语义，effort 没有这个语义）。
-    config 覆盖走 `effort-tiers.claude.{strong,mid,light}`，值域 {low,medium,high,xhigh,max}，
-    非法值忽略覆盖回落缺省 + stderr 告警。
-    """
+    """HAE-11：两机队 effort 三档解析与导出全链。"""
 
     def test_claude_host_exports_effort_defaults_without_override(self, tmp_path):
         root = make_bundle_repo(tmp_path)
@@ -312,16 +308,14 @@ class TestEffortTierDefaults:
         assert exports["SDFLOW_EFFORT_MID"] == "medium"
         assert exports["SDFLOW_EFFORT_LIGHT"] == "low"
 
-    def test_codex_host_effort_vars_are_empty_with_no_warning_noise(self, tmp_path):
+    def test_codex_host_exports_effort_defaults_without_override(self, tmp_path):
         root = make_bundle_repo(tmp_path)
         r = run_resolve(root, {"CODEX_THREAD_ID": "abc"})
         assert r.returncode == 0, r.stderr
         exports = parse_exports(r.stdout)
-        assert exports["SDFLOW_EFFORT_STRONG"] == ""
-        assert exports["SDFLOW_EFFORT_MID"] == ""
-        assert exports["SDFLOW_EFFORT_LIGHT"] == ""
-        assert "effort" not in r.stderr.lower(), (
-            f"codex 宿主 effort 无对应物是合法缺席，MUST NOT 产生告警噪声：{r.stderr!r}")
+        assert exports["SDFLOW_EFFORT_STRONG"] == "high"
+        assert exports["SDFLOW_EFFORT_MID"] == "medium"
+        assert exports["SDFLOW_EFFORT_LIGHT"] == "low"
 
     def test_unknown_host_effort_vars_are_empty_with_no_extra_warning_noise(self, tmp_path):
         root = make_bundle_repo(tmp_path)
@@ -336,6 +330,20 @@ class TestEffortTierDefaults:
         assert "effort" not in r.stderr.lower(), (
             f"unknown 宿主 effort 留空是既定语义，MUST NOT 产生告警噪声：{r.stderr!r}")
 
+    def test_unknown_host_overwrites_prior_effort_exports_with_empty_values(self, tmp_path):
+        root = make_bundle_repo(tmp_path)
+        env = dict(os.environ)
+        env["SDFLOW_HOME"] = bash_path(root.parent / "sdflow-home")
+        command = (
+            f'eval "$(CODEX_THREAD_ID=abc bash {shlex.quote(bash_path(SCRIPT))} --root {shlex.quote(bash_path(root))})"; '
+            f'eval "$(env -u CLAUDECODE -u CODEX_THREAD_ID bash {shlex.quote(bash_path(SCRIPT))} --root {shlex.quote(bash_path(root))})"; '
+            'printf "%s|%s|%s" "$SDFLOW_EFFORT_STRONG" "$SDFLOW_EFFORT_MID" "$SDFLOW_EFFORT_LIGHT"'
+        )
+        result = subprocess.run([bash_executable(), "-c", command], capture_output=True, text=True,
+                                env=env, timeout=15, encoding="utf-8", errors="replace")
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == "||"
+
     def test_config_override_applies_on_claude_host(self, tmp_path):
         root = make_bundle_repo(tmp_path)
         write_config_yaml(root, "schema: spec-driven\neffort-tiers:\n"
@@ -348,15 +356,29 @@ class TestEffortTierDefaults:
         assert exports["SDFLOW_EFFORT_STRONG"] == "high"
         assert exports["SDFLOW_EFFORT_LIGHT"] == "low"
 
-    def test_config_override_does_not_apply_on_codex_host(self, tmp_path):
-        """effort-tiers 仅 claude 键——codex 宿主没有覆盖对象，即便 config 写了也不套用。"""
+    def test_codex_override_applies_only_on_codex_host(self, tmp_path):
         root = make_bundle_repo(tmp_path)
         write_config_yaml(root, "schema: spec-driven\neffort-tiers:\n"
-                                 "  claude:\n    mid: xhigh\n")
-        r = run_resolve(root, {"CODEX_THREAD_ID": "abc"})
-        assert r.returncode == 0, r.stderr
-        exports = parse_exports(r.stdout)
-        assert exports["SDFLOW_EFFORT_MID"] == ""
+                                 "  claude:\n    mid: xhigh\n"
+                                 "  codex:\n    strong: ultra\n")
+        claude = parse_exports(run_resolve(root, {"CLAUDECODE": "1"}).stdout)
+        codex = parse_exports(run_resolve(root, {"CODEX_THREAD_ID": "abc"}).stdout)
+        assert claude["SDFLOW_EFFORT_STRONG"] == "high"
+        assert claude["SDFLOW_EFFORT_MID"] == "xhigh"
+        assert codex["SDFLOW_EFFORT_STRONG"] == "ultra"
+        assert codex["SDFLOW_EFFORT_MID"] == "medium"
+
+    @pytest.mark.parametrize("case", EFFORT_TIERS_CASES, ids=lambda case: case["name"])
+    def test_shared_effort_fixture_resolves_by_current_fleet(self, tmp_path, case):
+        root = make_bundle_repo(tmp_path)
+        write_config_yaml(root, "schema: spec-driven\n" + case["yaml_block"])
+        for host, env in (("claude", {"CLAUDECODE": "1"}),
+                          ("codex", {"CODEX_THREAD_ID": "abc"})):
+            result = run_resolve(root, env)
+            exports = parse_exports(result.stdout)
+            assert tuple(exports[f"SDFLOW_EFFORT_{tier}"] for tier in ("STRONG", "MID", "LIGHT")) == case["efforts"][host]
+            if case.get("resolver_warns"):
+                assert "effort-tiers" in result.stderr
 
     def test_invalid_override_value_falls_back_to_default_with_warning(self, tmp_path):
         root = make_bundle_repo(tmp_path)

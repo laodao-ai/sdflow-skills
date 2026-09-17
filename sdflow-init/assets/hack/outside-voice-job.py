@@ -205,7 +205,9 @@ SITE_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 # run-id 同样进 argv（且默认取自 run-dir basename）⇒ 同样收紧，别把「shlex 会 quote」
 # 当成可以放任任意串的理由（quoting 是最后一道，不是唯一一道）。
 RUN_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
-MODEL_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}\Z")
+# 与 resolve-models.sh 的完整 Claude model id 口径一致：允许单个末尾上下文窗口后缀
+# （如 `claude-opus-4-6[1M]`），但不放宽 shell 元字符或中间/嵌套方括号。
+MODEL_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}(?:\[[A-Za-z0-9]+\])?\Z")
 # 〔OVBG-04〕spec 把后台通道的推理档位**写死 `--effort high`** ⇒ 合法集就是这一个值，
 # 不是 CLI 自己支持的那 5 档、也不是原先随手放行的 3 档。dispatch 是整条链上 effort 的
 # **唯一 producer**（`build_worker_command` → worker → `SDFLOW_VOICE_EFFORT` →

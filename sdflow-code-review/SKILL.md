@@ -12,6 +12,24 @@ description: >
 
 # sdflow-code-review — 阶段三代码评审编排器（每次全跑·独立冷·强制主审）
 
+已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义代码评审镜与失败处置。
+
+## 本轮评审派发与收集
+
+派发前固定 scope、领域、对抗、历史及实际适用 voice 的**完整派发任务清单**；每项记录 `run_id`、`task_id`、角色、请求 model/effort、上下文模式和预期 `result_ref`。容量只能改变批次，MUST NOT 删除任务、减少镜数；容量未知时串行处理完整清单。
+
+宿主参数互斥：`host=claude` 只带对应 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；`host=codex` 显式带 `model`、`reasoning_effort` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`；`host=unknown` 沿用既有不 fan-out 路径。Codex 只有收到明确 effort 或 model×effort 不支持错误时才回退：先同一 model、任务、prompt、runner 尝试 canonical 默认，再省略 `reasoning_effort`；不得改变 model、任务、prompt、runner 或完整派发任务清单。记录 `requested_effort`、`accepted_request_evidence`、`effective_effort`（无可信元数据为 `unknown`）和 `fallback_reason`。
+
+### 故障矩阵
+
+| 状态 / 条件 | 处置 | 收尾状态 |
+|---|---|---|
+| 子代理机制 `unavailable` | 进入本入口既定的单镜显式降级路径并如实标注。 | 仅保留主 session 实际完成的镜。 |
+| 探针容量满载 / 容量拒绝 | 按共享契约等待和有界重试；探针也受此规则。 | 不缩镜。 |
+| 容量重试耗尽 | 进入既有阻塞路径，MUST NOT 标为 `unavailable`。 | 阻塞本轮。 |
+| `completed` 但缺本轮有效 `result_ref` | 拒绝空结果、无效结构及旧轮结果；按既有失败路径处置。 | 不作为成功锚。 |
+| `failed` / `interrupted` / `cancelled` | 进入未审待恢复的既有失败路径。 | 不作为成功锚。 |
+
 <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
 
@@ -198,7 +216,7 @@ Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一�
 4. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：
 
 <!-- sdflow:tier-resolution:start v1 -->
-**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（claude 机队按档位推导的 effort 值，供下方派发子代理时选配 `subagent_type`；codex/unknown 宿主或旧版 resolver 未导出时为空串，空值即回落不带 `subagent_type`，行为与引入前一致，MUST NOT 视为异常）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` 与三 `$SDFLOW_EFFORT_*` MUST 非空；`host=claude` 时三 `$SDFLOW_EFFORT_*` MUST 分别精确 ∈ {low,medium,high,xhigh,max}，`host=codex` 时 MUST 分别精确 ∈ {low,medium,high,xhigh,max,ultra}，任何非空非法值 MUST 在派发前 fail-closed——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（按档位解析的 effort 值；已知宿主必须完整，`unknown` 路径不派发时忽略它们）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
 <!-- sdflow:tier-resolution:end -->
 
 （与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、下方能力探针同类；空值/unknown 分家同样遵循 fail-loud 精神——均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
@@ -209,7 +227,7 @@ Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一�
    - `$SDFLOW_HOST="unknown"` → 不 fan-out（本轮不会走到本段——上一步已判定）。
    - `$SDFLOW_HOST="codex"` → **MUST** 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，
      不做任何实质工作）；派不出/机制报错 → `subagents="unavailable"`；派出且收到哨兵 → `subagents="available"`。
-     **Codex 子代理授权见 AGENTS.md「Codex 子代理授权」段**（多镜 fan-out + model-tiers 构成显式 task-specific reason）。
+   - **容量与能力分开处置**：容量满载 / 容量拒绝不属于机制错误，先按共享契约等待和有界重试；重试耗尽进入既有阻塞路径，MUST NOT 写为 `subagents="unavailable"` 或缩 roster。只有非容量的派不出/机制报错才进入上条 `subagents="unavailable"` 降级。
    - **诚实边界（MUST 显著登记，§0.0）**：探针结果由**主 session 自己**观察并落锚——「是否真派出了一次子代理、
      是否真收到回复」无可信脚本捕获路径，`anchor_lint` 的一致性 lint 只核**锚行文法自洽**（`unavailable`
      却报多镜的自相矛盾），**核不了它是否对应一次真 spawn**。MUST NOT 声称这是机械门。
@@ -344,7 +362,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
    纪律非机械门，MUST NOT 声称机械保证。
 3. **段③（动态）**：`DIFF_BASE..HEAD` diff 范围与 diff 本身。
 
-**fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
+**fan-out（完整 roster 按容量分批派出；各子代理 fresh context、无用户交互、返回结构化 findings）**：先固定完整派发任务清单。容量只能改变批次，MUST NOT 删除任务、减少镜数。`host=claude` 只带对应 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；`host=codex` 显式带同档 `model`、`reasoning_effort` 和 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。
 
 | 镜 | 数量 | 干什么 | 建议档位 | effort 档 |
 |----|------|--------|-----------|-----------|
@@ -352,10 +370,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 | **对抗镜** | 2-3 | 各从一个**不同角度**「证明这段代码运行期会爆」：并发竞态 / 资源泄漏 / 错误路径未覆盖。默认 refuted=true，找到爆点才记 | 中档（对抗推理） | `$SDFLOW_EFFORT_MID` |
 | **历史镜**〔条件化，见上「规划镜头」〕 | 0-1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） | `$SDFLOW_EFFORT_LIGHT` |
 
-> `$SDFLOW_EFFORT_<对应档位>` 非空时，dispatch MUST 附带 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<对应档位>`；
-> 为空（codex/unknown 宿主、resolver 未升级、`sdflow-effort-*` agent 定义未铺设）时 MUST NOT 带 `subagent_type`
-> 字段，派发行为与 effort 维引入前完全相同（见「模型选择」节，此表仅按镜类型列 model/effort 对应值，
-> 派发构造规则集中写在那里，不在此重复）。
+> 宿主参数构造遵循本入口顶部与「模型选择」节：Claude 只映射 effort agent；Codex 使用 `model`、`reasoning_effort`、`fork_turns: "none"` 且不带 `subagent_type`。
 
 **第二步半：code outside voice（跨模型，always〔C3·R1〕）**：按「helper 调用协议」（site="code-voice"，context = `git diff $DIFF_BASE..HEAD` 全量）跑一次整体找漏第二意见——不受清单约束、不占镜位。**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（进第三步汇总），结果在 Step3 barrier 处 collect**。findings 进 Step3 合并池；v1 锚行按位点写入报告。**复评条款已泛化〔workflow-metrics-loop ADR-5，见第五步「反馈回路」〕**：原「累计 10 次后按采纳率复评降采样为 HR-only」是本条 outside-voice 专属规则，现升级为 per-(层,镜) 通用条款（本镜只是其中一个评估单元，不再单独定义判据）。
 
@@ -805,11 +820,10 @@ ship-gate:
 | 领域镜 / 对抗镜（判断、对抗推理） | 中档 = `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
 | 历史镜（git blame，机械） | 弱档 = `$SDFLOW_TIER_LIGHT` | `$SDFLOW_EFFORT_LIGHT` |
 
-**effort 派发构造（`$SDFLOW_EFFORT_*` 为空即回落现行为，前向兼容——host-adaptive-execution delta）**：
-上表每个子代理 dispatch，对应 `$SDFLOW_EFFORT_<档位>` 非空时 MUST 附带
-`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；为空（codex/unknown 宿主、resolver 未升级、
-`sdflow-effort-*` agent 定义未铺设）时 MUST NOT 带 `subagent_type` 字段，派发行为与 effort 维引入前
-完全相同。**带门禁、无人逐条复核的步（主 session 综合裁决）MUST NOT 以低于 high 的 effort 执行**——
+**effort 派发构造**：`host=claude` 对应 `$SDFLOW_EFFORT_<档位>` MUST 只映射为
+`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；`host=codex` MUST 显式传同档 `model`、
+`reasoning_effort: $SDFLOW_EFFORT_<档位>` 和 `fork_turns: "none"`，且 MUST NOT 带 `subagent_type`。
+若 Codex 明确拒绝该 effort，按本入口「本轮评审派发与收集」的 canonical 默认、再省略参数两级回退；未知宿主不猜测机队。**带门禁、无人逐条复核的步（主 session 综合裁决）MUST NOT 以低于 high 的 effort 执行**——
 与 model 档位「不降档」铁律同构、同源（`model-tiers.md` 的 `effort-tier-defaults` 机读块）。
 
 依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读 blame 可下放弱档；机械引用核

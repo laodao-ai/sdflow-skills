@@ -8,7 +8,7 @@
 > 模型名塞给 Codex 机队）。缺省请勿填。
 > 编排 skill 一律以一句引用指向本文件，MUST NOT 内联模型名。
 
-| 档位 | 职责（谁必须用它） | Claude 机队缺省 | Codex 机队缺省 | effort 档（仅 claude） |
+| 档位 | 职责（谁必须用它） | Claude 机队缺省 | Codex 机队缺省 | effort 档 |
 |---|---|---|---|---|
 | **强档 strong** | verify 终门 / 对抗裁决（Step3 主审）/ final whole-branch 终审 | opus | gpt-5.6-sol | high |
 | **中档 mid** | 领域镜·对抗镜（判断/对抗推理）/ 生成 / 实现 / archive 对码 | sonnet | gpt-5.6-terra | medium |
@@ -36,10 +36,9 @@ codex.light: gpt-5.6-luna
 
 ## 机读缺省 · effort 维（消费脚本单一源·勿在脚本内复制）
 
-> effort 是 agent 定义 frontmatter 的独立维度（`effort: low/medium/high/xhigh/max`，宿主原生
-> per-call 派发参数只有 `model`，effort 只在 agent 定义层生效——ADR-0043）。**仅 claude 机队**
-> ——codex 无对应物，不写键即 n/a，杜绝「空值语义」。格式钉死同上方 `model-tier-defaults`
-> 惯例：fence info-string 恒为 `effort-tier-defaults`；键路径固定 3 条（1 机队 × 3 档，可穷举）
+> effort 是宿主派发的独立维度。Claude 值域为 `low/medium/high/xhigh/max`；Codex 值域额外支持
+> `ultra`。格式钉死同上方 `model-tier-defaults` 惯例：fence info-string 恒为
+> `effort-tier-defaults`；键路径固定 6 条（2 机队 × 3 档，可穷举）
 > ——`resolve-models.sh` 按同款有界键路径行锚定提取，MUST NOT 长成通用解析器（基准 5）。
 > 与上方表格「effort 档」列同源，两处 MUST NOT 漂移。
 
@@ -47,4 +46,7 @@ codex.light: gpt-5.6-luna
 claude.strong: high
 claude.mid: medium
 claude.light: low
+codex.strong: high
+codex.mid: medium
+codex.light: low
 ```

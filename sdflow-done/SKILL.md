@@ -4,9 +4,8 @@ description: >
   Finalize an OpenSpec change: reconcile tasks → verify (evidence-anchored, anti-false-green) →
   hand-off.md → archive (openspec CLI, with
   delta-spec sync into openspec/specs/) → git commit → merge to the repo's default branch
-  BY DEFAULT (opt out by saying so at invocation). Steps are fixed + each runs in its own
-  subagent, so model choice is per-step (no coupling): verify → the strong tier (gate /
-  judgment), archive → the mid tier (judgment), commit → the light tier (mechanical); tier-to-model defaults are centralized in
+  BY DEFAULT (opt out by saying so at invocation). Steps are fixed; verify and archive use their
+  required agents while commit message stays in the main session. Tier-to-model defaults are centralized in
   model-tiers.md. The archive subagent verifies each delta against
   actual code so the synced spec reflects post-review reality, not a stale delta; merge
   runs by default (ff) in the main session unless opted out (one-way git kept visible).
@@ -18,6 +17,8 @@ description: >
 ---
 
 # sdflow-done — OpenSpec 变更收尾
+
+已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 verify、archive 与收尾失败边界。
 
 <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
@@ -160,7 +161,7 @@ description: >
 
 <!-- sdflow:principles:end -->
 
-将 reconcile → verify → **hand-off** → archive → git commit → merge 串成一条收尾流水线。各步独立子代理、按本步性质选 model（见「模型选择」）：**verify → 强档**（唯一终门），**archive → 中档**（判断），**commit → 弱档**（机械）；**merge** 留主 session（单向 git，缺省执行、调用时可 opt-out）。
+将 reconcile → verify → **hand-off** → archive → git commit → merge 串成一条收尾流水线。verify 使用强档子代理，archive 使用中档子代理。主 session 负责 commit message、提交、hand-off、merge 理由与最终接受。
 
 ---
 
@@ -199,12 +200,39 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 ### 0.4 宿主/档位解析（每轮恰好一次，ADR-9 同源约束）〔host-adaptive-execution · 模型档位按机队分列〕
 
 <!-- sdflow:tier-resolution:start v1 -->
-**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（claude 机队按档位推导的 effort 值，供下方派发子代理时选配 `subagent_type`；codex/unknown 宿主或旧版 resolver 未导出时为空串，空值即回落不带 `subagent_type`，行为与引入前一致，MUST NOT 视为异常）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` 与三 `$SDFLOW_EFFORT_*` MUST 非空；`host=claude` 时三 `$SDFLOW_EFFORT_*` MUST 分别精确 ∈ {low,medium,high,xhigh,max}，`host=codex` 时 MUST 分别精确 ∈ {low,medium,high,xhigh,max,ultra}，任何非空非法值 MUST 在派发前 fail-closed——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（按档位解析的 effort 值；已知宿主必须完整，`unknown` 路径不派发时忽略它们）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
 <!-- sdflow:tier-resolution:end -->
 
 **下方各步「派发 Agent」的 `model:` 参数 MUST 取对应变量值，MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason** 一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
 
 ---
+
+## 本轮 done 派发与收集
+
+先建立 verify、archive 的完整派发任务清单，逐项记录 `run_id`、`task_id`、请求参数、`result_ref` 与状态。
+容量只能改变批次；容量满载 / 容量拒绝时等待和有界重试，MUST NOT 删除任务。`host=claude` 使用
+`subagent_type: sdflow-effort-<档位>`；`host=codex` 使用 `reasoning_effort` 与 `fork_turns: "none"`，MUST NOT 带
+`subagent_type`。已知宿主的 effort 空值在第零步 fail-closed，不能回落为继续派发；Codex MUST NOT 带 `subagent_type`。
+
+verify 是门禁：请求 effort 为 `low` 或 `medium` 时派发前拒绝，报告配置错误并将该档改为 `high` 或更高后重试。
+只有 high+ 请求的 `accepted_request_evidence`、本轮 `completed`、有效且归属本轮的 `result_ref`、最终主审核验
+同时具备才放行；`effective_effort=unknown` 可以放行但显著披露。若省略 `reasoning_effort` 的回退来自被拒请求，
+最初被拒的 high 请求 MUST NOT 作为放行证据；已知实际 low/medium 也不得放行。
+
+verify 通过后，主 session 先校验 `verify-report.md` 的结构与锚，再派 archive。archive 只有 `completed`、本轮
+`result_ref`、archive 对码都有效才成功；旧轮结果、坏 verify 报告或缺锚均 MUST NOT 继续 commit 或 merge。commit message、
+hand-off、merge 理由和最终接受由主 session 完成。
+
+### 故障矩阵
+
+| 状态 / 条件 | 处置 | 恢复 |
+|---|---|---|
+| 解析失败 | 硬停。 | 修复 resolver 或完整 model/effort 三档后重跑。 |
+| 容量满载 / 容量拒绝 | 等待和有界重试。 | 刷新终态后按完整清单分批。 |
+| `failed` / `interrupted` / `cancelled` | 停止当前收尾。 | 保留原错误并重跑对应子任务。 |
+| 坏 verify 报告 | 不派 archive。 | 修复 `verify-report.md` 结构与锚后重跑 verify。 |
+| 旧 archive 结果 | 拒绝本轮成功。 | 核验本轮 `run_id/task_id` 与 archive 对码后重跑。 |
+| low` 或 `medium` 门禁请求 | 派发前拒绝。 | 将 verify effort 改为 high 或更高。 |
 
 ## 第一步：Verify（强档子 agent）
 
@@ -212,7 +240,9 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 >
 > **P3h 禁降档（阶段三去人类门后 verify = 唯一终门）**：铁律"带门禁 / 无人逐条复核的步别用弱档——假绿会放不完整的活过关"。verify 用强档 + 下方 prompt 的 **"Do Not Trust the Report" 冷启**，靠证据锚点硬约束堵假✅，不靠人盯。见 design §7.3.1 / adr/0001。
 
-派发 Agent（model: `$SDFLOW_TIER_STRONG`——第零步 0.4 已 eval 出的强档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖；`$SDFLOW_EFFORT_STRONG` 非空时另附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`，为空则不带——verify 是门禁步，MUST NOT 低于 high），prompt：
+派发 Agent（model: `$SDFLOW_TIER_STRONG`——第零步 0.4 已 eval 出的强档模型 id；`host=claude` 附
+`subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`；`host=codex` 附 `reasoning_effort: "$SDFLOW_EFFORT_STRONG"`
+与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。verify 是门禁步，派发前拒绝 low/medium 请求），prompt：
 
 ```
 你是 OpenSpec 验证助手。工作目录：{项目根目录}。
@@ -321,7 +351,7 @@ verify 子代理是指令驱动——漏写 frontmatter 无法事前阻止，但
 
 ## 第二步：产出 hand-off.md（P3g，verify 之后 / archive 之前）
 
-verify 判定完（它才权威定完整性）后、归档前，产出 `{change_dir}/hand-off.md`——**异步人类再入口 + 下个 change 种子**，随归档一起进 `archive/`。主 session 直接写（它有本 change 的 why 与 defer 上下文）或派中档子代理。
+verify 判定完（它才权威定完整性）后、归档前，产出 `{change_dir}/hand-off.md`——**异步人类再入口 + 下个 change 种子**，随归档一起进 `archive/`。主 session 亲自写 hand-off（它有本 change 的 why 与 defer 上下文）。
 
 **三段内容**：
 
@@ -333,7 +363,7 @@ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_
 
 ### 2.1 issues scan 子步（先于上面「三段内容」撰写，只读查询）
 
-verify 判完之后、写 hand-off 正文之前，只读扫描**本 change 新增**的未闭合 bug/todo——这样上面第 2 段能直接列 ID，而不是引批次号。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了中档子代理，由该子代理顺带执行）。
+verify 判完之后、写 hand-off 正文之前，只读扫描**本 change 新增**的未闭合 bug/todo——这样上面第 2 段能直接列 ID，而不是引批次号。主 session 直接跑（纯机械 bash，无需额外派子代理）。
 
 **脚本路径**：`issues_v2.py` 是 skill `sdflow-issues` 的单一入口（v2 单文件模型：一个 issue 一个文件，砍掉 v1 的 `buglist.py`/`todolist.py` 两个薄入口与共享核心包），随 sdflow-skills `setup.sh` 整目录 symlink 到 `~/.claude/skills/sdflow-issues/`：
 
@@ -399,7 +429,9 @@ python3 ~/.sdflow/hack/token_snapshot.py --step done-final || true
 - 覆盖范围 = Verify（收尾最重步）+ hand-off 累计用量；archive/commit/merge 自身用量不在覆盖内，是已声明的残余盲区（见 `openspec/specs/token-snapshot-anchor/spec.md`），MUST NOT 表述为「收尾用量已全量覆盖」。
 - 已知边界：若本 change 收尾跨 session 重试（如 archive 失败后新会话重跑），该行会被记作新 session 的分组首行、其累计用量全额计入——token 统计可能重复计入，这是 view-only 精度边界，非阻断项。
 
-派发 Agent（model: `$SDFLOW_TIER_MID`——第零步 0.4 已 eval 出的中档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖；`$SDFLOW_EFFORT_MID` 非空时另附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`，为空则不带），prompt：
+派发 Agent（model: `$SDFLOW_TIER_MID`——第零步 0.4 已 eval 出的中档模型 id；`host=claude` 附
+`subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex` 附 `reasoning_effort: "$SDFLOW_EFFORT_MID"`
+与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`），prompt：
 
 ```
 你是 OpenSpec 归档助手。工作目录：{项目根目录}。语言中文。
@@ -460,17 +492,10 @@ MUST 段之后或行内。
 
 ---
 
-## 第四步：Git Commit（弱档子 agent）
+## 第四步：Git Commit（主 session）
 
-> 用弱档：本步纯机械（git add + 从 diff 生成 message），独立子代理无干扰、失败也就重生成 message。verify 用强档、archive 用中档是因它们是门禁/判断步（凭本步性质，非"统一"）。详见「模型选择」。
+主 session 读取本轮 verify/archive 证据、hand-off 与当前 diff 后编写 commit message；不得派 commit 子代理。执行：
 
-派发 Agent（model: `$SDFLOW_TIER_LIGHT`——第零步 0.4 已 eval 出的弱档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖；`$SDFLOW_EFFORT_LIGHT` 非空时另附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_LIGHT`，为空则不带），prompt：
-
-```
-你是 Git 助手。工作目录：{项目根目录}。
-任务：暂存并提交本次 OpenSpec change（{change_name}）收尾相关的文件。
-
-步骤：
 1. git status
 2. git add openspec/   （归档目录 + INDEX + 同步的主 specs 全部 openspec/ 变更）
 3. git add -u          （已追踪实现文件的修改；不暂存无关新增未追踪文件）
@@ -484,7 +509,6 @@ MUST 段之后或行内。
 8. 输出 commit hash + message
 
 禁止 git push。
-```
 
 > 若实现期已逐 commit 提交（tickets 管线逐 ticket checkpoint 提交），本步只提交**归档 + spec 同步 + INDEX** 这批收尾变更。
 
@@ -545,7 +569,7 @@ sdflow-done 完成
 ## 设计原则
 
 - **串行门禁**：每步失败即中止；verify FAIL（核心缺口）不归档。
-- **model 按本步性质（独立子代理无耦合）**：verify=强档（唯一终门），archive=中档（判断），commit=弱档（机械）；merge 留主 session（单向 git、缺省执行）。
+- **model 按本步性质**：verify=强档（唯一终门），archive=中档（判断）。主 session 负责 commit message、提交、hand-off、merge 理由与最终接受。
 - **归档必同步 spec**：用 `openspec archive` CLI；它做 spec 同步 + INDEX + 校验。手动 `mv` 是错的。
 - **中文遗留 spec**：`--skip-specs` + 手动同步（匹配遗留风格、按实况写、修自己引入的 invalid）。
 - **复选框对账要诚实**：勾真实完成的，未完成的留 `[ ]` + 说明。
@@ -561,8 +585,8 @@ sdflow-done 完成
 
 > 档位与缺省见规则根 `model-tiers.md`（按机队分列，经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。**取值 MUST 引用第零步 0.4 同一次 `eval "$(resolve-models.sh)"` 导出的 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`**（已按当前宿主机队解析好的具体模型 id）派子代理，**MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。
 
-**关键前提**：本 skill 步骤**固定**（不是运行时动态路由），且每步**独立子代理**（各自上下文）。所以——
-- **混用 model 无干扰**：弱档-commit 与中档-verify 上下文隔离，互不污染；混用没有耦合代价。
+**关键前提**：本 skill 的子代理步骤固定（不是运行时动态路由），仅 verify 与 archive 各自使用独立上下文。主 session 负责 commit message、提交、hand-off、merge 理由与最终接受。
+- **混用 model 无干扰**：强档-verify 与中档-archive 上下文隔离，互不污染；混用没有耦合代价。
 - **无运行时误分类**：「误分类风险」是**动态路由**的事（高频循环里运行时按难度挑模型才会挑错）；固定步骤在写 skill 时一次定死，不存在该风险。
 
 因此 model 就是**纯粹的「这一步配不配」**，逐步独立判：
@@ -571,19 +595,17 @@ sdflow-done 完成
 |---|---|---|---|---|
 | verify | **唯一终门** + grep 代码判 PASS/FAIL | **强档**（`$SDFLOW_TIER_STRONG`） | `$SDFLOW_EFFORT_STRONG`（MUST NOT 低于 high） | 中档/弱档假 PASS = 放不完整活进归档；门不能省 |
 | archive | spec 同步 + 读代码核 delta | **中档**（`$SDFLOW_TIER_MID`） | `$SDFLOW_EFFORT_MID` | judgment 活 |
-| commit | git add + 从 diff 生成 message | **弱档**（`$SDFLOW_TIER_LIGHT`） | `$SDFLOW_EFFORT_LIGHT` | 纯机械；失败也就重生成 message；独立上下文无副作用 |
+| commit | git add + 从 diff 生成 message | 主 session | 不派发 | 主 session 保留提交说明、hand-off 与 merge 理由。 |
 
-**effort 派发构造（`$SDFLOW_EFFORT_*` 为空即回落现行为，前向兼容——host-adaptive-execution delta）**：
-上表每步对应 `$SDFLOW_EFFORT_<档位>` 非空时，该步 dispatch MUST 附带
-`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`（已就地写入上方各步「派发 Agent」行）；为空
-（codex/unknown 宿主、resolver 未升级、`sdflow-effort-*` agent 定义未铺设）时 MUST NOT 带
-`subagent_type` 字段，派发行为与 effort 维引入前完全相同。**verify 是唯一终门，MUST NOT 以低于
-high 的 effort 执行**——与 model 档位「不降档」铁律同构、同源（`model-tiers.md` 的
-`effort-tier-defaults` 机读块）。
+**effort 派发构造**：verify/archive 仅在第零步已验证三档 effort 后派发。`host=claude` 使用对应
+`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；`host=codex` 使用 `reasoning_effort` 与
+`fork_turns: "none"`，MUST NOT 带 `subagent_type`。仅明确 effort 不支持才按共享契约回退；省略 effort
+后记 `effective_effort=unknown`。**verify 是唯一终门，MUST NOT 以 low/medium 请求执行**，也不得把被拒
+请求或未知实际值写成实际 high。
 
-注 **turn 数 > 单 token 价**：弱档在判断味的步上常多花 2-3× turn、总成本反高 → verify 用强档、archive 用中档不只为质量、也常更省。commit 机械、弱档不会 flail。
+注 **turn 数 > 单 token 价**：弱档在判断味的步上常多花 2-3× turn、总成本反高 → verify 用强档、archive 用中档不只为质量、也常更省。主 session 负责 commit message、提交、hand-off、merge 理由与最终接受。
 
-> 混用在固定步骤里唯一的**软成本**：分类会**过期**——若日后给某步加复杂逻辑（如 commit 加冲突处理），它不再机械、但 model 还写着弱档。低风险，留注释提醒即可。
+> 混用在固定步骤里的软成本：若日后给 verify 或 archive 加复杂逻辑，须重新评估该步骤的 model 档位。主 session 负责 commit message、提交、hand-off、merge 理由与最终接受。
 >
 > 对比 subagent-driven-development 的实现循环（高频、动态、上百任务）：那里「弱档转写实现 + 强档评审」是对的，但它**会**有运行时误分类风险（要靠评审兜底）。**规则随场景变。**
 

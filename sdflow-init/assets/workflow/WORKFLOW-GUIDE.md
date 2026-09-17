@@ -12,6 +12,8 @@
 > **概念入门**：这套体系的原理、设计思想与实战用法见 `~/.sdflow/workflow/sdflow-guide.html`（自包含 HTML，浏览器直接打开；随 workflow bundle 分发，不入消费仓）。
 > **审查清单**：设计审与代码审的领域清单体系（覆盖矩阵、缺口分析、扩展指南）见 `~/.sdflow/workflow/checklists-guide.html`。
 > **规则资产**：规则文件、机械层工具、配置模版、参考文档的完整清单见 `~/.sdflow/workflow/workflow-rules-guide.html`。
+> **派发契约**：已决定派发后的完整任务清单、容量分批、effort 回退和终态结果核验见
+> `~/.sdflow/workflow/subagent-dispatch-contract.md`；容量只改变批次与墙钟时间。
 > **流程本性**：三阶段**尽量连续自动运行**——阶段内部的 `/clear` 由子代理 fresh-context 独立性替代（阶段交界两处仍 SHALL 清，见 §三.2）、
 > 中途 AskUserQuestion 改报告决策登记、每步产物 checkpoint 提交；全流程**只在阶段二设计门停一次人类**。
 
