@@ -293,6 +293,21 @@ cleanup_migrated_skills() {
 #     一趟之后自愈。人手删掉 manifest 亦然。这是可接受的一次性窗口，MUST NOT 声称零窗口。
 AGENTS_MANIFEST=".sdflow-agents"
 
+# Windows 归属判据（copy 模式用）：名字若在【上一趟】写出的 manifest 里 ⇒ 判定为
+# 「这份拷贝是我们自己装的」，允许覆盖/清理；否则一律当第三方文件，绝不碰。
+# 【为什么复用 manifest、不另开一套 marker】skill 的 Windows marker 是「目录里塞一个标记
+# 文件」——skill 装出去的是一整个目录，marker 天然有地方放。agent 是散装 .md，没有目录可
+# 内嵌 marker；manifest 本就是「本安装器上一趟铺了哪些名字」的外部记录，效果等价，没必要
+# 为同一件事再造 N 个散装 marker 文件。
+# 【诚实边界】和 marker 一样，这是外部元数据、不是内容指纹——manifest 被人手删掉，或落点
+# 文件被第三方以同名替换但从未告诉我们，都无法分辨。首趟（尚无 manifest）一律判非自属，
+# 与 skill 侧「未知即不接管」同一取向；一趟之后自愈。
+agent_name_in_manifest() {  # $1=dest $2=name
+  local manifest="$1/$AGENTS_MANIFEST"
+  [ -f "$manifest" ] || return 1
+  grep -qxF "$2" "$manifest" 2>/dev/null
+}
+
 install_agents() {
   local src_dir="$REPO_DIR/sdflow-spec/agents"
   local dest="$HOME/.claude/agents"
@@ -305,18 +320,6 @@ install_agents() {
   #   ∴ 铺设循环按 src_dir 有无条件执行，**清理无条件走到底**。
   #   这也让 design Migration Plan 要求的「先移除 agents 再 revert」有了可执行的落地动作
   #   （删源目录 + 跑一次新版 setup），无需另造 uninstall 开关。
-
-  if [ "$IS_WINDOWS" -eq 1 ]; then
-    # 散装 .md 【没有 marker 落点】——marker 是「目录里放一个标记文件」，对单文件做不出来。
-    # ⇒ Windows 下不铺 agents。/sdflow-spec 在该宿主走主 session 亲查/亲写路径（D3 的降级方向）。
-    # MUST NOT 在这里写「copy + 所有权守卫」——那是做不出来的东西。
-    # （Windows 从不铺软链 ⇒ 也没有悬空链要清，故这里仍是唯一一处合法的整体早退。）
-    # ⚠️ 用 if/fi 而非 `[ … ] && …`：后者在条件为假时整条语句退出码为 1，`set -e` 会当场中止 setup。
-    if [ -d "$src_dir" ]; then
-      skipped+=("agents @ $dest — Windows：散装 .md 无 marker 落点，不铺设；/sdflow-spec 走主 session 亲查/亲写")
-    fi
-    return 0
-  fi
 
   # 源目录整体消失（人手删掉 / 被回滚掉一半）⇒ 不铺设，但**清理照跑**。
   # 当前源集合为空 ⇒ manifest 里记着的全都是废弃项，一并撤下。
@@ -341,6 +344,23 @@ install_agents() {
     [ -f "$f" ] || continue
     name="$(basename "$f")"
     target="$dest/$name"
+
+    if [ "$IS_WINDOWS" -eq 1 ]; then
+      # Windows：copy + manifest 归属（散装 .md 没有 marker 落点，改用 manifest——见上方
+      # agent_name_in_manifest 的说明）。已存在同名文件、且不在上一趟 manifest 里 ⇒ 判定
+      # 为非本仓拷贝，不接管——与下面 Unix 分支「真实文件不覆盖」同一取向。
+      if [ -e "$target" ] && ! agent_name_in_manifest "$dest" "$name"; then
+        skipped+=("agents/$name @ $dest — 已存在同名文件，非本仓拷贝，未接管")
+        continue
+      fi
+      if ! cp -f "$f" "$target" 2>/dev/null; then
+        skipped+=("agents/$name @ $dest — 拷贝失败（落点只读？磁盘满？），未铺设")
+        continue
+      fi
+      installed+=("agents/$name @ $dest")
+      laid+=("$name")
+      continue
+    fi
 
     # -e 对悬空软链为 false，故必须 `-e || -L` 才能覆盖「存在」的全部形态
     if [ -e "$target" ] || [ -L "$target" ]; then
@@ -405,8 +425,9 @@ cleanup_agent_orphans() {
   # ── (0) manifest 驱动：本安装器上一趟铺过、而**当前源集合里已没有**的名字 ⇒ 撤下 ──
   #   这一格专治「链仍有效」的废弃定义（旧 checkout 的 .md 还在），下面那一格只管悬空链。
   #   三道守卫缺一不可：① 名字必须是**裸文件名**（manifest 被写坏时不许变成任意路径删除）；
-  #   ② 落点必须是**软链**（真实文件 = 别人后来放的，不碰）；③ 链指向必须是本仓布局
-  #   （与接管判据同一条路径形状）。
+  #   ② 落点必须是**本安装器铺出去的形态**（Unix=软链指向本仓布局；Windows=普通文件，
+  #   靠 manifest 本身作归属证据，见 agent_name_in_manifest 的说明）——真实/第三方内容不碰；
+  #   ③（Unix）链指向必须是本仓布局（与接管判据同一条路径形状）。
   local manifest="$dest/$AGENTS_MANIFEST" mname mtarget mlink
   if [ -f "$manifest" ]; then
     while IFS= read -r mname; do
@@ -414,12 +435,16 @@ cleanup_agent_orphans() {
       case "$mname" in */*|.|..) continue ;; esac
       if [ -n "$src_dir" ] && [ -f "$src_dir/$mname" ]; then continue; fi   # 当前源里还有 ⇒ 不是废弃项
       mtarget="$dest/$mname"
-      [ -L "$mtarget" ] || continue
-      mlink="$(readlink "$mtarget" 2>/dev/null || true)"
-      case "$mlink" in
-        */sdflow-spec/agents/"$mname") : ;;
-        *) continue ;;
-      esac
+      if [ "$IS_WINDOWS" -eq 1 ]; then
+        [ -f "$mtarget" ] && [ ! -L "$mtarget" ] || continue   # 普通文件才是我们拷贝出去的
+      else
+        [ -L "$mtarget" ] || continue
+        mlink="$(readlink "$mtarget" 2>/dev/null || true)"
+        case "$mlink" in
+          */sdflow-spec/agents/"$mname") : ;;
+          *) continue ;;
+        esac
+      fi
       if ! rm -f "$mtarget" 2>/dev/null; then
         skipped+=("agents/$mname @ $dest — 废弃定义撤不掉（落点只读？权限？），未清理")
         continue
@@ -442,6 +467,11 @@ cleanup_agent_orphans() {
   #   即使那个名字从不属于本仓。判为可接受：① 该路径形状是本仓专有布局；② 只删悬空链——
   #   目标已不存在，零数据丢失，与 CLAUDE.md「绝不覆盖非本仓库拥有的同名目录」守的「真实内容」
   #   不是同一物（真实文件与**有效**外来软链一律不碰，见上面的接管守卫与 cleaned 用例）。
+  #
+  # Windows 没有"悬空软链"这个形态——copy 出来的都是普通文件，上面 manifest 驱动的那格
+  # 已覆盖"源已删 + 曾属于我们"的全部废弃情形，这里到此为止。
+  [ "$IS_WINDOWS" -eq 1 ] && return 0
+
   local entry link2
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue

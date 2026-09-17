@@ -179,7 +179,7 @@ Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一�
   第一遍: subagent-dev 终审 + 注入点B        第二遍: 本 skill（事后 sdflow-code-review）
   ────────────────────────────────────────────────────────────────
   时机   生成循环内                          全部实现完成后
-  机制   命中即派 fix 子代理修 + re-review 闭环  出报告 → 编排器修 → 存在复审循环，硬上限 1 轮（只审修复 diff）
+  机制   命中即派 fix 子代理修 + re-review 闭环  出报告 → 编排器修 → 存在复审循环，硬上限 2 轮（只审修复 diff）
   独立性 reviewer 冷,controller 热(在循环内)   完全冷独立(脱 controller)
   职责   即时修复确认(shift-left,便宜早修)    独立兜底网(实测能抓真问题)
 ```
@@ -279,7 +279,7 @@ Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一�
   证据 file:line 或 task 条目 + 严重度；CHANGED 由表行承载注明差异、不单独出 finding）→ 进 Step3 合并
   池按普通 finding 走裁决/置信/自动修/defer（informational shift-left，不设门、不 AskUserQuestion）。
   **与 verify 关系钉死**：本审计 MUST NOT 勾改 tasks.md 复选框、MUST NOT 替代 sdflow-done verify 终审
-  （verify 为最终权威）；Step4 自动修后的「复审一轮」SHALL 把 scope-drift 维度纳入复审范围（修复 diff
+  （verify 为最终权威）；Step4 自动修后的「复审各轮」SHALL 把 scope-drift 维度纳入复审范围（修复 diff
   自身的越界改动可见，报告锚定的 `reviewed_sha` 才名副其实）。
 - **降级**：能力探针判 `subagents="unavailable"` ⇒ 主 session 亲做同一审计协议，报告**显著标注**
   「⚠️ scope 审计降级（主 session 亲做，存在自查偏置）」。
@@ -433,18 +433,24 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
   stderr 摘要）与「待人工补录」，交 hand-off 显式提示；**MUST NOT** 静默吞掉失败后仍在台账写一个
   假 id 或裸散文占位。
 - **绝不 AskUserQuestion**（阶段三无人类门）。
-- **自动修复后的复审边界（硬上限 1 轮）**〔curb-rework-loop-cost · adr/0035〕：Step4 的自动修复**改的
-  正是被审的源码盘面**，而报告 `reviewed_sha` 锚的是修复后的盘面——那份修复本身未经任何镜审查，
-  须由一轮受限复审闭合该缺口：
-  - **有自动修复 ⇒ MUST 复审一轮**，范围**限定为本轮修复 diff**（Step5 第 3 步「仅源码」checkpoint
+- **自动修复后的复审边界（硬上限 2 轮，adr/0035 原定 1 轮，2026-09-17 按实测反馈上调——
+  1 轮下经常有非常简单的 bug/todo 因复审上限已达而被迫 defer，属于该 ADR 自己预留的
+  「按通则④不为它们反复调参，落地后如误伤再调」的调参场景，不是推翻决策）**〔curb-rework-loop-cost · adr/0035〕：
+  Step4 的自动修复**改的正是被审的源码盘面**，而报告 `reviewed_sha` 锚的是修复后的盘面——那份
+  修复本身未经任何镜审查，须由受限复审闭合该缺口：
+  - **有自动修复 ⇒ MUST 复审第 1 轮**，范围**限定为本轮修复 diff**（Step5 第 3 步「仅源码」checkpoint
     提交本身），**MUST NOT 重新打包整个分支 diff 重审**。
-  - **硬上限 = 1 轮**：该轮复审若仍报出 Critical/Important，**MUST NOT 自发进入第三轮**——全部
-    defer 进 buglist，并在 `code-review-report.md` 显式标注「复审上限已达，N 项残差已 defer」。
+  - **第 1 轮复审若仍报出 Critical/Important ⇒ 派第 2 轮修复**（同样只改本轮复审揭出的问题，标
+    `[impl-review-fix]`）+ **第 2 轮复审**，范围同样限定为第 2 轮修复 diff、MUST NOT 重新打包整
+    个分支 diff 重审。
+  - **任一轮复审干净（无 Critical/Important）⇒ 提前结束**，不为跑满轮数而跑。
+  - **硬上限 = 2 轮**：第 2 轮复审若仍报出 Critical/Important，**MUST NOT 自发进入第 3 轮**——全部
+    defer 进 buglist，并在 `code-review-report.md` 显式标注「复审上限已达（2 轮），N 项残差已 defer」。
     残差兜底责任在 `sdflow-done` 的 verify（位于所有修复之后）与 issues 池的异步再入口，**MUST NOT**
     靠延长本循环来兜。
   - **无自动修复时不触发本复审**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，本就自洽）。
   - **两侧表述统一**：本 skill 与 `sdflow-implement` 关于「code-review 是否存在 fix 循环」的描述
-    SHALL 一致，统一为「**存在复审循环，硬上限 1 轮**」——**MUST NOT** 出现「无 re-review 闭环」
+    SHALL 一致，统一为「**存在复审循环，硬上限 2 轮**」——**MUST NOT** 出现「无 re-review 闭环」
     类相反表述（见上「与注入点 B 的关系」对比表）。
   - **诚实边界**：本条是**指令层约束**，由编排器自报遵守；`ship_gate` 不为复审轮数新增机械门，
     **MUST NOT** 将其表述为机械保证。
@@ -477,11 +483,16 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
    自锁。
    `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审自动修复"`。
    **无自动修复时跳过本步**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，同样自洽）。
-4. **复审一轮（硬上限 1，仅当上一步产生了修复提交时触发）**〔curb-rework-loop-cost · adr/0035〕：
-   派一轮复审，输入 diff 范围**限定为上一步 checkpoint 提交本身**（本轮修复 diff），MUST NOT 重新
-   打包整个分支 diff 重审。仍报出 Critical/Important → MUST NOT 自发进入第三轮，全部 defer 进
-   buglist，第 5 步写报告时显式标注「复审上限已达，N 项残差已 defer」。**上一步因无自动修复而
-   跳过时，本步同样跳过**（详见 Step4「自动修复后的复审边界」）。
+4. **复审（硬上限 2 轮，仅当上一步产生了修复提交时触发）**〔curb-rework-loop-cost · adr/0035〕：
+   派复审，输入 diff 范围**限定为上一步 checkpoint 提交本身**（本轮修复 diff），MUST NOT 重新
+   打包整个分支 diff 重审。
+   - 复审干净（无 Critical/Important）⇒ 结束，进入第 5 步。
+   - 复审仍报出 Critical/Important 且这是**第 1 轮**复审 ⇒ 回到第 2 步修复该轮复审揭出的问题
+     （标 `[impl-review-fix]`），重复第 3 步（checkpoint，仅源码）与本步（复审，范围限定为这一
+     轮的修复 diff）。
+   - 复审仍报出 Critical/Important 且这已是**第 2 轮**复审 ⇒ **MUST NOT 自发进入第 3 轮**，全部
+     defer 进 buglist，第 5 步写报告时显式标注「复审上限已达（2 轮），N 项残差已 defer」。
+   **上一步因无自动修复而跳过时，本步同样跳过**（详见 Step4「自动修复后的复审边界」）。
 5. **写报告初稿（无锚）** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings（已采纳） + 已裁掉区
    + 裁决 + 修复/defer 台账〔机读表，含专用 id 列，见 Step4〕）——先只写正文，**不写 frontmatter**。
    **本步只产出报告正文，不产出度量锚/引用核锚/自检——那是下一步的独立职责，MUST NOT 在

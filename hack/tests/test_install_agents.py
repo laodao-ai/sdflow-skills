@@ -12,8 +12,9 @@
 
 【本文件照不到的面（诚实边界）】
 - **Windows 分支**：`IS_WINDOWS` 由 `uname -s` 决定，无环境变量覆盖入口 ⇒ 本机（Darwin）
-  测不到。它只有一条 `skipped+=` + `return 0`；如实登记为无机械覆盖，MUST NOT 假装测过。
-  （为了测它去给生产代码开一个覆盖开关 = 为测试放宽生产逻辑，不做。）
+  测不到。该分支现为 copy + manifest 归属判据（`agent_name_in_manifest`，与 Unix 侧软链
+  `readlink` 判据地位相同、只是复用 manifest 作外部归属记录）；如实登记为无机械覆盖，
+  MUST NOT 假装测过。（为了测它去给生产代码开一个覆盖开关 = 为测试放宽生产逻辑，不做。）
 - **真实 `~/.claude/agents/` 里的实际内容**：本文件只断言「没被本次测试动过」，
   不断言它此刻是什么（那取决于人上次在哪个 checkout 跑的 setup）。
 """
@@ -27,7 +28,8 @@ from test_support.windows import bash_executable, bash_path
 
 if os.name == "nt":
     pytest.skip(
-        "global agent installation intentionally does not create symlinks on Windows",
+        "this module's assertions target the Unix symlink path; on Windows"
+        " global agent installation copies files instead (see module docstring)",
         allow_module_level=True,
     )
 
