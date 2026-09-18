@@ -19,6 +19,7 @@ esac
 
 # Counters (entries formatted "skill @ dest")
 installed=()
+unchanged=()
 skipped=()
 cleaned=()
 
@@ -36,6 +37,101 @@ is_our_marker_copy() {  # $1 = 目录路径
     case "$OUR_LEGACY_NAMES$MIGRATED_SKILL_NAMES" in *" $name "*) return 0 ;; esac
   fi
   return 1
+}
+
+windows_skill_unchanged() {  # $1=source skill name $2=installed target
+  local source_name="$1" target="$2" installed_sha current_sha
+  [ -f "$target/.sdflow-skills" ] || return 1
+  IFS= read -r installed_sha < "$target/.sdflow-skills" || return 1
+  installed_sha="${installed_sha%$'\r'}"
+  case "$installed_sha" in ''|*[!0-9a-fA-F]*) return 1 ;; esac
+  git -C "$REPO_DIR" cat-file -e "${installed_sha}^{commit}" 2>/dev/null || return 1
+  git -C "$REPO_DIR" diff --quiet "$installed_sha" HEAD -- "$source_name" || return 1
+  # `status --porcelain` also catches staged and untracked changes, which a
+  # HEAD-to-HEAD diff would miss. A dirty source subtree must always refresh.
+  local dirty
+  dirty="$(git -C "$REPO_DIR" status --porcelain --untracked-files=all -- "$source_name" 2>/dev/null)" || return 1
+  [ -z "$dirty" ]
+}
+
+recover_windows_skill_backup() {  # $1=target $2=skill name
+  local target="$1" name="$2" transaction owner
+  for transaction in "${target%/*}/.sdflow-skills-${name}."*; do
+    [ -d "$transaction" ] && [ ! -L "$transaction" ] || continue
+    [ -f "$transaction/owner" ] && [ ! -L "$transaction/owner" ] || continue
+    IFS= read -r owner < "$transaction/owner" || continue
+    [ "$owner" = "$name" ] || continue
+    if [ -d "$transaction/backup" ]; then
+      [ ! -L "$transaction/backup" ] || continue
+      # The transaction name alone never authorizes recovery or deletion.
+      if [ ! -f "$transaction/backup/.sdflow-skills" ]; then
+        [ -f "$transaction/backup/.laodao-skills" ] || continue
+        case "$OUR_LEGACY_NAMES$MIGRATED_SKILL_NAMES" in *" $name "*) ;; *) continue ;; esac
+      fi
+      if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+        mv -T "$transaction/backup" "$target" 2>/dev/null || return 1
+      else
+        # Another run may still be using this transaction. Leave it alone.
+        continue
+      fi
+    else
+      continue
+    fi
+    rm -rf -- "$transaction" 2>/dev/null || return 1
+  done
+}
+
+install_windows_skill() {  # $1=source directory $2=target $3=skill name
+  local source="$1" target="$2" name="$3" transaction sha dirty
+  if [ -L "$target" ] || { [ -e "$target" ] && { [ ! -d "$target" ] || ! is_our_marker_copy "$target"; }; }; then
+    skipped+=("$name @ ${target%/*} — 非自有目录或链接，未覆盖")
+    return 0
+  fi
+  if ! recover_windows_skill_backup "$target" "$name"; then
+    skipped+=("$name @ ${target%/*} — backup 恢复失败")
+    return 0
+  fi
+  sha="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
+  if windows_skill_unchanged "$name" "$target"; then
+    if printf '%s\n' "$sha" > "$target/.sdflow-skills"; then
+      unchanged+=("$name @ ${target%/*} — 内容未变化")
+    else
+      skipped+=("$name @ ${target%/*} — marker 刷新失败")
+    fi
+    return 0
+  fi
+  # A dirty copy cannot later masquerade as HEAD after the source is reverted.
+  dirty="$(git -C "$REPO_DIR" status --porcelain --untracked-files=all -- "$name" 2>/dev/null)" || dirty=unknown
+  [ -z "$dirty" ] || sha=unknown
+  transaction="$(mktemp -d "${target%/*}/.sdflow-skills-${name}.XXXXXX")" || {
+    skipped+=("$name @ ${target%/*} — staging 创建失败"); return 0;
+  }
+  if ! printf '%s\n' "$name" > "$transaction/owner" ||
+     ! mkdir "$transaction/stage" ||
+     ! cp -R "$source/." "$transaction/stage" ||
+     ! printf '%s\n' "$sha" > "$transaction/stage/.sdflow-skills"; then
+    rm -rf -- "$transaction" || true
+    skipped+=("$name @ ${target%/*} — staging 失败，旧安装保留")
+    return 0
+  fi
+  if [ -d "$target" ] && ! mv -T "$target" "$transaction/backup"; then
+    rm -rf -- "$transaction" || true
+    skipped+=("$name @ ${target%/*} — backup 失败，旧安装保留")
+    return 0
+  fi
+  if ! mv -T "$transaction/stage" "$target"; then
+    if [ -d "$transaction/backup" ]; then
+      if ! mv -T "$transaction/backup" "$target"; then
+        skipped+=("$name @ ${target%/*} — swap/rollback 失败，backup 保留于 $transaction")
+        return 0
+      fi
+    fi
+    rm -rf -- "$transaction" || true
+    skipped+=("$name @ ${target%/*} — swap 失败，旧安装已恢复")
+    return 0
+  fi
+  rm -rf -- "$transaction" || true
+  installed+=("$name @ ${target%/*}")
 }
 
 # 自属判据的**第二条腿：内容指纹**（路径名判据是第一条腿，见各 case 分支）。
@@ -105,23 +201,7 @@ install_into() {
     target="$dest/$skill_name"
 
     if [ "$IS_WINDOWS" -eq 1 ]; then
-      # Windows: copy + marker file
-      if [ -d "$target" ] && [ ! -L "$target" ] && ! is_our_marker_copy "$target"; then
-        skipped+=("$skill_name @ $dest")
-        continue
-      fi
-      if [ -d "$target" ] && is_our_marker_copy "$target"; then
-        if ! rm -rf "$target" 2>/dev/null; then
-          skipped+=("$skill_name @ $dest — 旧拷贝删不掉（只读？占用？），未更新")
-          continue
-        fi
-      fi
-      if ! cp -r "$skill_dir" "$target" 2>/dev/null; then
-        skipped+=("$skill_name @ $dest — 拷贝失败（落点只读？磁盘满？），未铺设")
-        continue
-      fi
-      git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null > "$target/.sdflow-skills" || echo "unknown" > "$target/.sdflow-skills"
-      installed+=("$skill_name @ $dest")
+      install_windows_skill "$skill_dir" "$target" "$skill_name"
     else
       # Unix: absolute symlink. Only ever replace symlinks or our own marker
       # copies — never clobber a real directory we don't own (e.g. another
@@ -633,111 +713,7 @@ for _cand in python3 python; do
   fi
 done
 
-# ─── 运行依赖预检（shared-yaml-subset-parser · R1/R2）────────────────────
-# 统一检测并报告全部运行依赖：python3 >= 3.7 / git / yq(mikefarah) / openspec（可选）/
-# pytest（开发可选）。**不中止 setup.sh**——降级汇报，与全文既定的 skipped[] 范式一致
-# （同「set -e 面治」节的取向：检测本身不是安装的必要步，缺失只影响下游脚本能不能跑）。
-#
-# yq 最低版本 4.16.0 = `--front-matter` 选项的支持下限 [spec-review-amendment F5]——
-# 低于此版本即便是 mikefarah/yq 也用不了本 change 引入的 frontmatter 读写路径。
-_YQ_MIN_VERSION="4.16.0"
-
-# 版本号大小比较（"X.Y.Z" 形式，缺位按 0 补）。不用 `sort -V`——那是把判定外包给
-# coreutils 的另一种手搓，两行整数比较就能穷举 semver 三段，犯不上多一个工具依赖。
-_version_ge() {
-  local IFS=.
-  local -a v1=($1) v2=($2)
-  local i a b
-  for i in 0 1 2; do
-    a="${v1[i]:-0}"; b="${v2[i]:-0}"
-    case "$a" in ''|*[!0-9]*) a=0 ;; esac
-    case "$b" in ''|*[!0-9]*) b=0 ;; esac
-    if [ "$a" -gt "$b" ]; then return 0; fi
-    if [ "$a" -lt "$b" ]; then return 1; fi
-  done
-  return 0
-}
-
-check_dependencies() {
-  echo ""
-  echo "运行依赖预检："
-  local missing=()
-
-  # python3 >= 3.7 —— 复用上面 [T48] 已选出的 $_py，这里只统一【报告】，不重新检测。
-  # （_py 的候选选择必须留在此处**之前**：install_sdflow 与 retire-hooks 都消费它，
-  #  两者都跑在 check_dependencies 调用点之前，把选择本身挪到这里会让它们拿不到 $_py。）
-  if [ -n "$_py" ]; then
-    echo "  ✓ python3 ($("$_py" --version 2>&1))"
-  else
-    echo "  ✗ python3 >= 3.7 — 未找到"
-    missing+=("python3>=3.7")
-  fi
-
-  # git
-  if command -v git >/dev/null 2>&1; then
-    echo "  ✓ git ($(git --version 2>&1))"
-  else
-    echo "  ✗ git — 未找到"
-    missing+=("git")
-  fi
-
-  # yq（mikefarah/yq，>= 4.16.0）
-  if command -v yq >/dev/null 2>&1; then
-    local yqv yqnum
-    yqv="$(yq --version 2>&1)" || true
-    if printf '%s' "$yqv" | grep -q "mikefarah"; then
-      yqnum="$(printf '%s' "$yqv" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-      if [ -n "$yqnum" ] && _version_ge "$yqnum" "$_YQ_MIN_VERSION"; then
-        echo "  ✓ yq ($yqv)"
-      else
-        echo "  ⚠ yq 版本过低（${yqv}，需 >= ${_YQ_MIN_VERSION} —— --front-matter 支持下限）"
-        echo "    升级：macOS brew upgrade yq | Windows winget upgrade --id MikeFarah.yq | Linux snap refresh yq"
-        missing+=("yq>=$_YQ_MIN_VERSION")
-      fi
-    else
-      echo "  ⚠ yq 已安装但不是 mikefarah/yq（可能是 kislyuk/yq，jq 语法不兼容）——请卸载后安装正确版本"
-      missing+=("yq(mikefarah)")
-    fi
-  else
-    echo "  ✗ yq — 未找到"
-    missing+=("yq")
-  fi
-
-  # openspec（部分 skill 需要，setup.sh 本身不强依赖）
-  if command -v openspec >/dev/null 2>&1; then
-    echo "  ✓ openspec ($(openspec --version 2>&1))"
-  else
-    echo "  · openspec — 未找到（部分 skill 需要：npm i -g @fission-ai/openspec）"
-  fi
-
-  # pytest（开发可选，跑测试才需要）
-  if [ -n "$_py" ] && "$_py" -m pytest --version >/dev/null 2>&1; then
-    echo "  ✓ pytest ($("$_py" -m pytest --version 2>&1))"
-  else
-    echo "  · pytest — 未找到（跑测试需要：pip install pytest）"
-  fi
-
-  if [ ${#missing[@]} -gt 0 ]; then
-    echo ""
-    echo "  缺少/不满足必要依赖：${missing[*]}"
-    for m in "${missing[@]}"; do
-      case "$m" in
-        python3*)
-          echo "  python3 安装：https://python.org 或系统包管理器（apt/brew/winget 等）"
-          ;;
-        git)
-          echo "  git 安装：https://git-scm.com 或系统包管理器（apt/brew/winget 等）"
-          ;;
-        yq*)
-          echo "  yq 安装／升级："
-          echo "    macOS:   brew install yq          （升级：brew upgrade yq）"
-          echo "    Windows: winget install --id MikeFarah.yq   （升级：winget upgrade --id MikeFarah.yq）"
-          echo "    Linux:   snap install yq          （升级：snap refresh yq）"
-          ;;
-      esac
-    done
-  fi
-}
+source "$REPO_DIR/hack/setup-dependencies.sh"
 
 # 安装会改全局 skills、agents 与 canonical；两份派发契约先在源树 fail-closed 校验，
 # 任何一份漂移都不得留下半次安装。
@@ -755,7 +731,7 @@ for d in "${TARGET_DIRS[@]}"; do
 done
 install_agents
 install_sdflow
-check_dependencies
+check_dependencies "$_py"
 
 # ─── retire deregistered global hooks (T44) ─────────────────────
 # 死 hook（change-review-stub.py）每次 Bash 调用都 fire 报错，直到被反注册。把自愈焊进
@@ -779,6 +755,12 @@ echo ""
 if [ ${#installed[@]} -gt 0 ]; then
   echo "  installed (${#installed[@]}):"
   for s in "${installed[@]}"; do echo "    ✓ $s"; done
+fi
+
+if [ ${#unchanged[@]} -gt 0 ]; then
+  echo ""
+  echo "  unchanged (${#unchanged[@]}):"
+  for s in "${unchanged[@]}"; do echo "    = $s"; done
 fi
 
 if [ ${#skipped[@]} -gt 0 ]; then

@@ -844,17 +844,6 @@ def lint_config(root):
             reasons.append(
                 "effort-tiers: 顶层块类型非法"
                 "（须为 claude/codex 嵌套 mapping，不能为 null、标量或列表）")
-        elif _yq('.["effort-tiers"] | style', cfg_path, default="") == "flow":
-            reasons.append(
-                "effort-tiers: 不支持 YAML flow mapping"
-                "（resolver 只消费缩进式 claude/codex 嵌套块）")
-        elif any(
-            _yq(f'.["effort-tiers"].{fleet} | style', cfg_path, default="") == "flow"
-            for fleet in EFFORT_FLEET_KEYS
-        ):
-            reasons.append(
-                "effort-tiers: 不支持 YAML flow mapping"
-                "（resolver 只消费缩进式 claude/codex 嵌套块）")
         else:
             entries, bad, bad_headers = _effort_tiers_from_dict(raw_effort_tiers)
             if bad:

@@ -80,52 +80,48 @@ CASES = [
         },
     },
     {
-        "name": "flow_mapping_rejected",
+        "name": "flow_mapping_consumed",
         "yaml_block": "effort-tiers: {codex: {strong: ultra}}\n",
-        "lint_clean": False,
+        "lint_clean": True,
         "efforts": {
             "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "codex": ("ultra", "medium", "low"),
         },
-        "resolver_warns": True,
     },
     {
-        "name": "nested_flow_fleet_mapping_rejected",
+        "name": "nested_flow_fleet_mapping_consumed",
         "yaml_block": "effort-tiers:\n  codex: {strong: ultra}\n",
-        "lint_clean": False,
+        "lint_clean": True,
         "efforts": {
             "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "codex": ("ultra", "medium", "low"),
         },
-        "resolver_warns": True,
     },
     {
-        "name": "malformed_codex_header_invalidates_prior_overrides",
+        "name": "duplicate_codex_mapping_uses_yq_last_value",
         "yaml_block": """effort-tiers:
   codex:
     strong: xhigh
   codex: {strong: ultra}
 """,
-        "lint_clean": False,
+        "lint_clean": True,
         "efforts": {
             "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "codex": ("ultra", "medium", "low"),
         },
-        "resolver_warns": True,
     },
     {
-        "name": "malformed_claude_header_invalidates_prior_overrides",
+        "name": "duplicate_claude_mapping_uses_yq_last_value",
         "yaml_block": """effort-tiers:
   claude:
     strong: xhigh
   claude: {strong: max}
 """,
-        "lint_clean": False,
+        "lint_clean": True,
         "efforts": {
-            "claude": ("high", "medium", "low"),
+            "claude": ("max", "medium", "low"),
             "codex": ("high", "medium", "low"),
         },
-        "resolver_warns": True,
     },
     {
         "name": "scalar_top_level_rejected",

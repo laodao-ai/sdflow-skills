@@ -1,19 +1,9 @@
-"""`setup.sh check_dependencies()` 的依赖预检契约（shared-yaml-subset-parser · Task 1 · R1/R2）。
+"""依赖预检分层覆盖：6 个真实函数测试 + 1 个隔离 HOME 的完整安装测试。
 
-统一检测并报告全部运行依赖：python3 >= 3.7 / git / yq(mikefarah, >= 4.16.0) / openspec（可选）/
-pytest（开发可选）。调用点在 `install_sdflow` 之后、门禁检查之前；不中止 setup.sh
-——降级汇报，与既有 `skipped[]` 范式一致（同 `install_agents` 的既定取向）。
-
-【怎么跑】沿用 `test_install_agents.py` 的既定模式：`tmp_path` 当假 `HOME` 真跑 `bash setup.sh`。
-yq 分支（mikefarah / kislyuk / 版本过低 / 未安装）通过在 `PATH` 前置一个假 `yq` 可执行脚本来
-确定性复现——同 `test_sdflow_spec_agents.py::_scan_with_broken_grep` 注入假 `grep` 的手法。
-
-【本文件照不到的面（诚实边界）】
-- 不断言 openspec / pytest 分支的 ✓/· 具体取值——那取决于本机是否装了这两样，
-  本文件只断言「有且仅有一行状态」，不锁死本机环境的偶然状态。
-- 不测试 `_py`（python3 候选选择本身，[T48]）——那段功能性逻辑早于 `install_sdflow` 运行，
-  是脚本自身的执行前提（`install_sdflow` 消费 `$_py`），不能挪到 `check_dependencies()` 之后；
-  本文件只守「报告不重复」，不守选择算法本身。
+快速层仅替代 git/openspec/Python 的版本探针，yq 用 PATH 注入不同实现；
+预检判定、版本比较与安装指引均运行生产代码。完整安装层检查调用接线、
+报告唯一性和缺失 yq 的非致命语义。另有一个 PATH 多提供者隔离回归。
+Python 候选选择仍由 setup.sh 负责，不属于快速层的覆盖范围。
 """
 import os
 import re
@@ -27,17 +17,17 @@ from test_support.windows import bash_executable, bash_path
 
 REPO = Path(__file__).resolve().parents[2]
 SETUP = REPO / "setup.sh"
+DEPENDENCIES = REPO / "hack" / "setup-dependencies.sh"
 
 
 def _path_without_yq():
     """把真实 PATH 中含可解析 `yq` 的目录剔除——让"未安装"分支在任何机器上都确定性复现。"""
-    real_yq = shutil.which("yq")
     raw = os.environ.get("PATH", "")
-    if not real_yq:
-        return raw
-    yq_dir = os.path.normcase(os.path.normpath(os.path.dirname(real_yq)))
+    # A user shell may expose both a shim and the actual installation. Remove
+    # every provider, including extensionless Git Bash shims on Windows.
     parts = [p for p in raw.split(os.pathsep)
-             if os.path.normcase(os.path.normpath(p)) != yq_dir]
+             if not shutil.which("yq", path=p)
+             and not (Path(p) / "yq").is_file()]
     return os.pathsep.join(parts)
 
 
@@ -50,6 +40,17 @@ def _fake_yq(bin_dir, version_line):
     return fake
 
 
+def test_missing_yq_path_removes_every_provider(tmp_path, monkeypatch):
+    providers = [tmp_path / "shim", tmp_path / "installation"]
+    for provider in providers:
+        _fake_yq(provider, "fixture yq")
+    clean = tmp_path / "clean"
+    clean.mkdir()
+    monkeypatch.setenv("PATH", os.pathsep.join(map(str, [*providers, clean])))
+    filtered = _path_without_yq()
+    assert filtered == str(clean)
+
+
 def _deps_section(stdout):
     """截出 `check_dependencies()` 的输出块（"运行依赖预检：" 到下一个 "退役 hook 清理" 之间）。
 
@@ -60,14 +61,18 @@ def _deps_section(stdout):
     段，故用后者的标题行做右边界，是稳定可依赖的锚点。
     """
     start = stdout.index("运行依赖预检：")
-    end = stdout.index("退役 hook 清理", start)
+    end = stdout.find("退役 hook 清理", start)
+    if end < 0:
+        end = len(stdout)
     return stdout[start:end]
 
 
-def _run_setup(home, path=None):
+def _run_full_setup(home, path=None):
     """用假 HOME（+ 可选自定义 PATH）真跑一次 setup.sh。"""
     env = dict(os.environ)
     env["HOME"] = str(home)
+    env["USERPROFILE"] = str(home)
+    env["CLAUDE_CONFIG_DIR"] = str(home / ".claude")
     env.pop("SDFLOW_HOME", None)  # 否则 install_sdflow 会写到真实 ~/.sdflow
     if path is not None:
         env["PATH"] = path
@@ -75,6 +80,34 @@ def _run_setup(home, path=None):
         [bash_executable(), bash_path(SETUP)], cwd=str(REPO), env=env,
         capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace",
     )
+
+
+def _run_dependencies(home, path=None):
+    """只运行生产预检函数；替代慢的版本探针，不替代预检判定。"""
+    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home))
+    if path is not None:
+        env["PATH"] = path
+    command = '''
+set -e
+source "$1"
+git() { printf 'git version 2.45.0\n'; }
+openspec() { printf '1.7.0\n'; }
+dependency_test_python() {
+  case "$*" in
+    --version) printf 'Python 3.12.0\n' ;;
+    '-m pytest --version') printf 'pytest 8.0.0\n' ;;
+    *) return 99 ;;
+  esac
+}
+check_dependencies dependency_test_python
+'''
+    result = subprocess.run(
+        [bash_executable(), "-c", command, "dependency-test", bash_path(DEPENDENCIES)],
+        cwd=str(home), env=env, capture_output=True, text=True,
+        timeout=30, encoding="utf-8", errors="replace",
+    )
+    assert not list(home.iterdir()), "预检不应创建安装目录"
+    return result
 
 
 @pytest.fixture
@@ -86,14 +119,14 @@ def fake_home(tmp_path):
 
 def test_reports_a_status_line_for_each_of_the_five_dependencies(fake_home):
     """① python3 / git / yq / openspec / pytest 各恰好一行状态（✓/✗/·），且不中止 setup。"""
-    r = _run_setup(fake_home)
+    r = _run_dependencies(fake_home)
     assert r.returncode == 0, r.stdout + r.stderr
 
     deps = _deps_section(r.stdout)
-    # python3 与 git 是本仓测试自身运行的前提，本机必然存在 ⇒ 可断言为 ✓。
+    # 快速层控制 python3/git 版本探针，真实报告逻辑应给出成功状态。
     assert re.search(r"✓ python3", deps), deps
     assert re.search(r"✓ git", deps), deps
-    # yq / openspec / pytest 的具体取值取决于本机环境，只断言「行存在且恰好一行」——
+    # yq 取值随 PATH 场景变化；三者都应有且仅有一行状态。
     # 用行首锚定（`^  [✓✗·] <label>\b`），避免匹配到别的行里偶然带出的同名子串。
     for label in ("yq", "openspec", "pytest"):
         matches = re.findall(rf"^  [✓✗·] {label}\b.*$", deps, re.MULTILINE)
@@ -106,7 +139,7 @@ def test_python3_status_line_is_not_duplicated(fake_home):
     回归的是「既有 `_py` 检测/报告散落多处」的失效模式：若某处又单独 echo 了一条
     `✓ python3` / `✗ python3`，这里会从 1 变成 ≥2。
     """
-    r = _run_setup(fake_home)
+    r = _run_dependencies(fake_home)
     assert r.returncode == 0, r.stdout + r.stderr
     matches = re.findall(r"^  [✓✗] python3\b.*$", _deps_section(r.stdout), re.MULTILINE)
     assert len(matches) == 1, f"python3 状态行重复或缺失：{matches}\n{r.stdout}"
@@ -114,7 +147,7 @@ def test_python3_status_line_is_not_duplicated(fake_home):
 
 def test_missing_yq_reports_cross_and_three_platform_install_commands(fake_home):
     """③ yq 未安装 ⇒ `✗ yq` + 三平台安装命令，且 setup.sh 不中止。"""
-    r = _run_setup(fake_home, path=_path_without_yq())
+    r = _run_dependencies(fake_home, path=_path_without_yq())
     assert r.returncode == 0, r.stdout + r.stderr
 
     deps = _deps_section(r.stdout)
@@ -132,7 +165,7 @@ def test_kislyuk_yq_warns_and_gives_correct_install_guidance(fake_home, tmp_path
     _fake_yq(bin_dir, "yq 3.4.1")
     path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
 
-    r = _run_setup(fake_home, path=path)
+    r = _run_dependencies(fake_home, path=path)
     assert r.returncode == 0, r.stdout + r.stderr
 
     deps = _deps_section(r.stdout)
@@ -150,7 +183,7 @@ def test_mikefarah_yq_with_sufficient_version_reports_ok(fake_home, tmp_path):
     _fake_yq(bin_dir, "yq (https://github.com/mikefarah/yq/) version v4.44.3")
     path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
 
-    r = _run_setup(fake_home, path=path)
+    r = _run_dependencies(fake_home, path=path)
     assert r.returncode == 0, r.stdout + r.stderr
 
     deps = _deps_section(r.stdout)
@@ -165,10 +198,23 @@ def test_mikefarah_yq_below_min_version_warns_upgrade(fake_home, tmp_path):
     _fake_yq(bin_dir, "yq (https://github.com/mikefarah/yq/) version v4.9.2")
     path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
 
-    r = _run_setup(fake_home, path=path)
+    r = _run_dependencies(fake_home, path=path)
     assert r.returncode == 0, r.stdout + r.stderr
 
     deps = _deps_section(r.stdout)
     assert "版本过低" in deps, deps
     assert "4.16" in deps
     assert "✓ yq" not in deps
+
+
+def test_full_setup_reports_missing_yq_once_and_continues(fake_home):
+    """缺失 yq 仍完成真实安装；预检接线、非致命性、重复报告一起守住。"""
+    r = _run_full_setup(fake_home, path=_path_without_yq())
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.count("运行依赖预检：") == 1
+    deps = _deps_section(r.stdout)
+    assert "✗ yq" in deps
+    assert "winget install --id MikeFarah.yq" in deps
+    assert len(re.findall(r"^  [✓✗] python3\b.*$", r.stdout, re.MULTILINE)) == 1
+    assert "ready →" in r.stdout
+    assert (fake_home / ".codex" / "skills" / "sdflow-init" / "SKILL.md").is_file()

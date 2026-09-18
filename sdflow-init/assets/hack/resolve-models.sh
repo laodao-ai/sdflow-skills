@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # resolve-models.sh — 宿主判定 + 机队档位解析器（纯 shell，ADR-1；无 Python 依赖）
 #
-# 用法：eval "$(resolve-models.sh [--root <repo_root>])"
+# 用法：MODELS_ENV="$(resolve-models.sh --root <repo_root>)" || exit $?; eval "$MODELS_ENV"
 # 导出九变量（export，经 printf %q 编码，可安全 eval）：
 #   SDFLOW_HOST          claude | codex | unknown
 #   SDFLOW_TIER_STRONG   当前宿主所属机队的强档模型 id（覆盖优先，无覆盖回落机队缺省）
@@ -24,7 +24,7 @@
 #   `model-tiers.{claude,codex}.{strong,mid,light}`；扁平旧格式
 #   `model-tiers.{strong,mid,light}` 兼容读作 Claude 机队覆盖，仅在 Claude 机队生效
 #   （Codex 机队 MUST NOT 读扁平覆盖，回落 Codex 机队缺省）。
-#   解析按有界键路径（6 条：2 机队×3 档）行锚定提取，MUST NOT 写通用 YAML 解析器（基准 5）。
+#   YAML 语法交给 mikefarah/yq；Bash 仅负责有界业务键和值校验。
 #
 # eval 注入加固（GC-6/D5）：覆盖值先过模型 ID 字符集校验（主体仅 [A-Za-z0-9._-]，
 #   可带单个尾部 [字母数字] 后缀如 `[1M]`——Claude Code 完整 model id 的上下文窗口标记；
@@ -82,19 +82,23 @@ fi
 # ────────────────────────────── 3. 机读缺省块读取 ──────────────────────────────
 _default_get() {  # $1=fence(model-tier-defaults|effort-tier-defaults) $2="<key.path>"；
                    # stdout=值（trim 后），找不到/无文件 → 空 + return 1
-  local fence="$1" key="$2" line
+  local fence="$1" key="$2" line in_block=0 marker='```'
   [ -n "$MT_FILE" ] && [ -f "$MT_FILE" ] || return 1
   while IFS= read -r line; do
     line="${line%$'\r'}"
+    if [ "$line" = "$marker$fence" ]; then in_block=1; continue; fi
+    if [ "$line" = "$marker" ]; then in_block=0; continue; fi
+    [ "$in_block" -eq 1 ] || continue
     case "$line" in
       "$key":*)
         line="${line#*:}"
-        line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
         printf '%s' "$line"
         return 0
         ;;
     esac
-  done < <(awk -v fence="$fence" '$0 == "```" fence {f=1;next} /^```$/{f=0} f' "$MT_FILE" 2>/dev/null)
+  done < "$MT_FILE"
   return 1
 }
 
@@ -129,75 +133,50 @@ _valid_effort_value() {  # $1=fleet；$2=candidate；按机队枚举校验
 }
 
 # ────────────────────────────── 5. 消费仓 config.yaml 覆盖读取（有界键路径，基准 5） ──────────────────────────────
-OV_CLAUDE_STRONG=""; OV_CLAUDE_MID=""; OV_CLAUDE_LIGHT=""
-OV_CODEX_STRONG=""; OV_CODEX_MID=""; OV_CODEX_LIGHT=""
-OV_FLAT_STRONG=""; OV_FLAT_MID=""; OV_FLAT_LIGHT=""
-
-_read_config_overrides() {
-  local cfg="$ROOT/openspec/config.yaml"
-  [ -f "$cfg" ] || return 0
-  local in_block=0 fleet="" line key val trimmed
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%$'\r'}"
-    line="$(printf '%s' "$line" | sed -e 's/[[:space:]]*$//')"
-    if [ "$in_block" -eq 0 ]; then
-      [ "$line" = "model-tiers:" ] && { in_block=1; fleet=""; }
-      continue
-    fi
-    # 先剥一层：leading-space trim 后的内容（判空行/注释行，MUST NOT reset fleet——
-    # 块内空行/注释是合法的、不该打断 fleet 上下文）。
-    trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//')"
-    case "$trimmed" in
-      ""|"#"*)
-        continue ;;   # 空行 / 任意缩进的注释行 —— 保持 fleet 不变
-    esac
-    case "$line" in
-      "    "*)
-        # 4-space 缩进 = 机队子块下的叶子键（须先于 2-space 通配匹配，否则被后者截胡）。
-        key="${line%%:*}"; key="$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//')"
-        val="${line#*:}"
-        val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-        if [ -n "$fleet" ]; then
-          case "$fleet:$key" in
-            claude:strong) OV_CLAUDE_STRONG="$val" ;;
-            claude:mid)    OV_CLAUDE_MID="$val" ;;
-            claude:light)  OV_CLAUDE_LIGHT="$val" ;;
-            codex:strong)  OV_CODEX_STRONG="$val" ;;
-            codex:mid)     OV_CODEX_MID="$val" ;;
-            codex:light)   OV_CODEX_LIGHT="$val" ;;
-          esac
-        fi
-        continue ;;
-      "  "*)
-        # 2-space 缩进 = 机队头（claude:/codex:，值须空）或扁平叶子键（strong:/mid:/light:）。
-        # 〔Task 6 复评 Critical〕机队头匹配 MUST 容忍尾随注释（剥注释后值为空 = 合法块头），
-        # 且**非空尾随内容**（如 `claude: rogue`，fleet 名当标量误用）= 畸形 ⇒ reset fleet=""，
-        # 不让 stale fleet 跨该行续命把后续叶子读进错机队（opus 塞进 codex 的根因）。
-        # 与 config_lint（init.py::_parse_model_tiers_block）同口径：同输入同 fleet 归属（GC-6/D10）。
-        key="${line%%:*}"; key="$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//')"
-        val="${line#*:}"
-        val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-        case "$key" in
-          claude|codex)
-            if [ -z "$val" ]; then fleet="$key"; else fleet=""; fi ;;   # 空值=合法头；带值=畸形→reset
-          strong) OV_FLAT_STRONG="$val"; fleet="" ;;
-          mid)    OV_FLAT_MID="$val"; fleet="" ;;
-          light)  OV_FLAT_LIGHT="$val"; fleet="" ;;
-          *)      fleet="" ;;                                            # 未知 2-space 键 → reset
-        esac
-        continue ;;
-      " "*|"	"*)
-        # 其它缩进（3/5+ 空格等奇异缩进）——有界解析不认。reset fleet 防 stale 续命
-        # （option ①：遇未识别缩进行 MUST 重置，与上方带值机队头同一防线）。
-        fleet=""
-        continue ;;
-      *)
-        in_block=0; fleet=""
-        continue ;;
-    esac
-  done < "$cfg"
+OV_CLAUDE_STRONG=""; OV_CLAUDE_MID=""; OV_CLAUDE_LIGHT=""; OV_CODEX_STRONG=""; OV_CODEX_MID=""; OV_CODEX_LIGHT=""; OV_FLAT_STRONG=""; OV_FLAT_MID=""; OV_FLAT_LIGHT=""
+OV_EFFORT_CLAUDE_STRONG=""; OV_EFFORT_CLAUDE_MID=""; OV_EFFORT_CLAUDE_LIGHT=""; OV_EFFORT_CODEX_STRONG=""; OV_EFFORT_CODEX_MID=""; OV_EFFORT_CODEX_LIGHT=""; YQ_BIN=""
+require_yq() {
+  [ -n "$YQ_BIN" ] && return 0
+  YQ_BIN="${SDFLOW_YQ_BIN:-$(command -v yq 2>/dev/null || true)}"
+  if [ -z "$YQ_BIN" ]; then echo "resolve-models: ✗ 请安装 mikefarah/yq（Windows: winget install --id MikeFarah.yq）后重试" >&2; return 1; fi
+  local version; version="$("$YQ_BIN" --version 2>&1 || true)"
+  case "$version" in
+    *mikefarah/yq*) ;;
+    *) echo "resolve-models: ✗ 请安装正确的 mikefarah/yq；当前版本输出: ${version:-无}" >&2; YQ_BIN=""; return 1 ;;
+  esac
 }
-_read_config_overrides
+read_config_overrides() {
+  local config="$ROOT/openspec/config.yaml" values line; local fields=()
+  [ -f "$config" ] || return 0; require_yq || return 1
+  if ! values="$("$YQ_BIN" -r '
+    has("effort-tiers") as $has_effort |
+    [
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["claude"] | select(tag == "!!map") | .["strong"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["claude"] | select(tag == "!!map") | .["mid"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["claude"] | select(tag == "!!map") | .["light"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["codex"] | select(tag == "!!map") | .["strong"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["codex"] | select(tag == "!!map") | .["mid"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["codex"] | select(tag == "!!map") | .["light"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["strong"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["mid"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["model-tiers"] | select(tag == "!!map") | .["light"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["effort-tiers"] | select(tag == "!!map") | .["claude"] | select(tag == "!!map") | .["strong"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["effort-tiers"] | select(tag == "!!map") | .["claude"] | select(tag == "!!map") | .["mid"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["effort-tiers"] | select(tag == "!!map") | .["claude"] | select(tag == "!!map") | .["light"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["effort-tiers"] | select(tag == "!!map") | .["codex"] | select(tag == "!!map") | .["strong"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["effort-tiers"] | select(tag == "!!map") | .["codex"] | select(tag == "!!map") | .["mid"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ((select(tag == "!!map") | .["effort-tiers"] | select(tag == "!!map") | .["codex"] | select(tag == "!!map") | .["light"] | select(tag == "!!str")) // "" | sub("[[:cntrl:]]"; "!")),
+      ($has_effort and (."effort-tiers" | tag != "!!map")),
+      "__SDFLOW_YQ_END__"
+    ] | .[]
+  ' "$config" 2>&1)"; then echo "resolve-models: ✗ yq could not parse $config: $values" >&2; return 1; fi
+  while IFS= read -r line || [ -n "$line" ]; do fields+=("$line"); done <<< "$values"
+  if [ "${#fields[@]}" -ne 17 ] || [ "${fields[16]}" != "__SDFLOW_YQ_END__" ]; then echo "resolve-models: ✗ yq returned an incomplete override record; 修复 config.yaml" >&2; return 1; fi
+  if [ "${fields[15]}" = true ]; then echo "resolve-models: ⚠ effort-tiers 不是 mapping，忽略覆盖、回落缺省" >&2; fi
+  OV_CLAUDE_STRONG="${fields[0]}"; OV_CLAUDE_MID="${fields[1]}"; OV_CLAUDE_LIGHT="${fields[2]}"; OV_CODEX_STRONG="${fields[3]}"; OV_CODEX_MID="${fields[4]}"; OV_CODEX_LIGHT="${fields[5]}"; OV_FLAT_STRONG="${fields[6]}"; OV_FLAT_MID="${fields[7]}"; OV_FLAT_LIGHT="${fields[8]}"
+  OV_EFFORT_CLAUDE_STRONG="${fields[9]}"; OV_EFFORT_CLAUDE_MID="${fields[10]}"; OV_EFFORT_CLAUDE_LIGHT="${fields[11]}"; OV_EFFORT_CODEX_STRONG="${fields[12]}"; OV_EFFORT_CODEX_MID="${fields[13]}"; OV_EFFORT_CODEX_LIGHT="${fields[14]}"
+}
+read_config_overrides || exit 1
 
 # ────────────────────────────── 6. 档位解析（覆盖 → 缺省，值经字符集校验） ──────────────────────────────
 _resolve_tier() {  # $1=fleet(claude|codex) $2=tier(strong|mid|light) $3=use_override(0|1) → stdout
@@ -235,95 +214,6 @@ _resolve_tier() {  # $1=fleet(claude|codex) $2=tier(strong|mid|light) $3=use_ove
   echo "resolve-models: ✗ ${fleet}.${tier} 缺省档位不可读（model-tiers.md 缺失/机读块缺失或含非法值），该档位留空" >&2
   return 1
 }
-
-# ────────────────────── 6b. 消费仓 config.yaml effort-tiers 覆盖读取（两机队，有界键路径） ──────────────────────
-# effort 与 model-tiers 同样按机队分键，但不支持扁平旧格式。
-OV_EFFORT_CLAUDE_STRONG=""; OV_EFFORT_CLAUDE_MID=""; OV_EFFORT_CLAUDE_LIGHT=""
-OV_EFFORT_CODEX_STRONG=""; OV_EFFORT_CODEX_MID=""; OV_EFFORT_CODEX_LIGHT=""
-
-_clear_effort_fleet_overrides() {  # $1=claude|codex
-  case "$1" in
-    claude)
-      OV_EFFORT_CLAUDE_STRONG=""; OV_EFFORT_CLAUDE_MID=""; OV_EFFORT_CLAUDE_LIGHT="" ;;
-    codex)
-      OV_EFFORT_CODEX_STRONG=""; OV_EFFORT_CODEX_MID=""; OV_EFFORT_CODEX_LIGHT="" ;;
-  esac
-}
-
-_read_effort_overrides() {
-  local cfg="$ROOT/openspec/config.yaml"
-  [ -f "$cfg" ] || return 0
-  local in_block=0 fleet="" line key val trimmed block_seen=0 block_has_content=0
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%$'\r'}"
-    line="$(printf '%s' "$line" | sed -e 's/[[:space:]]*$//')"
-    if [ "$in_block" -eq 0 ]; then
-      case "$line" in
-        "effort-tiers:")
-          in_block=1; fleet=""; block_seen=1; block_has_content=0 ;;
-        "effort-tiers:"*)
-          echo "resolve-models: ⚠ effort-tiers 顶层块不是支持的缩进式 mapping，忽略覆盖、回落缺省" >&2 ;;
-      esac
-      continue
-    fi
-    trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//')"
-    case "$trimmed" in
-      ""|"#"*)
-        continue ;;   # 空行 / 注释行 —— 保持 fleet 不变
-    esac
-    block_has_content=1
-    case "$line" in
-      "    "*)
-        # 4-space 缩进 = 机队子块下的叶子键。
-        key="${line%%:*}"; key="$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//')"
-        val="${line#*:}"
-        val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-        case "$val" in
-          \"*\") val="${val#\"}"; val="${val%\"}" ;;
-          \'*\') val="${val#\'}"; val="${val%\'}" ;;
-        esac
-        case "$fleet:$key" in
-          claude:strong) OV_EFFORT_CLAUDE_STRONG="$val" ;;
-          claude:mid)    OV_EFFORT_CLAUDE_MID="$val" ;;
-          claude:light)  OV_EFFORT_CLAUDE_LIGHT="$val" ;;
-          codex:strong)  OV_EFFORT_CODEX_STRONG="$val" ;;
-          codex:mid)     OV_EFFORT_CODEX_MID="$val" ;;
-          codex:light)   OV_EFFORT_CODEX_LIGHT="$val" ;;
-        esac
-        continue ;;
-      "  "*)
-        # 2-space 缩进 = 机队头（值须空；带尾随内容=畸形→reset，同 model-tiers idiom）。
-        key="${line%%:*}"; key="$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//')"
-        val="${line#*:}"
-        val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-        case "$key" in
-          claude|codex)
-            if [ -z "$val" ]; then
-              fleet="$key"
-            else
-              fleet=""
-              _clear_effort_fleet_overrides "$key"
-              echo "resolve-models: ⚠ effort-tiers 机队头不是支持的缩进式 mapping，忽略覆盖、回落缺省" >&2
-            fi ;;
-          *) fleet=""; echo "resolve-models: ⚠ effort-tiers 子项不受支持，忽略覆盖、回落缺省" >&2 ;;
-        esac
-        continue ;;
-      " "*|"	"*)
-        fleet=""
-        continue ;;
-      *)
-        if [ "$block_seen" -eq 1 ] && [ "$block_has_content" -eq 0 ]; then
-          echo "resolve-models: ⚠ effort-tiers 顶层块为空或不是 mapping，忽略覆盖、回落缺省" >&2
-        fi
-        in_block=0; fleet=""
-        continue ;;
-    esac
-  done < "$cfg"
-  if [ "$block_seen" -eq 1 ] && [ "$block_has_content" -eq 0 ]; then
-    echo "resolve-models: ⚠ effort-tiers 顶层块为空或不是 mapping，忽略覆盖、回落缺省" >&2
-  fi
-}
-_read_effort_overrides
 
 # ────────────────────── 6c. effort 档位解析（覆盖 → 缺省，值经枚举域校验；MUST NOT 复用 _resolve_tier） ──────────────────────
 # 独立函数——effort 的 unknown 处置（显式空串）与 model tier 的 unknown 回落语义

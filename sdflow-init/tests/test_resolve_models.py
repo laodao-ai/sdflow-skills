@@ -14,6 +14,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -104,7 +105,7 @@ def eval_resolve(root, env_overrides=None, no_sdflow_home=True, cwd=None):
     env.pop("CODEX_THREAD_ID", None)
     if env_overrides:
         env.update(env_overrides)
-    script = f'eval "$(bash {shlex.quote(bash_path(SCRIPT))} --root {shlex.quote(bash_path(root))})"; ' \
+    script = f'exports=$(bash {shlex.quote(bash_path(SCRIPT))} --root {shlex.quote(bash_path(root))}) || exit $?; eval "$exports"; ' \
              f'echo "SDFLOW_HOST=$SDFLOW_HOST"; echo "SDFLOW_TIER_STRONG=$SDFLOW_TIER_STRONG"; ' \
              f'echo "SDFLOW_TIER_MID=$SDFLOW_TIER_MID"; echo "SDFLOW_TIER_LIGHT=$SDFLOW_TIER_LIGHT"; ' \
              f'echo "SDFLOW_VOICE_RUNNER=$SDFLOW_VOICE_RUNNER"; echo "SDFLOW_VOICE_MODEL=$SDFLOW_VOICE_MODEL"; ' \
@@ -436,9 +437,10 @@ class TestEvalInjectionHardening:
         write_config_yaml(root, "schema: spec-driven\nmodel-tiers:\n"
                                  f"  codex:\n    strong: `touch {marker}`\n")
         r = eval_resolve(root, {"CODEX_THREAD_ID": "abc"}, cwd=root)
-        assert r.returncode == 0, r.stderr
+        assert r.returncode != 0
         assert not marker.exists()
-        assert "SDFLOW_TIER_STRONG=gpt-5.6-sol" in r.stdout
+        assert not r.stdout
+        assert "yq" in r.stderr
 
     def test_semicolon_command_injection_rejected_and_not_executed(self, tmp_path):
         root = make_bundle_repo(tmp_path)
@@ -451,7 +453,7 @@ class TestEvalInjectionHardening:
         assert "SDFLOW_TIER_MID=sonnet" in r.stdout
 
     def test_newline_embedded_via_second_line_ignored_not_executed(self, tmp_path):
-        """恶意值试图借第二条物理行注入命令（YAML 行级读取天然只认第一行为 key: value）。"""
+        """恶意第二行不是合法 YAML；整份配置须在 eval 前拒绝。"""
         root = make_bundle_repo(tmp_path)
         marker = root / "INJECTED_NEWLINE"
         write_config_yaml(root, "schema: spec-driven\nmodel-tiers:\n"
@@ -459,7 +461,8 @@ class TestEvalInjectionHardening:
                                  "    strong: opus\n"
                                  f"touch {marker}\n")
         r = eval_resolve(root, {"CLAUDECODE": "1"}, cwd=root)
-        assert r.returncode == 0, r.stderr
+        assert r.returncode != 0
+        assert not r.stdout
         assert not marker.exists()
 
     def test_output_is_printf_q_encoded(self, tmp_path):
@@ -493,6 +496,10 @@ class TestSharedMalformedFixtureConsistency:
             for expect in case["resolver"]:
                 env = {"CLAUDECODE": "1"} if expect["host"] == "claude" else {"CODEX_THREAD_ID": "abc"}
                 r = run_resolve(root, env)
+                if "解析失败" in case["lint_reason_substrs"]:
+                    assert r.returncode != 0
+                    assert not r.stdout
+                    continue
                 assert r.returncode == 0, f"{case['name']}/{expect['host']}: {r.stderr}"
                 exports = parse_exports(r.stdout)
                 assert exports["SDFLOW_TIER_STRONG"] == expect["strong"], \
@@ -508,7 +515,11 @@ class TestSharedMalformedFixtureConsistency:
                 host_env = {"CLAUDECODE": "1"} if case["resolver"][0]["host"] == "claude" \
                     else {"CODEX_THREAD_ID": "abc"}
                 r = eval_resolve(root, host_env, cwd=root)
-                assert r.returncode == 0, r.stderr
+                if "解析失败" in case["lint_reason_substrs"]:
+                    assert r.returncode != 0
+                    assert not r.stdout
+                else:
+                    assert r.returncode == 0, r.stderr
                 assert not marker.exists(), f"{case['name']}: 注入被执行"
 
 
@@ -535,6 +546,107 @@ class TestFleetHeaderTrailingContentCrosstalk:
         write_config_yaml(root, self.CROSSTALK_CONFIG)
         claude = parse_exports(run_resolve(root, {"CLAUDECODE": "1"}).stdout)
         assert claude["SDFLOW_TIER_STRONG"] == "opus"
+
+
+class TestYqResolverContract:
+    @pytest.mark.parametrize("yaml_text, expected", [
+        ('model-tiers: {codex: {strong: "custom-model"}}\n', "custom-model"),
+        ('model-tiers:\n  codex:\n    strong: |\n      custom\n      injected\n', "gpt-5.6-sol"),
+        ('model-tiers: {codex: [invalid]}\n', "gpt-5.6-sol"),
+        ('model-tiers: {codex: {strong: "custom\\u0000model"}}\n', "gpt-5.6-sol"),
+    ])
+    def test_yaml_values_do_not_shift_fleet_fields(self, tmp_path, yaml_text, expected):
+        root = make_bundle_repo(tmp_path)
+        write_config_yaml(root, yaml_text)
+        result = run_resolve(root, {"CODEX_THREAD_ID": "test"})
+        assert result.returncode == 0, result.stderr
+        exports = parse_exports(result.stdout)
+        assert exports["SDFLOW_TIER_STRONG"] == expected
+        assert exports["SDFLOW_VOICE_MODEL"] == "opus"
+        assert "effort-tiers" not in result.stderr
+
+    def test_wrong_yq_identity_fails_closed(self, tmp_path):
+        root = make_bundle_repo(tmp_path)
+        write_config_yaml(root, "schema: spec-driven\n")
+        fake = tmp_path / "wrong-yq"
+        fake.write_text("#!/bin/sh\necho 'yq kislyuk 3.0'\n", encoding="utf-8")
+        fake.chmod(0o755)
+        result = run_resolve(root, {"SDFLOW_YQ_BIN": bash_path(fake)})
+        assert result.returncode != 0
+        assert not result.stdout
+        assert "mikefarah/yq" in result.stderr
+
+    def test_windows_sized_config_resolves_within_fifteen_seconds(self, tmp_path):
+        """每行 fork `sed` 会在 Git Bash 中超时；该测试锁住可用工作流窗口。"""
+        root = make_bundle_repo(tmp_path)
+        context_lines = "".join(f"  handoff line {i:02d}\n" for i in range(60))
+        write_config_yaml(
+            root,
+            "context: |\n" + context_lines
+            + "model-tiers:\n"
+              "  claude:\n"
+              "    strong: claude-custom\n"
+              "    mid: sonnet-custom\n"
+              "    light: haiku-custom\n"
+              "  codex:\n"
+              "    strong: codex-custom\n"
+              "    mid: terra-custom\n"
+              "    light: luna-custom\n"
+              "effort-tiers:\n"
+              "  claude:\n"
+              "    strong: high\n"
+              "    mid: medium\n"
+              "    light: low\n"
+              "  codex:\n"
+              "    strong: ultra\n"
+              "    mid: high\n"
+              "    light: medium\n"
+              "# padding 1\n# padding 2\n# padding 3\n# padding 4\n# padding 5\n",
+        )
+        assert (root / "openspec" / "config.yaml").read_text(encoding="utf-8").count("\n") == 84
+
+        started = time.monotonic()
+        try:
+            result = run_resolve(root, {"CODEX_THREAD_ID": "codex-test"})
+        except subprocess.TimeoutExpired:
+            pytest.fail("resolver exceeded the 15-second Git Bash workflow window")
+
+        assert result.returncode == 0, result.stderr
+        assert time.monotonic() - started < 15
+        exports = parse_exports(result.stdout)
+        assert exports["SDFLOW_TIER_STRONG"] == "codex-custom"
+        assert exports["SDFLOW_EFFORT_STRONG"] == "ultra"
+
+    def test_missing_yq_fails_before_emitting_exports(self, tmp_path):
+        root = make_bundle_repo(tmp_path)
+        write_config_yaml(root, "model-tiers:\n  codex:\n    strong: codex-custom\n")
+        env = dict(os.environ, SDFLOW_HOME=bash_path(root.parent / "sdflow-home"),
+                   CODEX_THREAD_ID="codex-test",
+                   SDFLOW_YQ_BIN="/definitely/missing/yq")
+
+        result = subprocess.run(
+            [bash_executable(), bash_path(SCRIPT), "--root", bash_path(root)],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=15,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        assert result.returncode != 0
+        assert "yq" in result.stderr.lower()
+        assert "export SDFLOW_" not in result.stdout
+
+    def test_invalid_yaml_fails_before_emitting_exports(self, tmp_path):
+        root = make_bundle_repo(tmp_path)
+        write_config_yaml(root, "model-tiers:\n  codex:\n    strong: valid\n  broken: [\n")
+
+        result = run_resolve(root, {"CODEX_THREAD_ID": "codex-test"})
+
+        assert result.returncode != 0
+        assert "yq" in result.stderr.lower()
+        assert "export SDFLOW_" not in result.stdout
 
 
 class TestOutsideVoiceDoesNotSelfResolve:

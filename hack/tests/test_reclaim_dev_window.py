@@ -73,7 +73,7 @@ def _make_checkout(root: Path, *, fingerprint: bool = True) -> Path:
     """造可运行的最小 checkout，含 setup 安装前 fail-closed gate 的真实脚本和输入。"""
     root.mkdir(parents=True, exist_ok=True)
     (root / "setup.sh").write_bytes((REPO / "setup.sh").read_bytes())
-    for rel in (*_GATE_SCRIPTS, *_GATE_SKILLS):
+    for rel in ("hack/setup-dependencies.sh", *_GATE_SCRIPTS, *_GATE_SKILLS):
         src = REPO / rel
         dst = root / rel
         dst.parent.mkdir(parents=True, exist_ok=True)

@@ -380,7 +380,7 @@ def test_exec_output_wc_failure_fails_closed(tmp_path):
     两次调用之间无并发，计数用普通文件即可。
     """
     bin_dir = make_fake_codex(tmp_path)
-    counter = tmp_path / "wc_calls"
+    counter = bash_path(tmp_path / "wc_calls")
     fake_wc = Path(bin_dir) / "wc"
     fake_wc.write_text(textwrap.dedent(f"""\
         #!/usr/bin/env bash
@@ -391,7 +391,7 @@ def test_exec_output_wc_failure_fails_closed(tmp_path):
         if [ "$n" -ge 2 ]; then
           exit 1
         fi
-        exec command -p wc "$@"
+        command -p wc "$@"
         """), encoding="utf-8")
     fake_wc.chmod(fake_wc.stat().st_mode | stat.S_IEXEC)
 
