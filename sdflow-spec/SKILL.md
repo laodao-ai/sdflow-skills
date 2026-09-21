@@ -294,7 +294,13 @@ git status --porcelain
 
 ```bash
 openspec new change "<name>"
+python3 ~/.sdflow/hack/token_snapshot.py --step change-start || true
 ```
+
+第二行落 `change-start` 基线行（implement-optimize-codex-workflow-p2-pull spec-review-amendment
+R1）：Codex 宿主下 token-log.jsonl 首行以此为差分基底，取代旧分支已废弃的 reflog +
+`usage_since_branch` 方案；helper 内部按宿主分流，Claude 宿主下写 v1 首行（首行全额口径不变，
+只是提前）。`|| true` 防非零退出拖累主流程，helper 自身不加任何 Git 调用。
 
 change 名此时即可定（A.2 禁止清单已保证目标态一句话可写出）。🔴 **MUST NOT 用暂定名后改名**
 （openspec CLI 无 rename change 命令，实查仅 `new change`/`archive`；手工 `git mv` + 改

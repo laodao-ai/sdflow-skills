@@ -27,6 +27,14 @@ MUST NOT 删除任务、减少镜数，或让主 session 的结果冒充独立�
 活动任务，只再重试一次。仍失败则进入入口既有阻塞、降级或硬停路径。权限、网络、未知模型、坏 prompt
 及其他非容量错误保留原错误，MUST NOT 伪装成容量不足或进入容量重试。
 
+## Codex 派发的 task_name
+
+Codex 宿主派发子代理时，`spawn_agent` 的 `task_name` 即该派发项的角色 id：格式
+`<skill>_<role>[_<n>]`，字符集仅 `[a-z0-9_]`，同批派发内唯一（如 `spec_review_strategy`、
+`spec_review_adversarial_1`、`implement_task3`）。宿主把它落为子线程元数据
+`agent_path=/root/<task_name>`，token 快照的 `role` 字段原样记录该值；不符合约定的值照原样记录，
+不映射、不猜测角色。
+
 ## Codex effort 回退与门禁
 
 Codex 派发使用本轮 resolver 的 model、`reasoning_effort` 与 `fork_turns: "none"`。Claude 使用其

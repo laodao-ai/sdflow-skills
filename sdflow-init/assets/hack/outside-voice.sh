@@ -690,6 +690,16 @@ ov_cleanup() {  # $1=触发来源标签（EXIT|INT|TERM|HUP|SIGNAL——最后�
   fi
 }
 
+ov_collect_cli_usage() {  # $1=cli.log 路径（codex --json 时为 JSONL stdout）
+  # implement-optimize-codex-workflow-p2-pull · TSA-04：在 rc 确定后、清理与三处 `exit` 之前
+  # 统一调用一次，经 `token_snapshot.py --cli-usage <jsonl>` 子入口写一行 `kind=cli`。
+  # 全程 no-op 失败——MUST NOT 改变 rc、最终消息、超时判定或进程树回收（同片契约见头部注释）。
+  # `$OV_DIR` = 本脚本所在目录（装好后 = ~/.sdflow/hack/，与 token_snapshot.py 同目录部署）。
+  local jsonl="$1"
+  [ -f "$jsonl" ] || return 0
+  python3 "$OV_DIR/token_snapshot.py" --cli-usage "$jsonl" >/dev/null 2>&1 || :
+}
+
 do_exec() {  # $1=context file  $2=timeout 秒
   local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner ov_effort ov_outsize
   runner="${SDFLOW_VOICE_RUNNER:-}"
@@ -767,7 +777,12 @@ do_exec() {  # $1=context file  $2=timeout 秒
       # 后台 + wait〔R2〕：前台跑时父被回收 ⇒ 本进程死、timeout 却 reparent 到 PID 1 跑满
       # 内层超时。后台化后 $! 拿得到 PID，ov_cleanup 才有东西可杀。stdin 已显式重定向
       # （后台任务在无 job control 的壳里 stdin 默认 /dev/null，不显式给就读不到 prompt）。
-      "$ov_timeout_bin" -k 10 "$tmo" codex exec -C "$repo_root" -s read-only --ephemeral \
+      # `--json`〔implement-optimize-codex-workflow-p2-pull · TSA-04〕：把 stdout 换成 JSONL 事件流
+      # （`thread.started` / `turn.completed` / `turn.failed` 等），供 `ov_collect_cli_usage()` 提取
+      # 用量。`--output-last-message` 不受影响——最终消息仍单独写 `last-message.md`，两者互不冲突
+      # （C5 证据锚：`--json` 与 `--output-last-message` 可并存）。代价：`cli.log` 从人读文本变成
+      # JSONL，下方失败诊断的 `tail -5` 可读性下降但机器判定不受影响 [spec-review-amendment D13]。
+      "$ov_timeout_bin" -k 10 "$tmo" codex exec -C "$repo_root" -s read-only --ephemeral --json \
         --output-last-message "$workdir/last-message.md" - \
         < "$workdir/prompt.md" > "$workdir/cli.log" 2> "$workdir/stderr.log" &
       OV_RUNNER_PID=$!   # ⚠ 残余(b)：`&` 与本行之间落信号 ⇒ trap 拿到空 PID，该次 runner 逃逸
@@ -812,6 +827,11 @@ do_exec() {  # $1=context file  $2=timeout 秒
       cp "$workdir/last-message.md" "$workdir/cli.log" 2>/dev/null || : > "$workdir/cli.log"
       ;;
   esac
+  # TSA-04：仅 codex 路径采集用量（claude 反向路径的用量缺口是本 change 明确 Non-Goal，
+  # 见头部契约与 host-adaptive-execution HAE-02）。rc 已确定、三处 exit 之前统一调用一次。
+  if [ "$runner" = codex ]; then
+    ov_collect_cli_usage "$workdir/cli.log"
+  fi
   if [ "$rc" -eq 124 ]; then cat "$workdir/stderr.log" >&2; exit 124; fi
   if [ "$rc" -ne 0 ]; then
     cat "$workdir/stderr.log" >&2

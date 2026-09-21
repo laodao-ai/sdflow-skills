@@ -41,7 +41,7 @@
    〔HARD-GATE：用户批准设计〕            ★全流程唯一人类门——过一份 spec-review-report.md 拍板
         │
  阶段三·ship ── 过设计门后连续跑到 merge,无人类门 ─────────────────
-   〔入口前 SHALL /clear（G1 交界例外之二，见 §三.2）；调 /sdflow-ship 时重述 merge 意图〕
+   〔入口前 SHALL /clear（G1 交界例外之二，见 §三.2）；merge 意图已由 ship/done 起手落盘 `.skip-merge`，`/clear` 后无需重述〕
    /sdflow-ship {change dir}                一次调用经 ship_gate 确定性台账驱动到底
      ├─ 子步骤 A：实现管线（sdflow-implement，唯一管线）
      │  └─ 逐 ticket/任务 [checkpoint]
@@ -147,11 +147,11 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 🔴 **阶段交界 SHALL 用一次 `/clear`（两处，理由各自都在上述结论射程之外）**：
 
 - **阶段一 → 阶段二**（`/sdflow-spec` 出口序列 `/clear` → 换档 → `/sdflow-spec-review`）：① **cache 按模型隔离**——拖着阶段一的旧上下文切换模型档位 = 缓存作废、全价重付；② **产 / 审错档纪律**——阶段一的产出档与阶段二的评审档本就不同，换档才是这次 `/clear` 的真实动因。
-- **阶段二 → 阶段三**（设计门通过后、`/sdflow-ship` 之前）：① **盘面纪律**——阶段三链序是「零跨步内存状态」，`NEEDS_CONTEXT` MUST 仅从盘面（design/specs/ticket 文本）自答；热编排器会拿对话记忆替代盘面，而**这一条 fresh 子代理防不住**（implementer 是冷的，回答它的编排器是热的）；② **产物自足性检验**——冷启动跑阶段三是对「四件套 + tickets 是否真的够用」的真实检验，热 session 会在盘面缺信息时无声补上、缺口永不暴露；③ **去作者偏置**——实现期若设计被证伪，热 session 倾向合理化而非叫停。**代价**：编排器需重读 SKILL 与产物（一次性），且 MUST 在调用 `/sdflow-ship` 时**重述 merge 意图**（它从调用语透传、不在盘上）。
+- **阶段二 → 阶段三**（设计门通过后、`/sdflow-ship` 之前）：① **盘面纪律**——阶段三链序是「零跨步内存状态」，`NEEDS_CONTEXT` MUST 仅从盘面（design/specs/ticket 文本）自答；热编排器会拿对话记忆替代盘面，而**这一条 fresh 子代理防不住**（implementer 是冷的，回答它的编排器是热的）；② **产物自足性检验**——冷启动跑阶段三是对「四件套 + tickets 是否真的够用」的真实检验，热 session 会在盘面缺信息时无声补上、缺口永不暴露；③ **去作者偏置**——实现期若设计被证伪，热 session 倾向合理化而非叫停。**代价**：编排器需重读 SKILL 与产物（一次性）；merge 意图已由 ship/done 起手落盘 `.skip-merge`，`/clear` 后无需重述。
 
 🔴 **MUST NOT 拿「主审裁决需要冷视角」当任一处例外的理由**——那一条已被上述结论正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供），拿它当依据是漏查。
 
-**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
+**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图已在盘上（`.skip-merge`）、但 `VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
 
 *流程 v2（三阶段连续化，单轨线性）· 配套 generation-process.md（生成）/ spec-review.md（评审）/ trigger-catalog.md（深度）/ reference/quality-layering.md（分层）*
 

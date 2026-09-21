@@ -167,11 +167,17 @@ description: >
 
 ## 第零步：确认 change + 检测默认分支 + 复选框对账
 
-### 0.1 确认 change + 捕获 merge 意图
+### 0.1 确认 change + 维护 `.skip-merge` 起手标记（三态解析）
 
 若未指定 change 名称，`openspec list` 展示 active changes，请用户确认。记为 `{change_name}`，路径 `openspec/changes/{change_name}/`。
 
-**merge 缺省执行**：除非用户在调用本 skill 时**明确说不合并**（如「不要 merge」「don't merge」「只归档别合」「skip merge」「先不合」），否则第五步**默认 ff 合并到 `{base_branch}`**。在此记下 `{merge_intent}` = `merge`（默认）或 `skip`（用户 opt-out）。
+**merge 意图不再记成对话变量，改为盘上标记文件** `openspec/changes/{change_name}/.skip-merge`（存在即 skip、不存在即 merge，零字节文件）——第五步只判这份标记的存在性，不依赖本步的对话状态。本步按用户本次调用语三态解析：
+
+- **opt-out**（命中「不要 merge」「don't merge」「只归档别合」「skip merge」「先不合」等词）→ `touch openspec/changes/{change_name}/.skip-merge`
+- **opt-in**（命中「要 merge」「merge 掉」「合并到 {base}」「do merge」「merge it」等词）→ `rm -f openspec/changes/{change_name}/.skip-merge`
+- **未指定**（两表均未命中，change 名含 "merge" 不算命中——按措辞语义判，非子串匹配）→ **不执行任何文件操作**（保留盘上已有标记状态，首次调用则默认无标记 = merge）
+
+文件操作（`touch`/`rm -f`）失败 → halt，报告失败原因，不得继续后续步骤。
 
 ### 0.2 检测默认分支（勿假设 main）
 
@@ -516,10 +522,17 @@ MUST 段之后或行内。
 
 ## 第五步：Merge 到默认分支（缺省执行，主 session）
 
-**缺省合并**：除非第 0.1 步记下 `{merge_intent}=skip`（用户调用时明确不合并），否则前四步成功后**直接 ff 合并**，不再逐次询问。
+**merge 前只判盘上标记 `.skip-merge` 的存在性**（不依赖第 0.1 步的对话变量——本步可能在新 session/新调用中执行，对话状态不可靠）。判定路径分两种：
 
-- `{merge_intent}=skip` → 跳过本步，摘要里标「⏭ 按调用意图跳过 merge（分支留待手动处理）」。**不自动 push**。
-- `{merge_intent}=merge`（默认）→ **先做 untracked 硬检查，再执行 checkout+merge**（单向 git，留主 session 可见，不丢子代理）：
+1. **active 路径**（change 目录尚未被第三步归档）：`openspec/changes/{change_name}/.skip-merge`
+2. **已归档路径**（第三步已把 active 目录搬进 `openspec/changes/archive/`）：取第三步 `openspec archive --json` 返回的归档目录路径，拼 `.skip-merge`；JSON 无路径字段时回退取 `openspec/changes/archive/*-{change_name}/` 按字典序最大者（日期前缀保证字典序即时间序）
+
+```bash
+test -f "{归档判定后的路径}/.skip-merge" && echo SKIP || echo MERGE
+```
+
+- 标记**存在** → 跳过本步，摘要里标「⏭ 按 `.skip-merge` 标记跳过 merge（分支留待手动处理）」。**不自动 push**。
+- 标记**不存在** → **先做 untracked 硬检查，再执行 checkout+merge**（单向 git，留主 session 可见，不丢子代理）：
 
 **merge 前 untracked 硬检查**〔spec-review-amendment SR-2，防"未追踪工作经 checkout+ff-merge 存活于磁盘却从未进 base git 历史"〕：
 ```bash
@@ -556,7 +569,7 @@ sdflow-done 完成
   Archive: openspec/changes/archive/{date}-{change_name}/
   Specs:   ✅ 同步主 specs（新建 / 追加 / INDEX）｜或 ⚠️ --skip-specs 手动同步
   Commit:  {hash} — {message}
-  Merge:   ✅ {base_branch} ← {feat_branch}（ff）｜⏭ 按调用意图跳过
+  Merge:   ✅ {base_branch} ← {feat_branch}（ff）｜⏭ 按 `.skip-merge` 标记跳过
   Roadmap: ⚠ 回填草稿待人确认（见 hand-off「▶ 下一阶段建议」）｜⛔ 未生成(<原因>,exit4/5/6/7)｜— 无关联
   Push:    ⏸ 未 push（用户手动控制）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

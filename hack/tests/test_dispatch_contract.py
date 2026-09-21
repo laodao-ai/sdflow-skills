@@ -279,6 +279,36 @@ def test_full_repo_indexes_and_context_register_the_contract():
         assert "subagent-dispatch-contract.md" in source.read_text(encoding="utf-8"), source
 
 
+TASK_NAME_RE = re.compile(r"^[a-z0-9_]+$")
+
+
+def test_task_name_convention_documented_with_valid_charset_and_batch_uniqueness():
+    """implement-optimize-codex-workflow-p2-pull · Task 3.3 / HAE-01：`task_name` 约定一行
+    存在，字符集合法（`[a-z0-9_]`），且契约里给出的同批示例互不重复。
+    """
+    text = CONTRACT.read_text(encoding="utf-8")
+    assert "## Codex 派发的 task_name" in text
+    assert "task_name" in text
+    assert "<skill>_<role>[_<n>]" in text
+    assert "[a-z0-9_]" in text
+    assert "agent_path=/root/<task_name>" in text
+
+    section = text.split("## Codex 派发的 task_name", 1)[1].split("## Codex effort 回退与门禁", 1)[0]
+    examples = re.findall(r"`([a-z0-9_]+)`", section)
+    examples = [e for e in examples if "_" in e]  # 排除 `task_name` 本身等非示例反引号词
+    assert len(examples) >= 3, examples
+    for name in examples:
+        assert TASK_NAME_RE.match(name), f"示例 {name!r} 字符集不合法"
+    assert len(examples) == len(set(examples)), f"同批示例存在重复：{examples}"
+
+
+def test_task_name_charset_mutation_is_rejected():
+    """字符集校验不是空判断——注入一个含非法字符的名字必须让上面的正则断言失败。"""
+    assert not TASK_NAME_RE.match("Spec-Review/Strategy")
+    assert not TASK_NAME_RE.match("spec review")
+    assert TASK_NAME_RE.match("spec_review_strategy")
+
+
 @needs_full_repo
 def test_managed_index_matches_canonical_index_entry():
     """本仓 INDEX 必须经 updater 注入 canonical 规则条目。"""

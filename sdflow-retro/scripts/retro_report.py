@@ -805,6 +805,268 @@ def read_token_log(path):
     return rows
 
 
+# ============================ task1 slice B/C: v2 行解析（Codex 六计数）============================
+# [implement-optimize-codex-workflow-p2-pull task1] design.md 「数据模型与生命周期」v2 行 schema
+# + 「归属与去重」§1：按 v 分流，v1/v2 互不差分互不相加；坏 JSON/非对象/未知 v 计入 bad-line
+# 且可见（吸收 T318 所在 change 的 WFR-01）。v2 行 schema 字段远多于 v1，但本读侧只需要「归属
+# 算法与覆盖块」实际消费的子集做类型/值域校验——未被消费的字段（cli_version 等）原样透传、
+# 不做门（design 原文「cli_version 原样记录，不做门」），过度校验会让 reader 对 writer 尚未
+# 稳定下来的枝节字段产生虚假耦合。
+
+_V2_KINDS = {"root", "child", "cli"}
+_V2_USAGE_KEYS = ("input", "cached_input", "cache_write_input",
+                   "output", "reasoning_output", "total")
+_V2_REASONS = {"ok", "no-transcript", "thread-not-found", "no-usage-events",
+               "parse-error", "timeout", "invalid-thread-id", "depth-exceeded"}
+
+
+def _parse_v2_line(raw_line):
+    """单行 v2 token-log.jsonl → 规范化 dict，或 None（schema 不合法，静默跳过——与 v1
+    既有精神一致：reader 对生产者的降级/畸形行宁可丢弃单行也不中断整体扫描）。
+
+    None 只覆盖「v=2 但字段类型/值域不对」的情形；JSON 解析失败/非对象/v≠2 由调用方
+    `read_v2_token_log` 分类为 bad-line 或路由给 v1，不在此函数处理。
+    """
+    try:
+        obj = json.loads(raw_line)
+    except Exception:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    if obj.get("v") != 2:
+        return None
+
+    step = obj.get("step")
+    session = obj.get("session")
+    ts_raw = obj.get("ts")
+    kind = obj.get("kind")
+    anchor = obj.get("anchor")
+    if not isinstance(step, str) or not step:
+        return None
+    if not isinstance(session, str) or not session:
+        return None
+    if not isinstance(ts_raw, str) or not ts_raw:
+        return None
+    if kind not in _V2_KINDS:
+        return None
+    if not isinstance(anchor, bool):
+        return None
+
+    ts = None
+    for fmt in _TOKEN_TS_FMTS:
+        try:
+            ts = datetime.strptime(ts_raw, fmt)
+            break
+        except Exception:
+            continue
+    if ts is None:
+        return None
+
+    usage_raw = obj.get("usage")
+    usage = {k: None for k in _V2_USAGE_KEYS}
+    if usage_raw is not None:
+        if not isinstance(usage_raw, dict):
+            return None
+        for k in _V2_USAGE_KEYS:
+            if k not in usage_raw:
+                continue  # 键缺失 ⇒ null，MUST NOT 派生（D2）
+            v = usage_raw.get(k)
+            if v is None:
+                continue
+            if isinstance(v, bool) or not isinstance(v, int) or v < 0:
+                return None
+            usage[k] = v
+
+    turns = obj.get("turns", 0)
+    if isinstance(turns, bool) or not isinstance(turns, int) or turns < 0:
+        return None
+
+    duration_ms = obj.get("duration_ms")
+    if duration_ms is not None:
+        if isinstance(duration_ms, bool) or not isinstance(duration_ms, int) or duration_ms < 0:
+            return None
+
+    reason = obj.get("reason")
+    if reason is not None and reason not in _V2_REASONS:
+        reason = None  # 未知 reason 字面量不致命，按未声明处理（覆盖块仍可见其为非 ok）
+
+    branch_at_start = obj.get("branch_at_start")
+    if branch_at_start is not None and not isinstance(branch_at_start, str):
+        return None
+
+    config_mixed = obj.get("config_mixed", False)
+    if not isinstance(config_mixed, bool):
+        config_mixed = False
+
+    return {
+        "v": 2, "ts": ts, "step": step, "host": obj.get("host"), "runner": obj.get("runner"),
+        "kind": kind, "session": session, "parent": obj.get("parent"), "role": obj.get("role"),
+        "depth": obj.get("depth"), "model": obj.get("model"), "effort": obj.get("effort"),
+        "config_mixed": config_mixed, "cli_version": obj.get("cli_version"),
+        "usage_source": obj.get("usage_source"), "branch_at_start": branch_at_start,
+        "usage": usage, "turns": turns, "duration_ms": duration_ms,
+        "anchor": anchor, "reason": reason or "ok",
+    }
+
+
+def read_v2_token_log(path):
+    """读单个 token-log.jsonl 的 v2 行，返回 `(rows, bad_line_count)`。
+
+    v=1 行照旧路由给既有 v1 路径（此函数不处理、不计 bad），v1/v2 互不相加、互不差分
+    （design「归属与去重」§1）；坏 JSON / 非对象 JSON / 未知 v（既非 1 也非 2）计入
+    `bad_line_count` 且不中断整文件扫描（WFR-01）。文件缺失/IO 错误 → 空结果，bad=0。
+    """
+    rows = []
+    bad = 0
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    bad += 1
+                    continue
+                if not isinstance(obj, dict):
+                    bad += 1
+                    continue
+                v = obj.get("v")
+                if v == 1:
+                    continue  # 既有 v1 路径消费，非本函数职责
+                if v != 2:
+                    bad += 1
+                    continue
+                row = _parse_v2_line(line)
+                if row is not None:
+                    rows.append(row)
+                # v=2 但字段非法：静默跳过，非 bad-line（同 v1 既有降级行处理口径）
+    except OSError:
+        return [], 0
+    return rows, bad
+
+
+def _v2_acc(target, usage):
+    """把 usage 六键累加进 target（None ⇒ 跳过，键从未提供则 target 该键保持 None——
+    MUST NOT 把「未提供」冒充成 0，D2）。"""
+    for k in _V2_USAGE_KEYS:
+        v = usage.get(k)
+        if v is None:
+            continue
+        target[k] = (target[k] or 0) + v
+
+
+def _v2_diff(target, cur, prev):
+    """相邻差分累加进 target；负值钳 0；返回是否发生过钳位（供 counter-reset 标记）。
+    仅当两侧该键均非 None 时才计算（其中一侧未提供该键即无法差分，不猜、跳过）。"""
+    clamped = False
+    for k in _V2_USAGE_KEYS:
+        cv, pv = cur.get(k), prev.get(k)
+        if cv is None or pv is None:
+            continue
+        d = cv - pv
+        if d < 0:
+            d = 0
+            clamped = True
+        target[k] = (target[k] or 0) + d
+    return clamped
+
+
+def compute_v2_deltas(root, changes):
+    """v2 行归属（design.md「归属与去重」§2-4 + 决策流）：按 `(session)` 全局分组、组内按
+    `ts` 排序；首行 step=change-start 计 0 只作差分基底，否则 branch_at_start 命中
+    `feat/<所在 change>` 全额计入，否则计 0 + start-missing；非首行对紧邻前一行相邻差分
+    （可跨 change，负值钳 0 + counter-reset）；anchor=false 行只进覆盖块、不参与归属分组。
+    v1/v2 全局互不相加互不差分（各自独立扫描 token-log.jsonl）。
+
+    返回 `(deltas, coverage, bad_line_total)`：
+    - deltas: {change: {六计数键: int_or_None, "turns": int, "duration_ms": int_or_None}}
+      （只含 ≥1 行贡献的 change；某计数键全程来源未提供则该 change 该键为 None）
+    - coverage: {change: {"root"/"child"/"cli": n, "anchor_true": n, "reason": {r: n},
+      "start_missing": n, "counter_reset": n, "config_mixed": n}}
+    - bad_line_total: 全项目坏行数（JSON 解析失败/非对象/未知 v），WFR-01 要求可见。
+    """
+    all_rows = []
+    bad_line_total = 0
+    for name, info in sorted(changes.items()):
+        for base in (info.get("active_dir"), info.get("archive_dir")):
+            if not base:
+                continue
+            path = os.path.join(base, "token-log.jsonl")
+            rows, bad = read_v2_token_log(path)
+            bad_line_total += bad
+            for row in rows:
+                row = dict(row)
+                row["change"] = name
+                all_rows.append(row)
+
+    groups = defaultdict(list)
+    for row in all_rows:
+        groups[row["session"]].append(row)
+
+    deltas = defaultdict(lambda: {k: None for k in _V2_USAGE_KEYS})
+    turns_dur = defaultdict(lambda: {"turns": 0, "duration_ms": None})
+    coverage = defaultdict(lambda: {"root": set(), "child": set(), "cli": set(),
+                                     "anchor_true": set(),
+                                     "reason": defaultdict(int), "start_missing": 0,
+                                     "counter_reset": 0, "config_mixed": 0})
+
+    for rows in groups.values():
+        ordered = sorted(rows, key=lambda r: r["ts"])
+        prev_anchored = None  # 上一条 anchor=true 行（归属差分基底；anchor=false 行不入组）
+        for row in ordered:
+            change = row["change"]
+            cov = coverage[change]
+            cov[row["kind"]].add(row["session"])
+            cov["reason"][row["reason"]] += 1
+            if row["config_mixed"]:
+                cov["config_mixed"] += 1
+            if not row["anchor"]:
+                continue
+            cov["anchor_true"].add(row["session"])
+
+            target = deltas[change]
+            td = turns_dur[change]
+            if prev_anchored is None:
+                if row["step"] == "change-start":
+                    pass  # 计 0，只作差分基底
+                elif row["branch_at_start"] == f"feat/{change}":
+                    _v2_acc(target, row["usage"])
+                    td["turns"] += row["turns"]
+                    if row["duration_ms"] is not None:
+                        td["duration_ms"] = (td["duration_ms"] or 0) + row["duration_ms"]
+                else:
+                    cov["start_missing"] += 1
+            else:
+                clamped = _v2_diff(target, row["usage"], prev_anchored["usage"])
+                dt_turns = row["turns"] - prev_anchored["turns"]
+                if dt_turns < 0:
+                    dt_turns = 0
+                    clamped = True
+                td["turns"] += dt_turns
+                if row["duration_ms"] is not None and prev_anchored["duration_ms"] is not None:
+                    dd = row["duration_ms"] - prev_anchored["duration_ms"]
+                    if dd < 0:
+                        dd = 0
+                        clamped = True
+                    td["duration_ms"] = (td["duration_ms"] or 0) + dd
+                if clamped:
+                    cov["counter_reset"] += 1
+            prev_anchored = row
+
+    out = {}
+    for change in set(list(deltas.keys()) + list(turns_dur.keys())):
+        d = dict(deltas.get(change, {k: None for k in _V2_USAGE_KEYS}))
+        td = turns_dur.get(change, {"turns": 0, "duration_ms": None})
+        d["turns"] = td["turns"]
+        d["duration_ms"] = td["duration_ms"]
+        out[change] = d
+
+    cov_out = {name: {**cov, "reason": dict(cov["reason"])} for name, cov in coverage.items()}
+    return out, cov_out, bad_line_total
+
+
 def compute_token_deltas(root, changes):
     """全局按 session 分组差分，返回 `{change_name: {"out","in","cc","cr"}}`（只含 ≥1 贡献行
     的 change；无 token-log 或全降级/全损坏的 change 不在返回 dict 中，调用方据此渲染「—」）。
@@ -870,6 +1132,169 @@ def format_tokens_cell(d):
         return "—"
     return (f"out {_fmt_compact_count(d['out'])} / in {_fmt_compact_count(d['in'])} / "
             f"cc {_fmt_compact_count(d['cc'])} / cr {_fmt_compact_count(d['cr'])}")
+
+
+def format_v2_tokens_cell(d):
+    """per-change 表 tokens 列 Codex 段：六计数紧凑串，MUST NOT 合成总分；来源未提供的键
+    显「–」（区别于「无锚/无数据」的「—」，design「六计数原样记录」）；六键全 None（无锚
+    或该 change 无 v2 行）显「—」。"""
+    if not d:
+        return "—"
+    vals = {k: d.get(k) for k in _V2_USAGE_KEYS}
+    if all(v is None for v in vals.values()):
+        return "—"
+
+    def _fmt(v):
+        return _fmt_compact_count(v) if v is not None else "–"
+
+    return (f"in {_fmt(vals['input'])} / cached {_fmt(vals['cached_input'])} / "
+            f"cw {_fmt(vals['cache_write_input'])} / out {_fmt(vals['output'])} / "
+            f"reason {_fmt(vals['reasoning_output'])} / total {_fmt(vals['total'])}")
+
+
+def render_v2_coverage_block(changes, coverage):
+    """WFR-03「Codex 用量覆盖」块：每个 change 一行，列 root/child/cli 三类行数、
+    anchor=true 线程数、reason 计数、start-missing/counter-reset/config_mixed 数。
+    无任何 v2 行的 change（`coverage` 无该键）显「未声明」——MUST NOT 推断为 0 或
+    100% 覆盖（design「归属与去重」§6 / spec WFR-03）。"""
+    lines = ["## Codex 用量覆盖", "",
+             "| change | root | child | cli | anchor=true | reason | "
+             "start-missing | counter-reset | config_mixed |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for name in sorted(changes):
+        cov = coverage.get(name)
+        if not cov:
+            lines.append(f"| {name} | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 | "
+                         f"未声明 | 未声明 | 未声明 |")
+            continue
+        reason_str = ", ".join(f"{k}:{v}" for k, v in sorted(cov["reason"].items())) or "—"
+        lines.append(f"| {name} | {len(cov['root'])} | {len(cov['child'])} | {len(cov['cli'])} | "
+                     f"{len(cov['anchor_true'])} | {reason_str} | {cov['start_missing']} | "
+                     f"{cov['counter_reset']} | {cov['config_mixed']} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ============================ task4: --scan-codex-sessions（默认关）============================
+# design.md 「归属与去重」§7 + spec WFR-04：只读每个 rollout 首行 `session_meta`，按
+# `cwd` == 仓根 且 `git.branch` == `feat/<change>` 归属线程，与该 change token-log 中已
+# 出现的 session 集合做差集，报「日志未覆盖的线程」。不读正文（只 `readline()` 一次）、
+# 不改任何计数、不写任何文件。默认关——调用方（build_report）只在 `scan_codex_sessions=True`
+# 时才调用本函数，off 时该函数从不被引用，零文件打开是结构性保证（非本函数内部判断）。
+
+def _codex_sessions_root_for_scan(env=None):
+    """`$CODEX_HOME/sessions`（非空时）否则 `~/.codex/sessions`——与
+    `token_snapshot.py._codex_sessions_root` 同一解析规则（各自独立小实现，
+    跨 skill 目录不 import，同 DD1「零第三方依赖 + 收敛惯例」精神）。"""
+    env = os.environ if env is None else env
+    codex_home = env.get("CODEX_HOME")
+    base = Path(codex_home) if codex_home else Path(os.path.expanduser("~")) / ".codex"
+    return base / "sessions"
+
+
+def scan_codex_sessions_uncovered(root, changes, covered_by_change, sessions_root=None):
+    """返回 `{change: [thread_id, ...]}`——在本仓根、`feat/<change>` 分支出生、但
+    `covered_by_change[change]` 里没有的线程 id（按 change 分组，仅含未覆盖线程）。
+
+    `covered_by_change`: `{change: {session_id, ...}}`，已在该 change token-log.jsonl
+    出现过的 session 集合。`sessions_root` 缺省走 `_codex_sessions_root_for_scan()`；
+    测试经此参数注入隔离目录，不触碰真实 `~/.codex/sessions`。sessions 根目录不存在/
+    不可枚举 → 空结果，不抛。每个候选文件只 `readline()` 一次，不读正文。
+    """
+    sroot = Path(sessions_root) if sessions_root is not None else _codex_sessions_root_for_scan()
+    result = defaultdict(list)
+    try:
+        if not sroot.is_dir():
+            return {}
+        files = sorted(sroot.glob("**/rollout-*.jsonl"))
+    except OSError:
+        return {}
+    root_str = str(Path(root).resolve())
+    for fp in files:
+        try:
+            with open(fp, encoding="utf-8", errors="replace") as f:
+                first = f.readline()
+        except OSError:
+            continue
+        first = first.strip()
+        if not first:
+            continue
+        try:
+            obj = json.loads(first)
+        except Exception:
+            continue
+        if not isinstance(obj, dict) or obj.get("type") != "session_meta":
+            continue
+        payload = obj.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        tid = payload.get("id")
+        cwd = payload.get("cwd")
+        git = payload.get("git")
+        branch = git.get("branch") if isinstance(git, dict) else None
+        if not isinstance(tid, str) or not tid:
+            continue
+        if cwd != root_str:
+            continue
+        if not isinstance(branch, str) or not branch.startswith("feat/"):
+            continue
+        change = branch[len("feat/"):]
+        if not change or change not in changes:
+            continue
+        if tid in covered_by_change.get(change, ()):
+            continue
+        result[change].append(tid)
+    return {name: sorted(ids) for name, ids in result.items()}
+
+
+def v2_covered_sessions_by_change(root, changes):
+    """`{change: {session_id,...}}`——该 change token-log.jsonl（活动+归档）里出现过的
+    全部 v2 session id（不论 anchor 真假；本函数只回答「日志里提过这个线程」，覆盖判定
+    在 `scan_codex_sessions_uncovered` 做差集）。"""
+    out = defaultdict(set)
+    for name, info in changes.items():
+        for base in (info.get("active_dir"), info.get("archive_dir")):
+            if not base:
+                continue
+            rows, _bad = read_v2_token_log(os.path.join(base, "token-log.jsonl"))
+            for row in rows:
+                out[name].add(row["session"])
+    return dict(out)
+
+
+_SCAN_DISCLAIMER = "跨分支复用线程不可由本扫描判定。"
+
+
+def render_scan_codex_sessions_block(uncovered):
+    """`--scan-codex-sessions` 结果块；固定注明 `_SCAN_DISCLAIMER`（design D11：本开关
+    只能核对「在本分支出生的会话」）。无未覆盖线程也要显性输出固定行，不静默省略
+    （同 hr-tg / 待复评空箱同理）。"""
+    lines = [f"## Codex 会话覆盖核对（--scan-codex-sessions）", "",
+             f"> {_SCAN_DISCLAIMER}", ""]
+    if not uncovered:
+        lines.append("未发现日志未覆盖的线程。")
+        return "\n".join(lines)
+    lines.append("| change | 未覆盖线程 id |")
+    lines.append("|---|---|")
+    for name, ids in sorted(uncovered.items()):
+        lines.append(f"| {name} | {', '.join(ids)} |")
+    return "\n".join(lines)
+
+
+def format_tokens_cell_combined(v1d, v2d):
+    """per-change 表 tokens 列单元格：Claude v1 四计数段 + Codex v2 六计数段各自一段
+    （design「归属与去重」§5，MUST NOT 合并成总分）；两段都无数据显单个「—」，
+    只有一段有数据只显那一段。"""
+    v1s = format_tokens_cell(v1d)
+    v2s = format_v2_tokens_cell(v2d)
+    if v1s == "—" and v2s == "—":
+        return "—"
+    parts = []
+    if v1s != "—":
+        parts.append(v1s)
+    if v2s != "—":
+        parts.append(f"codex: {v2s}")
+    return " ｜ ".join(parts)
 
 
 # ============================ 一览（语义化总结）============================
@@ -984,13 +1409,17 @@ def semantic_summary(N, M, stage_totals, cost_items, flagged_count, agg_rows):
     return "\n".join(["## 一览", "", *card, "", "".join(sents), ""])
 
 
-def build_report(root):
+def build_report(root, scan_codex_sessions=False, sessions_root_override=None):
     """组装全项目 change 成本×价值复盘报告（view-only 再生，无持久状态）。
 
     顶部覆盖计数「覆盖 N change / 有真锚 M / 边界不可解析 K」——M 必须显性
     （避免样本量 N 被误当趋势看：实测常见 M << N）。per-change 表含 hr-tg 双列
     + in-progress 标记；聚合段①阶段占比②成本双峰③per-镜价值表（内嵌
     lens_metric_aggregate 的整表聚合输出，扫 archive）。
+
+    `scan_codex_sessions`：WFR-04 开关，默认关。为 False 时本函数不引用
+    `scan_codex_sessions_uncovered`——不打开 sessions 目录任何文件（结构性保证，
+    非函数内部判断）。`sessions_root_override` 供测试注入隔离 sessions 根目录。
     """
     changes = discover_changes(root)
     seed = seed_mass_shas(root)
@@ -1036,6 +1465,9 @@ def build_report(root):
                  "spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | tokens | 状态 |")
     lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     token_deltas = compute_token_deltas(root, changes)
+    # [task1] v2 分流：Codex 六计数归属，独立于 v1 扫描（v1/v2 全局互不相加互不差分）；
+    # bad_line_total 只在此处汇总（reader 侧唯一坏行计数源），footnote 里可见（WFR-01）。
+    v2_deltas, v2_coverage, bad_line_total = compute_v2_deltas(root, changes)
     for name, info, b, wt, val, hr in rows:
         status = "in-progress" if info["active"] and not info["archive_dir"] else "archived"
         note = "（边界不可解析）" if b["unresolved"] else ""
@@ -1044,7 +1476,7 @@ def build_report(root):
         # 对同一批坏锚的呈现口径一致——不能一张表打 flag、另一张悄悄看着正常。
         if val["has_anchor"] and val.get("num_bad"):
             rate += " ⚠数值非法"
-        tokens_cell = format_tokens_cell(token_deltas.get(name))
+        tokens_cell = format_tokens_cell_combined(token_deltas.get(name), v2_deltas.get(name))
         lines.append(f'| {name} | {wt["total_min"]}{note} | '
                      f'{_stage_col(wt, "spec-review")} | {_stage_col(wt, "impl")} | '
                      f'{_stage_col(wt, "code-review")} | {_stage_col(wt, "done")} | '
@@ -1054,7 +1486,21 @@ def build_report(root):
                      f'{val["sum_independent"] if val["has_anchor"] else "—"} | {tokens_cell} | {status} |')
     lines.append("")
     lines.append(_TOKEN_FOOTNOTE)
+    lines.append(f"> token-log.jsonl bad-line（坏 JSON / 非对象 / 未知 v，逐行跳过不中断报告）: "
+                 f"{bad_line_total}")
     lines.append("")
+
+    # [task4] 「Codex 用量覆盖」块（WFR-03）
+    lines.append(render_v2_coverage_block(changes, v2_coverage))
+    lines.append("")
+
+    # [task4] `--scan-codex-sessions`（WFR-04，默认关；off 时不引用扫描函数）
+    if scan_codex_sessions:
+        covered = v2_covered_sessions_by_change(root, changes)
+        uncovered = scan_codex_sessions_uncovered(
+            root, changes, covered, sessions_root=sessions_root_override)
+        lines.append(render_scan_codex_sessions_block(uncovered))
+        lines.append("")
 
     # 聚合①阶段占比
     lines.append("## 聚合① 阶段占比")
@@ -1123,9 +1569,12 @@ def atomic_write(path, text):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".")
+    ap.add_argument("--scan-codex-sessions", action="store_true", default=False,
+                     help="WFR-04：只读每个 Codex rollout 首行 session_meta，核对"
+                          "未被 token-log 覆盖的线程；默认关，不打开 sessions 目录任何文件。")
     args = ap.parse_args(argv)
     root = os.path.abspath(args.root)
-    md = build_report(root)
+    md = build_report(root, scan_codex_sessions=args.scan_codex_sessions)
     out = os.path.join(root, "openspec", "retro", "report.md")
     atomic_write(out, md)
     print(f"[sdflow-retro] 复盘报告已再生 → {out}")

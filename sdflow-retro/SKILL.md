@@ -215,6 +215,66 @@ python3 ~/.codex/skills/sdflow-retro/scripts/retro_report.py --root "$(git rev-p
    可判定/未知/覆盖率/实修率，样本量低于阈值（5）标「（参考）」不入砍留依据，宁缺毋假、
    MUST NOT 猜测归属。
 
+## Codex 用量（v2 行）怎么读
+
+Codex 宿主下（根线程/子线程）与 outside-voice 经 Codex 的 CLI 调用写的是 v2 行，
+与 Claude 宿主的 v1 四计数**分列呈现、不互相差分、不互相相加**——per-change 表
+tokens 列 Claude 段（`out/in/cc/cr`）与 Codex 段（`codex: ...`）各自一段，从不合并成
+一个总分（两者计价不同）。
+
+- **六计数含义**：`input` / `cached_input`（**⊆ input**，缓存命中部分，不是额外量）/
+  `cache_write_input` / `output` / `reasoning_output`（**⊆ output**，推理 token 部分）/
+  `total`。来源事件未提供某键时该键显 `–`（区别于「无锚/无数据」的 `—`）——
+  **`–` 不代表 0，MUST NOT 当 0 读**。
+- **`duration_ms` 含义**：Σ 每 turn 的 `task_complete.timestamp − task_started.timestamp`，
+  **含工具调用与等待时间**，不是纯模型计算耗时——两个耗时相近的 turn，一个全程在等
+  外部工具、一个全程在推理，`duration_ms` 看不出差别。
+- **「Codex 用量覆盖」块**（每次再生都在，紧跟 per-change 表之后）：每个含 v2 行的
+  change 一行，列 `root`/`child`/`cli` 三类行数、`anchor=true` 线程数、`reason` 各值计数、
+  `start-missing`/`counter-reset`/`config_mixed` 数；**该 change 完全没有 v2 行时显示
+  「未声明」**——不要把「未声明」读成「0 行」或「100% 覆盖」，二者含义不同（design
+  「归属与去重」§6）。
+- **`--scan-codex-sessions`（默认关，人工核对用）**：加这个参数会额外只读
+  `~/.codex/sessions/`（或 `$CODEX_HOME/sessions`）下每个 rollout 文件的**首行**
+  `session_meta`，筛出 `cwd` 等于本仓根、`git.branch` 等于 `feat/<change>` 的线程，
+  与该 change token-log 里已出现的 session 集合做差集，列出「日志里没出现过的线程」。
+  **不读正文、不改任何计数、不写任何文件**——默认关时这段代码路径完全不执行，
+  零文件打开。**报告固定注明「跨分支复用线程不可由本扫描判定」**：一个线程如果
+  在别的分支上出生、后来又在本分支被复用，这个扫描判不出来，只能核对「在本分支
+  出生的会话」这一类。用法：
+  ```bash
+  python3 ~/.claude/skills/sdflow-retro/scripts/retro_report.py \
+    --root "$(git rev-parse --show-toplevel)" --scan-codex-sessions
+  ```
+
+### 已知限制 / 残余盲区
+
+- **root + child 合计**：当前实现按 session（线程）分组后，对同一 change 下全部线程
+  （root/child/cli）的六计数**直接求和**。根线程的 `thread_token_usage` 是否已经包含
+  子代理（child）的用量，尚未在本机核验通过（design.md 决策 R4，核验是 task 2.2 的
+  范围，本 task 未包含）——公开源码与 issue #14642 显示「不包含」，置信中但非实测确认。
+  **在该核验通过前，把 retro 呈现的 Codex 六计数合计当作「未排除重复计入风险」的
+  已知限制看待**，不要拿它做精确的成本核算依据。
+- **Claude runner voice 未覆盖**：Codex 宿主经 outside-voice 调用 Claude
+  （`claude -p --output-format text`）不产生任何用量记录——这是显式声明的缺口，
+  **MUST NOT** 用同一线程的其它数字或别的线程的数字去填充或估算它。
+- **done-final 之后仍在跑的子线程**：`--step done-final` 之后才完成的子代理用量不会
+  再被采集，属于既有 archive 期残余盲区的延伸，非本 change 引入的新问题。
+- **写侧降级不计入用量**：`thread-not-found` / `no-usage-events` / `parse-error` /
+  `timeout` / `invalid-thread-id` / `depth-exceeded` 这些 `reason` 只在覆盖块里可见，
+  该线程本身不贡献任何 usage 数字——覆盖块的 reason 计数就是用来暴露这类「有行但
+  没有可信数字」的情况，不要只看 tokens 列的数字而忽略覆盖块。
+
+### 回滚方式
+
+v2 是纯追加的封闭 schema，旧版 reader（不认识 `v=2` 字段）按既有的「`anchor=true` 且
+四计数齐全」校验会让 v2 行自然落在校验失败分支上被跳过（v2 的 usage 没有 v1 要求的
+`cache_read` 键）——**不会误计、不需要数据迁移**。整套回滚只需还原三个文件到本 change
+之前的版本：`sdflow-init/assets/hack/token_snapshot.py`、
+`sdflow-init/assets/hack/outside-voice.sh`、`sdflow-retro/scripts/retro_report.py`
+（+ 本文件），运行 checkout 重跑一次 `bash setup.sh` 让全局 `~/.sdflow/hack/` 与
+skill symlink 落到回滚后的版本；已经写入 token-log.jsonl 的 v2 行留在文件里不用清理。
+
 ## 跑完之后
 
 **显著呈现报告顶部的 `⚠️ 待复评:` 区块**（不要一句话带过或藏进长回复里）——这是 D12 机械

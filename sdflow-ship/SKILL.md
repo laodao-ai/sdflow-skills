@@ -158,7 +158,12 @@ description: 阶段三编排器——对已过设计门的 OpenSpec change 一�
   再兜底仓内路径 `sdflow-ship/scripts/ship_gate.py`（相对仓根，即 `python3 sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"`），三处均找不到才停下问用户。
   步前问"NEXT 是谁 + 前置缺什么"，步后问"产物落了吗 + 门禁结论"。首行人读摘要照抄进对话，JSON 供判定。
 - **ship 零 git 写操作〔D8〕**：全程不 commit/merge/push（各子 skill 的 checkpoint 归其自身；ship 无产物故无自身 checkpoint）；**不自动 push**。
-- **merge 意图透传**：调用语含 merge opt-out 意图时，ship 归一化为 sdflow-done 词表短语（如「不要 merge」「skip merge」）转述给 done——勿原样转述词表外措辞（git 单向操作只在 done 一处）。
+- **merge 意图透传**：调用语含 merge opt-out 意图时，ship 归一化为 sdflow-done 词表短语（如「不要 merge」「skip merge」）转述给 done——勿原样转述词表外措辞（git 单向操作只在 done 一处）。透传时只转述 opt-out 短语，**MUST NOT 合成 opt-in 措辞**。
+- **`.skip-merge` 起手三态维护**〔R1/R3〕：写盘时机 = `ship_gate` 首调返回非 `REFUSE_START` 后，据本次调用语解析 merge 意图并按三态落盘 `openspec/changes/{change}/.skip-merge`（零字节标记文件，语义 = 存在即 skip、不存在即 merge）：
+  - opt-out（调用语命中「不要 merge」「don't merge」「只归档别合」「skip merge」「先不合」等）→ `touch openspec/changes/{change}/.skip-merge`
+  - opt-in（调用语命中「要 merge」「merge 掉」「合并到 {base}」「do merge」「merge it」等）→ `rm -f openspec/changes/{change}/.skip-merge`
+  - 未指定（两表均未命中，change 名含 "merge" 不算命中）→ 不执行任何文件操作
+  - 文件操作（`touch`/`rm -f`）非零退出 → halt 报告，**MUST NOT 静默继续**
 - **决策协议（`T10-choice` 三级，替换"有把握自动选"；"T10" 保留为历史别名）**：阶段三遇 ≥2 方案——①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过才自动选（复核记录写进该步报告）；③复核不过/无从复核 → defer 进 buglist/todolist + hand-off。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。** 复核记录格式：写入该步 code-review-report.md 的「修复 / defer 台账」区，行格式 = 「`T10-choice`复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」。
 - 模型档位与缺省见规则根 `model-tiers.md`（按机队分列，经 ~/.sdflow/hack/resolve-workflow.sh 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。取值经各被链序调度的子 skill（spec-review/code-review/done/implement）各自 `eval "$(~/.sdflow/hack/resolve-models.sh)"` 解出 `$SDFLOW_TIER_*`；本 skill 自身零 git 写操作、不直接派子代理（无需 spawn_agent 理由声明），此处仅转述覆盖入口，MUST NOT 内联模型名。
 

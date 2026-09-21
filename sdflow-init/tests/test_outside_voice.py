@@ -1,4 +1,4 @@
-import os, re, stat, subprocess, textwrap
+import os, re, stat, subprocess, tempfile, textwrap
 from pathlib import Path
 
 import pytest
@@ -8,8 +8,17 @@ from test_support.windows import bash_argv, bash_executable, bash_path
 REPO = Path(__file__).resolve().parents[2]
 HELPER = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
 
+# implement-optimize-codex-workflow-p2-pull · Task 3.2：Codex 路径新增 `ov_collect_cli_usage()`
+# 会以 helper 进程的 cwd 解析活动 change（`token_snapshot.py --cli-usage` 走与 checkpoint 相同的
+# `_resolve_change_dir(os.getcwd())`）。`run()` 此前从不设 `cwd`，子进程默认继承本测试进程的 cwd
+# ——若那恰好是本仓库真实 checkout（分支为某个 `feat/<change>`），会向该 change 的真实
+# `token-log.jsonl` 追加行（真机验证：修 `--json` 之前跑一遍 `-k codex` 子集，文件被写入 3 行）。
+# 固定一个【非 git 仓库】的隔离 cwd 作默认值——`git symbolic-ref` 在此失败，`_resolve_change_dir`
+# 返回 None，cli-usage 静默跳过，与生产语义一致（非 change 分支下不落任何降级行）。
+_ISOLATED_CWD = Path(tempfile.mkdtemp(prefix="outside-voice-test-cwd-"))
 
-def run(args, env=None, stdin=None, timeout=15):
+
+def run(args, env=None, stdin=None, timeout=15, cwd=None):
     e = os.environ.copy()
     # host=unknown / runner 分叉相关测试要求 SDFLOW_VOICE_* 确定处于测试指定状态——防宿主 shell
     # 已 eval 过 resolve-models.sh 把这两个变量泄漏进 ambient 环境，污染"未设置"类断言。
@@ -19,7 +28,8 @@ def run(args, env=None, stdin=None, timeout=15):
         e.update(env)
     return subprocess.run([bash_executable(), bash_path(HELPER), *bash_argv(args)],
                           capture_output=True, text=True, env=e, input=stdin,
-                          timeout=timeout, encoding="utf-8", errors="replace")
+                          timeout=timeout, encoding="utf-8", errors="replace",
+                          cwd=str(cwd) if cwd is not None else str(_ISOLATED_CWD))
 
 
 def _write_fake_timeout(bin_dir):
@@ -653,12 +663,17 @@ def test_exec_claude_reverse_path_three_flags_golden(tmp_path):
     bin_dir = make_fake_claude(tmp_path)
     ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
     args_file = tmp_path / "claude-args.txt"
-    repo_root = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+    # 本测试断言 `--add-dir` 落的是【真实仓库】的 toplevel（`do_exec` 用
+    # `git rev-parse --show-toplevel` 求 `repo_root`）——显式钉住 `cwd=REPO`，不依赖
+    # `run()` 的默认隔离 cwd（那个 cwd 非 git 仓库，会让 `repo_root` 回落 `$PWD` 而非此处
+    # 期望的真实仓库路径）。
+    repo_root = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--show-toplevel"],
                                 capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     r = run(["exec", "--context-file", str(ctx)],
             env={"PATH": f"{bin_dir}:{path_without_codex()}",
                  "SDFLOW_VOICE_RUNNER": "claude", "SDFLOW_VOICE_MODEL": "claude-strong-placeholder",
-                 "FAKE_CLAUDE_ARGS_FILE": str(args_file)})
+                 "FAKE_CLAUDE_ARGS_FILE": str(args_file)},
+            cwd=REPO)
     assert r.returncode == 0
     argv = args_file.read_text(encoding="utf-8").splitlines()
 
@@ -1124,3 +1139,189 @@ def test_real_runner_control_group_proves_the_probe_can_detect_ambient_leakage(t
         "对照组未观测到任何 ambient 泄漏（hook 未跑且 memory 未加载）—— "
         "本探针对 safe-mode 无判别力，上面那条断言不成立\nstdout=%r\nstderr=%r"
         % (r.stdout[:800], r.stderr[:800]))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# implement-optimize-codex-workflow-p2-pull · Task 3.2：Codex 路径 `--json` +
+# `ov_collect_cli_usage()`（TSA-04）
+# ═══════════════════════════════════════════════════════════════════════════
+
+TOKEN_SNAPSHOT_FOR_OV = REPO / "sdflow-init" / "assets" / "hack" / "token_snapshot.py"
+_OV_CLI_USAGE_FIVE_COUNT = {
+    "input_tokens": 111, "cached_input_tokens": 22, "cache_write_input_tokens": 0,
+    "output_tokens": 5, "reasoning_output_tokens": 0,
+}
+
+
+def _git_ov(repo, *args):
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
+
+
+def _init_change_repo(tmp_path, change="ov-demo-change"):
+    """建一个假 repo，切到 `feat/<change>`，建出对应的 `openspec/changes/<change>/` 目录——
+    `ov_collect_cli_usage()` 落点由 helper 进程 cwd 解析出的活动 change 决定，同
+    `test_token_snapshot.py::_init_repo` 的最小子集。
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_ov(repo, "init", "-q")
+    _git_ov(repo, "config", "user.email", "t@t")
+    _git_ov(repo, "config", "user.name", "t")
+    _git_ov(repo, "checkout", "-q", "-b", f"feat/{change}")
+    change_dir = repo / "openspec" / "changes" / change
+    change_dir.mkdir(parents=True)
+    (change_dir / ".keep").write_text("", encoding="utf-8")
+    return repo, change_dir
+
+
+def _token_log_rows(change_dir):
+    path = change_dir / "token-log.jsonl"
+    if not path.is_file():
+        return []
+    import json as _json
+    return [_json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
+def make_fake_codex_json(tmp_path, usage=None, ok=True, args_file=None):
+    """PATH 前置的假 codex：捕获完整 argv（供断言 `--json` 存在），stdout 输出
+    `codex exec --json` 形态的 JSONL（`thread.started` / `turn.completed`），
+    `--output-last-message` 文件仍照常写（两者互不冲突，同真实 CLI 契约）。
+    """
+    import json as _json
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    usage = usage or _OV_CLI_USAGE_FIVE_COUNT
+    fake = bin_dir / "codex"
+    exit_code = "0" if ok else "1"
+    turn_completed_line = _json.dumps({"type": "turn.completed", "usage": usage})
+    args_capture = '[ -n "${FAKE_CODEX_ARGS_FILE:-}" ] && printf \'%s\\n\' "$@" > "${FAKE_CODEX_ARGS_FILE}"'
+    fake.write_text(textwrap.dedent(f"""\
+        #!/usr/bin/env bash
+        {args_capture}
+        out=""
+        prev=""
+        for a in "$@"; do
+          [ "$prev" = "--output-last-message" ] && out="$a"
+          prev="$a"
+        done
+        cat >/dev/null
+        echo '{{"type":"thread.started","thread_id":"ov-cli-thread"}}'
+        echo '{{"type":"turn.started"}}'
+        echo '{turn_completed_line}'
+        [ -n "$out" ] && printf 'FAKE_FINDINGS\\n' > "$out"
+        exit {exit_code}
+        """), encoding="utf-8")
+    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+    _write_fake_timeout(bin_dir)
+    return str(bin_dir)
+
+
+class TestOutsideVoiceCliUsageCollection:
+    def test_codex_exec_receives_json_flag(self, tmp_path):
+        repo, _ = _init_change_repo(tmp_path)
+        args_file = tmp_path / "codex-args.txt"
+        bin_dir = make_fake_codex_json(tmp_path)
+        ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+        r = run(["exec", "--context-file", str(ctx)],
+                env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
+                     "FAKE_CODEX_ARGS_FILE": str(args_file)},
+                cwd=repo)
+        assert r.returncode == 0, r.stdout + r.stderr
+        argv = args_file.read_text(encoding="utf-8").splitlines()
+        assert "--json" in argv
+        assert "--output-last-message" in argv  # 两旗并存，互不冲突
+
+    def test_normal_call_writes_one_anchored_cli_line_final_message_and_rc_unaffected(self, tmp_path):
+        repo, change_dir = _init_change_repo(tmp_path)
+        bin_dir = make_fake_codex_json(tmp_path)
+        ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+        r = run(["exec", "--context-file", str(ctx)],
+                # 显式钉死 host=claude（spec Scenario「Claude 宿主一次 outside-voice Codex 调用」）——
+                # MUST NOT 依赖运行本测试套件的真实环境是否恰好在 Claude Code 会话里跑
+                # （同 test_token_snapshot.py 的宿主基线纪律）。
+                env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
+                     "CLAUDECODE": "1", "CODEX_THREAD_ID": ""},
+                cwd=repo)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert r.stdout.strip() == "FAKE_FINDINGS"  # 最终消息提取路径不受 --json 影响
+
+        rows = _token_log_rows(change_dir)
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["kind"] == "cli"
+        assert row["anchor"] is True
+        assert row["reason"] == "ok"
+        assert row["session"] == "ov-cli-thread"
+        assert row["usage_source"] == "cli"
+        assert row["runner"] == "codex"
+        # host = 本次调用 outside-voice.sh 的实际宿主（HAE-02：Claude 宿主经 outside-voice
+        # 调 Codex ⇒ host=claude runner=codex），不是硬编码 codex。
+        assert row["host"] == "claude"
+
+    def test_nonzero_exit_still_collects_and_rc_unchanged(self, tmp_path):
+        repo, change_dir = _init_change_repo(tmp_path)
+        bin_dir = make_fake_codex_json(tmp_path, ok=False)
+        ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+        r = run(["exec", "--context-file", str(ctx)],
+                env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex"},
+                cwd=repo)
+        assert r.returncode == 1  # 既有非零退出契约不变（TSA-04：rc 不变）
+
+        rows = _token_log_rows(change_dir)
+        assert len(rows) == 1
+        assert rows[0]["anchor"] is True  # 非零退出但 stdout 已含 usage 事件 ⇒ 仍采集
+
+    def test_unparseable_json_degrades_without_affecting_rc_or_final_message(self, tmp_path):
+        repo, change_dir = _init_change_repo(tmp_path)
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        fake = bin_dir / "codex"
+        fake.write_text(textwrap.dedent("""\
+            #!/usr/bin/env bash
+            out=""
+            prev=""
+            for a in "$@"; do
+              [ "$prev" = "--output-last-message" ] && out="$a"
+              prev="$a"
+            done
+            cat >/dev/null
+            echo 'this is not json at all'
+            [ -n "$out" ] && printf 'FAKE_FINDINGS\\n' > "$out"
+            exit 0
+            """), encoding="utf-8")
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        _write_fake_timeout(bin_dir)
+        ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+        r = run(["exec", "--context-file", str(ctx)],
+                env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex"},
+                cwd=repo)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert r.stdout.strip() == "FAKE_FINDINGS"
+
+        rows = _token_log_rows(change_dir)
+        assert len(rows) == 1
+        assert rows[0]["kind"] == "cli"
+        assert rows[0]["anchor"] is False
+        assert rows[0]["reason"] == "parse-error"
+
+    def test_claude_runner_path_writes_no_cli_line(self, tmp_path):
+        """Non-Goal：不为 Claude runner 拿用量——反向 claude 路径 MUST NOT 触发 cli-usage 采集。"""
+        repo, change_dir = _init_change_repo(tmp_path)
+        bin_dir = make_fake_claude(tmp_path)
+        ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+        r = run(["exec", "--context-file", str(ctx)],
+                env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "claude",
+                     "SDFLOW_VOICE_MODEL": "claude-strong-placeholder"},
+                cwd=repo)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert _token_log_rows(change_dir) == []
+
+    def test_no_active_change_writes_nothing(self, tmp_path):
+        """`run()` 默认隔离 cwd（非 git 仓库）下：cli-usage 静默跳过，既有 rc/最终消息契约不变。"""
+        bin_dir = make_fake_codex_json(tmp_path)
+        ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+        r = run(["exec", "--context-file", str(ctx)],
+                env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex"})
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert r.stdout.strip() == "FAKE_FINDINGS"

@@ -1244,3 +1244,608 @@ def test_build_report_real_repo_tokens_column_smoke():
     md = R.build_report(str(_REPO))
     assert "tokens" in md
     assert "首行全额之和" in md
+
+
+# ============================ WFR-01/02 task1: v1 golden + v2 双读 ============================
+# [implement-optimize-codex-workflow-p2-pull task1] v1 golden：冻结一份真实 v1 token-log.jsonl
+# 内容（本 change 自身 2026-09-21 采集的三个 session），本 change 引入 v2 分流后逐字节
+# 不变断言——防止「加 v2 支路」这个改动意外改写 v1 数值口径（Non-Goals D-1）。
+_V1_GOLDEN_JSONL = "\n".join([
+    '{"v": 1, "ts": "2026-09-21T12:33:13+0800", "step": "sdflow-spec-grill", "session": "69eebb6d-4c7d-4e2f-b510-74be09370109", "host": "claude", "anchor": true, "reason": "ok", "usage": {"input": 2140, "output": 111135, "cache_read": 13052866, "cache_creation": 472140, "messages": 80}}',
+    '{"v": 1, "ts": "2026-09-21T12:41:52+0800", "step": "sdflow-spec-generate", "session": "69eebb6d-4c7d-4e2f-b510-74be09370109", "host": "claude", "anchor": true, "reason": "ok", "usage": {"input": 3132, "output": 189402, "cache_read": 21360485, "cache_creation": 607356, "messages": 111}}',
+    '{"v": 1, "ts": "2026-09-21T14:15:42+0800", "step": "spec-review", "session": "14a6c4b4-e5bc-4c25-aba8-4561eba9bf16", "host": "claude", "anchor": true, "reason": "ok", "usage": {"input": 1902, "output": 360996, "cache_read": 17010627, "cache_creation": 955285, "messages": 81}}',
+    '{"v": 1, "ts": "2026-09-21T15:00:03+0800", "step": "spec-review", "session": "14a6c4b4-e5bc-4c25-aba8-4561eba9bf16", "host": "claude", "anchor": true, "reason": "ok", "usage": {"input": 2716, "output": 473733, "cache_read": 21226492, "cache_creation": 1117489, "messages": 113}}',
+    '{"v": 1, "ts": "2026-09-21T15:03:02+0800", "step": "spec-review", "session": "14a6c4b4-e5bc-4c25-aba8-4561eba9bf16", "host": "claude", "anchor": true, "reason": "ok", "usage": {"input": 2878, "output": 476169, "cache_read": 22383855, "cache_creation": 1124646, "messages": 119}}',
+    '{"v": 1, "ts": "2026-09-21T15:07:29+0800", "step": "implement-optimize-codex-workflow-p2-pull:plan", "session": "fac51dc1-6bc8-43c1-912a-0e47d60ee23a", "host": "claude", "anchor": true, "reason": "ok", "usage": {"input": 91, "output": 18340, "cache_read": 2453185, "cache_creation": 452062, "messages": 28}}',
+]) + "\n"
+
+# 三个 session 各自「首行全额 + 相邻差分」手算得到的期望总量（与生产者累计口径一致，见 task1
+# 交付报告的独立 python 复算脚本）：69eebb6d 会话终值 out189402/in3132/cc607356/cr21360485，
+# 14a6c4b4 会话终值 out476169/in2878/cc1124646/cr22383855，fac51dc1 会话首行 out18340/in91/
+# cc452062/cr2453185；三者相加即下方期望值。
+_V1_GOLDEN_EXPECTED = {"out": 683911, "in": 6101, "cc": 2184064, "cr": 46197525}
+
+
+def test_v1_golden_delta_byte_for_byte_stable(tmp_path):
+    """v1 golden：冻结真实 v1 行内容跑 compute_token_deltas，数值逐字节（逐整数）不变。
+    本测试是 v2 分流引入后的回归锚——任何触碰 v1 路径的改动都会让此测试先红。"""
+    d = tmp_path / "openspec/changes/golden"
+    d.mkdir(parents=True)
+    (d / "token-log.jsonl").write_text(_V1_GOLDEN_JSONL, encoding="utf-8")
+    changes = {"golden": {"active": True, "active_dir": str(d), "archive_dir": None}}
+    deltas = R.compute_token_deltas(str(tmp_path), changes)
+    assert deltas["golden"] == _V1_GOLDEN_EXPECTED
+
+
+def test_v1_golden_reread_is_idempotent(tmp_path):
+    """固定输入二次再生等价：同一 golden 文件跑两次 compute_token_deltas 结果逐字节相同
+    （view-only 再生契约，reader 无副作用/无隐藏状态）。"""
+    d = tmp_path / "openspec/changes/golden"
+    d.mkdir(parents=True)
+    (d / "token-log.jsonl").write_text(_V1_GOLDEN_JSONL, encoding="utf-8")
+    changes = {"golden": {"active": True, "active_dir": str(d), "archive_dir": None}}
+    first = R.compute_token_deltas(str(tmp_path), changes)
+    second = R.compute_token_deltas(str(tmp_path), changes)
+    assert first == second == {"golden": _V1_GOLDEN_EXPECTED}
+
+
+# ============================ task1 slice B: v2 行解析 + bad-line ============================
+
+def _v2_line(session, step, ts, *, kind="root", host="codex", runner="codex",
+             usage=None, anchor=True, reason="ok", branch_at_start=None,
+             turns=0, duration_ms=None, config_mixed=False, parent=None,
+             role=None, depth=0, model="gpt-5", effort="medium",
+             cli_version="0.1.0", usage_source="token_usage_record"):
+    obj = {
+        "v": 2, "ts": ts, "step": step, "host": host, "runner": runner, "kind": kind,
+        "session": session, "parent": parent, "role": role, "depth": depth,
+        "model": model, "effort": effort, "config_mixed": config_mixed,
+        "cli_version": cli_version, "usage_source": usage_source,
+        "branch_at_start": branch_at_start, "usage": usage, "turns": turns,
+        "duration_ms": duration_ms, "anchor": anchor, "reason": reason,
+    }
+    return json.dumps(obj)
+
+
+_V2_USAGE_KEYS = ("input", "cached_input", "cache_write_input", "output",
+                  "reasoning_output", "total")
+
+
+def _v2_usage(**kw):
+    """六键 usage dict，未传的键显式为 None（来源未提供）。"""
+    return {k: kw.get(k) for k in _V2_USAGE_KEYS}
+
+
+def test_parse_v2_line_accepts_well_formed_row():
+    line = _v2_line("s1", "impl", "2026-09-21T10:00:00+0800",
+                     usage=_v2_usage(input=100, cached_input=10, cache_write_input=5,
+                                     output=200, reasoning_output=20, total=300),
+                     branch_at_start="feat/foo")
+    row = R._parse_v2_line(line)
+    assert row is not None
+    assert row["v"] == 2
+    assert row["kind"] == "root"
+    assert row["session"] == "s1"
+    assert row["usage"] == {"input": 100, "cached_input": 10, "cache_write_input": 5,
+                             "output": 200, "reasoning_output": 20, "total": 300}
+    assert row["anchor"] is True
+    assert row["branch_at_start"] == "feat/foo"
+
+
+def test_parse_v2_line_null_usage_keys_stay_none_not_derived():
+    """来源未提供的键为 null，MUST NOT 派生（D2）——cli 行常见 total=None。"""
+    line = _v2_line("s1", "cli-call", "2026-09-21T10:00:00+0800", kind="cli",
+                     usage=_v2_usage(input=10, output=5))
+    row = R._parse_v2_line(line)
+    assert row["usage"]["input"] == 10
+    assert row["usage"]["output"] == 5
+    for k in ("cached_input", "cache_write_input", "reasoning_output", "total"):
+        assert row["usage"][k] is None
+
+
+def test_parse_v2_line_rejects_wrong_v():
+    line = _v2_line("s1", "impl", "2026-09-21T10:00:00+0800")
+    obj = json.loads(line)
+    obj["v"] = 1
+    assert R._parse_v2_line(json.dumps(obj)) is None
+
+
+def test_parse_v2_line_rejects_malformed_json():
+    assert R._parse_v2_line("{not valid json") is None
+
+
+def test_parse_v2_line_rejects_negative_usage_value():
+    line = _v2_line("s1", "impl", "2026-09-21T10:00:00+0800",
+                     usage=_v2_usage(input=-1))
+    assert R._parse_v2_line(line) is None
+
+
+def test_parse_v2_line_no_transcript_row_anchor_false_reason_visible():
+    line = _v2_line("s1", "impl", "2026-09-21T10:00:00+0800", anchor=False,
+                     reason="no-transcript", usage=_v2_usage())
+    row = R._parse_v2_line(line)
+    assert row is not None
+    assert row["anchor"] is False
+    assert row["reason"] == "no-transcript"
+
+
+def test_read_v2_token_log_counts_bad_lines_and_skips_v1(tmp_path):
+    """坏 JSON / 非对象 / 未知 v 计入 bad-line；v=1 行不算 bad、也不进 v2_rows（互不相加/差分）。"""
+    p = tmp_path / "token-log.jsonl"
+    body = "\n".join([
+        _v2_line("s1", "a", "2026-09-21T10:00:00+0800", usage=_v2_usage(input=1, output=2)),
+        "{truncated half line",
+        "[1, 2, 3]",
+        '{"v": 3, "ts": "x"}',
+        '{"v": 1, "ts": "2026-09-21T10:00:00+0800", "step": "s", "session": "s1", '
+        '"anchor": true, "usage": {"input": 1, "output": 1, "cache_read": 1, "cache_creation": 1}}',
+        "",
+    ])
+    p.write_text(body, encoding="utf-8")
+    rows, bad = R.read_v2_token_log(str(p))
+    assert len(rows) == 1
+    assert rows[0]["step"] == "a"
+    assert bad == 3  # truncated / 数组非对象 / 未知 v=3
+
+
+def test_read_v2_token_log_missing_file_returns_empty_no_bad(tmp_path):
+    rows, bad = R.read_v2_token_log(str(tmp_path / "nope.jsonl"))
+    assert rows == []
+    assert bad == 0
+
+
+# ============================ task1 slice C: compute_v2_deltas 归属算法 ============================
+# 覆盖 decision-memo/design.md 「决策流」全部 scenario：基线行 / 出生分支 / start-missing /
+# 差分 / 回退(counter-reset) / resume(同 session 多行) / retry(config_mixed) / config_mixed 标注。
+
+def _mk_change(root, name):
+    d = root / "openspec/changes" / name
+    d.mkdir(parents=True)
+    return {name: {"active": True, "active_dir": str(d), "archive_dir": None}}, d
+
+
+def test_v2_change_start_baseline_row_counts_zero_and_is_diff_base(tmp_path):
+    """基线行 scenario：首行 step=change-start 计 0，只作差分基底；下一行对其差分。"""
+    changes, d = _mk_change(tmp_path, "foo")
+    body = "\n".join([
+        _v2_line("s1", "change-start", "2026-09-21T09:00:00+0800",
+                 usage=_v2_usage(input=100, output=200)),
+        _v2_line("s1", "impl", "2026-09-21T10:00:00+0800",
+                 usage=_v2_usage(input=150, output=260)),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert bad == 0
+    assert deltas["foo"]["input"] == 50
+    assert deltas["foo"]["output"] == 60
+
+
+def test_v2_born_on_branch_first_row_full_credit(tmp_path):
+    """出生分支 scenario：无 change-start 基线行，但首行 branch_at_start == feat/<change>
+    → 全额计入。"""
+    changes, d = _mk_change(tmp_path, "foo")
+    body = _v2_line("s1", "impl", "2026-09-21T10:00:00+0800",
+                     usage=_v2_usage(input=100, output=200), branch_at_start="feat/foo") + "\n"
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert deltas["foo"]["input"] == 100
+    assert deltas["foo"]["output"] == 200
+    assert coverage["foo"]["start_missing"] == 0
+
+
+def test_v2_start_missing_zero_credit_and_flagged(tmp_path):
+    """start-missing scenario：无 change-start 基线行、branch_at_start 不等于 feat/<change>
+    （或缺失）→ 计 0 + 覆盖块标 start-missing。"""
+    changes, d = _mk_change(tmp_path, "foo")
+    body = _v2_line("s1", "impl", "2026-09-21T10:00:00+0800",
+                     usage=_v2_usage(input=100, output=200), branch_at_start=None) + "\n"
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert deltas["foo"]["input"] is None or deltas["foo"]["input"] == 0
+    assert coverage["foo"]["start_missing"] == 1
+
+
+def test_v2_adjacent_diff_across_two_rows_same_change(tmp_path):
+    """差分 scenario：同 session 同 change 相邻两行按累计值相邻差分（与 v1 同法）。"""
+    changes, d = _mk_change(tmp_path, "foo")
+    body = "\n".join([
+        _v2_line("s1", "a", "2026-09-21T10:00:00+0800",
+                 usage=_v2_usage(input=100, output=200), branch_at_start="feat/foo"),
+        _v2_line("s1", "b", "2026-09-21T10:05:00+0800",
+                 usage=_v2_usage(input=150, output=260), branch_at_start="feat/foo"),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert deltas["foo"]["input"] == 150   # 100 全额 + 50 差分
+    assert deltas["foo"]["output"] == 260  # 200 全额 + 60 差分
+
+
+def test_v2_counter_reset_negative_delta_clamped_zero_and_flagged(tmp_path):
+    """回退 scenario：后一行计数小于前一行（生产者重启/口径回退）→ Δ 钳 0，覆盖块标
+    counter-reset。"""
+    changes, d = _mk_change(tmp_path, "foo")
+    body = "\n".join([
+        _v2_line("s1", "a", "2026-09-21T10:00:00+0800",
+                 usage=_v2_usage(input=200, output=400), branch_at_start="feat/foo"),
+        _v2_line("s1", "b", "2026-09-21T10:05:00+0800",
+                 usage=_v2_usage(input=50, output=100), branch_at_start="feat/foo"),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert deltas["foo"]["input"] == 200   # 首行全额 200 + 钳 0
+    assert deltas["foo"]["output"] == 400
+    assert coverage["foo"]["counter_reset"] == 1
+
+
+def test_v2_resume_multiple_rows_same_session_accumulate(tmp_path):
+    """resume scenario：同一子线程被多次 checkpoint 写多行（reader 幂等取相邻差分累加，
+    非取最后一行覆盖）——三次快照的总入账须等于末次累计值。"""
+    changes, d = _mk_change(tmp_path, "foo")
+    body = "\n".join([
+        _v2_line("s1", "a", "2026-09-21T10:00:00+0800",
+                 usage=_v2_usage(input=10, output=10), branch_at_start="feat/foo"),
+        _v2_line("s1", "b", "2026-09-21T10:05:00+0800",
+                 usage=_v2_usage(input=20, output=20), branch_at_start="feat/foo"),
+        _v2_line("s1", "c", "2026-09-21T10:10:00+0800",
+                 usage=_v2_usage(input=35, output=35), branch_at_start="feat/foo"),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert deltas["foo"]["input"] == 35
+    assert deltas["foo"]["output"] == 35
+
+
+def test_v2_retry_anchor_false_row_excluded_from_deltas_but_counted_in_coverage(tmp_path):
+    """retry scenario：一次失败重试写 anchor=false 行（reason=timeout 等）——只进覆盖块，
+    不参与差分归属（design 决策流「anchor=false→只进覆盖块」）。"""
+    changes, d = _mk_change(tmp_path, "foo")
+    body = "\n".join([
+        _v2_line("s1", "a", "2026-09-21T10:00:00+0800", anchor=False, reason="timeout",
+                 usage=_v2_usage()),
+        _v2_line("s1", "b", "2026-09-21T10:05:00+0800",
+                 usage=_v2_usage(input=10, output=20), branch_at_start="feat/foo"),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    # 降级行不参与归属分组 → b 视为该 session 的首行，按出生分支全额计入
+    assert deltas["foo"]["input"] == 10
+    assert deltas["foo"]["output"] == 20
+    assert coverage["foo"]["reason"].get("timeout") == 1
+
+
+def test_v2_config_mixed_flag_counted_in_coverage(tmp_path):
+    """config_mixed scenario：区间内 model/effort 变化的行标 config_mixed=true，
+    覆盖块计数、retro 标「不可用于模型/效率对照」。"""
+    changes, d = _mk_change(tmp_path, "foo")
+    body = _v2_line("s1", "a", "2026-09-21T10:00:00+0800",
+                     usage=_v2_usage(input=10, output=20), branch_at_start="feat/foo",
+                     config_mixed=True) + "\n"
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert coverage["foo"]["config_mixed"] == 1
+
+
+def test_v2_cross_change_session_diffs_against_prior_change_last_row(tmp_path):
+    """跨 change 差分 scenario：同 session 先在 change A 出生、后在 change B 落行
+    → B 对 A 末行差分入账（同 v1 的 Q1=A 口径，v2 亦不得双计）。"""
+    da = tmp_path / "openspec/changes/A"
+    db = tmp_path / "openspec/changes/B"
+    da.mkdir(parents=True)
+    db.mkdir(parents=True)
+    (da / "token-log.jsonl").write_text(
+        _v2_line("s1", "a", "2026-09-21T10:00:00+0800",
+                 usage=_v2_usage(input=100, output=200), branch_at_start="feat/A") + "\n",
+        encoding="utf-8")
+    (db / "token-log.jsonl").write_text(
+        _v2_line("s1", "b", "2026-09-21T10:05:00+0800",
+                 usage=_v2_usage(input=150, output=260)) + "\n",
+        encoding="utf-8")
+    changes = {
+        "A": {"active": True, "active_dir": str(da), "archive_dir": None},
+        "B": {"active": True, "active_dir": str(db), "archive_dir": None},
+    }
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert deltas["A"]["input"] == 100
+    assert deltas["B"]["input"] == 50  # 150-100 差分入 B，非全额
+
+
+def test_v2_root_child_cli_kinds_counted_in_coverage(tmp_path):
+    changes, d = _mk_change(tmp_path, "foo")
+    body = "\n".join([
+        _v2_line("s1", "a", "2026-09-21T10:00:00+0800", kind="root",
+                 usage=_v2_usage(input=1), branch_at_start="feat/foo"),
+        _v2_line("s2", "b", "2026-09-21T10:00:01+0800", kind="child",
+                 usage=_v2_usage(input=1), branch_at_start="feat/foo"),
+        _v2_line("s3", "c", "2026-09-21T10:00:02+0800", kind="cli",
+                 usage=_v2_usage(input=1)),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert len(coverage["foo"]["root"]) == 1
+    assert len(coverage["foo"]["child"]) == 1
+    assert len(coverage["foo"]["cli"]) == 1
+    assert len(coverage["foo"]["anchor_true"]) == 3
+
+
+def test_v2_missing_token_log_no_entry(tmp_path):
+    changes, d = _mk_change(tmp_path, "bare")
+    deltas, coverage, bad = R.compute_v2_deltas(str(tmp_path), changes)
+    assert "bare" not in deltas
+    assert bad == 0
+
+
+def test_v2_deltas_reread_is_idempotent(tmp_path):
+    changes, d = _mk_change(tmp_path, "foo")
+    body = "\n".join([
+        _v2_line("s1", "a", "2026-09-21T10:00:00+0800",
+                 usage=_v2_usage(input=100, output=200), branch_at_start="feat/foo"),
+        _v2_line("s1", "b", "2026-09-21T10:05:00+0800",
+                 usage=_v2_usage(input=150, output=260), branch_at_start="feat/foo"),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    first = R.compute_v2_deltas(str(tmp_path), changes)
+    second = R.compute_v2_deltas(str(tmp_path), changes)
+    assert first == second
+
+
+# ============================ task1 slice D: per-change 表双段呈现 ============================
+
+def test_format_v2_tokens_cell_examples():
+    d = {"input": 100, "cached_input": 10, "cache_write_input": 5,
+         "output": 200, "reasoning_output": 20, "total": None, "turns": 3, "duration_ms": 1000}
+    cell = R.format_v2_tokens_cell(d)
+    assert cell == "in 100 / cached 10 / cw 5 / out 200 / reason 20 / total –"
+
+
+def test_format_v2_tokens_cell_no_anchor_dash():
+    assert R.format_v2_tokens_cell(None) == "—"
+    assert R.format_v2_tokens_cell({k: None for k in _V2_USAGE_KEYS}) == "—"
+
+
+def test_format_tokens_cell_combined_both_present():
+    v1d = {"out": 260, "in": 150, "cc": 470, "cr": 380}
+    v2d = {"input": 10, "cached_input": None, "cache_write_input": None,
+           "output": 5, "reasoning_output": None, "total": None}
+    cell = R.format_tokens_cell_combined(v1d, v2d)
+    assert "out 260 / in 150 / cc 470 / cr 380" in cell
+    assert "codex:" in cell
+    assert "in 10" in cell
+
+
+def test_format_tokens_cell_combined_neither_present_is_dash():
+    assert R.format_tokens_cell_combined(None, None) == "—"
+
+
+def test_format_tokens_cell_combined_only_v2_present():
+    v2d = {"input": 10, "cached_input": None, "cache_write_input": None,
+           "output": 5, "reasoning_output": None, "total": None}
+    cell = R.format_tokens_cell_combined(None, v2d)
+    assert cell.startswith("codex:")
+    assert "out 260" not in cell
+
+
+def test_build_report_v2_tokens_dual_segment_and_bad_line_visible(tmp_path):
+    """per-change 表双段呈现：v1 段（既有格式）+ codex 段（v2 六计数）同格出现；
+    bad-line 计入须在报告里可见（WFR-01）。"""
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    d = root / "openspec/changes/foo"
+    v1_body = "\n".join([
+        _tok_line("s1", "a", "2026-08-10T10:00:00+0800", 100, 200, 300, 400),
+    ])
+    v2_body = _v2_line("s2", "impl", "2026-09-21T10:00:00+0800",
+                        usage=_v2_usage(input=10, output=20), branch_at_start="feat/foo")
+    # bad line: 未知 v
+    bad_line = '{"v": 9, "ts": "x"}'
+    (d / "token-log.jsonl").write_text(v1_body + "\n" + v2_body + "\n" + bad_line + "\n",
+                                        encoding="utf-8")
+    md = R.build_report(str(root))
+    assert "out 200 / in 100 / cc 400 / cr 300" in md
+    assert "codex:" in md and "in 10" in md
+    assert "bad-line" in md
+
+
+def test_build_report_v2_reread_is_byte_identical(tmp_path):
+    """固定输入二次再生等价：同一仓状态两次 build_report 输出逐字节相同。"""
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    d = root / "openspec/changes/foo"
+    body = _v2_line("s1", "impl", "2026-09-21T10:00:00+0800",
+                     usage=_v2_usage(input=10, output=20), branch_at_start="feat/foo")
+    (d / "token-log.jsonl").write_text(body + "\n", encoding="utf-8")
+    first = R.build_report(str(root))
+    second = R.build_report(str(root))
+    assert first == second
+
+
+# ============================ task4: 「Codex 用量覆盖」块 ============================
+# design.md 「归属与去重」§6 + spec WFR-03：每个含 v2 行的 change 一行，列 root/child/cli
+# 三类行数、anchor=true 数、reason 计数、start-missing/counter-reset/config_mixed；
+# 无任何 v2 行的 change 显示「未声明」（MUST NOT 推断 0 或 100% 覆盖）。
+
+def test_render_v2_coverage_block_lists_counts_for_change_with_v2_rows():
+    changes = {"foo": {}}
+    coverage = {
+        "foo": {"root": {"s1", "s2"}, "child": {"s3"}, "cli": {"s4"}, "anchor_true": {"s1", "s2", "s3"},
+                "reason": {"ok": 3, "timeout": 1}, "start_missing": 1,
+                "counter_reset": 2, "config_mixed": 1},
+    }
+    block = R.render_v2_coverage_block(changes, coverage)
+    assert "## Codex 用量覆盖" in block
+    assert "| foo | 2 | 1 | 1 | 3 | ok:3, timeout:1 | 1 | 2 | 1 |" in block
+
+
+def test_render_v2_coverage_block_no_v2_rows_shows_未声明():
+    changes = {"bar": {}}
+    coverage = {}
+    block = R.render_v2_coverage_block(changes, coverage)
+    assert "| bar | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 |" in block
+
+
+def test_build_report_includes_v2_coverage_block_mixed_changes(tmp_path):
+    """一个 change 有 v2 行、一个没有——报告里前者列真实计数，后者列「未声明」。"""
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a",
+                    "openspec/changes/bar/proposal.md": "a"}, "checkpoint(ff)")
+    d = root / "openspec/changes/foo"
+    body = _v2_line("s1", "impl", "2026-09-21T10:00:00+0800",
+                     usage=_v2_usage(input=10, output=20), branch_at_start="feat/foo")
+    (d / "token-log.jsonl").write_text(body + "\n", encoding="utf-8")
+    md = R.build_report(str(root))
+    assert "## Codex 用量覆盖" in md
+    assert "| foo | 1 | 0 | 0 | 1 | ok:1 | 0 | 0 | 0 |" in md
+    assert "| bar | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 | 未声明 |" in md
+
+
+# ============================ task4: --scan-codex-sessions ============================
+# design.md 「归属与去重」§7 + spec WFR-04：默认关，开启时只读每 rollout 首行
+# session_meta，按 cwd==仓根 且 git.branch==feat/<change> 归属，与该 change token-log
+# 的 session 集合做差集，报「日志未覆盖的线程」。MUST NOT 读取首行之外内容。
+
+def _write_rollout(sessions_root, subpath, first_line_obj, *, garbage_tail=True):
+    p = sessions_root / subpath
+    p.parent.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps(first_line_obj)]
+    if garbage_tail:
+        # 第二行故意写非法 JSON——证明扫描只读首行，不会因此崩溃
+        lines.append("{not valid json at all")
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return p
+
+
+def _session_meta_line(thread_id, cwd, branch):
+    return {"type": "session_meta",
+            "payload": {"id": thread_id, "cwd": cwd, "git": {"branch": branch}}}
+
+
+def test_scan_codex_sessions_uncovered_finds_thread_not_in_log(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    sessions_root = tmp_path / "codex-sessions"
+    _write_rollout(sessions_root, "2026/09/21/rollout-1-uuid-a.jsonl",
+                    _session_meta_line("uuid-a", str(root), "feat/foo"))
+    changes = {"foo": {}}
+    covered = {}
+    uncovered = R.scan_codex_sessions_uncovered(str(root), changes, covered,
+                                                 sessions_root=sessions_root)
+    assert uncovered == {"foo": ["uuid-a"]}
+
+
+def test_scan_codex_sessions_uncovered_excludes_covered_session(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    sessions_root = tmp_path / "codex-sessions"
+    _write_rollout(sessions_root, "rollout-1-uuid-a.jsonl",
+                    _session_meta_line("uuid-a", str(root), "feat/foo"))
+    changes = {"foo": {}}
+    covered = {"foo": {"uuid-a"}}
+    uncovered = R.scan_codex_sessions_uncovered(str(root), changes, covered,
+                                                 sessions_root=sessions_root)
+    assert uncovered == {}
+
+
+def test_scan_codex_sessions_uncovered_wrong_cwd_excluded(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    other = tmp_path / "other-repo"
+    sessions_root = tmp_path / "codex-sessions"
+    _write_rollout(sessions_root, "rollout-1-uuid-a.jsonl",
+                    _session_meta_line("uuid-a", str(other), "feat/foo"))
+    changes = {"foo": {}}
+    uncovered = R.scan_codex_sessions_uncovered(str(root), changes, {},
+                                                 sessions_root=sessions_root)
+    assert uncovered == {}
+
+
+def test_scan_codex_sessions_uncovered_non_feat_branch_excluded(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    sessions_root = tmp_path / "codex-sessions"
+    _write_rollout(sessions_root, "rollout-1-uuid-a.jsonl",
+                    _session_meta_line("uuid-a", str(root), "main"))
+    changes = {"foo": {}}
+    uncovered = R.scan_codex_sessions_uncovered(str(root), changes, {},
+                                                 sessions_root=sessions_root)
+    assert uncovered == {}
+
+
+def test_scan_codex_sessions_uncovered_branch_change_not_in_changes_excluded(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    sessions_root = tmp_path / "codex-sessions"
+    _write_rollout(sessions_root, "rollout-1-uuid-a.jsonl",
+                    _session_meta_line("uuid-a", str(root), "feat/not-a-known-change"))
+    uncovered = R.scan_codex_sessions_uncovered(str(root), {"foo": {}}, {},
+                                                 sessions_root=sessions_root)
+    assert uncovered == {}
+
+
+def test_scan_codex_sessions_uncovered_missing_sessions_root_returns_empty(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    sessions_root = tmp_path / "does-not-exist"
+    uncovered = R.scan_codex_sessions_uncovered(str(root), {"foo": {}}, {},
+                                                 sessions_root=sessions_root)
+    assert uncovered == {}
+
+
+def test_scan_codex_sessions_uncovered_only_reads_first_line_not_full_file(tmp_path):
+    """第二行是非法 JSON，若实现误读全文件会崩；只读首行则安然跳过。"""
+    root = tmp_path / "repo"
+    root.mkdir()
+    sessions_root = tmp_path / "codex-sessions"
+    _write_rollout(sessions_root, "rollout-1-uuid-a.jsonl",
+                    _session_meta_line("uuid-a", str(root), "feat/foo"),
+                    garbage_tail=True)
+    uncovered = R.scan_codex_sessions_uncovered(str(root), {"foo": {}}, {},
+                                                 sessions_root=sessions_root)
+    assert uncovered == {"foo": ["uuid-a"]}
+
+
+def test_render_scan_codex_sessions_block_fixed_disclaimer_no_uncovered():
+    block = R.render_scan_codex_sessions_block({})
+    assert "跨分支复用线程不可由本扫描判定" in block
+
+
+def test_render_scan_codex_sessions_block_lists_uncovered_threads():
+    block = R.render_scan_codex_sessions_block({"foo": ["uuid-a", "uuid-b"]})
+    assert "uuid-a" in block and "uuid-b" in block
+    assert "foo" in block
+    assert "跨分支复用线程不可由本扫描判定" in block
+
+
+def test_build_report_scan_codex_sessions_default_off_never_scans(tmp_path, monkeypatch):
+    """默认关：build_report 不带 scan_codex_sessions 参数时，MUST NOT 调用扫描函数
+    （零文件打开的机械证明——扫描函数被替换为必炸桩，未被调用则不炸）。"""
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+
+    def _boom(*a, **kw):
+        raise AssertionError("scan_codex_sessions_uncovered MUST NOT be called when off")
+    monkeypatch.setattr(R, "scan_codex_sessions_uncovered", _boom)
+    md = R.build_report(str(root))
+    assert "--scan-codex-sessions" not in md
+
+
+def test_build_report_scan_codex_sessions_on_includes_block(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    sessions_root = tmp_path / "codex-sessions"
+    _write_rollout(sessions_root, "rollout-1-uuid-a.jsonl",
+                    _session_meta_line("uuid-a", str(root), "feat/foo"))
+    md = R.build_report(str(root), scan_codex_sessions=True, sessions_root_override=sessions_root)
+    assert "## Codex 会话覆盖核对（--scan-codex-sessions）" in md
+    assert "uuid-a" in md
+    assert "跨分支复用线程不可由本扫描判定" in md
+
+
+def test_main_scan_codex_sessions_flag_wires_through(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    env = dict(os.environ, CODEX_HOME=str(tmp_path / "nonexistent-codex-home"))
+    proc = subprocess.run(
+        [sys.executable, str(Path(R.__file__)), "--root", str(root), "--scan-codex-sessions"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+    assert proc.returncode == 0, proc.stderr
+    out = (root / "openspec/retro/report.md").read_text(encoding="utf-8")
+    assert "## Codex 会话覆盖核对（--scan-codex-sessions）" in out

@@ -77,12 +77,12 @@ Standards 轴 dispatch 模板**必填槽**已前移进循环（见 `sdflow-imple
     - **设计门 →「阶段三」交界**（`/sdflow-ship` 之前）——**理由三条，同样在 G1 射程之外**：① **盘面纪律**（阶段三「零跨步内存状态」，
       `NEEDS_CONTEXT` MUST 仅从盘面自答；热编排器会拿对话记忆替代盘面，而 **fresh 子代理防不住这一条**——implementer 冷、回答它的编排器热）；
       ② **产物自足性检验**（冷启动是对四件套/tickets 够不够用的真实检验，热 session 会无声补上、缺口永不暴露）；③ **去作者偏置**。
-      **代价**：编排器需重读 SKILL 与产物，且 MUST 在调 `/sdflow-ship` 时重述 merge 意图（不在盘上）。
+      **代价**：编排器需重读 SKILL 与产物；merge 意图已由 ship/done 起手落盘 `.skip-merge`，`/clear` 后无需重述。
     本节这条 G1 谈的是**独立性**，成本 / 档位 / 盘面纪律 / 自足性都不在其射程内 ⇒ 两处例外均不与之矛盾。
   - 🔴 **MUST NOT 拿「主审裁决需要冷视角」当任一处例外的理由**——本节上面几行已正面回答过它
     （事后 sdflow-code-review 的冷来自**独立编排器 + fresh 子代理 fan-out**，不来自 `/clear`）。
   - **边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 sdflow-implement
-    调度期间、code-review→done 交接）；阶段三内部需控上下文用 **`/compact` 而非 `/clear`**（merge 意图不在盘上、`VERIFY_FAIL` 恢复要重建理解，
+    调度期间、code-review→done 交接）；阶段三内部需控上下文用 **`/compact` 而非 `/clear`**（merge 意图已在盘上（`.skip-merge`）、`VERIFY_FAIL` 恢复要重建理解，
     而 done 的 verify 本就是冷子代理）。
 
 TG 驱动的是**领域镜的选取 + outside voice 是否走 cross-model**（命中 HR-TG 才单开领域 cross-model），
