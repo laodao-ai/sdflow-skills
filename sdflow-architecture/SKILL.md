@@ -505,7 +505,7 @@ Options/Consequences 三节正文仍需模型手写。
 - **ADR → `openspec/adr/`**（更新规则见 `sdflow-adr/references/format.md`：Status 取值、取代改写、
   Partially superseded 活跃态修订），编号由 `adr.py` 机械分配、唯一确定性入口（AD/adr/0011）：
   ```
-  python3 ~/.claude/skills/sdflow-adr/scripts/adr.py new --root "$REPO" --title "<决策一句话>" --slug "<kebab-slug>" --source sdflow-architecture
+  python3 ~/.claude/skills/sdflow-adr/scripts/adr.py new --root "$REPO" --title "<决策一句话>" --slug "<kebab-slug>" --source "来源：SAD 分解判据 · <SAD 章节>（<YYYY-MM-DD>）"
   ```
   找不到该脚本时的定位与提示，见 `sdflow-adr/SKILL.md`「脚本定位」一节（C3 先例：固定路径 →
   `~/.codex/skills/…` → 仓内 `find . -name adr.py` → 未安装提示）。扫描既有文件名最大数字前缀 +1；

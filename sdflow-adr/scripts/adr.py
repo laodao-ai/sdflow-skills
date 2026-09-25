@@ -236,7 +236,7 @@ def _find_status_line(text):
     return None, None, None
 
 
-def _compose_new_status_line(kind, existing_items, nnnn, partial_text, trailing_text):
+def _compose_new_status_line(kind, existing_items, nnnn, partial_text):
     """根据目标当前分类与转换矩阵，返回新的 Status 值（不含 `**Status: ` 包装）。"""
     if kind in ("accepted", "no-status-line"):
         if partial_text is None:
@@ -293,6 +293,31 @@ def _validate_partial_or_die(partial_text, supersedes):
     return text
 
 
+def _plan_supersede(adr_dir, supersedes, nnnn, partial_text):
+    """定位取代目标、按转换矩阵校验，返回 (目标路径, 改写后的目标全文)。只读不写；
+    任何不合法情况以退出码 2 失败，此时尚未创建新文件。"""
+    candidates = sorted(p for p in adr_dir.glob("*.md") if p.name.startswith(f"{supersedes}-"))
+    if not candidates:
+        _die(2, _supersedes_error_text(supersedes, "文件不存在"))
+    if len(candidates) > 1:
+        _die(2, f"adr: --supersedes {supersedes} 对应多个文件（{', '.join(p.name for p in candidates)}）；"
+                f"未创建新文件；先修正重复编号")
+    target_path = candidates[0]
+    target_text = _read_exact_or_die(target_path)
+    if _find_h1_idx(target_text.splitlines()) is None:
+        _die(2, f"adr: --supersedes {supersedes} 的文件 {target_path} 为空；未创建新文件")
+    idx, status_value, _trailing = _find_status_line(target_text)
+    kind, existing_items = _classify_target_status(status_value)
+    if kind == "terminal":
+        _die(2, _supersedes_error_text(supersedes, status_value))
+    if kind == "invalid":
+        _die(2, f"adr: --supersedes {supersedes} 的 Status 取值 {status_value!r} 不在枚举内；"
+                f"未创建新文件；先修正该 ADR 的 Status 行（adr.py lint 可定位）")
+    new_status_value = _compose_new_status_line(kind, existing_items, nnnn, partial_text)
+    new_target_text = _rewrite_target_status(target_text, idx, new_status_value, kind, nnnn, partial_text)
+    return target_path, new_target_text
+
+
 def cmd_new(args):
     root = Path(args.root).resolve()
     adr_dir = _resolve_adr_dir(root)
@@ -313,30 +338,9 @@ def cmd_new(args):
         new_path = adr_dir / f"{nnnn}-{args.slug}.md"
 
         # 全部校验与旧文件新内容的计算都在创建新文件之前完成：创建之后只剩原子写旧文件一步可能失败
-        target_path = None
-        new_target_text = None
+        target_path, new_target_text = None, None
         if supersedes is not None:
-            candidates = sorted(p for p in adr_dir.glob("*.md") if p.name.startswith(f"{supersedes}-"))
-            if not candidates:
-                _die(2, _supersedes_error_text(supersedes, "文件不存在"))
-            if len(candidates) > 1:
-                _die(2, f"adr: --supersedes {supersedes} 对应多个文件（{', '.join(p.name for p in candidates)}）；"
-                        f"未创建新文件；先修正重复编号")
-            target_path = candidates[0]
-            target_text = _read_exact_or_die(target_path)
-            if _find_h1_idx(target_text.splitlines()) is None:
-                _die(2, f"adr: --supersedes {supersedes} 的文件 {target_path} 为空；未创建新文件")
-            idx, status_value, trailing = _find_status_line(target_text)
-            target_kind, target_existing_items = _classify_target_status(status_value)
-            if target_kind == "terminal":
-                _die(2, _supersedes_error_text(supersedes, status_value))
-            if target_kind == "invalid":
-                _die(2, f"adr: --supersedes {supersedes} 的 Status 取值 {status_value!r} 不在枚举内；"
-                        f"未创建新文件；先修正该 ADR 的 Status 行（adr.py lint 可定位）")
-            new_status_value = _compose_new_status_line(
-                target_kind, target_existing_items, nnnn, partial_text, trailing)
-            new_target_text = _rewrite_target_status(
-                target_text, idx, new_status_value, target_kind, nnnn, partial_text)
+            target_path, new_target_text = _plan_supersede(adr_dir, supersedes, nnnn, partial_text)
 
         existing_same_number = [p for p in adr_dir.glob(f"{nnnn}-*.md")]
         if existing_same_number:

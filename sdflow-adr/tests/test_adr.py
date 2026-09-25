@@ -5,6 +5,7 @@
 """
 
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -123,17 +124,67 @@ def test_new_invalid_slug_exits_2(tmp_path):
     assert r.returncode == 2
 
 
-def test_new_same_number_already_exists_exits_2(tmp_path):
+def test_new_increments_past_existing_number(tmp_path):
     root = mkroot(tmp_path)
     write_adr(root, "0001-foo.md", ACCEPTED_ADR)
-    # 强制传入的 slug 会让新扫号仍是 0002，因此改用已占用文件名场景：
-    # 通过直接构造同号冲突——两个不同 slug 但期望编号相同不可控（next-id 自动递增）。
-    # 用「独占创建失败」场景改用并发/占用测试（见下）。
     r = run(["new", "--root", str(root), "--title", "T",
              "--slug", "bar", "--source", "s"])
     assert r.returncode == 0
     out_path = Path(r.stdout.strip().splitlines()[0])
     assert out_path.name == "0002-bar.md"
+
+
+def test_new_same_number_taken_after_scan_exits_2_without_overwrite(tmp_path, monkeypatch, capsys):
+    """AM-4「同号不覆盖」：扫号结果过期（别的写入者在扫号后占了同号），命中同号检查 → 退出 2，
+    已有文件字节不变、不产生第二个同号文件。锁在单进程下挡住了真实竞争，故 monkeypatch 让扫号
+    漏掉已存在的 0002，精确落到该分支。"""
+    root = mkroot(tmp_path)
+    write_adr(root, "0001-foo.md", ACCEPTED_ADR)
+    taken = write_adr(root, "0002-other.md", ACCEPTED_ADR)
+    adr_module = _load_adr_module()
+    monkeypatch.setattr(adr_module, "_scan_numbers_or_die", lambda adr_dir: [1])
+    with pytest.raises(SystemExit) as exc_info:
+        adr_module.main(["new", "--root", str(root), "--title", "T", "--slug", "bar", "--source", "s"])
+    assert exc_info.value.code == 2
+    assert "编号 0002 已被" in capsys.readouterr().err
+    assert taken.read_text(encoding="utf-8") == ACCEPTED_ADR
+    assert sorted(p.name for p in (root / "openspec" / "adr").glob("*.md")) == ["0001-foo.md", "0002-other.md"]
+
+
+def test_new_same_file_created_before_exclusive_open_exits_2_without_overwrite(tmp_path, monkeypatch, capsys):
+    """AM-4「同号不覆盖」的最后一道防线：同号检查通过后、独占创建前，目标文件被别人建出 →
+    `O_EXCL` 失败 → 退出 2，别人写的内容不被覆盖。`_render_skeleton` 恰在两步之间调用，借它建文件。"""
+    root = mkroot(tmp_path)
+    adr_module = _load_adr_module()
+    target = root / "openspec" / "adr" / "0001-bar.md"
+    real_render = adr_module._render_skeleton
+
+    def _render_after_race(title, source):
+        target.write_text("别人写的内容\n", encoding="utf-8")
+        return real_render(title, source)
+
+    monkeypatch.setattr(adr_module, "_render_skeleton", _render_after_race)
+    with pytest.raises(SystemExit) as exc_info:
+        adr_module.main(["new", "--root", str(root), "--title", "T", "--slug", "bar", "--source", "s"])
+    assert exc_info.value.code == 2
+    assert "编号 0001 已被" in capsys.readouterr().err
+    assert target.read_text(encoding="utf-8") == "别人写的内容\n"
+
+
+@pytest.mark.skipif(sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                    reason="依赖 POSIX 目录权限；root 无视权限位")
+def test_new_lock_file_cannot_be_created_exits_2(tmp_path):
+    """`_acquire_lock` 的「无法创建锁文件」分支：ADR 目录不可写 → 退出 2 + 文案，不产生任何文件。"""
+    root = mkroot(tmp_path)
+    adr_dir = root / "openspec" / "adr"
+    adr_dir.chmod(0o555)
+    try:
+        r = run(["new", "--root", str(root), "--title", "T", "--slug", "bar", "--source", "s"])
+    finally:
+        adr_dir.chmod(0o755)
+    assert r.returncode == 2
+    assert "无法创建锁文件" in r.stderr
+    assert list(adr_dir.iterdir()) == []
 
 
 def test_new_unknown_filename_in_dir_exits_2(tmp_path):
@@ -168,30 +219,28 @@ def test_new_different_slug_concurrent_no_duplicate_number(tmp_path):
 # new --supersedes / --partial
 # ══════════════════════════════════════════════════════════════════════════
 
-def test_new_supersedes_accepted_target_full(tmp_path):
+ACCEPTED_STATUS_LINE = "**Status: Accepted** · 来源 change：`demo-change`（2026-01-01）"
+PARTIALLY_0044 = "Partially superseded by 0044（决策 1、2）"
+
+
+@pytest.mark.parametrize("before, extra, after", [
+    # 转换矩阵四格：目标 Accepted / Partially × 不带 / 带 --partial；· 之后的原文一律保留
+    ("Accepted", [], "Superseded by 0002"),
+    ("Accepted", ["--partial", "决策 1、2"], "Partially superseded by 0002（决策 1、2）"),
+    (PARTIALLY_0044, [], "Superseded by 0044（决策 1、2）、0002"),
+    (PARTIALLY_0044, ["--partial", "决策 3"], "Partially superseded by 0044（决策 1、2）、0002（决策 3）"),
+])
+def test_new_supersedes_transition_matrix(tmp_path, before, extra, after):
     root = mkroot(tmp_path)
-    write_adr(root, "0001-old.md", ACCEPTED_ADR)
+    write_adr(root, "0001-old.md", ACCEPTED_ADR.replace(
+        ACCEPTED_STATUS_LINE, f"**Status: {before}** · 来源 change：`demo-change`（2026-01-01）"))
     r = run(["new", "--root", str(root), "--title", "决定用 Z", "--slug", "decide-z",
-             "--source", "s", "--supersedes", "0001"])
+             "--source", "s", "--supersedes", "0001", *extra])
     assert r.returncode == 0
     lines = r.stdout.strip().splitlines()
-    assert len(lines) == 2
-    new_path, old_path = Path(lines[0]), Path(lines[1])
-    assert new_path.name == "0002-decide-z.md"
-    assert old_path.name == "0001-old.md"
-    old_text = old_path.read_text(encoding="utf-8")
-    assert "**Status: Superseded by 0002** · 来源 change：`demo-change`（2026-01-01）" in old_text
-
-
-def test_new_supersedes_partial(tmp_path):
-    root = mkroot(tmp_path)
-    write_adr(root, "0001-old.md", ACCEPTED_ADR)
-    r = run(["new", "--root", str(root), "--title", "T", "--slug", "s2",
-             "--source", "s", "--supersedes", "0001", "--partial", "决策 1、2"])
-    assert r.returncode == 0
-    old_path = root / "openspec" / "adr" / "0001-old.md"
-    old_text = old_path.read_text(encoding="utf-8")
-    assert "**Status: Partially superseded by 0002（决策 1、2）** · 来源 change：`demo-change`（2026-01-01）" in old_text
+    assert [Path(p).name for p in lines] == ["0002-decide-z.md", "0001-old.md"]
+    old_text = Path(lines[1]).read_text(encoding="utf-8")
+    assert f"**Status: {after}** · 来源 change：`demo-change`（2026-01-01）" in old_text
 
 
 def test_new_supersedes_target_no_status_line(tmp_path):
@@ -220,49 +269,31 @@ def test_new_supersedes_target_not_exist_exits_2(tmp_path):
     assert list((root / "openspec" / "adr").glob("*.md")) == []
 
 
-def test_new_supersedes_target_already_superseded_exits_2(tmp_path):
-    text = ACCEPTED_ADR.replace(
-        "**Status: Accepted** · 来源 change：`demo-change`（2026-01-01）",
-        "**Status: Superseded by 0044** · 来源 change：`demo-change`（2026-01-01）",
-    )
+@pytest.mark.parametrize("status_line, extra", [
+    ("**Status: Superseded by 0044** · 来源 change：`demo-change`（2026-01-01）", []),
+    ("**Status: Deprecated** · 已废弃", ["--partial", "TEXT"]),
+])
+def test_new_supersedes_terminal_target_exits_2(tmp_path, status_line, extra):
+    """终态目标（Superseded / Deprecated）拒绝再取代：不创建新文件，目标字节不变。"""
+    text = ACCEPTED_ADR.replace(ACCEPTED_STATUS_LINE, status_line)
     root = mkroot(tmp_path)
     write_adr(root, "0001-old.md", text)
     r = run(["new", "--root", str(root), "--title", "T", "--slug", "s2",
-             "--source", "s", "--supersedes", "0001"])
+             "--source", "s", "--supersedes", "0001", *extra])
     assert r.returncode == 2
-    old_text = (root / "openspec" / "adr" / "0001-old.md").read_text(encoding="utf-8")
-    assert old_text == text
-    # 未创建新文件
+    assert (root / "openspec" / "adr" / "0001-old.md").read_text(encoding="utf-8") == text
     assert sorted(p.name for p in (root / "openspec" / "adr").glob("*.md")) == ["0001-old.md"]
 
 
-def test_new_supersedes_target_already_deprecated_exits_2(tmp_path):
-    text = ACCEPTED_ADR.replace(
-        "**Status: Accepted** · 来源 change：`demo-change`（2026-01-01）",
-        "**Status: Deprecated** · 已废弃",
-    )
-    root = mkroot(tmp_path)
-    write_adr(root, "0001-old.md", text)
-    r = run(["new", "--root", str(root), "--title", "T", "--slug", "s2",
-             "--source", "s", "--supersedes", "0001", "--partial", "TEXT"])
-    assert r.returncode == 2
-    assert (root / "openspec" / "adr" / "0001-old.md").read_text(encoding="utf-8") == text
-
-
-def test_new_supersedes_partially_superseded_target_becomes_multi_target(tmp_path):
-    """目标已是 Partially superseded，不带 --partial 全覆盖 → 多目标 Superseded by 既有、新。"""
-    text = ACCEPTED_ADR.replace(
-        "**Status: Accepted** · 来源 change：`demo-change`（2026-01-01）",
-        "**Status: Partially superseded by 0044（决策 1、2）** · 来源 change：`demo-change`（2026-01-01）",
-    )
+def test_new_supersedes_multi_target_result_passes_lint_and_is_terminal(tmp_path):
+    """Partially 目标被整体取代后得到的多目标终态：lint 认可其取值，且不可再被取代。"""
+    text = ACCEPTED_ADR.replace(ACCEPTED_STATUS_LINE, f"**Status: {PARTIALLY_0044}** · 来源")
     root = mkroot(tmp_path)
     write_adr(root, "0001-old.md", text)
     r = run(["new", "--root", str(root), "--title", "T", "--slug", "s2",
              "--source", "s", "--supersedes", "0001"])
     assert r.returncode == 0
-    old_text = (root / "openspec" / "adr" / "0001-old.md").read_text(encoding="utf-8")
-    assert "**Status: Superseded by 0044（决策 1、2）、0002** · 来源 change：`demo-change`（2026-01-01）" in old_text
-    # 往返：new 产出的多目标终态须被 lint 接受（0044 不存在会报 L5，这里只断言没有 L4 取值红项）
+    # 0044 不存在会报 L5，这里只断言没有 L4 取值红项
     lint = run(["lint", "--root", str(root), str(root / "openspec" / "adr" / "0001-old.md")])
     assert "ADR-L4" not in lint.stdout, lint.stdout
     # 该终态不可再被取代，目录字节不变
@@ -357,21 +388,6 @@ def test_new_supersedes_preserves_crlf_and_trailing_blank_lines(tmp_path):
     assert r.returncode == 0
     expected = original.replace("**Status: Accepted**", "**Status: Superseded by 0002**")
     assert p.read_bytes() == expected.encode("utf-8")
-
-
-def test_new_supersedes_partially_superseded_target_append_partial(tmp_path):
-    """目标已是 Partially superseded，带 --partial → 追加、<新>（TEXT）。"""
-    text = ACCEPTED_ADR.replace(
-        "**Status: Accepted** · 来源 change：`demo-change`（2026-01-01）",
-        "**Status: Partially superseded by 0044（决策 1、2）** · 来源 change：`demo-change`（2026-01-01）",
-    )
-    root = mkroot(tmp_path)
-    write_adr(root, "0001-old.md", text)
-    r = run(["new", "--root", str(root), "--title", "T", "--slug", "s2",
-             "--source", "s", "--supersedes", "0001", "--partial", "决策 3"])
-    assert r.returncode == 0
-    old_text = (root / "openspec" / "adr" / "0001-old.md").read_text(encoding="utf-8")
-    assert "**Status: Partially superseded by 0044（决策 1、2）、0002（决策 3）** · 来源 change：`demo-change`（2026-01-01）" in old_text
 
 
 def test_new_supersedes_old_file_write_failure_rolls_back(tmp_path, monkeypatch, capsys):
