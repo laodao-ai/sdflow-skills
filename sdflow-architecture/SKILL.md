@@ -305,7 +305,7 @@ after:  <修正后切法一句话>
   （是否凑数）无确定性信号，归人门与冷走查复核——脚本不查、模型不自证。
 
 **分解判据落 ADR**：子系统分解的判据、被否切法、显式接受的疑点（hub / 横跨变化）→ 消费仓 `openspec/adr/`
-下的**第一条分解 ADR**，经 `adr-new` 机械分配编号（见「分家指令」节）。
+下的**第一条分解 ADR**，经 `adr.py new` 机械分配编号（见「分家指令」节）。
 
 留痕步骤到位 + **候选摘要快照**（continue 断点恢复靠它）：
 
@@ -499,17 +499,20 @@ SAD**（environments/testing-strategy 是相邻文档，写进 SAD 违反 `quali
 ## 分家指令（ADR / 术语单一真相源；SAD 只引用不复述）
 
 分家写入**编号分配与骨架机械化**，**正文由模型用 Edit 补写**，SAD 本体只索引/引用，**MUST NOT 复述**其
-内容（复述必双写发散）——adr-new 只机械化编号扫描+骨架文件生成，Context/Decision/Consequences 三节正文
-仍需模型手写。
+内容（复述必双写发散）——`adr.py new` 只机械化编号扫描+骨架文件生成，Decision/Considered
+Options/Consequences 三节正文仍需模型手写。
 
-- **ADR → `openspec/adr/`**（不可变 + supersession 链），编号由 scaffold 机械分配：
+- **ADR → `openspec/adr/`**（更新规则见 `sdflow-adr/references/format.md`：Status 取值、取代改写、
+  Partially superseded 活跃态修订），编号由 `adr.py` 机械分配、唯一确定性入口（AD/adr/0011）：
   ```
-  python3 "$SKILL_DIR/scripts/sad_scaffold.py" adr-new --root "$REPO" --title "<决策一句话>" --slug "<kebab-slug>"
+  python3 ~/.claude/skills/sdflow-adr/scripts/adr.py new --root "$REPO" --title "<决策一句话>" --slug "<kebab-slug>" --source sdflow-architecture
   ```
-  扫描既有文件名最大数字前缀 +1；**编号模式无法识别 → fail-closed**（脚本非零退出），此时人工核对后用
-  `--number <N>` 越过扫描。第一条分解 ADR（步骤 ② 判据）即经此产出。**adr-new 产出骨架后 MUST 用 Edit
-  把步骤 ② 的判据/被否切法/AP 自检三行痕写入该 ADR 文件的 Context/Decision/Consequences 三节，MUST NOT
-  留空骨架。**
+  找不到该脚本时的定位与提示，见 `sdflow-adr/SKILL.md`「脚本定位」一节（C3 先例：固定路径 →
+  `~/.codex/skills/…` → 仓内 `find . -name adr.py` → 未安装提示）。扫描既有文件名最大数字前缀 +1；
+  **编号模式无法识别 → fail-closed**（脚本退出 2）。第一条分解 ADR（步骤 ② 判据）即经此产出。**`adr.py
+  new` 产出骨架后 MUST 用 Edit 把步骤 ② 的判据/被否切法/AP 自检三行痕写入该 ADR 文件的
+  Decision/Considered Options/Consequences 三节，MUST NOT 留空骨架（骨架占位行含字面标记
+  `TODO(adr)`，写完后跑 `adr.py lint <文件>` 确认 `TODO(adr)` 清零）。**
 - **术语 → `openspec/CONTEXT.md`**（生态既有 home），并入 `## Language` 段末尾：
   ```
   python3 "$SKILL_DIR/scripts/sad_scaffold.py" context-add --root "$REPO" --term "<术语>" --definition "<定义>"

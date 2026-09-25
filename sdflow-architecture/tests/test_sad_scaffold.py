@@ -194,22 +194,7 @@ def test_write_commands_before_init_exit2(tmp_path):
     assert r3.returncode == 2 and "sad.md 不存在" in r3.stderr
 
 
-# ---- Task 5: scaffold 分家机械化（adr-new + context-add） -------------------------------
-
-def test_adr_new_max_plus_one(tmp_path):
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    (repo / "openspec" / "adr" / "0007-x.md").write_text("x", encoding="utf-8")
-    r = run(["adr-new", "--root", str(repo), "--title", "分解判据", "--slug", "decomposition"], tmp_path)
-    assert r.returncode == 0
-    assert (repo / "openspec" / "adr" / "0008-decomposition.md").exists()
-
-def test_adr_new_unrecognized_pattern_fail_closed(tmp_path):
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    (repo / "openspec" / "adr" / "notes.md").write_text("x", encoding="utf-8")
-    r = run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "t"], tmp_path)
-    assert r.returncode == 2 and "notes.md" in r.stderr          # 留人工，--number 可越
-    r2 = run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "t", "--number", "12"], tmp_path)
-    assert r2.returncode == 0 and (repo / "openspec" / "adr" / "0012-t.md").exists()
+# ---- Task 5: scaffold 分家机械化（context-add；ADR 新建子命令已删除，改走 `adr.py new`，AD） -
 
 def test_context_add_append_and_conflict(tmp_path):
     repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
@@ -221,45 +206,6 @@ def test_context_add_append_and_conflict(tmp_path):
     assert r2.returncode == 2 and "已存在" in r2.stderr
     assert "另一定义" not in (repo / "openspec" / "CONTEXT.md").read_text(encoding="utf-8")
 
-def test_adr_new_bad_slug_exit2(tmp_path):
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    r = run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "Bad_Slug!"], tmp_path)
-    assert r.returncode == 2
-    assert not list((repo / "openspec" / "adr").glob("*Bad*"))
-
-def test_adr_new_target_exists_exit2(tmp_path):
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    existing = repo / "openspec" / "adr" / "0007-decomposition.md"
-    existing.write_text("既有内容", encoding="utf-8")
-    r = run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "decomposition",
-             "--number", "7"], tmp_path)
-    assert r.returncode == 2 and "0007-decomposition.md" in r.stderr
-    assert existing.read_text(encoding="utf-8") == "既有内容"   # 未被覆盖
-
-def test_adr_new_empty_dir_starts_at_0001(tmp_path):
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    assert not list((repo / "openspec" / "adr").glob("*.md"))
-    r = run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "t"], tmp_path)
-    assert r.returncode == 0
-    assert (repo / "openspec" / "adr" / "0001-t.md").exists()
-
-def test_adr_new_ignores_readme(tmp_path):
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    (repo / "openspec" / "adr" / "README.md").write_text("非编号命名，须被忽略", encoding="utf-8")
-    r = run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "t"], tmp_path)
-    assert r.returncode == 0
-    assert (repo / "openspec" / "adr" / "0001-t.md").exists()
-
-def test_adr_new_skeleton_content(tmp_path):
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    r = run(["adr-new", "--root", str(repo), "--title", "决策标题", "--slug", "decision-x"], tmp_path)
-    assert r.returncode == 0
-    created = repo / "openspec" / "adr" / "0001-decision-x.md"
-    assert str(created) in r.stdout
-    text = created.read_text(encoding="utf-8")
-    assert text.startswith("# ADR 0001: 决策标题\n\n- Status: Proposed\n- Date: ")
-    assert "## Context\n\n## Decision\n\n## Consequences\n" in text
-
 def test_context_add_creates_language_section_if_missing(tmp_path):
     repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
     ctx_path = repo / "openspec" / "CONTEXT.md"
@@ -269,27 +215,11 @@ def test_context_add_creates_language_section_if_missing(tmp_path):
     text = ctx_path.read_text(encoding="utf-8")
     assert "## Language" in text and "**X**" in text and "定义X" in text
 
-def test_adr_new_no_openspec_exit3(tmp_path):
-    repo = make_repo(tmp_path, with_openspec=False)
-    r = run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "t"], tmp_path)
-    assert r.returncode == 3 and "sdflow-init" in r.stderr
-    assert not (repo / "openspec").exists()
-
 def test_context_add_no_openspec_exit3(tmp_path):
     repo = make_repo(tmp_path, with_openspec=False)
     r = run(["context-add", "--root", str(repo), "--term", "X", "--definition", "D"], tmp_path)
     assert r.returncode == 3 and "sdflow-init" in r.stderr
     assert not (repo / "openspec").exists()
-
-def test_adr_new_missing_sad_log_notice_not_blocking(tmp_path):
-    # openspec/ 布局存在（changes+specs）但从未跑过 sad_scaffold init → 无 sad-log.md；
-    # adr-new 合法运行于此态，MUST NOT 因日志缺失被拒——显式提示 + 继续 + exit 0。
-    repo = make_repo(tmp_path)
-    r = run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "t"], tmp_path)
-    assert r.returncode == 0
-    assert (repo / "openspec" / "adr" / "0001-t.md").exists()
-    assert not (repo / "openspec" / "architecture" / "sad-log.md").exists()
-    assert "sad-log" in (r.stdout + r.stderr)
 
 def test_context_add_missing_sad_log_notice_not_blocking(tmp_path):
     repo = make_repo(tmp_path)
@@ -307,25 +237,11 @@ def test_load_sad_non_utf8_fail_closed(tmp_path):
     assert "FAIL" in r.stderr
 
 
-def test_adr_new_and_context_add_append_log_when_present(tmp_path):
+def test_context_add_appends_log_when_present(tmp_path):
     repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "t"], tmp_path)
     run(["context-add", "--root", str(repo), "--term", "Y", "--definition", "D"], tmp_path)
     log = (repo / "openspec" / "architecture" / "sad-log.md").read_text(encoding="utf-8")
-    assert "adr-new 0001-t" in log
     assert "context-add Y" in log
-
-
-def test_adr_new_number_collision_exit2(tmp_path):
-    """Fix 1: 重复编号应被占用检查拒绝。"""
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    # 先创建 0007-x.md
-    (repo / "openspec" / "adr" / "0007-x.md").write_text("existing", encoding="utf-8")
-    # 再用 --number 7 尝试创建 0007-y.md → 应返回码 2，stderr 含 0007，文件未创建
-    r = run(["adr-new", "--root", str(repo), "--number", "7", "--slug", "y", "--title", "T"], tmp_path)
-    assert r.returncode == 2
-    assert "0007" in r.stderr and "已被占用" in r.stderr
-    assert not (repo / "openspec" / "adr" / "0007-y.md").exists()
 
 
 def test_context_add_single_blank_between_entries(tmp_path):
@@ -525,23 +441,8 @@ def test_b8_preset_lock_blocks_set_fact(tmp_path):
     r = run(["set-fact", "--root", str(repo), "--fact", "positioning=answered"], tmp_path)
     assert r.returncode == 2 and "进行中" in r.stderr
 
-def test_b8_concurrent_adr_new_unique_numbers(tmp_path):
-    # 6 路并发 adr-new：锁串行化 → 编号互不相同 且 全部 exit 0（CI 不稳可标注但保留）
-    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    procs = [subprocess.Popen(
-                [sys.executable, str(SCRIPT), "adr-new", "--root", str(repo),
-                 "--title", f"T{i}", "--slug", f"s{i}"],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=tmp_path)
-             for i in range(6)]
-    # 先全部并发启动，再逐个 communicate 收割：drain + close PIPE，避免 ResourceWarning
-    rcs = []
-    for p in procs:
-        p.communicate()
-        rcs.append(p.returncode)
-    assert all(rc == 0 for rc in rcs), f"部分进程失败: {rcs}"
-    names = sorted(p.name for p in (repo / "openspec" / "adr").glob("*.md"))
-    nums = [n[:4] for n in names]
-    assert len(nums) == len(set(nums)) == 6, f"编号非唯一或数量不符: {names}"
+# ADR 新建并发编号唯一性覆盖已随 T1 迁至 sdflow-adr/tests/test_adr.py::
+# test_new_different_slug_concurrent_no_duplicate_number（同一 `_repo_lock` 形态，AD）。
 
 
 # ---- B9: log 换行注入拒绝 --------------------------------------------------------------

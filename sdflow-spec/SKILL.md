@@ -352,9 +352,10 @@ change 名此时即可定（A.2 禁止清单已保证目标态一句话可写出
 
 ### B.6 ADR / 术语惰性提议钩子
 
-拷问中命中 ADR 三条件 ⇒ **提议**落 `openspec/adr/`；发现术语冲突或模糊语言 ⇒ **提议**更新
-`openspec/CONTEXT.md`。🔴 **两者未经人确认 MUST NOT 自动写入。** 三条件判据与模板见
-[`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
+拷问中命中 ADR 三条件 ⇒ **提议**落 `openspec/adr/`（人确认后经 `sdflow-adr` 的 `adr.py new` 分配编号
+与骨架，格式以 `sdflow-adr/references/format.md` 为准，补写正文后 `adr.py lint` 全绿）；发现术语冲突
+或模糊语言 ⇒ **提议**更新 `openspec/CONTEXT.md`。🔴 **两者未经人确认 MUST NOT 自动写入。** 三条件
+判据与落盘流程见 [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
 
 ### B.7 收敛前检查（B.6 升级：从「临场感知」→ 显式检查点）
 
@@ -364,7 +365,7 @@ change 名此时即可定（A.2 禁止清单已保证目标态一句话可写出
 2. **术语冲突判据**（同 B.6）：该决策引入/使用的术语与 `openspec/CONTEXT.md` 已有定义是否冲突或模糊 ⇒ 需更新 CONTEXT.md。
 3. scope 内聚检查：MUST 读 `references/scope-cohesion-check.md` 判据；发现偏离 MUST 呈现给人拍板，MUST NOT 静默调整范围。
 
-🔴 同 B.6：item 1/2 未经人确认 MUST NOT 自动写入，判据与模板同引 B.6 所示文件。
+🔴 同 B.6：item 1/2 未经人确认 MUST NOT 自动写入，判据与落盘流程同引 B.6 所示文件。
 
 **与 B.6 的区别**：B.6 是拷问过程中的惰性钩子（命中就提议）；本步是**收敛前逐条回扫**——B.6 漏掉的、
 或在后续拷问中语义发生变化的决策，在此兜底捕获。

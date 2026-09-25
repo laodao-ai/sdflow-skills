@@ -1,4 +1,4 @@
-# ADR 与术语的惰性提议 — 判据与最小模板
+# ADR 与术语的惰性提议 — 判据与落盘流程
 
 > 被 `sdflow-spec/SKILL.md` 相位 A/B 的「惰性提议钩子」引用。
 > 🔴 **两者一律「只提议、不写入」**——未经人确认 MUST NOT 自动落盘。
@@ -23,24 +23,20 @@
 
 ### 格式真相源
 
-**锚定 `openspec/adr/` 同目录的既有文件**（读 2–3 个最近的，照其结构写）。
-目录为空时才用下面的最小模板：
+**格式见 `sdflow-adr/references/format.md`**——本 skill MUST NOT 自带 ADR 模板，MUST NOT 照同目录
+既有文件的格式写（那会把存量格式漂移带进新文件）。流程固定三步：
 
-```markdown
-# <一句话结论，不是「关于 X 的决策」这种标题>
-
-<2–5 句：背景 + 为什么必须现在定 + 结论。>
-
-## Considered Options
-
-- **<选中的>（选中）**：<为什么>。代价 = <代价>。
-- **<候选 2>**：<为什么没选>。未选。
-
-## Consequences
-
-- <这个决定往后会让什么变容易 / 变难>
-- <谁需要跟着改>
-```
+1. 人确认后跑 `adr.py new`（编号与骨架机械分配，`--root`/`--title`/`--slug`/`--source` 必填）：
+   ```
+   python3 ~/.claude/skills/sdflow-adr/scripts/adr.py new --root <消费仓根> \
+     --title "<一句话结论>" --slug "<kebab-slug>" --source "<本次 change 名>"
+   ```
+   找不到该脚本时的定位与提示，见 `sdflow-adr/SKILL.md`「脚本定位」一节。
+   该决策**推翻既有 ADR**时加 `--supersedes NNNN`（部分推翻再带 `--partial "<决策范围一句话>"`），
+   旧 ADR 的 Status 行由 `adr.py` 一并改写，MUST NOT 手改。
+2. 补写正文：骨架的 `Decision` / `Considered Options` / `Consequences` 三节含字面占位
+   `TODO(adr)`，按 format.md 的结构与措辞要求逐节补写。
+3. `adr.py lint <新文件路径>` 全绿（`TODO(adr)` 清零、Status 行、H2 顺序均通过）后才算落盘完成。
 
 🔴 **MUST NOT 另起一套 `docs/adr/`** —— 那会形成第二套真相源，正是这套工作流一路在消除的漂移。
 落点恒为项目的 `openspec/adr/`。

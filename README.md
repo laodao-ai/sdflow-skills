@@ -52,9 +52,10 @@ git clone https://github.com/laodao-ai/sdflow-skills.git ~/.skills/sdflow-skills
 | 规划 | `sdflow-devenv` | 开发/测试环境副驾：定测试策略（单元/集成/e2e 三层，一层不留白）→ 落脚手架 → 尽可能真跑一遍确认 → 出 `testing-strategy.md` + `environments.md` |
 | 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，直写产出 design/roadmap/task-log 三件套（可选 memo），不经 change 壳 |
 | 记录（issues 台账） | `sdflow-issues` | issues 台账单一 skill：bug 池（缺陷记录 + 状态回写 OPEN→VERIFIED→FIXED，B-ID）+ todo 池（改进 / 技术债，T-ID）两池记录，跨池 `issues/INDEX.md` 重建与批次注册表维护，保证 ID 不撞号、总览/详情双写一致 |
+| 记录（ADR） | `sdflow-adr` | `openspec/adr/` 唯一确定性入口：new（新建/取代）· sync（随 change 收尾自动核对，由 sdflow-done 调用）· audit（人工全量体检），格式与更新规则只在 `references/format.md` 定义、只由 `adr.py` 机械检查 |
 | 复盘 | `sdflow-retro` | 只读再生 workflow 成本×价值复盘报告（阶段墙钟×per-镜价值 join），不决策不改动 |
 
-> `sdflow-init`、`sdflow-issues`、`sdflow-retro`、`sdflow-implement`、`sdflow-ship`、
+> `sdflow-init`、`sdflow-issues`、`sdflow-adr`、`sdflow-retro`、`sdflow-implement`、`sdflow-ship`、
 > `sdflow-done`、`sdflow-architecture` 与 `sdflow-devenv` 为**数据类 skill**
 > （带 `scripts/`，多数另有 `tests/`），由脚本保证确定性；其余 5 个
 > （`sdflow-spec`、`sdflow-spec-review`、`sdflow-code-review`、`sdflow-roadmap`、`sdflow-upgrade`）

@@ -5,14 +5,13 @@
 CLI: sad_scaffold.py <sub> --root <消费仓根> …
 exit 码约定：0=ok / 2=坏输入 / 3=preflight无openspec布局 / 4=单例冲突 / 5=迁移拒绝（表外迁移/前置复检未过）
 
-argparse subparsers 结构：main() 的 dispatch 按子命令名查表，新增子命令（adr-new/
-context-add，Task 5）只需新增一个 _cmd_xxx(args) 函数 + 一个 add_parser 注册，
-不需要改动既有子命令的实现或 dispatch 逻辑。
+argparse subparsers 结构：main() 的 dispatch 按子命令名查表，新增子命令（如 context-add，
+Task 5）只需新增一个 _cmd_xxx(args) 函数 + 一个 add_parser 注册，不需要改动既有子命令的
+实现或 dispatch 逻辑。ADR 新建已改走 `sdflow-adr/scripts/adr.py new`（唯一确定性入口，AD）。
 """
 import argparse
 import contextlib
 import os
-import re
 import sys
 
 for _s in (sys.stdout, sys.stderr):
@@ -33,9 +32,7 @@ TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "references" / "sad-tem
 SAD_LOG_HEADER = "# sad-log（append-only 判定留痕）\n"
 CONTEXT_STUB = "# Context\n\n## Language\n"
 
-# ---- Task 5: scaffold 分家（adr-new / context-add）常量 --------------------------------
-ADR_NUM_RE = re.compile(r"^(\d{4})-")
-SLUG_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
+# ---- Task 5: scaffold 分家（context-add）常量 -------------------------------------------
 LANGUAGE_HEADING = "## Language"
 
 # ---- [impl-review-fix] B8: 仓级写互斥锁 --------------------------------------------------
@@ -264,10 +261,10 @@ def _cmd_log(args):
     return 0
 
 
-# ---- Task 5: scaffold 分家机械化（adr-new / context-add，REQ-9）------------------------
-# adr-new / context-add 合法运行在 sad init 尚未跑过的仓状态（preflight 只保证
+# ---- Task 5: scaffold 分家机械化（context-add，REQ-9）----------------------------------
+# context-add 合法运行在 sad init 尚未跑过的仓状态（preflight 只保证
 # openspec/adr、openspec/CONTEXT.md 存在，不保证 sad.md/sad-log.md 已建）——
-# ADR 分家、术语并入不该被「SAD 生命周期还没开始」阻塞。
+# 术语并入不该被「SAD 生命周期还没开始」阻塞（ADR 分家已改走 `sdflow-adr` 的 `adr.py new`）。
 
 
 def _maybe_log(root, line):
@@ -277,56 +274,6 @@ def _maybe_log(root, line):
         append_log(root, line)
     else:
         print("提示：sad-log.md 不存在（尚未跑 sad_scaffold init）——本次跳过留痕，不影响本次操作")
-
-
-def _cmd_adr_new(args):
-    root = Path(args.root).resolve()
-    announcements = []
-    preflight(root, announcements)
-    for line in announcements:
-        print(line)
-
-    if not SLUG_RE.fullmatch(args.slug):
-        _die(2, f"--slug 须匹配 [a-z0-9][a-z0-9-]*（ascii kebab），得到 {args.slug!r}")
-
-    adr_dir = root / "openspec" / "adr"
-
-    # [impl-review-fix] B8：扫号-查占-写在锁内即原子（闭合并发同号双写的静默双号）。
-    with _repo_lock(root):
-        if args.number is not None:
-            if args.number < 0:
-                _die(2, f"--number 须为非负整数，得到 {args.number}")
-            number = args.number
-        else:
-            md_files = sorted(p for p in adr_dir.glob("*.md") if p.name != "README.md")
-            max_n = 0
-            for p in md_files:
-                m = ADR_NUM_RE.match(p.name)
-                if not m:
-                    _die(2, f"无法识别编号模式（{p.name}）——人工指定 --number 越过扫描")
-                max_n = max(max_n, int(m.group(1)))
-            number = max_n + 1
-
-        nnnn = f"{number:04d}"
-        target = adr_dir / f"{nnnn}-{args.slug}.md"
-
-        # 检查同号 ADR 是否已被占用（同号双 ADR 破坏编号唯一引用）
-        existing = [p.name for p in adr_dir.glob(f"{nnnn}-*.md") if p.name != target.name]
-        if existing:
-            _die(2, f"ADR 编号 {nnnn} 已被占用: {existing[0]}——同号双 ADR 破坏编号唯一引用")
-
-        if target.exists():
-            _die(2, f"目标 ADR 已存在：openspec/adr/{target.name}——MUST NOT 覆盖，"
-                    f"换 --number 或人工核对已有文件后处理")
-
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        skeleton = (f"# ADR {nnnn}: {args.title}\n\n"
-                    f"- Status: Proposed\n- Date: {date}\n\n"
-                    f"## Context\n\n## Decision\n\n## Consequences\n")
-        atomic_write(target, skeleton)
-        print(str(target))
-        _maybe_log(root, f"adr-new {nnnn}-{args.slug}")
-    return 0
 
 
 def _cmd_context_add(args):
@@ -675,13 +622,6 @@ def build_parser():
     p_set_assumption.add_argument("--root", required=True)
     p_set_assumption.add_argument("--assumption", required=True, help="<N>=<接受|待校准>")
     p_set_assumption.set_defaults(func=_cmd_set_assumption)
-
-    p_adr_new = sub.add_parser("adr-new", help="ADR 新建：编号扫描 max+1，未知模式 fail-closed（--number 可越）")
-    p_adr_new.add_argument("--root", required=True)
-    p_adr_new.add_argument("--title", required=True)
-    p_adr_new.add_argument("--slug", required=True)
-    p_adr_new.add_argument("--number", type=int, default=None)
-    p_adr_new.set_defaults(func=_cmd_adr_new)
 
     p_context_add = sub.add_parser("context-add", help="CONTEXT.md ## Language 追加，同名冲突 fail-closed 不覆盖")
     p_context_add.add_argument("--root", required=True)

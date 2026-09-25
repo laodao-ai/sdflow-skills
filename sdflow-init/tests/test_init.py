@@ -1041,3 +1041,76 @@ class TestEnsureGlobalHooksCodexWarning:
         monkeypatch.setattr(os.path, "expanduser", lambda p: str(tmp_path / "nonexistent") if p == "~/.codex" else str(tmp_path / p.replace("~/", "")))
         output = init_mod.ensure_global_hooks()
         assert "⚠" not in output
+
+
+class TestAdrMigrationCheck:
+    """AM-10 / 设计门 Q3：update 收尾的只读 ADR lint 提示（`init.py` 落点，C3 定位先例）。
+    只读——不改任何文件，返回值不影响 update 的退出码。"""
+
+    @staticmethod
+    def _fake_adr_py(tmp_path, exitcode, stderr=""):
+        script = tmp_path / "fake_adr.py"
+        script.write_text(
+            "import sys\n"
+            f"sys.stderr.write({stderr!r})\n"
+            f"sys.exit({exitcode})\n",
+            encoding="utf-8",
+        )
+        return str(script)
+
+    def test_no_adr_dir_skips(self, tmp_path):
+        (tmp_path / "openspec").mkdir()
+        assert init_mod.check_adr_migration(str(tmp_path)) == "openspec/adr/ 不存在，跳过 ADR 检查"
+
+    def test_adr_py_not_installed(self, tmp_path, monkeypatch):
+        (tmp_path / "openspec" / "adr").mkdir(parents=True)
+        monkeypatch.setattr(init_mod, "_find_adr_py", lambda: None)
+        assert init_mod.check_adr_migration(str(tmp_path)) == "sdflow-adr 未安装，跳过 ADR 检查"
+
+    def test_lint_clean_reports_green(self, tmp_path, monkeypatch):
+        (tmp_path / "openspec" / "adr").mkdir(parents=True)
+        fake = self._fake_adr_py(tmp_path, 0)
+        monkeypatch.setattr(init_mod, "_find_adr_py", lambda: fake)
+        assert init_mod.check_adr_migration(str(tmp_path)) == "ADR 格式检查：全绿"
+
+    def test_lint_red_prompts_audit(self, tmp_path, monkeypatch):
+        (tmp_path / "openspec" / "adr").mkdir(parents=True)
+        fake = self._fake_adr_py(tmp_path, 1)
+        monkeypatch.setattr(init_mod, "_find_adr_py", lambda: fake)
+        assert init_mod.check_adr_migration(str(tmp_path)) == "ADR 格式未迁移，运行 `/sdflow-adr audit`"
+
+    def test_lint_usage_error_passes_through_stderr_verbatim(self, tmp_path, monkeypatch):
+        # 设计要求「退出 2 则原样转述错误」——不额外包装我们自己的措辞
+        msg = "adr: openspec/adr/x.md 不匹配 NNNN-<slug>.md；该目录只允许 ADR 文件"
+        (tmp_path / "openspec" / "adr").mkdir(parents=True)
+        fake = self._fake_adr_py(tmp_path, 2, stderr=msg)
+        monkeypatch.setattr(init_mod, "_find_adr_py", lambda: fake)
+        assert init_mod.check_adr_migration(str(tmp_path)) == msg
+
+    def test_find_adr_py_respects_claude_config_dir(self, tmp_path, monkeypatch):
+        home = tmp_path / "fake-claude"
+        skill_dir = home / "skills" / "sdflow-adr" / "scripts"
+        skill_dir.mkdir(parents=True)
+        adr_py = skill_dir / "adr.py"
+        adr_py.write_text("", encoding="utf-8")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        assert init_mod._find_adr_py() == str(adr_py)
+
+    def test_run_update_reports_adr_line_and_does_not_touch_files(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        proj = tmp_path / "proj"
+        (proj / "openspec" / "adr").mkdir(parents=True)
+        before = sorted((proj / "openspec" / "adr").iterdir())
+        monkeypatch.setattr(init_mod, "_find_adr_py", lambda: None)
+        init_mod.run(str(proj), "update")
+        out = capsys.readouterr().out
+        assert "sdflow-adr 未安装，跳过 ADR 检查" in out
+        assert sorted((proj / "openspec" / "adr").iterdir()) == before
+
+    def test_run_init_mode_skips_adr_check(self, tmp_path, monkeypatch, capsys):
+        # 落点仅 update 路径（设计门 Q3 拍板）：init 模式不跑该步
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        called = []
+        monkeypatch.setattr(init_mod, "check_adr_migration", lambda root: called.append(root) or "x")
+        init_mod.run(str(tmp_path / "proj"), "init")
+        assert called == []

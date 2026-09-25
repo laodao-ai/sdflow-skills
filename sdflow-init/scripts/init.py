@@ -1137,6 +1137,45 @@ def retire_hooks():
     return "\n".join(f"  · {a}" for a in acts) if acts else "  · 无退役 hook 残留"
 
 
+def _find_adr_py():
+    """定位 sdflow-adr 的 adr.py：沿 C3 先例（`sdflow-adr/SKILL.md` §脚本定位）
+    `~/.claude/skills/sdflow-adr/scripts/adr.py` → `~/.codex/skills/sdflow-adr/scripts/adr.py`；
+    两处都找不到返回 None（调用方据此打印「未安装」提示，不阻塞 update，AM-10）。"""
+    candidates = [
+        os.path.join(_home_claude(), "skills", "sdflow-adr", "scripts", "adr.py"),
+        os.path.expanduser("~/.codex/skills/sdflow-adr/scripts/adr.py"),
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def check_adr_migration(root):
+    """update 收尾的只读 ADR 迁移提示（AM-10，设计门 Q3 拍板）：`openspec/adr/` 存在时跑
+    `adr.py lint --root .` 并按退出码给一句提示；不存在则跳过；adr.py 未安装同样只提示。
+    只读：不改任何文件，返回值不影响 update 的退出码。"""
+    adr_dir = os.path.join(root, "openspec", "adr")
+    if not os.path.isdir(adr_dir):
+        return "openspec/adr/ 不存在，跳过 ADR 检查"
+    adr_py = _find_adr_py()
+    if not adr_py:
+        return "sdflow-adr 未安装，跳过 ADR 检查"
+    try:
+        proc = subprocess.run(
+            [sys.executable, adr_py, "lint", "--root", root],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+    except OSError as exc:
+        return f"ADR 检查未能运行（{exc}），跳过（不影响 update）"
+    if proc.returncode == 0:
+        return "ADR 格式检查：全绿"
+    if proc.returncode == 1:
+        return "ADR 格式未迁移，运行 `/sdflow-adr audit`"
+    # 退出 2：用法/IO 错误，原样转述 adr.py 自己的 stderr，不额外包装措辞
+    return (proc.stderr or proc.stdout).strip() or "ADR 检查退出码 2，无 stderr 输出"
+
+
 # ── 主流程 ──────────────────────────────────────────────────
 
 def run(root, mode):
@@ -1206,6 +1245,9 @@ def run(root, mode):
             a = inject(p, *MARK_DOC, sec,
                        header=f"# {fn.split('.')[0]}\n\n本文件为项目级 AI 指令。")
             report.append(f"{fn}：{a}")
+
+        if mode == "update":
+            report.append(f"ADR 迁移检查：{check_adr_migration(root)}")
     except (OSError, shutil.Error, ValueError, RuntimeError) as e:
         _die(f"文件系统操作失败：{e}")
 

@@ -215,7 +215,11 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 
 ## 本轮 done 派发与收集
 
-先建立 verify、archive 的完整派发任务清单，逐项记录 `run_id`、`task_id`、请求参数、`result_ref` 与状态。
+先建立 **verify · ADR 同步（条件成员）· archive** 的完整派发任务清单，逐项记录 `run_id`、
+`task_id`、请求参数、`result_ref` 与状态——清单在第零步即固定为这三个成员，满足
+adr/0046「先定完整清单再调度」：ADR 同步是否真派子代理取决于 `adr.py refs` 是否召回候选
+（空数组则该成员按「不派」落一行处置），但**成员本身**（要不要在清单里占位）在第零步就定，
+不是等 refs 跑完才临时追加成第四个任务。
 容量只能改变批次；容量满载 / 容量拒绝时等待和有界重试，MUST NOT 删除任务。`host=claude` 使用
 `subagent_type: sdflow-effort-<档位>`；`host=codex` 使用 `reasoning_effort` 与 `fork_turns: "none"`，MUST NOT 带
 `subagent_type`。已知宿主的 effort 空值在第零步 fail-closed，不能回落为继续派发；Codex MUST NOT 带 `subagent_type`。
@@ -225,11 +229,21 @@ verify 是门禁：请求 effort 为 `low` 或 `medium` 时派发前拒绝，报
 同时具备才放行；`effective_effort=unknown` 可以放行但显著披露。若省略 `reasoning_effort` 的回退来自被拒请求，
 最初被拒的 high 请求 MUST NOT 作为放行证据；已知实际 low/medium 也不得放行。
 
+**ADR 同步任务**（第 1.5 步，条件成员）：`model: $SDFLOW_TIER_MID`；`host=claude` 附
+`subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex` 附
+`reasoning_effort: "$SDFLOW_EFFORT_MID"` 与 `fork_turns: "none"`，MUST NOT 带
+`subagent_type`。非门禁步（不阻塞 archive/commit/merge），故不受上方 verify 的 high+ 强制。
+子代理 `failed`/`interrupted`/`cancelled` 一律按第 1.5 步的「任何终态后 lint → 撤销实际改动集」
+处理，不中止本轮 done 的其余步骤（与 verify/archive 的「失败即中止」不同，见故障矩阵）。
+
 verify 通过后，主 session 先校验 `verify-report.md` 的结构与锚，再派 archive。archive 只有 `completed`、本轮
 `result_ref`、archive 对码都有效才成功；旧轮结果、坏 verify 报告或缺锚均 MUST NOT 继续 commit 或 merge。commit message、
 hand-off、merge 理由和最终接受由主 session 完成。
 
 ### 故障矩阵
+
+除下方标注「第 1.5 步」的两行外，本矩阵作用于 verify / archive；ADR 同步是非门禁的条件成员，
+其失败处置见标注「第 1.5 步」的两行（不停止收尾），与其余行的「停止当前收尾」相反。
 
 | 状态 / 条件 | 处置 | 恢复 |
 |---|---|---|
@@ -239,6 +253,8 @@ hand-off、merge 理由和最终接受由主 session 完成。
 | 坏 verify 报告 | 不派 archive。 | 修复 `verify-report.md` 结构与锚后重跑 verify。 |
 | 旧 archive 结果 | 拒绝本轮成功。 | 核验本轮 `run_id/task_id` 与 archive 对码后重跑。 |
 | low` 或 `medium` 门禁请求 | 派发前拒绝。 | 将 verify effort 改为 high 或更高。 |
+| ADR 同步子代理 `failed`/`interrupted`/`cancelled`，或子代理返回 `completed` 但对实际改动集跑 `adr.py lint` 仍有红项（第 1.5 步） | **不停止收尾**：`git checkout -- <该批实际改动集>` 撤销（起手已用 `git status --porcelain` 确认这些文件干净，撤销即精确回到 sync 前）+ 记一条 issues todo；hand-off 记一行同步结果；继续第二步。 | 下一轮 done（或人直接跑 `/sdflow-adr audit`）重新核对；不阻塞本轮 archive/commit/merge。 |
+| `adr.py` 未安装 / `refs` 退出 2（第 1.5 步） | 不派 ADR 同步子代理；hand-off 记跳过原因；继续第二步。 | 运行 checkout 跑 `bash setup.sh` 装好 `sdflow-adr` 后，下一轮 done 生效。 |
 
 ## 第一步：Verify（强档子 agent）
 
@@ -355,6 +371,64 @@ verify 子代理是指令驱动——漏写 frontmatter 无法事前阻止，但
 
 ---
 
+## 第 1.5 步：ADR 同步（条件成员，mid 档子代理；1.1 之后 / 第二步之前，SW-ADR）
+
+verify PASS 且 1.1 机械校验通过后、第二步 hand-off 之前，主 session 按下述流程自动核对与本次
+change 相关的 ADR。**不阻塞 merge**——本步任何失败都记一行 hand-off + 一条 issues todo 后继续，
+MUST NOT 中止 archive/commit/merge。既有步号 MUST NOT 因插入本步而重排。
+
+```
+1.1 机械校验通过
+   │
+   ▼
+[主 session] 定位 adr.py：~/.claude/skills/sdflow-adr/scripts/adr.py
+   → 找不到则依次尝试 ~/.codex/skills/sdflow-adr/scripts/adr.py、仓内 find . -name adr.py
+   │ 三处都找不到 ──▶ hand-off 记「ADR 同步跳过：sdflow-adr 未安装」──▶ 第二步
+   ▼
+[主 session] python3 <adr.py> refs --root . --base {base_branch} \
+             --explicit-from openspec/changes/{change_name}/decision-memo.md \
+                              openspec/changes/{change_name}/design.md
+   │ 退出 2（git 失败）──▶ hand-off 记原因 ──▶ 第二步
+   │ 输出 []（无候选）───▶ hand-off 记「ADR 同步：无候选」──▶ 第二步
+   ▼
+[主 session] git status --porcelain -- openspec/adr/
+   │ 候选文件路径命中已脏文件 ──▶ 该篇从候选剔除 + 记一条 issues todo（不自动改脏文件）
+   ▼
+[主 session] 按每批 ≤20 篇分派 mid 档子代理（本轮派发清单已在「本轮 done 派发与收集」固定登记）
+   model: $SDFLOW_TIER_MID；host=claude 附 subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID；
+   host=codex 附 reasoning_effort: "$SDFLOW_EFFORT_MID" 与 fork_turns: "none"，MUST NOT 带 subagent_type。
+   prompt = sdflow-adr/references/sync-prompt.md 全文 + 本批候选清单（含 refs 输出的编号/路径/
+   Status/命中词/explicit）+ decision-memo.md 与 design.md 路径。
+   ▼
+[各子代理] 按 sync-prompt.md：先读 Status 分支（终态跳过正文 / Partially 只核未取代部分）→
+   逐条陈述对照代码 → 分类（一致 / 细节变化 / 已声明取代但 Status 未改 / 未声明的偏离 / 对象
+   已删除）→ 细节变化改正文+附录；已声明取代改旧 Status 行；未声明偏离/对象已删除先
+   issues_v2.py scan 查重、无命中才 add --pool bug（source_change=本 change）→ 返回逐篇判定 +
+   已触碰文件清单
+   ▼
+[主 session] 每个子代理进入任何终态（completed / failed / interrupted / cancelled）后：
+   git diff --name-only -- <本批候选路径...>   # 取该批实际改动集（不信子代理自报的"已触碰文件"）
+   # 只看本批候选：其它批次的改动（已验收的或仍在进行的）不属于本批，不能被本批的撤销连带
+   │ 改动集为空 ──▶ 本批记「无 ADR 改动」，不跑 lint（adr.py lint 不带文件参数 = 全目录 lint）
+   python3 <adr.py> lint --root . <该改动集中的文件...>
+   │ 子代理非 completed，或该改动集内仍有红项文件
+   │   ──▶ git checkout -- <该改动集>（起手已用 git status --porcelain 确认这些文件是干净的，
+   │        撤销精确等于回到 sync 前，不吞用户改动）+ 记一条 issues todo
+   ▼
+第二步 hand-off：写一行「ADR 同步：候选 N / 修改 M / bug K」，或上述任一跳过/失败分支的原因
+第四步 commit：git add openspec/ 已包含 openspec/adr/ 的改动（若有）
+```
+
+sync **不做全目录 lint**——只管本轮实际改动的文件；本仓存量未迁移格式的 ADR 不因此被
+sync 触碰或报红。细节见 `sdflow-adr/SKILL.md` sync 模式一节与 design.md §4。
+
+adr/0046 合规理由（「先定完整清单再调度」）：本步是否真派子代理取决于 `refs` 是否召回候选，
+但**清单成员本身**（ADR 同步在不在本轮 done 的派发清单里）在第零步与 verify/archive 一起
+一次性固定为「verify · ADR 同步（条件成员）· archive」，refs 空数组时该成员按「不派」落一行
+处置，不是等 refs 跑完后再临时决定要不要往清单里加一个新任务。
+
+---
+
 ## 第二步：产出 hand-off.md（P3g，verify 之后 / archive 之前）
 
 verify 判定完（它才权威定完整性）后、归档前，产出 `{change_dir}/hand-off.md`——**异步人类再入口 + 下个 change 种子**，随归档一起进 `archive/`。主 session 亲自写 hand-off（它有本 change 的 why 与 defer 上下文）。
@@ -364,6 +438,10 @@ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_
 1. **✅ 完成了什么**：引 verify-report 的 done 项。**P3h-c：不直接搬运 verify 的 ✅**——每条至少复核锚点存在性（测试名 / commit / 文件:行 真的在），再写进"完成"；无锚点的不写成完成。
 2. **⏳ 未完成 / 延后**：本 change 新增的 bug/todo（sdflow-code-review defer 的，已按下方 §2.1 scan 出的 ID 列表，各自见 `openspec/issues/open/{ID}.md`）+ 被延后的 ≥2 方案决策（附当时自动选了什么 / 为何拿不准）+ verify 的 Minor 缺口。
 3. **▶ 下一阶段建议**：建议开哪个清理 change、优先级；哪些 defer 项该一起清。
+
+**第 1.5 步同步结果单独一行**（不并入上面三段，紧跟三段之后）：`ADR 同步：候选 N / 修改 M / bug K`，
+或第 1.5 步任一跳过/失败分支的原因（如「ADR 同步跳过：sdflow-adr 未安装」「ADR 同步：无候选」）。
+第 1.5 步记的 bug（若有）已随 §2.1 scan 一并列在上面第 2 段的 ID 列表里，此行只汇总数字与状态。
 
 > **为何独立成步、不并进 verify 或 archive**：verify 判"完整性"、hand-off 是"给人的高层交接 + 下阶段种子"，altitude 不同；时机必须在 verify **之后**（引其权威结论）、archive **之前**（随归档留档）。sdflow-done 是自制 skill，加此步无碍。
 
@@ -593,6 +671,7 @@ sdflow-done 完成
 - **hand-off.md（P3g）**：verify 之后 / archive 之前产出（done/not-done + 延后项 + 下阶段建议），随归档留档，作异步人类再入口 + 下个 change 种子；**不直接搬运 verify 的 ✅**（复核锚点存在性）。
 - **issues scan 子步（§2.1）**：写 hand-off 正文前先跑 `issues_v2.py scan --json --source-change {本change} --status OPEN --status PROPOSED` 只读查询（v2 单文件模型已砍 batch/triage/sweep 机制，不再是写操作）；**显式传 `--source-change {本change}`**（不靠 `detect_change` 猜）；hand-off 直接列出命令返回的每个 ID（各即 `openspec/issues/open/{ID}.md`），不再建批次；只读、天然幂等、无需仓级锁；只圈 `源==本change` 的非终态项，孤儿（`source_change` 为空）不归本查询，交独立清理流程兜底。
 - **roadmap 回填助手（§2.2，done-roadmap-writeback）**：verify 之后跑 `roadmap_writeback_draft.py` 生成 roadmap 回填草稿进 hand-off + 第六步摘要抬一行（merge 时点可见）；**与 §2.1 issues scan 同位不同性**——同为 done 收尾盘面消费，但 scan 机械只读、roadmap 回填**助人确认**（完成判定含判断，写入语义相反，不诱导复用 scan 自动落盘）。切分线：定位到 phase=机械（change 名前缀确定性信号）、勾哪几行=判断留人；archive/merge 预测值留占位不预填（P-1）；detection fence-aware 防自指（P-5）；非复选框格式 fail-loud（P-3）。**残差登记**：草稿产出即止、apply 由人异步、不保证（经 /sdflow-ship 全自动链人被支走时尤然）。
+- **ADR 同步（第 1.5 步，SW-ADR）**：verify 之后 / hand-off 之前用 `adr.py refs` 召回候选、mid 档子代理按 `sdflow-adr` 的 sync 规则核对，改动与本 change 收尾一起进同一个 commit；**非门禁**——`adr.py` 未安装、refs 失败、子代理任何非 `completed` 终态或 lint 红都只记 hand-off 一行 + issues todo 后继续，MUST NOT 阻塞 archive/commit/merge（与 verify 的「失败即中止」相反）。
 
 ## 模型选择（按本步性质，逐步定）
 
@@ -607,6 +686,7 @@ sdflow-done 完成
 | 步 | 性质 | model 档位 | effort 档 | 理由（本步自证） |
 |---|---|---|---|---|
 | verify | **唯一终门** + grep 代码判 PASS/FAIL | **强档**（`$SDFLOW_TIER_STRONG`） | `$SDFLOW_EFFORT_STRONG`（MUST NOT 低于 high） | 中档/弱档假 PASS = 放不完整活进归档；门不能省 |
+| ADR 同步（1.5，条件成员） | 陈述与代码对照的 judgment 活，非门禁 | **中档**（`$SDFLOW_TIER_MID`） | `$SDFLOW_EFFORT_MID` | 不阻塞 merge，lint 机械兜底格式；判断量级同 archive |
 | archive | spec 同步 + 读代码核 delta | **中档**（`$SDFLOW_TIER_MID`） | `$SDFLOW_EFFORT_MID` | judgment 活 |
 | commit | git add + 从 diff 生成 message | 主 session | 不派发 | 主 session 保留提交说明、hand-off 与 merge 理由。 |
 

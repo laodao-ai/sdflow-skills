@@ -1,16 +1,15 @@
 ---
-name: sdflow-init
+name: sdflow-adr
 description: >
-  把整套 OpenSpec spec 工作流（openspec/workflow/ bundle）一键铺进一个项目：建目录骨架、拷规则集、
-  从模版生成/合并 config.yaml、注入 INDEX.md 与 CLAUDE.md/AGENTS.md 的托管区块，并说明 3 个配套 skill。
-  **只要用户想在新项目里启用这套 spec 工作流，或说"给这个项目初始化 openspec 工作流 / 把 workflow
-  铺过来 / 装一下 spec 工作流 / 更新这个项目的 workflow
-  规则到最新"，就用本 skill**——别手动一个个拷文件。脚本兜底确定性铺设与幂等注入，模型只管判断
-  （填 config 的本项目段、合并已存在的 config）。本 skill 的 assets/workflow/ 是这套 bundle 的唯一
-  权威源；init 铺设、update 重拉最新。Trigger with /sdflow-init。
+  openspec/adr/ 下 ADR（Architecture Decision Record）的唯一确定性入口——new（新建，含取代
+  旧 ADR）/ sync（随 change 收尾自动核对更新，由 sdflow-done 调用）/ audit（人工触发的全量体检）
+  三个模式，格式与更新规则只在 sdflow-adr/references/format.md 定义。当用户说"记一条 ADR"、
+  "开一篇 ADR"、"这个决策要不要写 ADR"、"这篇 ADR 过期了"、"ADR 体检"、"/sdflow-adr"、
+  "/sdflow-adr audit"时触发。与 domain-modeling 的区分：domain-modeling 管的是项目术语表与
+  领域模型（落 docs/adr/，本 skill 不管），本 skill 只管 openspec/adr/ 下的决策记录本身。
 ---
 
-# sdflow-init — 一键铺设 OpenSpec spec 工作流
+# sdflow-adr — ADR 唯一确定性入口（new · sync · audit）
 
 <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
@@ -153,101 +152,115 @@ description: >
 
 <!-- sdflow:principles:end -->
 
-把 `openspec/workflow/` 这套**项目无关**的 spec 工作流 bundle 铺进任意项目，并接好 config / INDEX /
-CLAUDE.md。**本 skill 的 `assets/workflow/` 是该 bundle 的唯一权威源**——新项目从这里铺，bundle 有改动
-先改这里、再用 `update` 推到各项目。
+## 这是什么
 
-> **为什么要 skill**：手动铺要拷 28 个文件、另存 config 模版、改 INDEX、改 CLAUDE.md，易漏易错。
-> 脚本把确定性部分（拷贝、建目录、标记区块**幂等**注入）一次做对；模型只处理需要判断的两点
-> （填 config 本项目段、合并已存在 config）。
+`openspec/adr/` 下 ADR 文件的格式、Status 取值、更新规则**只在** `references/format.md`
+定义（AM-1）；所有确定性检查（编号、格式、取代目标存在性、候选召回）**只由** `scripts/adr.py`
+完成，模型只做「陈述与代码是否一致」这类无法机械判定的语义判断（基准 1 的残余）。
 
-脚本：[scripts/init.py](scripts/init.py)。bundle 源：`assets/workflow/`。注入片段：`assets/snippets/`。
+三个模式：
 
----
+| 模式 | 触发方 | 做什么 |
+|---|---|---|
+| **new** | 人直接调用；`sdflow-spec` 人确认提议后；`sdflow-architecture` 分家判据命中时 | 新建 ADR，可选 `--supersedes` 同时改写旧 ADR 的 Status |
+| **sync** | `sdflow-done` 第 1.5 步（verify 之后、hand-off 之前）自动调用 | 按本次 change 改动的路径 + 显式引用找候选 ADR，子代理批量核对、细节变化直接改、未声明的偏离记 bug |
+| **audit** | 人直接调用 `/sdflow-adr audit` | 全量体检存量 ADR，格式改齐、内容对照代码，需拍板的条目进 issues todo |
 
-## 两种模式
+## new 模式
 
-| 模式 | 用于 | 行为 |
-|------|------|------|
-| **init** | 空项目首次铺设 | 建目录骨架 + 拷 bundle + 从模版生成 config.yaml + 注入 INDEX/CLAUDE/AGENTS 托管区块 + 确保全局 FF-0 hook |
-| **update** | 已铺过的项目 | 重拉最新 bundle（覆盖 `workflow/` 托管文件）+ 重注入托管区块 + 幂等确保全局 FF-0 hook；**不动 config.yaml、不覆盖用户内容** |
+1. 读 `references/format.md`，确认标题、来源、（可选）取代目标已想清楚。
+2. 定位并运行 `adr.py`（脚本定位顺序见下）：
 
-## 怎么用
+   ```bash
+   python3 <adr.py 路径> new --root . \
+     --title "<一句话结论>" --slug <kebab-slug> \
+     --source "来源 change：\`<change-name>\`（<YYYY-MM-DD>）" \
+     [--supersedes NNNN [--partial "<决策范围>"]]
+   ```
 
-### 第零步：确认 openspec 已就绪
-若目标项目还没 `openspec/`，先让 OpenSpec 自身初始化核心（`openspec init`），再铺本 bundle。
-（脚本也会自建所需目录与 config，但 `openspec init` 能把核心 schema/CLI 接好。）
+   `--supersedes` 带 `--partial` 时只标记「部分取代」；不带则整体取代。目标 ADR 若已是
+   `Superseded` / `Deprecated`（终态），脚本以退出码 2 拒绝，不创建新文件——先核对编号，
+   或改用 `--partial` 处理 `Partially superseded` 目标。
+3. 打开脚本输出的新文件路径，把各节 `TODO(adr)` 占位替换成真实内容（背景段、Decision、
+   Considered Options、Consequences）。
+4. 跑 `python3 <adr.py 路径> lint --root . <新文件路径>`，须退出码 0。有红项按提示改，
+   直到全绿。
 
-### 第一步：跑脚本
-```bash
-# 在目标项目根目录
-python ~/.claude/skills/sdflow-init/scripts/init.py init      # 首次铺设
-python ~/.claude/skills/sdflow-init/scripts/init.py update    # 重拉最新 bundle
-# 或显式指定项目根
-python <skill>/scripts/init.py init --root /path/to/project
+新建 ADR 不需要 change 走完全部拷问——`sdflow-spec` B.6/B.7 的三条件判据（决策影响后续
+change、决策非显然、决策可能被质疑）不变，只是产出入口从「照模板写」改为「调 `adr.py new`」。
+
+## sync 模式（sdflow-done 第 1.5 步调用，人不直接触发）
+
+由 `sdflow-done/SKILL.md` 第 1.5 步驱动，主 session 依序执行：
+
+1. **起手剔除已脏候选**：`git status --porcelain -- openspec/adr/`——非空即候选文件在 sync
+   开始前已有未提交改动，不交给子代理，记一条 issues todo（避免子代理改动与用户已有改动
+   混在一起，`git checkout --` 撤销时会连带吞掉用户改动）。
+2. **召回候选**：跑 `adr.py refs --root . --base {base_branch} --explicit-from
+   {change_dir}/decision-memo.md {change_dir}/design.md`。退出 2（git 失败）→ 记原因、跳过
+   本步；空数组 `[]` → 记「ADR 同步：无候选」、跳过本步；从结果中去掉第 1 步已剔除的候选。
+3. **分批派子代理**：剩余候选按每批 ≤20 篇分批，每批派一个 mid 档子代理，prompt 用
+   `references/sync-prompt.md`（含四条通则原文整段、Status 分支、分类规则、附录格式、
+   add 前 scan 查重、返回格式）+ 本批候选清单 + `{change_dir}/decision-memo.md` 与
+   `design.md` 路径。
+4. **任何终态后对实际改动集跑 lint**：不论子代理返回 `completed` 还是
+   `failed`/`interrupted`/`cancelled`，都先取 `git diff --name-only -- <本批候选路径...>`
+   得到该批实际改动的文件集合（只看本批候选，其它批次的改动不会被本批撤销连带），对这些
+   文件跑 `adr.py lint --root .`；集合为空则记「无 ADR 改动」、不跑 lint（不带文件参数的
+   lint 是全目录 lint）。子代理非
+   `completed`，或该集合内任一文件仍有红项 → `git checkout -- <该集合>`（起手已确认这些
+   文件在 sync 前是干净的，撤销即精确回到 sync 前）+ 记一条 issues todo。
+5. sync **不做全目录 lint**——只管本轮实际改动的文件；不阻塞 merge，失败一律记 issues todo
+   /  hand-off 一行后继续。
+
+细节与状态机图见 `sdflow-done/SKILL.md` 第 1.5 步与 design.md §4。
+
+## audit 模式（人直接触发）
+
 ```
-脚本会打印每步动作（建了哪些目录、bundle 多少文件、config/INDEX/CLAUDE/AGENTS 各做了什么）；`update`
-收尾还会额外跑一步只读提示——`openspec/adr/` 存在时用 `sdflow-adr` 的 `adr.py lint` 给一句 ADR 格式
-迁移状态（未安装 `sdflow-adr` 则打印跳过），不改任何文件、不影响 update 的退出码（AM-10）。
-
-### 第二步：处理需要判断的两点（模型的活）
-脚本结束会提示下一步：
-
-1. **填 config 的「本项目」段**（init 新建 config 时）：编辑 `openspec/config.yaml` 的 `## 本项目`
-   context 段，填该项目的 tech stack、命中的领域（backend·go / embedded·ml307c·esp32 / frontend(+frontend-react)）、
-   硬边界等。**通用段与 rules 照搬模版、勿改**。
-2. **合并已存在的 config**（config.yaml 已存在时）：把模版（`openspec/workflow/config.template.yaml`）的
-   「通用」context 段 + 全部 `rules:` 并入现有 config.yaml，**保留**用户的「本项目」段和自定义键。
-   这步用模型读两份做 YAML 合并，别让脚本硬改（block scalar 易破坏）。
-
-### 第三步：装配套 skill
-workflow.md 的流程依赖 3 个 sdflow skill，提示用户安装：
-```bash
-bash ~/.skills/sdflow-skills/setup.sh
-```
-- `/sdflow-spec-review` — 设计审主审 · `/sdflow-code-review` — 代码审主审 · `/sdflow-done` — 闭环（verify→archive→commit→merge）
-（记录类按需：`/sdflow-issues`。）
-
-## 铺设了什么
-
-```
-openspec/
-├── workflow/              ← 只铺一份人读手册（fix-probe-scan-precision：规则本体/tools/
-│   └── WORKFLOW-GUIDE.md    契约 MUST NOT 复制进消费仓，全经全局 canonical 解析）
-├── schemas/<PROJECT_SCHEMA>/  ← project-local schema（openspec CLI 版本门通过时铺）
-├── config.yaml            ← init 从 config.template.yaml 生成（本项目段待填）
-├── INDEX.md               ← 注入「工作流规则」托管区块
-├── changes/  specs/       ← 目录骨架
-CLAUDE.md / AGENTS.md      ← 注入「OpenSpec 工作流」托管区块（强制规范 + 3 配套 skill 说明）
+/sdflow-adr audit [--batch N]
 ```
 
-规则文件（`workflow.md` / `trigger-catalog.md` / `spec-checklists/` / `code-checklists/` / …）与
-review 机械层脚本（`tools/`）均**不进消费仓**——skill 运行时经 `resolve-workflow.sh` 两步链
-（全局 canonical → 显式降级）解析，改权威源即时对所有消费仓生效，无需逐仓 `update`。
+`N` 缺省 9（本仓 46 篇按此粒度切 5 批；单批 ≤9 篇约 300–550 行正文，strong 子代理逐条对照
+代码核实不至上下文过载）。
 
-> **FF-0 hook 是全局的**：装于 `~/.claude/hooks/ff0-branch-guard.py` + 注册进 `~/.claude/settings.json`（**不写项目 `.claude/`**），init/update 幂等确保、跨所有项目生效。
+1. 主 session 先跑 `adr.py lint --root .`，记下**基线红项数**；把全部 ADR 按编号切批
+   （每批 ≤N 篇）。
+2. 每批派一个 strong 档子代理，prompt 取 `references/audit-prompt.md`：格式按 `format.md`
+   改齐（H1 前状态 blockquote 转 Status 行后删除属格式迁移，Superseded/Deprecated 除此之外
+   只改 H1 与 Status 行，Partially 按活跃态只整理未取代部分），逐条陈述对照代码核实——一致
+   不动、细节变化改正文并记附录、核实不了保留原文，决策被推翻 / 写了没实现 / 代码违反 ADR
+   三类情况不改正文、连同「核实不了」一起列入返回。
+3. 主 session 汇总全部批次返回，把三类情况与「核实不了」逐条串行 `issues_v2.py add --pool
+   todo`（每条 add 前先 `scan` 查同 ADR 同类未闭合项，命中则跳过，避免 audit 重跑重复建号）。
+4. 主 session 跑全目录 `adr.py lint --root .`，取**结束红项数**，须全绿（退出码 0）；
+   输出基线与结束两个红项数供人核对进度。
 
-## 托管区块（幂等、勿手改区块内）
+audit 不产报告文件。细节见 `references/audit-prompt.md`。
 
-脚本用 HTML 注释标记包裹注入内容，重跑只替换标记间、不动其余：
-- `CLAUDE.md` / `AGENTS.md`：`<!-- opsx-init:start -->` … `<!-- opsx-init:end -->`
-- `INDEX.md`：`<!-- opsx-init:rules:start -->` … `<!-- opsx-init:rules:end -->`
+## 脚本定位
 
-要改这些托管内容，改 `assets/snippets/` 再 `update`，别手改目标文件区块内（会被下次 update 覆盖）。
+`adr.py` 随本 skill 整目录 symlink 到 `~/.claude/skills/sdflow-adr/`：
 
-## 注意
+```
+~/.claude/skills/sdflow-adr/scripts/adr.py
+```
 
-- **权威源唯一**：bundle 改动一律先改本 skill 的 `assets/workflow/`，再 `update` 推到各项目；
-  别在某个项目里直接改 `openspec/workflow/` 然后忘了回灌（会被下次 update 覆盖）。
-- **不覆盖用户内容**：config.yaml 的本项目段、CLAUDE.md/AGENTS.md 标记区块外的内容，脚本一律不动。
-- **`openspec/rules/` 不在本 bundle**（destructive-commands、task-completion 等是独立通用规则，按需自行加）。
-- **FF-0 硬强制（全局）**：hook 脚本源在本 skill 的 `assets/hooks/ff0-branch-guard.py`，由 `init`/`update` **全局安装**到 `~/.claude/hooks/` + 注册进 `~/.claude/settings.json` 的 PreToolUse.Bash（幂等、跨所有项目，**不写项目 `.claude/`**）。使得在 `master`/`main` 上跑 `openspec new change`（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard`、`/sdflow-spec`（分支 A，相位 B ③）共用此 CLI 入口，**两条分支都拦得住**）被直接拦下，逼先开 feature 分支。想卸载：删 `~/.claude/hooks/ff0-branch-guard.py` + 移除 `~/.claude/settings.json` 中对应 PreToolUse entry。权威定义见 `workflow/ff-generation-constraints.md` FF-0。
-- **退役 hook 反注册（自愈）**：`init`/`update` 每次跑时按 `RETIRED_HOOKS` 名单把已退役的全局 hook
-  从 `~/.claude/settings.json` 摘除注册 + 删 `~/.claude/hooks/` 里的脚本（外科式、保留他项、fresh 安装 no-op）。
-  当前名单含 `change-review-stub.py`（每目录 review.html stub 生产者，已废弃）。
-- **退役部署文件清理（自愈）**：`init`/`update` 每次跑时按 `RETIRED_DEPLOY_FILES` 名单清理曾铺进消费仓
-  `openspec/` 根、现已废弃的文件——**签名门控删除**（仅当文件内容含 bundle 部署签名时删，防误删用户同名文件）。
-  当前名单含查看器根锚 `serve.sh` + `review.html`（HTML 文档查看器已整体移除）；`tools/` 已停止
-  铺进消费仓，存量仓残留的旧 `tools/`（含其下查看器资产）不再被自动触碰，与其它规则副本死件
-  一并由残留告警提示、人按告警附带命令清除。
-- 脚本默认 `--root .`（当前目录）；务必在目标项目根跑，或用 `--root` 指定。
+固定路径不存在时依次尝试 `~/.codex/skills/sdflow-adr/scripts/adr.py`、仓内
+`find . -name adr.py`；三处都找不到时停下并提示：
+
+```
+sdflow-adr 未安装：~/.claude/skills/sdflow-adr/scripts/adr.py 不存在；
+运行 checkout 尚未跑 setup.sh；先在 ~/.skills/sdflow-skills 跑 bash setup.sh 再重试
+```
+
+## 退出码
+
+`adr.py` 统一：`0` 成功；`1` `lint` 有红项；`2` 用法错误、IO 错误、文件不可读（fail-closed，
+stderr 写明文件与原因）。
+
+## Non-Goals
+
+- `lint` 不判断 ADR 内容是否与代码一致——那是 sync / audit 的模型判断。
+- `refs` 不解析任何编程语言或配置文件语法，只做路径信号 + 纯文本子串匹配。
+- ADR 同步不阻塞 merge。
