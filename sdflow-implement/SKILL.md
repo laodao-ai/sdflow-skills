@@ -248,7 +248,7 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 ## 依赖的确定性 helper（machine-verifiable，本 skill 不重新发明判断逻辑）
 
 拓扑判断一律走 stdlib-only 脚本，本 skill 只消费其输出，不自行解析 plan 结构。
-路径约定：`~/.claude/skills/sdflow-implement/scripts/impl_route.py`；Codex 宿主兜底 `~/.codex/skills/sdflow-implement/scripts/impl_route.py`：
+路径约定：`~/.claude/skills/sdflow-implement/scripts/impl_route.py`；Codex 宿主兜底 `~/.agents/skills/sdflow-implement/scripts/impl_route.py`：
 
 - **frontier**（由本 skill **执行模式内部**每轮调用，解析 `Blocked-by` 拓扑 + 已完成号集，算出
   下一批 next-ready ticket 号）：

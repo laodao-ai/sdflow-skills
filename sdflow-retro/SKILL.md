@@ -189,7 +189,7 @@ description: >
 ```bash
 python3 ~/.claude/skills/sdflow-retro/scripts/retro_report.py --root "$(git rev-parse --show-toplevel)"
 # Codex 运行时 sibling 路径兜底：
-python3 ~/.codex/skills/sdflow-retro/scripts/retro_report.py --root "$(git rev-parse --show-toplevel)"
+python3 ~/.agents/skills/sdflow-retro/scripts/retro_report.py --root "$(git rev-parse --show-toplevel)"
 ```
 
 脚本内部做的事（全部确定性、幂等、无副作用外溢）：

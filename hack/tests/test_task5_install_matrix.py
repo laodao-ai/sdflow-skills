@@ -43,6 +43,7 @@ OUTSIDE_VOICE_SRC = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh
 REAL_HOME = Path(os.path.expanduser("~"))
 REAL_CLAUDE = REAL_HOME / ".claude"
 REAL_CODEX = REAL_HOME / ".codex"
+REAL_AGENTS = REAL_HOME / ".agents"
 REAL_SDFLOW = REAL_HOME / ".sdflow"
 
 
@@ -78,12 +79,14 @@ def real_home_untouched_guard():
     before = {
         "claude": _snapshot_dir(REAL_CLAUDE),
         "codex": _snapshot_dir(REAL_CODEX),
+        "agents": _snapshot_dir(REAL_AGENTS),
         "sdflow": _snapshot_dir(REAL_SDFLOW),
     }
     yield
     after = {
         "claude": _snapshot_dir(REAL_CLAUDE),
         "codex": _snapshot_dir(REAL_CODEX),
+        "agents": _snapshot_dir(REAL_AGENTS),
         "sdflow": _snapshot_dir(REAL_SDFLOW),
     }
     assert after == before, (

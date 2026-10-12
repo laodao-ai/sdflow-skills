@@ -154,7 +154,7 @@ description: 阶段三编排器——对已过设计门的 OpenSpec change 一�
   ```bash
   python3 ~/.claude/skills/sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"
   ```
-  路径缺失时按 sibling 约定兜底：`python3 ~/.codex/skills/sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"`，
+  路径缺失时按 sibling 约定兜底：`python3 ~/.agents/skills/sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"`，
   再兜底仓内路径 `sdflow-ship/scripts/ship_gate.py`（相对仓根，即 `python3 sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"`），三处均找不到才停下问用户。
   步前问"NEXT 是谁 + 前置缺什么"，步后问"产物落了吗 + 门禁结论"。首行人读摘要照抄进对话，JSON 供判定。
 - **ship 零 git 写操作〔D8〕**：全程不 commit/merge/push（各子 skill 的 checkpoint 归其自身；ship 无产物故无自身 checkpoint）；**不自动 push**。

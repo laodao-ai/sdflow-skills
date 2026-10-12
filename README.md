@@ -72,8 +72,8 @@ bash setup.sh
 ```
 
 `setup.sh` 会把每个含 `SKILL.md` 的目录同时装到 **Claude**（`~/.claude/skills/`）和
-**Codex**（`~/.codex/skills/`），另铺 `~/.claude/agents/` 下的 agent 定义与 `~/.sdflow/` 下的
-全局 canonical workflow + 辅助脚本（四个落点详见下方[工作原理](#工作原理)）。幂等，可反复运行。
+**共享 Agent Skills（Codex、Cursor 等）**（`~/.agents/skills/`），另铺 `~/.claude/agents/` 下的 agent 定义与 `~/.sdflow/` 下的
+全局 canonical workflow + 辅助脚本（四个落点详见下方[工作原理](#工作原理)）。幂等，可反复运行。新落点安装成功后，自动清理旧 `~/.codex/skills/` 中属于 sdflow 的对应安装项，保留其他工具的 skills。
 
 ## 更新
 
@@ -90,7 +90,7 @@ bash setup.sh
 - **每个 skill 是一个自包含目录**：`SKILL.md`（frontmatter + 指令，唯一被 `setup.sh` 识别的标志）
   + 可选 `scripts/`（Python/Shell）+ `tests/`（pytest）+ `assets/` / `references/`。
 - **安装机制**：`setup.sh` 遍历仓库根下所有目录，仅安装含 `SKILL.md` 的（故 `docs/`、`hack/` 不会被当 skill）。共四个落点：
-  - `~/.claude/skills/` 与 `~/.codex/skills/` —— 全部 skill；
+  - `~/.claude/skills/` 与 `~/.agents/skills/` —— 全部 skill；
   - `~/.claude/agents/` —— `sdflow-spec/agents/*.md` 逐文件软链（3 个角色定义 +
     5 个 `sdflow-effort-*` 档位定义）。这是全局命名空间，守卫更严：只接管确认指向本仓的软链；
   - `~/.sdflow/` —— 全局 canonical `workflow`（软链到本仓 `sdflow-init/assets/workflow/`）

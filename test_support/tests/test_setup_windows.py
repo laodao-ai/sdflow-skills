@@ -54,11 +54,29 @@ def farm(tmp_path):
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows copy installer coverage")
+def test_migration_removes_owned_copy_and_preserves_foreign_copy(farm):
+    repo, home, git, run = farm
+    old = home / ".codex/skills"
+    owned = old / "alpha"
+    owned.mkdir(parents=True)
+    (owned / "SKILL.md").write_text("old\n")
+    (owned / ".sdflow-skills").write_text("old-sha\n")
+    foreign = old / "beta"
+    foreign.mkdir()
+    (foreign / "SKILL.md").write_text("foreign\n")
+    for _ in range(2):
+        run()
+        assert not owned.exists()
+        assert (home / ".agents/skills/alpha/SKILL.md").read_text() == "original\n"
+        assert (foreign / "SKILL.md").read_text() == "foreign\n"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows copy installer coverage")
 def test_incremental_commits_and_dirty_revert(farm):
     repo, home, git, run = farm
     run()
-    alpha = home / ".codex/skills/alpha"
-    beta = home / ".codex/skills/beta"
+    alpha = home / ".agents/skills/alpha"
+    beta = home / ".agents/skills/beta"
     # A local sentinel proves an unchanged target was not deleted/copied.
     (beta / "sentinel").write_text("keep")
     assert "unchanged (4)" in run()
@@ -82,7 +100,7 @@ def test_incremental_commits_and_dirty_revert(farm):
 def test_failed_replacement_and_recovery(farm, failure):
     repo, home, git, run = farm
     run()
-    target = home / ".codex/skills/alpha"
+    target = home / ".agents/skills/alpha"
     (repo / "alpha/SKILL.md").write_text("new\n")
     if failure == "marker":
         prefix = 'cp() { command cp "$@" || return; case "$*" in *alpha*/stage*) mkdir "${@: -1}/.sdflow-skills";; esac; }; export -f cp'
@@ -107,7 +125,7 @@ def test_failed_replacement_and_recovery(farm, failure):
 @pytest.mark.skipif(os.name != "nt", reason="Windows copy installer coverage")
 def test_recovery_does_not_claim_foreign_transaction(farm):
     repo, home, git, run = farm
-    transaction = home / ".codex/skills/.sdflow-skills-alpha.foreign"
+    transaction = home / ".agents/skills/.sdflow-skills-alpha.foreign"
     backup = transaction / "backup"
     backup.mkdir(parents=True)
     (transaction / "owner").write_text("alpha\n")
@@ -115,7 +133,7 @@ def test_recovery_does_not_claim_foreign_transaction(farm):
     # A matching transaction name and owner do not replace marker ownership.
     run()
     assert (backup / "SKILL.md").read_text() == "foreign\n"
-    assert (home / ".codex/skills/alpha/SKILL.md").read_text() == "original\n"
+    assert (home / ".agents/skills/alpha/SKILL.md").read_text() == "original\n"
 
 
 def run_setup(tmp_path):
@@ -140,7 +158,7 @@ def run_setup(tmp_path):
 def test_second_setup_skips_unchanged_owned_skills(tmp_path):
     first, home = run_setup(tmp_path)
     assert first.returncode == 0, first.stdout + first.stderr
-    installed = home / ".codex" / "skills" / "sdflow-init"
+    installed = home / ".agents" / "skills" / "sdflow-init"
     assert (installed / "SKILL.md").is_file()
     assert (installed / ".sdflow-skills").is_file()
     resolver = home / ".sdflow/hack/resolve-models.sh"
@@ -154,7 +172,7 @@ def test_second_setup_skips_unchanged_owned_skills(tmp_path):
 @pytest.mark.skipif(os.name != "nt", reason="Windows copy installer coverage")
 def test_setup_keeps_foreign_same_name_directory(tmp_path):
     home = tmp_path / "home"
-    foreign = home / ".codex" / "skills" / "sdflow-init"
+    foreign = home / ".agents" / "skills" / "sdflow-init"
     foreign.mkdir(parents=True)
     (foreign / "foreign.txt").write_text("keep me", encoding="utf-8")
 

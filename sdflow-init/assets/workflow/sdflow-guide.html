@@ -503,7 +503,7 @@ CLAUDE.md / AGENTS.md            <span class="comment"># 注入托管块：强�
       <thead><tr><th>落点</th><th>内容</th><th>方式</th></tr></thead>
       <tbody>
         <tr><td><code>~/.claude/skills/</code></td><td>全部顶层 skill</td><td>绝对路径 symlink（改源即时生效）</td></tr>
-        <tr><td><code>~/.codex/skills/</code></td><td>同上（Codex 宿主）</td><td>同上；Windows 用 copy + marker</td></tr>
+        <tr><td><code>~/.agents/skills/</code></td><td>同上（Codex、Cursor 等共享）</td><td>同上；Windows 用 copy + marker</td></tr>
         <tr><td><code>~/.claude/agents/</code></td><td>3 个角色定义 + 5 个 effort 档位定义</td><td>逐文件软链；全局命名空间，守卫最严</td></tr>
         <tr><td><code>~/.sdflow/</code></td><td>canonical <code>workflow/</code> + <code>hack/</code> 辅助脚本</td><td>workflow 软链；hack 是<strong>拷贝</strong>——改源后必须重跑 setup</td></tr>
       </tbody>

@@ -217,4 +217,4 @@ def test_full_setup_reports_missing_yq_once_and_continues(fake_home):
     assert "winget install --id MikeFarah.yq" in deps
     assert len(re.findall(r"^  [✓✗] python3\b.*$", r.stdout, re.MULTILINE)) == 1
     assert "ready →" in r.stdout
-    assert (fake_home / ".codex" / "skills" / "sdflow-init" / "SKILL.md").is_file()
+    assert (fake_home / ".agents" / "skills" / "sdflow-init" / "SKILL.md").is_file()

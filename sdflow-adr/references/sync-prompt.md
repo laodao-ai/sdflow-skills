@@ -202,7 +202,7 @@ python3 <issues_v2.py 路径> --root . add --pool bug --json '{
 ```
 
 `issues_v2.py` 定位：随 `sdflow-issues` skill symlink 到 `~/.claude/skills/sdflow-issues/scripts/issues_v2.py`；
-固定路径不存在时依次尝试 `~/.codex/skills/sdflow-issues/scripts/issues_v2.py`、仓内
+固定路径不存在时依次尝试 `~/.agents/skills/sdflow-issues/scripts/issues_v2.py`、仓内
 `find . -name issues_v2.py`。
 
 ## 完成后返回

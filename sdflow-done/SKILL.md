@@ -382,7 +382,7 @@ MUST NOT 中止 archive/commit/merge。既有步号 MUST NOT 因插入本步而�
    │
    ▼
 [主 session] 定位 adr.py：~/.claude/skills/sdflow-adr/scripts/adr.py
-   → 找不到则依次尝试 ~/.codex/skills/sdflow-adr/scripts/adr.py、仓内 find . -name adr.py
+   → 找不到则依次尝试 ~/.agents/skills/sdflow-adr/scripts/adr.py、仓内 find . -name adr.py
    │ 三处都找不到 ──▶ hand-off 记「ADR 同步跳过：sdflow-adr 未安装」──▶ 第二步
    ▼
 [主 session] python3 <adr.py> refs --root . --base {base_branch} \
@@ -455,7 +455,7 @@ verify 判完之后、写 hand-off 正文之前，只读扫描**本 change 新�
 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py
 ```
 
-若该固定路径不存在（非常规安装/裸源码检出），在 `~/.claude/skills/`、`~/.codex/skills/`、或本仓库内 `find . -name issues_v2.py` 兜底定位，找不到就停下问用户脚本在哪。
+若该固定路径不存在（非常规安装/裸源码检出），在 `~/.claude/skills/`、`~/.agents/skills/`、或本仓库内 `find . -name issues_v2.py` 兜底定位，找不到就停下问用户脚本在哪。
 
 以下命令在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根。v1 的写操作 sweep（scan 两池 → 逐项 triage → batch add → reindex）在 v2 已砍——batch/triage 机制随单文件模型消解，收尾只需一次只读查询：
 
@@ -473,7 +473,7 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py --root . scan --json
 
 verify 判完之后，跑 roadmap 回填助手机械核生成回填草稿，供人异步确认回填 roadmap（切分线：**定位到 phase 机械、勾哪几行判断留人**）。主 session 直接跑（纯机械脚本）。
 
-**脚本路径**（sibling 约定，同 §2.1）：`~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py`（兜底 `~/.codex/skills/…` 或本仓 `find . -name roadmap_writeback_draft.py`）。
+**脚本路径**（sibling 约定，同 §2.1）：`~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py`（兜底 `~/.agents/skills/…` 或本仓 `find . -name roadmap_writeback_draft.py`）。
 
 ```bash
 python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \

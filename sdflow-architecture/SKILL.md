@@ -171,7 +171,7 @@ description: >
 ```
 REPO="$(git rev-parse --show-toplevel)"                # 消费仓根（分家/SAD 落位都在其 openspec/ 下）
 SKILL_DIR="$HOME/.claude/skills/sdflow-architecture"    # Claude 宿主字面路径；Codex 宿主改用
-                                                         #   "$HOME/.codex/skills/sdflow-architecture"
+                                                         #   "$HOME/.agents/skills/sdflow-architecture"
                                                          #   （按实际运行宿主二选一，找不到就都试一遍——
                                                          #   两者皆经 symlink 指向源仓 checkout）
                                                          # 用 $HOME 不用 ~：~ 在非交互 shell/部分字符串
@@ -508,7 +508,7 @@ Options/Consequences 三节正文仍需模型手写。
   python3 ~/.claude/skills/sdflow-adr/scripts/adr.py new --root "$REPO" --title "<决策一句话>" --slug "<kebab-slug>" --source "来源：SAD 分解判据 · <SAD 章节>（<YYYY-MM-DD>）"
   ```
   找不到该脚本时的定位与提示，见 `sdflow-adr/SKILL.md`「脚本定位」一节（C3 先例：固定路径 →
-  `~/.codex/skills/…` → 仓内 `find . -name adr.py` → 未安装提示）。扫描既有文件名最大数字前缀 +1；
+  `~/.agents/skills/…` → 仓内 `find . -name adr.py` → 未安装提示）。扫描既有文件名最大数字前缀 +1；
   **编号模式无法识别 → fail-closed**（脚本退出 2）。第一条分解 ADR（步骤 ② 判据）即经此产出。**`adr.py
   new` 产出骨架后 MUST 用 Edit 把步骤 ② 的判据/被否切法/AP 自检三行痕写入该 ADR 文件的
   Decision/Considered Options/Consequences 三节，MUST NOT 留空骨架（骨架占位行含字面标记

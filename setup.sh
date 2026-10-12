@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # sdflow-skills setup — install/update skills into BOTH:
 #   - Claude  ~/.claude/skills/
-#   - Codex   ~/.codex/skills/
+#   - Codex / Cursor   ~/.agents/skills/
 # Idempotent. Unix: absolute symlink (layout-independent). Windows: copy + marker.
 set -e
 
@@ -9,7 +9,7 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_NAME="$(basename "$REPO_DIR")"
 
 # Install destinations (explicit + absolute → independent of where the repo lives)
-TARGET_DIRS=("$HOME/.claude/skills" "$HOME/.codex/skills")
+TARGET_DIRS=("$HOME/.claude/skills" "$HOME/.agents/skills")
 
 # Platform detection
 IS_WINDOWS=0
@@ -249,6 +249,32 @@ install_into() {
       else
         installed+=("$skill_name @ $dest")
       fi
+    fi
+  done
+}
+
+# 先确认新落点已安装本仓版本，再清理旧落点；同名第三方项不动。
+cleanup_legacy_codex_skills() {
+  local old="$HOME/.codex/skills" new="$HOME/.agents/skills"
+  local entry name link_dest
+  [ -d "$old" ] || return 0
+  for entry in "$old"/*; do
+    name="$(basename "$entry")"
+    if [ -L "$new/$name" ]; then
+      [ "$(readlink "$new/$name")" = "$REPO_DIR/$name" ] || continue
+    elif ! is_our_marker_copy "$new/$name"; then
+      continue
+    fi
+    if [ -L "$entry" ]; then
+      link_dest="$(readlink "$entry")"
+      is_our_checkout_path "$link_dest" || continue
+    elif ! is_our_marker_copy "$entry"; then
+      continue
+    fi
+    if rm -rf "$entry"; then
+      cleaned+=("$name @ $old — 已迁移到 $new")
+    else
+      skipped+=("$name @ $old — 旧安装项清理失败")
     fi
   done
 }
@@ -729,6 +755,7 @@ for d in "${TARGET_DIRS[@]}"; do
   cleanup_migrated_skills "$d"
   cleanup_orphans "$d"
 done
+cleanup_legacy_codex_skills
 install_agents
 install_sdflow
 check_dependencies "$_py"

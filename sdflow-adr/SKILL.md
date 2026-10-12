@@ -246,7 +246,7 @@ audit 不产报告文件。细节见 `references/audit-prompt.md`。
 ~/.claude/skills/sdflow-adr/scripts/adr.py
 ```
 
-固定路径不存在时依次尝试 `~/.codex/skills/sdflow-adr/scripts/adr.py`、仓内
+固定路径不存在时依次尝试 `~/.agents/skills/sdflow-adr/scripts/adr.py`、仓内
 `find . -name adr.py`；三处都找不到时停下并提示：
 
 ```

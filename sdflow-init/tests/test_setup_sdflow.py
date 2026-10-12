@@ -120,6 +120,29 @@ def _farm_repo(tmp_path, extra_dirs):
     return farm
 
 
+def test_shared_skills_migration_preserves_foreign_and_blocked_entries(tmp_path):
+    home = tmp_path / "home"
+    old = home / ".codex" / "skills"
+    new = home / ".agents" / "skills"
+    old.mkdir(parents=True)
+    new.mkdir(parents=True)
+    (old / "sdflow-init").symlink_to(REPO / "sdflow-init")
+    (old / "sdflow-done").symlink_to(REPO / "sdflow-done")
+    (old / "foreign").symlink_to(tmp_path / "other-tool")
+    (new / "sdflow-done").mkdir()  # 同名第三方目录阻挡安装，旧版本必须保留。
+    env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+    for _ in range(2):
+        result = subprocess.run(
+            [bash_executable(), bash_path(REPO / "setup.sh")], env=env,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert (new / "sdflow-init").resolve() == REPO / "sdflow-init"
+        assert not os.path.lexists(old / "sdflow-init")
+        assert (old / "sdflow-done").is_symlink()
+        assert (old / "foreign").is_symlink()
+
+
 class TestCleanupOrphansNonSkillSource:
     """清理判据 MUST 与安装判据同源（「目录含 SKILL.md」）。
 
@@ -127,7 +150,7 @@ class TestCleanupOrphansNonSkillSource:
     目录既不被安装、也不被清理，软链永久留在全局名册里。实例：sdflow-buglist /
     sdflow-todolist 三合一进 sdflow-issues 后 SKILL.md 已删，但残留的
     `scripts/__pycache__/*.pyc` 把目录撑着（git pull 删不掉未跟踪文件）⇒ `-d` 判「源还在」
-    ⇒ 两条链在 ~/.claude/skills 与 ~/.codex/skills 各活一条。
+    ⇒ 两条链在 ~/.claude/skills 与 ~/.agents/skills 各活一条。
 
     定点删门法：把 `cleanup_orphans` 里的 `[ ! -f "$dest/$entry_name/SKILL.md" ]` 分支删掉
     ⇒ 本用例必须红。"""

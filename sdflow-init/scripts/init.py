@@ -1139,11 +1139,11 @@ def retire_hooks():
 
 def _find_adr_py():
     """定位 sdflow-adr 的 adr.py：沿 C3 先例（`sdflow-adr/SKILL.md` §脚本定位）
-    `~/.claude/skills/sdflow-adr/scripts/adr.py` → `~/.codex/skills/sdflow-adr/scripts/adr.py`；
+    `~/.claude/skills/sdflow-adr/scripts/adr.py` → `~/.agents/skills/sdflow-adr/scripts/adr.py`；
     两处都找不到返回 None（调用方据此打印「未安装」提示，不阻塞 update，AM-10）。"""
     candidates = [
         os.path.join(_home_claude(), "skills", "sdflow-adr", "scripts", "adr.py"),
-        os.path.expanduser("~/.codex/skills/sdflow-adr/scripts/adr.py"),
+        os.path.expanduser("~/.agents/skills/sdflow-adr/scripts/adr.py"),
     ]
     for c in candidates:
         if os.path.isfile(c):
