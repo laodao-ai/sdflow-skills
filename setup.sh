@@ -39,6 +39,11 @@ is_our_marker_copy() {  # $1 = 目录路径
   return 1
 }
 
+# Empty dir has nothing to lose — takeable (Windows accident leftovers).
+is_empty_dir() {  # $1 = path
+  [ -d "$1" ] && [ ! -L "$1" ] && [ -z "$(ls -A "$1" 2>/dev/null)" ]
+}
+
 windows_skill_unchanged() {  # $1=source skill name $2=installed target
   local source_name="$1" target="$2" installed_sha current_sha
   [ -f "$target/.sdflow-skills" ] || return 1
@@ -83,7 +88,7 @@ recover_windows_skill_backup() {  # $1=target $2=skill name
 
 install_windows_skill() {  # $1=source directory $2=target $3=skill name
   local source="$1" target="$2" name="$3" transaction sha dirty
-  if [ -L "$target" ] || { [ -e "$target" ] && { [ ! -d "$target" ] || ! is_our_marker_copy "$target"; }; }; then
+  if [ -L "$target" ] || { [ -e "$target" ] && { [ ! -d "$target" ] || { ! is_our_marker_copy "$target" && ! is_empty_dir "$target"; }; }; }; then
     skipped+=("$name @ ${target%/*} — 非自有目录或链接，未覆盖")
     return 0
   fi
@@ -207,13 +212,13 @@ install_into() {
       # copies — never clobber a real directory we don't own (e.g. another
       # tool's skill of the same name).
       if [ -e "$target" ] && [ ! -L "$target" ]; then
-        if is_our_marker_copy "$target"; then
+        if is_our_marker_copy "$target" || is_empty_dir "$target"; then
           if ! rm -rf "$target" 2>/dev/null; then
             skipped+=("$skill_name @ $dest — 旧 marker 拷贝删不掉（只读？占用？），未接管")
             continue
           fi
         else
-          skipped+=("$skill_name @ $dest")
+          skipped+=("$skill_name @ $dest — 非自有目录，未覆盖")
           continue
         fi
       fi

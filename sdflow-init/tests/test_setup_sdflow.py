@@ -120,7 +120,8 @@ def _farm_repo(tmp_path, extra_dirs):
     return farm
 
 
-def test_shared_skills_migration_preserves_foreign_and_blocked_entries(tmp_path):
+@pytest.mark.parametrize("foreign_content", [None, "keep me"], ids=["empty", "foreign"])
+def test_shared_skills_migration_preserves_foreign_and_blocked_entries(tmp_path, foreign_content):
     home = tmp_path / "home"
     old = home / ".codex" / "skills"
     new = home / ".agents" / "skills"
@@ -129,7 +130,9 @@ def test_shared_skills_migration_preserves_foreign_and_blocked_entries(tmp_path)
     (old / "sdflow-init").symlink_to(REPO / "sdflow-init")
     (old / "sdflow-done").symlink_to(REPO / "sdflow-done")
     (old / "foreign").symlink_to(tmp_path / "other-tool")
-    (new / "sdflow-done").mkdir()  # 同名第三方目录阻挡安装，旧版本必须保留。
+    (new / "sdflow-done").mkdir()
+    if foreign_content is not None:
+        (new / "sdflow-done" / "foreign.txt").write_text(foreign_content, encoding="utf-8")
     env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
     for _ in range(2):
         result = subprocess.run(
@@ -139,7 +142,12 @@ def test_shared_skills_migration_preserves_foreign_and_blocked_entries(tmp_path)
         assert result.returncode == 0, result.stdout + result.stderr
         assert (new / "sdflow-init").resolve() == REPO / "sdflow-init"
         assert not os.path.lexists(old / "sdflow-init")
-        assert (old / "sdflow-done").is_symlink()
+        if foreign_content is None:
+            assert (new / "sdflow-done").resolve() == REPO / "sdflow-done"
+            assert not os.path.lexists(old / "sdflow-done")
+        else:
+            assert (old / "sdflow-done").is_symlink()
+            assert (new / "sdflow-done" / "foreign.txt").read_text(encoding="utf-8") == foreign_content
         assert (old / "foreign").is_symlink()
 
 

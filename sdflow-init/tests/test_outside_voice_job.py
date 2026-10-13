@@ -11,7 +11,8 @@ TDD 接缝（先定后写）——两处公共边界，测试只打这两处，�
      存在时序、原子发布、权限与字段。
 
 单测一律用 **fake `claude` 可执行** 与 **fake `outside-voice.sh` 替身**，MUST NOT 真调模型。
-唯一一条真机集成用例（跨 shell 存活）在文件末尾，缺 `claude` / 版本不足时 skip 并给出理由。
+两条无模型真机集成用例验证跨 shell 存活和 supervisor 日志隔离；缺 `claude` / 版本不足时
+skip 并给出理由。它们从已信任的项目根目录启动，运行证据留在 gitignored `.test/`。
 """
 
 import hashlib
@@ -1172,13 +1173,15 @@ _REAL_CLAUDE_SKIP = _real_claude_reason()
 
 
 @pytest.mark.skipif(_REAL_CLAUDE_SKIP is not None, reason=_REAL_CLAUDE_SKIP or "")
-def test_background_worker_survives_dispatching_shell_exit(fake_job_home, repo):
+def test_background_worker_survives_dispatching_shell_exit(fake_job_home, real_cli_repo):
     """真 `claude --bg --exec`：发起 shell 退出后，无模型 worker 仍跑到终态。"""
+    repo = real_cli_repo
     env = os.environ.copy()
     env["FAKE_HELPER_MARKER"] = "cross-shell"
     env["FAKE_HELPER_SLEEP"] = "6"      # 明显长于 dispatch 调用本身
     started = time.monotonic()
-    proc = _run_job(fake_job_home, _dispatch_args(repo, fake_job_home), env, timeout=60)
+    proc = _run_job(fake_job_home, _dispatch_args(repo, fake_job_home), env, timeout=60,
+                    cwd=repo["root"])
     dispatch_elapsed = time.monotonic() - started
     payload = _json_stdout(proc)
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
@@ -1202,7 +1205,8 @@ def test_background_worker_survives_dispatching_shell_exit(fake_job_home, repo):
         assert (repo["run_dir"] / "design-voice.terminal.json").exists()
     finally:
         subprocess.run([shutil.which("claude"), "rm", job_id],
-                       capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
+                       capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace",
+                       cwd=repo["root"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3397,7 +3401,7 @@ exit 0
 
 
 @pytest.mark.skipif(_REAL_CLAUDE_SKIP is not None, reason=_REAL_CLAUDE_SKIP or "")
-def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_path, repo):
+def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_path, real_cli_repo):
     """🔴 OVBG-04 出境面封堵的真机锚：`claude logs <id>` 与 agents state 都不得含 payload。
 
     口径（Task 1 双轴审已实测确立）：`claude agents --all --json` 的 `name` 字段承载
@@ -3410,12 +3414,14 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
     stdout/stderr **确实**会出现在 transcript 里；对照组不成立时本用例 MUST 立即失败，
     MUST NOT 让一条无判别力的断言冒充证据。
     """
+    repo = real_cli_repo
     claude = shutil.which("claude")
     control_canary = "CONTROL_TRANSCRIPT_CANARY_A1B2"
     control = subprocess.run(
         [claude, "--bg", "--exec",
          "printf '%s\\n' " + control_canary + "; printf '%s\\n' " + control_canary + "-ERR >&2"],
-        capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
+        capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace",
+        cwd=repo["root"])
     assert control.returncode == 0, control.stderr
     control_id = JOB._parse_job_id_hint(control.stdout)
     assert control_id, control.stdout
@@ -3424,7 +3430,8 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             got = subprocess.run([claude, "logs", control_id],
-                                 capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
+                                 capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace",
+                                 cwd=repo["root"])
             control_logs = got.stdout + got.stderr
             if control_canary in control_logs:
                 break
@@ -3434,7 +3441,8 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
             "「worker 是否重定向」无判别力，下面的断言不构成证据\n%r" % control_logs[:800])
         assert control_canary + "-ERR" in control_logs, "对照组：stderr 未进 transcript"
     finally:
-        subprocess.run([claude, "rm", control_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
+        subprocess.run([claude, "rm", control_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace",
+                       cwd=repo["root"])
 
     home = tmp_path / "hack-canary"
     home.mkdir()
@@ -3449,7 +3457,7 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
 
     env = os.environ.copy()
     env["FAKE_HELPER_SLEEP"] = "3"
-    proc = _run_job(home, _dispatch_args(repo, home), env, timeout=60)
+    proc = _run_job(home, _dispatch_args(repo, home), env, timeout=60, cwd=repo["root"])
     payload = _json_stdout(proc)
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     job_id = payload["job_id"]
@@ -3463,10 +3471,12 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
         assert ctx_canary in (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
         assert ctx_canary in (repo["run_dir"] / "design-voice.stderr").read_text(encoding="utf-8")
 
-        logs = subprocess.run([claude, "logs", job_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
+        logs = subprocess.run([claude, "logs", job_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace",
+                              cwd=repo["root"])
         assert logs.returncode == 0, (logs.stdout, logs.stderr)
         roster = subprocess.run([claude, "agents", "--all", "--json"],
-                                capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
+                                capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace",
+                                cwd=repo["root"])
         assert roster.returncode == 0, roster.stderr
         surface = logs.stdout + logs.stderr + roster.stdout
         assert ctx_canary not in surface, "context 正文进了 supervisor transcript/state"
@@ -3474,7 +3484,8 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
         # 路径出现在 roster 的 name 里是**既有且已知**的结构化事实，不判红
         assert str(repo["ctx"]) in roster.stdout or job_id in roster.stdout
     finally:
-        subprocess.run([claude, "rm", job_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
+        subprocess.run([claude, "rm", job_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace",
+                       cwd=repo["root"])
 
 
 @pytest.mark.parametrize("attr,value", [("name", "nt"), ("platform", "win32"),
