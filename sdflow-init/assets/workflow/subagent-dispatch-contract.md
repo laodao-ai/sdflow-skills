@@ -37,8 +37,7 @@ Codex 宿主派发子代理时，`spawn_agent` 的 `task_name` 即该派发项�
 
 ## Codex effort 回退与门禁
 
-Codex 派发使用本轮 resolver 的 model、`reasoning_effort` 与 `fork_turns: "none"`。Claude 使用其
-既有 `subagent_type` 语义；本契约不把主 session 的模型切换交给 resolver，也不以子代理的 strong
+Codex 派发使用本轮 resolver 的 model、`reasoning_effort` 与 `fork_turns: "none"`。Claude 派发同样 MUST 传本轮 resolver 的 model，并以 `subagent_type: sdflow-effort-<档位>` 选 effort（effort agent 定义为 `model: inherit`，漏传 model 即继承主 session 模型）；本契约不把主 session 的模型切换交给 resolver，也不以子代理的 strong
 档位冒充主 session 已满足门禁。
 
 仅明确的 effort 参数或 model×effort 组合不支持，才可回退：先以同一 model、任务和 prompt 尝试该档

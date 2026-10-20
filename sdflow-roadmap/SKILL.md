@@ -20,7 +20,7 @@ description: |
 
 每项只有 `completed`、`result_ref` 存在、结果结构符合 roadmap findings 要求，且能由 `run_id/task_id` 或当前调用归属本轮时才成功。旧轮结果、空结果、无效结构、`failed`、`interrupted` 和 `cancelled` 都写入「未审待恢复」并阻塞收尾，MUST NOT 作为成功 review。
 
-宿主参数互斥：`host=claude` 只带对应 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；`host=codex` 显式带 `model`、`reasoning_effort` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`；`host=unknown` 保持既有双镜路径且不调 voice。Codex 只有收到明确 effort 或 model×effort 不支持错误时才回退：先同一 model、任务、prompt、runner 尝试 canonical 默认，再省略 `reasoning_effort`；不得改变 model、任务、prompt、runner 或完整派发任务清单。记录 `requested_effort`、`accepted_request_evidence`、`effective_effort`（无可信元数据为 `unknown`）和 `fallback_reason`。
+宿主参数互斥：`host=claude` 带同档 `model: $SDFLOW_TIER_<档位>` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`（effort agent 定义为 `model: inherit`，漏传 `model` 即继承主 session 模型）；`host=codex` 显式带 `model`、`reasoning_effort` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`；`host=unknown` 保持既有双镜路径且不调 voice。Codex 只有收到明确 effort 或 model×effort 不支持错误时才回退：先同一 model、任务、prompt、runner 尝试 canonical 默认，再省略 `reasoning_effort`；不得改变 model、任务、prompt、runner 或完整派发任务清单。记录 `requested_effort`、`accepted_request_evidence`、`effective_effort`（无可信元数据为 `unknown`）和 `fallback_reason`。
 
 ### 故障矩阵
 
@@ -528,7 +528,7 @@ strategy/plan-eng 双镜（镜职责定义见上方「广审镜（strategy / pla
 ### 双镜派发（恒跑，不分档）
 
 1. **resolve-models 一次**：先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT`；`[ -x ~/.sdflow/hack/resolve-models.sh ]` 不成立 → fail-loud 并写入「未审待恢复」。否则先捕获 `MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"` 的退出码，非零时 fail-loud 并写入「未审待恢复」；成功后执行 `eval "$MODELS_ENV"; EVAL_RC=$?`，`EVAL_RC` 非零时 fail-loud 并写入「未审待恢复」。随后校验 `$SDFLOW_HOST` 精确属于 `{claude,codex,unknown}` 且非空；host≠unknown 时三 `$SDFLOW_TIER_*` 与三 `$SDFLOW_EFFORT_*` MUST 非空；`host=claude` 时三 `$SDFLOW_EFFORT_*` MUST 分别精确 ∈ {low,medium,high,xhigh,max}，`host=codex` 时 MUST 分别精确 ∈ {low,medium,high,xhigh,max,ultra}，任何非空非法值 MUST 在派发前 fail-closed。任一失败保持「未审待恢复」并阻塞收尾；`unknown` 是成功解析的既有路径，不猜机队。本轮全程只 eval 这一次。
-2. **双镜恒跑，host-adaptive**：strategy 镜 + plan-eng 镜进入完整派发任务清单；容量只能改变批次，MUST NOT 删除任务、减少镜数。按容量分批派完，MUST NOT 按商业化信号或容量增减镜数。`host=claude` 只使用对应 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex` 以 `model: $SDFLOW_TIER_MID`、`reasoning_effort: $SDFLOW_EFFORT_MID`、`fork_turns: "none"` 派 fresh 子代理，MUST NOT 带 `subagent_type`；`host=unknown` 保持原有双镜路径。
+2. **双镜恒跑，host-adaptive**：strategy 镜 + plan-eng 镜进入完整派发任务清单；容量只能改变批次，MUST NOT 删除任务、减少镜数。按容量分批派完，MUST NOT 按商业化信号或容量增减镜数。`host=claude` 以 `model: $SDFLOW_TIER_MID` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID` 派发；`host=codex` 以 `model: $SDFLOW_TIER_MID`、`reasoning_effort: $SDFLOW_EFFORT_MID`、`fork_turns: "none"` 派 fresh 子代理，MUST NOT 带 `subagent_type`；`host=unknown` 保持原有双镜路径。
 3. **voice 与双镜重叠启动**：双镜派出后**立即**前台跑 sync voice（不串行等双镜返回再跑），墙钟
    ≈ max(双镜, voice) 而非相加。`$SDFLOW_HOST="unknown"` 时双镜仍恒跑，但**不调 voice**（task-log 留一行
    `runner=none reason_code=host-unknown`，见下方「review 结果如何处理」）。

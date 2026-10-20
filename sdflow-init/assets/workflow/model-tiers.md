@@ -10,12 +10,25 @@
 
 | 档位 | 职责（谁必须用它） | Claude 机队缺省 | Codex 机队缺省 | effort 档 |
 |---|---|---|---|---|
-| **强档 strong** | verify 终门 / 对抗裁决（Step3 主审）/ final whole-branch 终审 | opus | gpt-5.6-sol | high |
-| **中档 mid** | 领域镜·对抗镜（判断/对抗推理）/ 生成 / 实现 / archive 对码 | sonnet | gpt-5.6-terra | medium |
-| **弱档 light** | 纯机械步：接地镜 grep 核验 / 历史镜 / 置信打分 / commit message | haiku | gpt-5.6-luna | low |
+| **强档 strong** | verify 终门 / 对抗裁决（Step3 主审）/ final whole-branch 终审 | opus | gpt-6-astra | high |
+| **中档 mid** | 领域镜·对抗镜（判断/对抗推理）/ 生成 / 实现 / archive 对码 | sonnet | gpt-6.1-sol | medium |
+| **弱档 light** | 纯机械步：接地镜 grep 核验 / 历史镜 / 置信打分 / commit message | haiku | gpt-6-luna | low |
 
 铁律：带门禁、无人逐条复核的步 MUST NOT 降档（假绿会放不完整的活过关）；
 纯机械步可下放弱档（失败可重试、无判断权重）。
+
+## 主 session 档位（resolver 不切换主 session）
+
+`resolve-models.sh` 只解析**子代理**的档位，不切换主 session 的模型与 effort。
+`/sdflow-spec-review`、`/sdflow-code-review`（含经 `/sdflow-ship` 调度）的主 session 承担门禁裁决，
+MUST 运行在当前宿主机队的 strong 档模型上，effort MUST NOT 低于 high。
+
+| 宿主 | 进入阶段二 / 阶段三前的动作 |
+|---|---|
+| Claude Code | `/model` 切到 `claude.strong` |
+| Codex | `/model` 切到 `codex.strong`，reasoning effort 选 `codex.strong` 对应档（不低于 high）。`~/.codex/config.toml` 的 `model` / `model_reasoning_effort` 只是主 session 缺省，低于此档时须手动切 |
+
+诚实边界：主 session 无法可靠自检当前模型，本条是给人的提示，不是机械门。
 
 ## 机读缺省（消费脚本单一源·勿在脚本内复制）
 
@@ -29,9 +42,9 @@
 claude.strong: opus
 claude.mid: sonnet
 claude.light: haiku
-codex.strong: gpt-5.6-sol
-codex.mid: gpt-5.6-terra
-codex.light: gpt-5.6-luna
+codex.strong: gpt-6-astra
+codex.mid: gpt-6.1-sol
+codex.light: gpt-6-luna
 ```
 
 ## 机读缺省 · effort 维（消费脚本单一源·勿在脚本内复制）

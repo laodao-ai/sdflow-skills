@@ -191,7 +191,7 @@ adr/0042 supersede adr/0033）；frontmatter marker 为文件格式契约（无�
 | `T10-choice` 对抗镜复核 | 强档 = `$SDFLOW_TIER_STRONG` | `$SDFLOW_EFFORT_STRONG` |
 | `review-loop-breaker` 仲裁对抗镜 / fix 子代理 | 强档 = `$SDFLOW_TIER_STRONG` | `$SDFLOW_EFFORT_STRONG` |
 
-`host=claude` 时，上表每处 dispatch MUST 附带对应档位的 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`。
+`host=claude` 时，上表每处 dispatch MUST 传对应档位的 `model: "$SDFLOW_TIER_<档位>"` 并附带 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`。
 `host=codex` 时，必须显式传对应档位的 `model: "$SDFLOW_TIER_<档位>"`、`reasoning_effort: "$SDFLOW_EFFORT_<档位>"`
 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。
 仅宿主明确拒绝 effort 参数或 model×effort 组合时，按共享契约依次尝试 canonical 默认和省略
@@ -276,7 +276,7 @@ HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判�
 3. 切片建议草图与 design.md 正文矛盾（评审 amendments 只改其他节时，切片节可能残留旧切分——
    文件级失鲜监视不覆盖节级一致性，此处是该缺口的唯一显形点）。
 
-任一命中即派 **strong 档**对抗镜复核切分方案：`host=claude` 用
+任一命中即派 **strong 档**对抗镜复核切分方案：`host=claude` 用 `model: "$SDFLOW_TIER_STRONG"` 与
 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`；`host=codex` 显式用
 `model: "$SDFLOW_TIER_STRONG"`、`reasoning_effort: "$SDFLOW_EFFORT_STRONG"` 与 `fork_turns: "none"`，MUST NOT 带
 `subagent_type`。复核记录按上述行格式落
@@ -550,8 +550,8 @@ impl-pipeline: tickets
 fix 子代理。容量只能改变批次，MUST NOT 删除任务、减少镜数；容量满载 / 容量拒绝按共享契约等待和有界重试，
 重试耗尽 MUST NOT 标为 `unavailable`。
 
-每项按宿主原生参数派发：`host=claude` 用 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex`
-用 `reasoning_effort` 和 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。Codex 能力探针的子代理机制
+每项按宿主原生参数派发：`host=claude` 用 `model: "$SDFLOW_TIER_MID"` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex`
+用 `model: "$SDFLOW_TIER_MID"`、`reasoning_effort` 和 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。Codex 能力探针的子代理机制
 `unavailable` 立即硬停，主 session 不得代替任何角色。每批收集后，只有 `completed`、存在本轮有效
 `result_ref`，且能以 `run_id/task_id` 归属的结果才成功；`failed` / `interrupted` / `cancelled`，或
 `completed` 但缺本轮有效 `result_ref`，均硬停当前票，MUST NOT 标完成或继续下一票。
@@ -788,7 +788,7 @@ git log --oneline | grep "checkpoint({change}:task<N>-"
 
 implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代理（各 **<400 词**封顶，
 **均派发 Agent model: `$SDFLOW_TIER_MID`**——同一次第零步 eval 出的中档模型 id，MUST NOT 内联具体
-模型 id；`host=claude` 只附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex` 使用
+模型 id；`host=claude` 附 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex` 使用
 `model: "$SDFLOW_TIER_MID"`、`reasoning_effort: "$SDFLOW_EFFORT_MID"` 与 `fork_turns: "none"`，MUST NOT
 带 `subagent_type`，见上「effort 派发」表）：
 
@@ -855,7 +855,7 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
   标签——本场景语义为「同一发现反复未消解」，与 `T10-choice`「≥2 方案自动选」触发条件不同〕：
 
   熔断只停止该 finding 的修复循环。strong 档仲裁对抗镜和 fix 子代理按同一派发规则执行：`host=claude`
-  用 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`；`host=codex` 显式用
+  用 `model: "$SDFLOW_TIER_STRONG"` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`；`host=codex` 显式用
   `model: "$SDFLOW_TIER_STRONG"`、`reasoning_effort: "$SDFLOW_EFFORT_STRONG"` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。
 
   - **触发（两条判据并列，命中任一即停）**：

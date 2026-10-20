@@ -503,7 +503,7 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 
 ```
 1. /clear
-2. 切换到评审档模型（阶段二用评审档，与阶段一的产出档不同）
+2. 切换到评审档模型（阶段二用评审档，与阶段一的产出档不同；Codex 宿主用 /model 切到 codex 强档且 effort ≥ high，见 model-tiers.md「主 session 档位」）
 3. /sdflow-spec-review
 ```
 

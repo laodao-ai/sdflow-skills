@@ -83,7 +83,9 @@ def _table_rows(text, heading):
         if not line.startswith("|"):
             break
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        rows.append(dict(zip(headers, cells, strict=True)))
+        # 不用 zip(strict=True)：它要 3.10+，而 CI 下限是 3.9
+        assert len(cells) == len(headers), line
+        rows.append(dict(zip(headers, cells)))
     return rows
 
 

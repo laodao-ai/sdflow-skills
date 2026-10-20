@@ -37,7 +37,7 @@ _JOB_SPEC.loader.exec_module(JOB)
 
 
 def make_bundle_repo(tmp_path, claude=("opus", "sonnet", "haiku"),
-                      codex=("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"),
+                      codex=("gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"),
                       effort=("high", "medium", "low"),
                       codex_effort=("high", "medium", "low")):
     """项目根 + 一个自包含的假全局 canonical bundle（fix-probe-scan-precision：本地 pin 判定
@@ -234,15 +234,15 @@ class TestTierDefaultsPerFleet:
         assert exports["SDFLOW_TIER_STRONG"] == "opus"
         assert exports["SDFLOW_TIER_MID"] == "sonnet"
         assert exports["SDFLOW_TIER_LIGHT"] == "haiku"
-        assert exports["SDFLOW_VOICE_MODEL"] == "gpt-5.6-sol"  # 另一机队（codex）的强档
+        assert exports["SDFLOW_VOICE_MODEL"] == "gpt-6-astra"  # 另一机队（codex）的强档
 
     def test_codex_host_reads_codex_fleet_defaults(self, tmp_path):
         root = make_bundle_repo(tmp_path)
         r = run_resolve(root, {"CODEX_THREAD_ID": "abc"})
         exports = parse_exports(r.stdout)
-        assert exports["SDFLOW_TIER_STRONG"] == "gpt-5.6-sol"
-        assert exports["SDFLOW_TIER_MID"] == "gpt-5.6-terra"
-        assert exports["SDFLOW_TIER_LIGHT"] == "gpt-5.6-luna"
+        assert exports["SDFLOW_TIER_STRONG"] == "gpt-6-astra"
+        assert exports["SDFLOW_TIER_MID"] == "gpt-6.1-sol"
+        assert exports["SDFLOW_TIER_LIGHT"] == "gpt-6-luna"
         assert exports["SDFLOW_VOICE_MODEL"] == "opus"  # 另一机队（claude）的强档
 
     def test_gate_step_never_downgrades_strong_across_hosts(self, tmp_path):
@@ -278,14 +278,14 @@ class TestFleetKeyedOverride:
         root = make_bundle_repo(tmp_path)
         write_config_yaml(root, "schema: spec-driven\nmodel-tiers:\n  strong: legacy-override\n")
         codex = parse_exports(run_resolve(root, {"CODEX_THREAD_ID": "abc"}).stdout)
-        assert codex["SDFLOW_TIER_STRONG"] == "gpt-5.6-sol"
+        assert codex["SDFLOW_TIER_STRONG"] == "gpt-6-astra"
         assert codex["SDFLOW_TIER_STRONG"] != "legacy-override"
 
     def test_missing_fleet_section_falls_back_to_fleet_default(self, tmp_path):
         root = make_bundle_repo(tmp_path)
         write_config_yaml(root, "schema: spec-driven\nmodel-tiers:\n  claude:\n    strong: c-only\n")
         codex = parse_exports(run_resolve(root, {"CODEX_THREAD_ID": "abc"}).stdout)
-        assert codex["SDFLOW_TIER_STRONG"] == "gpt-5.6-sol"
+        assert codex["SDFLOW_TIER_STRONG"] == "gpt-6-astra"
 
     def test_voice_model_for_codex_host_honors_claude_flat_override(self, tmp_path):
         """codex 宿主向 claude 发起 voice 时，VOICE_MODEL = Claude 机队强档——该值本身仍可被
@@ -412,7 +412,7 @@ class TestEffortTierDefaults:
         assert "SDFLOW_TIER_MID=sonnet" in r.stdout
         assert "SDFLOW_TIER_LIGHT=haiku" in r.stdout
         assert "SDFLOW_VOICE_RUNNER=codex" in r.stdout
-        assert "SDFLOW_VOICE_MODEL=gpt-5.6-sol" in r.stdout
+        assert "SDFLOW_VOICE_MODEL=gpt-6-astra" in r.stdout
         assert "SDFLOW_EFFORT_STRONG=high" in r.stdout
         assert "SDFLOW_EFFORT_MID=medium" in r.stdout
         assert "SDFLOW_EFFORT_LIGHT=low" in r.stdout
@@ -551,9 +551,9 @@ class TestFleetHeaderTrailingContentCrosstalk:
 class TestYqResolverContract:
     @pytest.mark.parametrize("yaml_text, expected", [
         ('model-tiers: {codex: {strong: "custom-model"}}\n', "custom-model"),
-        ('model-tiers:\n  codex:\n    strong: |\n      custom\n      injected\n', "gpt-5.6-sol"),
-        ('model-tiers: {codex: [invalid]}\n', "gpt-5.6-sol"),
-        ('model-tiers: {codex: {strong: "custom\\u0000model"}}\n', "gpt-5.6-sol"),
+        ('model-tiers:\n  codex:\n    strong: |\n      custom\n      injected\n', "gpt-6-astra"),
+        ('model-tiers: {codex: [invalid]}\n', "gpt-6-astra"),
+        ('model-tiers: {codex: {strong: "custom\\u0000model"}}\n', "gpt-6-astra"),
     ])
     def test_yaml_values_do_not_shift_fleet_fields(self, tmp_path, yaml_text, expected):
         root = make_bundle_repo(tmp_path)

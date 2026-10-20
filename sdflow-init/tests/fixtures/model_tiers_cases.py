@@ -40,7 +40,7 @@ CASES = [
         lint_reason_substrs=[],
         resolver=[
             dict(host="claude", strong="claude-strong-x", mid="claude-mid-x", light="haiku"),
-            dict(host="codex", strong="codex-strong-x", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="codex-strong-x", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     dict(
@@ -55,7 +55,7 @@ CASES = [
             # 扁平旧格式兼容读作 Claude 机队覆盖（ADR-8）
             dict(host="claude", strong="legacy-strong", mid="legacy-mid", light="haiku"),
             # Codex 机队 MUST NOT 读扁平覆盖 —— 回落 Codex 机队缺省
-            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="gpt-6-astra", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     dict(
@@ -69,7 +69,7 @@ CASES = [
         resolver=[
             # resolver 对未知子键宽容跳过（不崩），仍读到合法的 strong 覆盖
             dict(host="claude", strong="ok-model", mid="sonnet", light="haiku"),
-            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="gpt-6-astra", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     dict(
@@ -96,7 +96,7 @@ CASES = [
         # 解析失败（非 config_lint 精确点名到 codex.strong 的语义校验），见文件头 Task 4 说明。
         lint_reason_substrs=["解析失败"],
         resolver=[
-            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="gpt-6-astra", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
         injection_marker="INJECTED_B",
     ),
@@ -145,7 +145,7 @@ CASES = [
     # 后续叶子值被读进错误机队（opus 塞进 codex）。两解析器须对同一输入给出同一 fleet 归属。
     dict(
         # Critical 原始复现：codex 块在前，claude 头带注释，strong: opus。
-        # opus MUST 归 claude、MUST NOT 泄进 codex（codex 回落缺省 gpt-5.6-sol）。
+        # opus MUST 归 claude、MUST NOT 泄进 codex（codex 回落缺省 gpt-6-astra）。
         # 纯注释是合法 YAML（注释剥离后值为空 = 合法嵌套块头）⇒ 合法、CLEAN、两侧一致归 claude。
         name="fleet_header_trailing_comment_claude",
         yaml_block="""model-tiers:
@@ -158,7 +158,7 @@ CASES = [
         lint_reason_substrs=[],
         resolver=[
             dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
-            dict(host="codex", strong="codex-real", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="codex-real", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     dict(
@@ -175,7 +175,7 @@ CASES = [
         lint_reason_substrs=[],
         resolver=[
             dict(host="claude", strong="claude-real", mid="sonnet", light="haiku"),
-            dict(host="codex", strong="codex-real", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="codex-real", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     dict(
@@ -196,7 +196,7 @@ CASES = [
         lint_reason_substrs=["解析失败"],
         resolver=[
             dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
-            dict(host="codex", strong="codex-real", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="codex-real", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     dict(
@@ -211,7 +211,7 @@ CASES = [
         lint_reason_substrs=[],
         resolver=[
             dict(host="claude", strong="claude-first", mid="sonnet", light="haiku"),
-            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="gpt-6-astra", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     # ─── Task 6 复评 r2 Important：叶子层漏冒号笔误 MUST NOT 毒化整个 fleet 块 ─────────────
@@ -235,7 +235,7 @@ CASES = [
         resolver=[
             # claude host：strong 那行漏冒号被跳过 ⇒ strong 回落缺省 opus；mid 沿用 claude ⇒ sonnet-real
             dict(host="claude", strong="opus", mid="sonnet-real", light="haiku"),
-            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="gpt-6-astra", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     # ─── 方括号尾后缀（如 [1M] 上下文窗口标记）——完整 model id 的合法形态 ─────────────
@@ -252,7 +252,7 @@ CASES = [
         lint_reason_substrs=[],
         resolver=[
             dict(host="claude", strong="claude-opus-4-6[1M]", mid="sonnet", light="haiku"),
-            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+            dict(host="codex", strong="gpt-6-astra", mid="gpt-6.1-sol", light="gpt-6-luna"),
         ],
     ),
     dict(

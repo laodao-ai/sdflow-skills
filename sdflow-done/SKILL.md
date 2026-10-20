@@ -220,8 +220,8 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 adr/0046「先定完整清单再调度」：ADR 同步是否真派子代理取决于 `adr.py refs` 是否召回候选
 （空数组则该成员按「不派」落一行处置），但**成员本身**（要不要在清单里占位）在第零步就定，
 不是等 refs 跑完才临时追加成第四个任务。
-容量只能改变批次；容量满载 / 容量拒绝时等待和有界重试，MUST NOT 删除任务。`host=claude` 使用
-`subagent_type: sdflow-effort-<档位>`；`host=codex` 使用 `reasoning_effort` 与 `fork_turns: "none"`，MUST NOT 带
+容量只能改变批次；容量满载 / 容量拒绝时等待和有界重试，MUST NOT 删除任务。`host=claude` 使用同档 `model: $SDFLOW_TIER_<档位>` 与
+`subagent_type: sdflow-effort-<档位>`；`host=codex` 使用同档 `model`、`reasoning_effort` 与 `fork_turns: "none"`，MUST NOT 带
 `subagent_type`。已知宿主的 effort 空值在第零步 fail-closed，不能回落为继续派发；Codex MUST NOT 带 `subagent_type`。
 
 verify 是门禁：请求 effort 为 `low` 或 `medium` 时派发前拒绝，报告配置错误并将该档改为 `high` 或更高后重试。
@@ -690,8 +690,8 @@ sdflow-done 完成
 | archive | spec 同步 + 读代码核 delta | **中档**（`$SDFLOW_TIER_MID`） | `$SDFLOW_EFFORT_MID` | judgment 活 |
 | commit | git add + 从 diff 生成 message | 主 session | 不派发 | 主 session 保留提交说明、hand-off 与 merge 理由。 |
 
-**effort 派发构造**：verify/archive 仅在第零步已验证三档 effort 后派发。`host=claude` 使用对应
-`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；`host=codex` 使用 `reasoning_effort` 与
+**effort 派发构造**：verify/archive 仅在第零步已验证三档 effort 后派发。`host=claude` 使用同档 `model: $SDFLOW_TIER_<档位>` 与
+`subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`；`host=codex` 使用同档 `model`、`reasoning_effort` 与
 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。仅明确 effort 不支持才按共享契约回退；省略 effort
 后记 `effective_effort=unknown`。**verify 是唯一终门，MUST NOT 以 low/medium 请求执行**，也不得把被拒
 请求或未知实际值写成实际 high。

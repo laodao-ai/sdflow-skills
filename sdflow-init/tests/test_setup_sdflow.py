@@ -324,7 +324,7 @@ class TestResolveModelsInstallPath:
             errors="replace",)
         assert proc.returncode == 0, proc.stderr
         assert "export SDFLOW_HOST=codex" in proc.stdout
-        assert "export SDFLOW_TIER_STRONG=gpt-5.6-sol" in proc.stdout
+        assert "export SDFLOW_TIER_STRONG=gpt-6-astra" in proc.stdout
         assert "export SDFLOW_VOICE_RUNNER=claude" in proc.stdout
 
 

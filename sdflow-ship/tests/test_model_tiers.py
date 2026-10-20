@@ -10,10 +10,10 @@ SKILLS = ["sdflow-ship/SKILL.md", "sdflow-done/SKILL.md",
 # word char，紧贴 ASCII 单词两侧仍会被 \b 判定为词边界），收紧为显式排除左右 ASCII
 # 字母的负向环视，堵住"档位词紧贴裸模型名"类残留不被 \b 误判为非边界从而漏检的口子。
 # [add-codex-host-support:task10 面治收口 Minor-1] 原正则只盖 Claude 机队名，漏 Codex
-# 机队名 gpt-5.6-{sol,terra,luna}（见 model-tiers.md 机读块 `codex.strong/mid/light`）——
+# 机队名 gpt-6-astra / gpt-6.1-sol / gpt-6-luna（见 model-tiers.md 机读块 `codex.strong/mid/light`）——
 # 机队对称主题下机械锁只守半个域，扩正则覆盖两机队。
 BARE = re.compile(
-    r"(?<![A-Za-z])(opus|sonnet|haiku|gpt-5\.6-(?:sol|terra|luna))(?![A-Za-z])",
+    r"(?<![A-Za-z])(opus|sonnet|haiku|gpt-(?:6-astra|6\.1-sol|6-luna))(?![A-Za-z])",
     re.IGNORECASE,
 )
 
