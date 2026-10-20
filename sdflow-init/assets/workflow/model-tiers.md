@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | **强档 strong** | verify 终门 / 对抗裁决（Step3 主审）/ final whole-branch 终审 | opus | gpt-6-astra | high |
 | **中档 mid** | 领域镜·对抗镜（判断/对抗推理）/ 生成 / 实现 / archive 对码 | sonnet | gpt-6.1-sol | medium |
-| **弱档 light** | 纯机械步：接地镜 grep 核验 / 历史镜 / 置信打分 / commit message | haiku | gpt-6-luna | low |
+| **弱档 light** | 纯机械步：接地镜 grep 核验 / 历史镜 / 置信打分 / commit message | haiku | gpt-6-luna | Claude medium · Codex high |
 
 铁律：带门禁、无人逐条复核的步 MUST NOT 降档（假绿会放不完整的活过关）；
 纯机械步可下放弱档（失败可重试、无判断权重）。
@@ -58,8 +58,8 @@ codex.light: gpt-6-luna
 ```effort-tier-defaults
 claude.strong: high
 claude.mid: medium
-claude.light: low
+claude.light: medium
 codex.strong: high
 codex.mid: medium
-codex.light: low
+codex.light: high
 ```

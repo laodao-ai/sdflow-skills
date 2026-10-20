@@ -40,13 +40,13 @@ def _bare(tmp_path, name, body):
 # ── 真仓状态 ────────────────────────────────────────────────────────────────
 
 def test_repo_sites_are_byte_identical():
-    """⭐ 四个编排 SKILL 的宿主/档位解析核心段逐字节一致——漂了就红。"""
+    """⭐ 七个派发 SKILL 的宿主/档位解析核心段逐字节一致——漂了就红。"""
     assert P.main([]) == 0
 
 
 def test_all_four_sites_carry_the_markers():
-    """四处 marker 都真的存在（不是「都没有 ∴ 都一致」的空绿）。"""
-    assert len(P.SITES) == 4, "本票交付四个 skill 的核心段——site 枚举不应变多变少"
+    """七处 marker 都真的存在（不是「都没有 ∴ 都一致」的空绿）。"""
+    assert len(P.SITES) == 7, "四个编排 SKILL + adr / architecture / devenv——site 枚举不应变多变少"
     for rel in P.SITES:
         text = (REPO / rel).read_text(encoding="utf-8")
         assert P.START_LINE_PREFIX in text, rel

@@ -18,7 +18,7 @@ description: >
 
 # sdflow-done — OpenSpec 变更收尾
 
-已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 verify、archive 与收尾失败边界。
+已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 verify、archive 与收尾失败边界。Codex 宿主按该契约「Codex 结果收集」节在同一回合内收齐结果，时长上限取缺省 30 分钟。
 
 <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
@@ -147,15 +147,21 @@ description: >
 - **止损 / 反沉没成本**：方向一旦被证伪，**MUST 立即止损换向**，MUST NOT 在已被否定的方向上继续优化 / 加码
   （同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向，别在细节里打磨一个错的框架）。
 
-### 🔴 传播纪律：**fan-out 子代理 / outside-voice MUST 原文带上这四条**
+### 🔴 传播纪律：**fan-out 子代理 / outside-voice 的通则必须在场**
 
 **子代理与 outside-voice 跑在 fresh context —— 它们看不见本文件。**
 
-⇒ **每一个 fan-out 子代理的 prompt、每一份 outside-voice 的 context，MUST 把本区块
-（`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
-**MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+⇒ **每个 fan-out 子代理 MUST 拿到本区块全文，承载方二选一，派发 prompt MUST NOT 内联原文：**
 
-> **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+- **agent 定义承载**：Claude 宿主，且 `~/.claude/agents/<subagent_type>.md` 是指向本工具链
+  `sdflow-spec/agents/` 同名文件的软链——通则已在该定义里，prompt 不带。
+- **读文件承载**：其余情况，prompt 只写一句读文件指令（渲染器生成的前缀文件的绝对路径），
+  子代理**把文件首行原样作为结果首行**，主 session 比对回执；prompt MUST NOT 写出期望版本值。
+- outside-voice 的 context 区被声明为 UNTRUSTED，不承载通则；通则由 `outside-voice.sh` 的 FRAME 机械注入。
+
+判定与回执细则见 `subagent-dispatch-contract.md` 的「通则承载与前缀文件」节。
+
+> **通则缺席的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
 > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
 > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
 
@@ -211,6 +217,16 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 
 **下方各步「派发 Agent」的 `model:` 参数 MUST 取对应变量值，MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason** 一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
 
+### 0.5 通则承载与 run 目录（首次派发之前，每轮恰好一次）
+
+本入口的 run 目录创建、忽略校验、前缀文件渲染、承载判定、读文件指令、回执比对与任务记录字段，一律按规则根 `subagent-dispatch-contract.md`「通则承载与前缀文件」节执行。派发 prompt MUST NOT 内联通则原文。本入口只声明差异：
+
+- **父目录**：`openspec/.outside-voice/`（archive 会搬走 change 目录，放在外面才不失效）。
+- **承载判定所用 `subagent_type`**：`host=claude` 时对 `sdflow-effort-$SDFLOW_EFFORT_STRONG`（verify）与 `sdflow-effort-$SDFLOW_EFFORT_MID`（archive、ADR 同步）各判一次。
+- **回执与失败出口**：通过后**先剥掉回执行**，再做 PASS/FAIL 末行、BLOCKED 或逐篇判定的解析。
+  - 只读任务（verify）：同一任务重派一次；再不符按第 1.1 步的硬停处置。
+  - 有写副作用的任务（archive、ADR 同步）：不重派。archive 走第三步的 BLOCKED 出口（停止并交回用户）；ADR 同步走第 1.5 步的「任何终态后 lint → 撤销实际改动集」。两者报告均标注「回执不符，产出未采信」。
+
 ---
 
 ## 本轮 done 派发与收集
@@ -264,7 +280,7 @@ hand-off、merge 理由和最终接受由主 session 完成。
 
 派发 Agent（model: `$SDFLOW_TIER_STRONG`——第零步 0.4 已 eval 出的强档模型 id；`host=claude` 附
 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`；`host=codex` 附 `reasoning_effort: "$SDFLOW_EFFORT_STRONG"`
-与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。verify 是门禁步，派发前拒绝 low/medium 请求），prompt：
+与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。verify 是门禁步，派发前拒绝 low/medium 请求），prompt（`not-carried` 时最前先加 0.5 的读文件指令，回执行先剥再解析 PASS/FAIL）：
 
 ```
 你是 OpenSpec 验证助手。工作目录：{项目根目录}。
@@ -395,9 +411,10 @@ MUST NOT 中止 archive/commit/merge。既有步号 MUST NOT 因插入本步而�
    │ 候选文件路径命中已脏文件 ──▶ 该篇从候选剔除 + 记一条 issues todo（不自动改脏文件）
    ▼
 [主 session] 按每批 ≤20 篇分派 mid 档子代理（本轮派发清单已在「本轮 done 派发与收集」固定登记）
+   sdflow-adr 的 sync 复用本轮第 0.4 步已导出的变量（SDFLOW_HOST / SDFLOW_TIER_MID / SDFLOW_EFFORT_MID），不另行解析；
    model: $SDFLOW_TIER_MID；host=claude 附 subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID；
    host=codex 附 reasoning_effort: "$SDFLOW_EFFORT_MID" 与 fork_turns: "none"，MUST NOT 带 subagent_type。
-   prompt = sdflow-adr/references/sync-prompt.md 全文 + 本批候选清单（含 refs 输出的编号/路径/
+   prompt = [0.5 的读文件指令，仅 not-carried] + sdflow-adr/references/sync-prompt.md 全文 + 本批候选清单（含 refs 输出的编号/路径/
    Status/命中词/explicit）+ decision-memo.md 与 design.md 路径。
    ▼
 [各子代理] 按 sync-prompt.md：先读 Status 分支（终态跳过正文 / Partially 只核未取代部分）→
@@ -411,7 +428,7 @@ MUST NOT 中止 archive/commit/merge。既有步号 MUST NOT 因插入本步而�
    # 只看本批候选：其它批次的改动（已验收的或仍在进行的）不属于本批，不能被本批的撤销连带
    │ 改动集为空 ──▶ 本批记「无 ADR 改动」，不跑 lint（adr.py lint 不带文件参数 = 全目录 lint）
    python3 <adr.py> lint --root . <该改动集中的文件...>
-   │ 子代理非 completed，或该改动集内仍有红项文件
+   │ 子代理非 completed、回执不符（0.5，产出未采信），或该改动集内仍有红项文件
    │   ──▶ git checkout -- <该改动集>（起手已用 git status --porcelain 确认这些文件是干净的，
    │        撤销精确等于回到 sync 前，不吞用户改动）+ 记一条 issues todo
    ▼
@@ -515,7 +532,7 @@ python3 ~/.sdflow/hack/token_snapshot.py --step done-final || true
 
 派发 Agent（model: `$SDFLOW_TIER_MID`——第零步 0.4 已 eval 出的中档模型 id；`host=claude` 附
 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex` 附 `reasoning_effort: "$SDFLOW_EFFORT_MID"`
-与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`），prompt：
+与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`），prompt（`not-carried` 时最前先加 0.5 的读文件指令；回执不符不重派）：
 
 ```
 你是 OpenSpec 归档助手。工作目录：{项目根目录}。语言中文。

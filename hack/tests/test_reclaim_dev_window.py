@@ -56,6 +56,9 @@ _GATE_SKILLS = (
     "sdflow-done/SKILL.md",
     "sdflow-spec-review/SKILL.md",
     "sdflow-code-review/SKILL.md",
+    "sdflow-adr/SKILL.md",
+    "sdflow-architecture/SKILL.md",
+    "sdflow-devenv/SKILL.md",
 )
 
 

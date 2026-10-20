@@ -62,7 +62,7 @@ MUST NOT 因为「我觉得这样更好」就**悄悄**改了方案——**沉�
 MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回纠结。
 **止损**：方向一旦被证伪 MUST 立即换向（同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向）。
 
-> fan-out 子代理 / outside-voice 跑在 fresh context，看不见本文件 ⇒ 它们的 prompt MUST 原文带上这四条。
+> fan-out 子代理 / outside-voice 跑在 fresh context，看不见本文件 ⇒ 通则由 agent 定义承载或让子代理读文件，prompt 不内联原文（见各 SKILL 的传播纪律）。
 
 <!-- sdflow:principles:end -->
 
@@ -104,7 +104,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 
 四个编排 SKILL（`/sdflow-spec-review`、`/sdflow-code-review`、`/sdflow-implement`、`/sdflow-done`）
 的子代理派发在 `model` 档位之外另有一维 **effort**（`$SDFLOW_EFFORT_STRONG`/`MID`/`LIGHT`，经
-`model-tiers.md` 的 `effort-tier-defaults` 机读块推导，缺省 strong→high / mid→medium / light→low）。
+`model-tiers.md` 的 `effort-tier-defaults` 机读块推导，缺省 strong→high / mid→medium / light→Claude medium、Codex high）。
 Claude 宿主在派发时用 `subagent_type: sdflow-effort-<值>`，选用全局
 `~/.claude/agents/sdflow-effort-*.md` 定义，其 frontmatter 携 `effort: <值>`。Codex 宿主在派发时用原生
 `reasoning_effort: <值>` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。unknown 宿主不派发子代理。

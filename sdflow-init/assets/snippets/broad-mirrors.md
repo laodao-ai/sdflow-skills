@@ -16,7 +16,7 @@
 **两镜各自 prompt 契约（MUST 含，不 AskUserQuestion）**：
 
 1. 评审对象路径（调用方 SKILL 在本区块外声明的具体路径/文件集）。
-2. **四条通则原文整段复制**（`sdflow:principles` 从 start 到 end，不转述、不摘要——见各 SKILL 传播纪律）。
+2. **四条通则由承载方提供**（agent 定义承载，或读 `prefix-principles.md` 并回显首行；prompt MUST NOT 内联原文——见契约「通则承载与前缀文件」节）。
 3. 本镜职责清单（上表对应行的 R 项范围）。
 4. 返回**结构化** findings 列表（每条：问题 / 证据 `{file, line, quote}` 或 `evidence_pack`〔调用方若接入
    机械引用核 `findings_ref_check.py`（DD4，implement-workflow-optimization-2026-08-p2）消费此字段；未接入

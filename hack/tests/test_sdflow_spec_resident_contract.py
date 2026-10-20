@@ -101,10 +101,9 @@ REFERENCE_ROUTES = {
 
 
 DELEGATION_PROPAGATION_CONTRACT = (
-    "每一次派发的 prompt",
-    "`sdflow:principles` 从 `start` 到 `end`",
-    "原文整段复制进去",
-    "MUST NOT 依赖 agent 定义中的副本",
+    "通则由 agent 定义承载",
+    "MUST NOT 内联通则原文",
+    "MUST NOT 改派通用子代理",
 )
 
 
@@ -179,7 +178,7 @@ def test_reference_route_rejects_bare_or_detached_links(degraded_route):
         _assert_reference_routes(entry.replace(valid_route, degraded_route, 1))
 
 
-def test_delegation_requires_verbatim_principles_in_every_dispatched_prompt():
+def test_delegation_carries_principles_by_agent_definition_not_by_prompt():
     delegation = _text(SKILL.parent / "references/delegation-protocol.md")
     for token in DELEGATION_PROPAGATION_CONTRACT:
         assert token in delegation, f"外派协议缺传播纪律锚：{token}"

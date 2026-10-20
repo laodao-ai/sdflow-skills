@@ -157,3 +157,29 @@ def test_run_init_and_update_use_canonical_runtime_merge(mode, case, tmp_path, m
             assert result.splitlines().count(entry) == 1, \
                 f"canonical 条目 {entry!r} 不是恰好一条"
     assert calls == [canonical]
+
+
+OUTSIDE_VOICE_ENTRY = b"**/.outside-voice/"
+
+
+def test_canonical_contains_outside_voice_entry():
+    # SW-04：评审 / 实现入口写 run 目录前靠这条忽略规则放行（git check-ignore）。
+    assert OUTSIDE_VOICE_ENTRY in CANONICAL_ENTRIES
+
+
+@pytest.mark.parametrize("mode", ["init", "update"])
+def test_run_adds_outside_voice_entry_and_second_run_is_noop(mode, tmp_path, monkeypatch):
+    _stub_run_dependencies(monkeypatch)
+    if mode == "update":
+        (tmp_path / "openspec").mkdir()
+    target = tmp_path / ".gitignore"
+    original = b"# user\ncustom/**\n"
+    target.write_bytes(original)
+
+    INIT.run(str(tmp_path), mode)
+    first = target.read_bytes()
+    assert first.startswith(original)
+    assert first.splitlines().count(OUTSIDE_VOICE_ENTRY) == 1
+
+    INIT.run(str(tmp_path), mode)
+    assert target.read_bytes() == first

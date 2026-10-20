@@ -138,15 +138,21 @@ description: >
 - **止损 / 反沉没成本**：方向一旦被证伪，**MUST 立即止损换向**，MUST NOT 在已被否定的方向上继续优化 / 加码
   （同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向，别在细节里打磨一个错的框架）。
 
-### 🔴 传播纪律：**fan-out 子代理 / outside-voice MUST 原文带上这四条**
+### 🔴 传播纪律：**fan-out 子代理 / outside-voice 的通则必须在场**
 
 **子代理与 outside-voice 跑在 fresh context —— 它们看不见本文件。**
 
-⇒ **每一个 fan-out 子代理的 prompt、每一份 outside-voice 的 context，MUST 把本区块
-（`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
-**MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+⇒ **每个 fan-out 子代理 MUST 拿到本区块全文，承载方二选一，派发 prompt MUST NOT 内联原文：**
 
-> **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+- **agent 定义承载**：Claude 宿主，且 `~/.claude/agents/<subagent_type>.md` 是指向本工具链
+  `sdflow-spec/agents/` 同名文件的软链——通则已在该定义里，prompt 不带。
+- **读文件承载**：其余情况，prompt 只写一句读文件指令（渲染器生成的前缀文件的绝对路径），
+  子代理**把文件首行原样作为结果首行**，主 session 比对回执；prompt MUST NOT 写出期望版本值。
+- outside-voice 的 context 区被声明为 UNTRUSTED，不承载通则；通则由 `outside-voice.sh` 的 FRAME 机械注入。
+
+判定与回执细则见 `subagent-dispatch-contract.md` 的「通则承载与前缀文件」节。
+
+> **通则缺席的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
 > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
 > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
 
@@ -157,6 +163,39 @@ description: >
 `openspec/adr/` 下 ADR 文件的格式、Status 取值、更新规则**只在** `references/format.md`
 定义（AM-1）；所有确定性检查（编号、格式、取代目标存在性、候选召回）**只由** `scripts/adr.py`
 完成，模型只做「陈述与代码是否一致」这类无法机械判定的语义判断（基准 1 的残余）。
+
+sync 与 audit 派发子代理后，Codex 宿主按规则根 `subagent-dispatch-contract.md` 的「Codex 结果收集」节在同一回合内收齐结果，时长上限取缺省 30 分钟。
+
+### 档位解析与宿主参数
+
+sync 与 audit 派发子代理时，model 与 effort 经 `resolve-models.sh` 解析后显式传入，不内联具体模型 id。
+
+- **sync 被 `sdflow-done` 第 1.5 步调用**：复用 done 已导出的变量（`$SDFLOW_HOST`、`$SDFLOW_TIER_MID`、`$SDFLOW_EFFORT_MID`），不再解析。
+- **独立调用（独立 sync、audit）**：首次派发之前按下块解析一次。`new` 模式不派发子代理，不解析。
+
+<!-- sdflow:tier-resolution:start v1 -->
+**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` 与三 `$SDFLOW_EFFORT_*` MUST 非空；`host=claude` 时三 `$SDFLOW_EFFORT_*` MUST 分别精确 ∈ {low,medium,high,xhigh,max}，`host=codex` 时 MUST 分别精确 ∈ {low,medium,high,xhigh,max,ultra}，任何非空非法值 MUST 在派发前 fail-closed——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（按档位解析的 effort 值；已知宿主必须完整，`unknown` 路径不派发时忽略它们）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+<!-- sdflow:tier-resolution:end -->
+
+| 模式 | model 档位 | effort |
+|---|---|---|
+| sync | 中档 `$SDFLOW_TIER_MID` | `$SDFLOW_EFFORT_MID` |
+| audit | 强档 `$SDFLOW_TIER_STRONG` | `$SDFLOW_EFFORT_STRONG`，门禁性质，请求 effort 不低于 high：解析为 `low` 或 `medium` 时不派发，报告配置错误并将该档改为 `high` 或更高后重试 |
+
+- `host=claude`：带 `model: "$SDFLOW_TIER_<档位>"` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`。
+- `host=codex`：带 `model`、`reasoning_effort: "$SDFLOW_EFFORT_<档位>"` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。
+- `host=unknown`：不派发子代理。sync 记「ADR 同步跳过：宿主未知」并走既有跳过路径；audit 停止并提示换受支持宿主重跑。
+
+### 通则承载与 run 目录
+
+sync 与 audit 派发的子代理，其 run 目录创建、忽略校验、前缀文件渲染、承载判定、读文件指令、回执比对与任务记录字段，一律按规则根 `subagent-dispatch-contract.md`「通则承载与前缀文件」节执行。prompt 模板（`references/sync-prompt.md`、`references/audit-prompt.md`）不内联通则，派发 prompt MUST NOT 内联通则原文。本入口只声明差异：
+
+- **sync 被 `sdflow-done` 第 1.5 步调用**：复用 done 第 0.5 步已建的 run 目录、`prefix-principles.md` 与承载判定，不另建。
+- **audit 与独立 sync 的父目录**：`openspec/adr/.outside-voice/`，首次派发之前建。
+- **承载判定所用 `subagent_type`**：本次派发所带的 `subagent_type`；Codex 宿主不带，记 `not-carried`。
+- **回执与失败出口**：通过后先剥掉回执行再读返回内容。
+  - audit（只读任务）：同一批重派一次；再不符，该批记为未完成，汇总里列出批次编号，不计入基线对比。
+  - sync（有写副作用）：不重派，走 sync 既有失败路径（对实际改动集撤销 + 记 issues todo），报告标注「回执不符，产出未采信」。
 
 三个模式：
 
@@ -199,8 +238,8 @@ change、决策非显然、决策可能被质疑）不变，只是产出入口�
 2. **召回候选**：跑 `adr.py refs --root . --base {base_branch} --explicit-from
    {change_dir}/decision-memo.md {change_dir}/design.md`。退出 2（git 失败）→ 记原因、跳过
    本步；空数组 `[]` → 记「ADR 同步：无候选」、跳过本步；从结果中去掉第 1 步已剔除的候选。
-3. **分批派子代理**：剩余候选按每批 ≤20 篇分批，每批派一个 mid 档子代理，prompt 用
-   `references/sync-prompt.md`（含四条通则原文整段、Status 分支、分类规则、附录格式、
+3. **分批派子代理**：剩余候选按每批 ≤20 篇分批，每批派一个 mid 档子代理（`$SDFLOW_TIER_MID` / `$SDFLOW_EFFORT_MID`，见上「档位解析与宿主参数」），prompt 用
+   `references/sync-prompt.md`（含 Status 分支、分类规则、附录格式、
    add 前 scan 查重、返回格式）+ 本批候选清单 + `{change_dir}/decision-memo.md` 与
    `design.md` 路径。
 4. **任何终态后对实际改动集跑 lint**：不论子代理返回 `completed` 还是
@@ -226,7 +265,7 @@ change、决策非显然、决策可能被质疑）不变，只是产出入口�
 
 1. 主 session 先跑 `adr.py lint --root .`，记下**基线红项数**；把全部 ADR 按编号切批
    （每批 ≤N 篇）。
-2. 每批派一个 strong 档子代理，prompt 取 `references/audit-prompt.md`：格式按 `format.md`
+2. 每批派一个 strong 档子代理（`$SDFLOW_TIER_STRONG` / `$SDFLOW_EFFORT_STRONG`，门禁性质，请求 effort 不低于 high，见上「档位解析与宿主参数」），prompt 取 `references/audit-prompt.md`：格式按 `format.md`
    改齐（H1 前状态 blockquote 转 Status 行后删除属格式迁移，Superseded/Deprecated 除此之外
    只改 H1 与 Status 行，Partially 按活跃态只整理未取代部分），逐条陈述对照代码核实——一致
    不动、细节变化改正文并记附录、核实不了保留原文，决策被推翻 / 写了没实现 / 代码违反 ADR

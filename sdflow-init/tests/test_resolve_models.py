@@ -38,8 +38,8 @@ _JOB_SPEC.loader.exec_module(JOB)
 
 def make_bundle_repo(tmp_path, claude=("opus", "sonnet", "haiku"),
                       codex=("gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"),
-                      effort=("high", "medium", "low"),
-                      codex_effort=("high", "medium", "low")):
+                      effort=("high", "medium", "medium"),
+                      codex_effort=("high", "medium", "high")):
     """项目根 + 一个自包含的假全局 canonical bundle（fix-probe-scan-precision：本地 pin 判定
     已从 resolve-workflow.sh 删除，两步链只剩「全局 canonical → 显式降级」——bundle 须放进
     `tmp_path/sdflow-home/workflow/`，经 `run_resolve`/`eval_resolve` 默认设置的 SDFLOW_HOME
@@ -307,7 +307,7 @@ class TestEffortTierDefaults:
         exports = parse_exports(r.stdout)
         assert exports["SDFLOW_EFFORT_STRONG"] == "high"
         assert exports["SDFLOW_EFFORT_MID"] == "medium"
-        assert exports["SDFLOW_EFFORT_LIGHT"] == "low"
+        assert exports["SDFLOW_EFFORT_LIGHT"] == "medium"
 
     def test_codex_host_exports_effort_defaults_without_override(self, tmp_path):
         root = make_bundle_repo(tmp_path)
@@ -316,7 +316,7 @@ class TestEffortTierDefaults:
         exports = parse_exports(r.stdout)
         assert exports["SDFLOW_EFFORT_STRONG"] == "high"
         assert exports["SDFLOW_EFFORT_MID"] == "medium"
-        assert exports["SDFLOW_EFFORT_LIGHT"] == "low"
+        assert exports["SDFLOW_EFFORT_LIGHT"] == "high"
 
     def test_unknown_host_effort_vars_are_empty_with_no_extra_warning_noise(self, tmp_path):
         root = make_bundle_repo(tmp_path)
@@ -355,7 +355,7 @@ class TestEffortTierDefaults:
         assert exports["SDFLOW_EFFORT_MID"] == "xhigh"
         # 未覆盖的档位不受影响，仍回落缺省
         assert exports["SDFLOW_EFFORT_STRONG"] == "high"
-        assert exports["SDFLOW_EFFORT_LIGHT"] == "low"
+        assert exports["SDFLOW_EFFORT_LIGHT"] == "medium"
 
     def test_codex_override_applies_only_on_codex_host(self, tmp_path):
         root = make_bundle_repo(tmp_path)
@@ -415,7 +415,7 @@ class TestEffortTierDefaults:
         assert "SDFLOW_VOICE_MODEL=gpt-6-astra" in r.stdout
         assert "SDFLOW_EFFORT_STRONG=high" in r.stdout
         assert "SDFLOW_EFFORT_MID=medium" in r.stdout
-        assert "SDFLOW_EFFORT_LIGHT=low" in r.stdout
+        assert "SDFLOW_EFFORT_LIGHT=medium" in r.stdout
 
 class TestEvalInjectionHardening:
     """GC-6/D5：eval 注入面加固——覆盖值须过模型 ID 字符集校验，恶意值不得在 eval 时执行。"""

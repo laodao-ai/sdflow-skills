@@ -132,15 +132,21 @@ effort: low
 - **止损 / 反沉没成本**：方向一旦被证伪，**MUST 立即止损换向**，MUST NOT 在已被否定的方向上继续优化 / 加码
   （同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向，别在细节里打磨一个错的框架）。
 
-### 🔴 传播纪律：**fan-out 子代理 / outside-voice MUST 原文带上这四条**
+### 🔴 传播纪律：**fan-out 子代理 / outside-voice 的通则必须在场**
 
 **子代理与 outside-voice 跑在 fresh context —— 它们看不见本文件。**
 
-⇒ **每一个 fan-out 子代理的 prompt、每一份 outside-voice 的 context，MUST 把本区块
-（`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
-**MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+⇒ **每个 fan-out 子代理 MUST 拿到本区块全文，承载方二选一，派发 prompt MUST NOT 内联原文：**
 
-> **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+- **agent 定义承载**：Claude 宿主，且 `~/.claude/agents/<subagent_type>.md` 是指向本工具链
+  `sdflow-spec/agents/` 同名文件的软链——通则已在该定义里，prompt 不带。
+- **读文件承载**：其余情况，prompt 只写一句读文件指令（渲染器生成的前缀文件的绝对路径），
+  子代理**把文件首行原样作为结果首行**，主 session 比对回执；prompt MUST NOT 写出期望版本值。
+- outside-voice 的 context 区被声明为 UNTRUSTED，不承载通则；通则由 `outside-voice.sh` 的 FRAME 机械注入。
+
+判定与回执细则见 `subagent-dispatch-contract.md` 的「通则承载与前缀文件」节。
+
+> **通则缺席的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
 > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
 > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
 

@@ -30,6 +30,7 @@ description: >
 | 容量重试耗尽 | 进入未审待恢复，MUST NOT 标为 `unavailable`。 | 阻塞本轮。 |
 | `completed` 但缺本轮有效 `result_ref` | 拒绝空结果、无效结构及旧轮结果；按本入口失败路径处置。 | 不作为成功锚。 |
 | `failed` / `interrupted` / `cancelled` | 进入未审待恢复。 | 不作为成功锚。 |
+| 读文件分支的镜，结果首行缺回执或与本轮前缀文件首行不符 | 记 `result-invalid-or-unattributed`，同一镜重派一次；再不符按本入口失败路径处置，MUST NOT 接受其 findings。 | 不作为成功锚。 |
 
 <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
@@ -158,15 +159,21 @@ description: >
 - **止损 / 反沉没成本**：方向一旦被证伪，**MUST 立即止损换向**，MUST NOT 在已被否定的方向上继续优化 / 加码
   （同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向，别在细节里打磨一个错的框架）。
 
-### 🔴 传播纪律：**fan-out 子代理 / outside-voice MUST 原文带上这四条**
+### 🔴 传播纪律：**fan-out 子代理 / outside-voice 的通则必须在场**
 
 **子代理与 outside-voice 跑在 fresh context —— 它们看不见本文件。**
 
-⇒ **每一个 fan-out 子代理的 prompt、每一份 outside-voice 的 context，MUST 把本区块
-（`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
-**MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+⇒ **每个 fan-out 子代理 MUST 拿到本区块全文，承载方二选一，派发 prompt MUST NOT 内联原文：**
 
-> **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+- **agent 定义承载**：Claude 宿主，且 `~/.claude/agents/<subagent_type>.md` 是指向本工具链
+  `sdflow-spec/agents/` 同名文件的软链——通则已在该定义里，prompt 不带。
+- **读文件承载**：其余情况，prompt 只写一句读文件指令（渲染器生成的前缀文件的绝对路径），
+  子代理**把文件首行原样作为结果首行**，主 session 比对回执；prompt MUST NOT 写出期望版本值。
+- outside-voice 的 context 区被声明为 UNTRUSTED，不承载通则；通则由 `outside-voice.sh` 的 FRAME 机械注入。
+
+判定与回执细则见 `subagent-dispatch-contract.md` 的「通则承载与前缀文件」节。
+
+> **通则缺席的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
 > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
 > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
 
@@ -185,6 +192,17 @@ description: >
 
 ---
 
+## 完成标准与停点
+
+- **完成产物**：`{change_dir}/spec-review-report.md` 落盘，锚行自检（`anchor_lint.py`）退出 0，checkpoint 提交完成。
+- **允许停下的情形**：只有下列既有出口。
+  - 第零步 fail-loud 硬停：resolve-models.sh 未安装或解析校验不过；run 目录未被 git 忽略；渲染前缀文件非零退出；`mktemp -d` 失败。
+  - 容量重试耗尽，进入未审待恢复（故障矩阵）。
+  - 报告产出后的设计 HARD-GATE，交人批准。
+
+  其余情况一律继续到完成产物。检查通过就继续，不做未要求的改进。
+- **循环上限**：读文件分支的镜回执不符，同一镜重派一次；再不符按故障矩阵处置，不再重派。
+
 ## 第零步：确认对象 + 读规则
 
 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
@@ -198,6 +216,19 @@ description: >
 **主 session 档位提示**：校验通过且 `$SDFLOW_HOST="codex"` 时，派发任何子代理前向用户输出一行提示，然后**继续执行本轮，MUST NOT 因此结束回合或等待回复**：「本 skill 主 session 承担门禁裁决，应运行在 codex 强档且 effort 不低于 high（见规则根 `model-tiers.md`「主 session 档位」）；若当前不是，下次运行前用 `/model` 切档」。resolver 不切换主 session，本条是提示，不是机械门，也不是停点。
 
 （与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、第一步能力探针同类；空值/unknown 分家同样遵循 fail-loud 精神——均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
+
+4. **run 目录 + 前缀文件 + 通则承载判定（每轮恰好一次，首次派发之前；细则见规则根 `subagent-dispatch-contract.md`「通则承载与前缀文件」节）**：
+   - **建 run 目录**（本轮所有站点共用，outside-voice 协议复用，不再另建）：`mkdir -p "{change_dir}/.outside-voice"`，再
+     `RUN_DIR="$(mktemp -d "{change_dir}/.outside-voice/$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")" && basename "$RUN_DIR"`——同一次调用内取回字面 run-id，后续路径一律代入字面值（run-id 取回与占坑细则见下「outside-voice helper 调用协议」）。`mktemp -d` 失败 → 显式停。
+   - **写入前校验忽略**：`git check-ignore -q "{change_dir}/.outside-voice/<run-id>"`。不被忽略 → **fail-loud**，不写文件、不派发：problem=run 目录未被 git 忽略；cause=该仓 `.gitignore` 缺 `**/.outside-voice/`；fix=在本仓跑 `sdflow-init update`。
+   - **渲染三个变体**（各一次调用，stdout 一行 JSON，用 `python3 -c` 解析取 `path`、`version`；每变体每轮只写一次，写后不改）：
+     `~/.sdflow/hack/render-review-prefix.sh --layer spec-review --out-dir "{change_dir}/.outside-voice/<run-id>"`（含通则）、
+     `~/.sdflow/hack/render-review-prefix.sh --layer spec-review --no-principles --out-dir "…同上…"`（`-np`，通则由 agent 定义承载时用）、
+     `~/.sdflow/hack/render-review-prefix.sh --layer principles --out-dir "…同上…"`（广审镜等非评审镜 `not-carried` 时用）。
+     任一非零退出 → **fail-loud**：转发 stderr 的 problem/cause/fix（未知参数 exit 64 = 渲染器旧于本 SKILL，先在运行 checkout 跑 `bash setup.sh`），**MUST NOT** 用半段前缀继续，**MUST NOT** 在派发失败后补渲染。
+   - **承载判定**：`host=claude` 时对本轮将用的每个 `subagent_type`（`sdflow-effort-$SDFLOW_EFFORT_MID`、`sdflow-effort-$SDFLOW_EFFORT_LIGHT`、`sdflow-effort-$SDFLOW_EFFORT_STRONG`）判 `~/.claude/agents/<subagent_type>.md` 是软链且 `readlink` 指向 `*/sdflow-spec/agents/<subagent_type>.md`——通过记 `carried`，其余（未跑 setup、Windows、同名文件属于别的插件、`host=codex`）一律 `not-carried`。
+   - 每个任务记录增加 `prefix_path`、`prefix_version` 两个字段（`carried` 的非评审镜两者为空），上下文压缩后靠它们继续比对。
+   - 第一步的能力探针子代理只回复固定哨兵、不做实质工作，不承载通则，不受本项约束；其后的每一次派发都受约束；对抗镜复核、复审等后续派发沿用同一判定，按契约变体表「其余子代理」行处理（`carried` 不带通则，`not-carried` 读 `prefix-principles.md`）。
 
 ## 第一步：能力探针 + 规划镜头 + 完整 roster 容量分批 dispatch（广审双镜 + 领域镜 + 对抗镜 + 接地镜 + design-voice）
 
@@ -273,7 +304,7 @@ design-voice 一起进入完整派发任务清单；容量只能改变批次，M
 **两镜各自 prompt 契约（MUST 含，不 AskUserQuestion）**：
 
 1. 评审对象路径（调用方 SKILL 在本区块外声明的具体路径/文件集）。
-2. **四条通则原文整段复制**（`sdflow:principles` 从 start 到 end，不转述、不摘要——见各 SKILL 传播纪律）。
+2. **四条通则由承载方提供**（agent 定义承载，或读 `prefix-principles.md` 并回显首行；prompt MUST NOT 内联原文——见契约「通则承载与前缀文件」节）。
 3. 本镜职责清单（上表对应行的 R 项范围）。
 4. 返回**结构化** findings 列表（每条：问题 / 证据 `{file, line, quote}` 或 `evidence_pack`〔调用方若接入
    机械引用核 `findings_ref_check.py`（DD4，implement-workflow-optimization-2026-08-p2）消费此字段；未接入
@@ -287,6 +318,8 @@ design-voice 一起进入完整派发任务清单；容量只能改变批次，M
 <!-- sdflow:broad-mirror-def:end -->
 
 本 skill 场景下，上方契约的「评审对象路径」= `{change_dir}` 下 proposal/design/specs/tasks 四件套。
+
+通则承载（广审镜是非评审镜）：按第零步 4 的判定，`carried` → prompt 不带通则、无回执；`not-carried` → 读 `prefix-principles.md`，读文件指令与回执规则同下「三段组装序」段①。
 
 ### 领域镜 / 对抗镜 / 接地镜 + 容量分批 dispatch
 
@@ -319,13 +352,12 @@ Step3 合并去重 + 对抗裁决 ──▶ Step4 报告 + amendment
 **三段组装序（spec-workflow delta：稳定前缀 byte-stable）**——领域镜/对抗镜/接地镜三者的 dispatch prompt
 MUST 按固定三段拼接，MUST NOT 打散顺序或把段①内容手工重述：
 
-1. **段①（稳定前缀，跨轮跨镜 byte-stable）**：调 `~/.sdflow/hack/render-review-prefix.sh --layer spec-review`，
-   把其 **stdout 原文整体**作为 dispatch prompt 的开头——已固定含通则区块全文 + 评审子代理通用契约
-   （结构化 findings schema、引文纪律、输出封顶句「回传目标 ≤2k token，超出按严重度截优先」、不问人）+
-   `spec-checklists/spec-quality-base.md` 全文（base R 项，供领域/对抗/接地镜参照全局判据）。**非零退出
-   ⇒ fail-loud**：显式提示「render-review-prefix.sh 报错——先在运行 checkout 跑 `bash setup.sh`，或按
-   stderr 的 problem/cause/fix 处置」，**MUST NOT** 用半段前缀继续。**MUST NOT 再手工复制粘贴「四条通则」
-   区块或重述结构化 findings schema/引文纪律/不问人**——唯一源在脚本，本 SKILL 正文只保留这一句引用。
+1. **段①（稳定前缀，跨轮跨镜 byte-stable）**：前缀已在第零步 4 写成 run 目录里的文件，不在此处渲染、不贴进 prompt。按承载判定选文件：`carried` → `prefix-spec-review-np.md`（通用契约 + `spec-quality-base.md`，通则由 agent 定义承载）；`not-carried` → `prefix-spec-review.md`（另含通则区块全文）。该镜 prompt 的段① **只写一句读文件指令**（`<path>` 代入第零步取回的绝对路径）：
+
+   > 先完整读取 `<path>`；把该文件第一行原样作为你结果的第一行。
+
+   **MUST NOT 写出期望的 `prefix-version` 值**——期望值只由主 session 持有，子代理不读文件就拿不到正确首行。**MUST NOT** 把前缀正文、「四条通则」区块或结构化 findings schema / 引文纪律 / 不问人手工贴进 prompt——唯一源在渲染器，本 SKILL 正文只保留这一句读文件指令。
+   **回执比对**：子代理结果首行 MUST 与所选文件的首行（`<!-- prefix-version: <version> -->`）逐字一致；一致则剥掉该行再进合并去重与机械引用核。缺失或不符 → 记 `result-invalid-or-unattributed`，**同一镜重派一次**；再不符按故障矩阵处置，MUST NOT 接受其 findings。回执只证明读到首行，不证明读完全文。
 2. **段②（半稳定，per-镜、change 内稳定）**：该镜的角色声明 + `{change_dir}` 路径 + 负责的清单/角度
    （领域镜：命中的 `spec-checklists/domains/<栈>` R 项；对抗镜：本镜负责的角度之一——隐藏假设 / 失败
    模式 / 乐观估计与边界；接地镜：核验代码事实一致性指令）+ **置信度自报字段**（高/中/低，仅供报告
@@ -333,8 +365,8 @@ MUST 按固定三段拼接，MUST NOT 打散顺序或把段①内容手工重述
 3. **段③（动态）**：`{change_dir}` 下 proposal/design/specs/tasks 四件套当前内容（+ 领域/对抗镜需要的
    相关真实代码路径）。
 
-> **代码审是通则 ③ 的最高发区（设计审同理）**：段①已含四条通则原文；子代理眼前只有「现在的代码/现在
-> 的设计」，漏带段①（如脚本调用失败仍继续 fan-out）它**必然**把「现状不是这么做的」当成「这个设计该
+> **代码审是通则 ③ 的最高发区（设计审同理）**：通则由 agent 定义或段①文件提供；子代理眼前只有「现在的代码/现在
+> 的设计」，通则缺席（如渲染失败仍继续 fan-out、回执不符仍接受结果）它**必然**把「现状不是这么做的」当成「这个设计该
 > 缩水」。**评审的基准是目标态。**
 
 **design-voice 恒自跑（DD3，历史沿革见 `references/evolution-notes.md` §2）**：纳入完整 roster，按容量分批派出（按下方「outside-voice
@@ -344,7 +376,7 @@ Step3 barrier 处 collect。
 
 ## 第三步：机械引用核 + 综合裁决 → 决策登记进报告（主 session · 强档）
 
-- 🔴 **进合并去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的合并去重。
+- 🔴 **进合并去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点：Claude 宿主等完成通知；Codex 宿主按 ⑥ codex-host 继续调有界 `await`；两侧 MUST NOT 早退落 `timeout`），方可进下面的合并去重。
 - **合并去重**：把广审双镜（strategy/plan-eng）+ 领域镜 + 对抗镜 + 接地镜 findings 汇成一池，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，折叠到 canonical lens 后供第四步落锚时导出各镜`独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
 - **机械引用核前置〔DD4，adr/0041，裁决动作层与 sdflow-code-review 同三层协议对齐〕**：把去重后的合并池组装成
   结构化 JSON（每条 finding 携带 `{id, file, line, quote}` 或 `evidence_pack`——本层核对象含四件套文档
@@ -502,8 +534,8 @@ HELPER=~/.sdflow/hack/outside-voice.sh
 $SDFLOW_HOST="unknown"（第零步 resolve-models.sh 判不出宿主）→ 不调用本 helper、不跑 voice；锚行 host="unknown" runner="none" reason_code="host-unknown"（ADR-7），报告显著标注本轮无跨模型第二意见
 以下分支仅在 $SDFLOW_HOST∈{claude,codex} 时适用；helper 需要 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL（第零步 eval 解析出的值），MUST NOT 自行重判宿主（ADR-9）。🔴 **这两个值的传递纪律与 $HELPER / run-id 相同：MUST 代入第零步取回的字面值，MUST NOT 写 `$SDFLOW_VOICE_RUNNER` / `$SDFLOW_VOICE_MODEL` shell 变量引用**——harness 每次 Bash 调用是独立 shell，第零步 eval 的 export 到不了后续调用：
 preflight：stdout 仅精确匹配 "ready" 走目标 runner（第零步取得的 <runner> 字面值）；"not_installed" → fallback（reason_code="not-installed"）；"missing-deps" → fallback 且 MUST 映射锚 reason_code="preflight-error"（D7，MUST NOT 原样落 reason_code="missing-deps"——该值不在契约 reason_code 枚举内，会被 anchor_lint 矩阵判 illegal-combo）；任何畸形输出/非零退出 → fallback（reason_code="preflight-error"）
-context 构造（摘录规则定死，不现场发挥）：本轮**起手先占一个 run 目录**，本轮所有站点共用、定后不再变；context 写 {change_dir}/.outside-voice/<run-id>/<site>-context.md
-  **run-id 生成 + 占坑（唯一性交给 OS 判，不靠自觉）**：MUST 逐字跑下面这两条——`mktemp -d` **原子地建目录并保证唯一**，唯一性由它负责，不靠时间戳精度、不靠自觉。前缀带 UTC 时间戳只为人读排序；后缀 `XXXXXX` 由 `mktemp` 填随机位，故**同秒起的两轮并行评审也必得不同目录**。
+context 构造（摘录规则定死，不现场发挥）：**复用第零步 4 已建的 run 目录，不再另建**，本轮所有站点共用、定后不再变；context 写 {change_dir}/.outside-voice/<run-id>/<site>-context.md
+  **run-id 生成 + 占坑（由第零步 4 执行，细则留在此处；唯一性交给 OS 判，不靠自觉）**：第零步 MUST 逐字跑下面这两条——`mktemp -d` **原子地建目录并保证唯一**，唯一性由它负责，不靠时间戳精度、不靠自觉。前缀带 UTC 时间戳只为人读排序；后缀 `XXXXXX` 由 `mktemp` 填随机位，故**同秒起的两轮并行评审也必得不同目录**。
     `mkdir -p "{change_dir}/.outside-voice"`
     `RUN_DIR="$(mktemp -d "{change_dir}/.outside-voice/$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")" && basename "$RUN_DIR"`
   **MUST NOT 自己拼 run-id 再 `mkdir`**（手拼要么撞名、要么退化成 `$RANDOM`/`od` 这类不可移植写法，还得自造重试循环与上界）——`mktemp -d` 一条就把唯一性、原子性、失败非零退出全给了；父目录不可写 / 磁盘满时它非零退出且错误直接浮出，此时 MUST 显式停、MUST NOT 继续跑 voice

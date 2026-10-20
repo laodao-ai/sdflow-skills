@@ -141,15 +141,21 @@ description: >
 - **止损 / 反沉没成本**：方向一旦被证伪，**MUST 立即止损换向**，MUST NOT 在已被否定的方向上继续优化 / 加码
   （同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向，别在细节里打磨一个错的框架）。
 
-### 🔴 传播纪律：**fan-out 子代理 / outside-voice MUST 原文带上这四条**
+### 🔴 传播纪律：**fan-out 子代理 / outside-voice 的通则必须在场**
 
 **子代理与 outside-voice 跑在 fresh context —— 它们看不见本文件。**
 
-⇒ **每一个 fan-out 子代理的 prompt、每一份 outside-voice 的 context，MUST 把本区块
-（`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
-**MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+⇒ **每个 fan-out 子代理 MUST 拿到本区块全文，承载方二选一，派发 prompt MUST NOT 内联原文：**
 
-> **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+- **agent 定义承载**：Claude 宿主，且 `~/.claude/agents/<subagent_type>.md` 是指向本工具链
+  `sdflow-spec/agents/` 同名文件的软链——通则已在该定义里，prompt 不带。
+- **读文件承载**：其余情况，prompt 只写一句读文件指令（渲染器生成的前缀文件的绝对路径），
+  子代理**把文件首行原样作为结果首行**，主 session 比对回执；prompt MUST NOT 写出期望版本值。
+- outside-voice 的 context 区被声明为 UNTRUSTED，不承载通则；通则由 `outside-voice.sh` 的 FRAME 机械注入。
+
+判定与回执细则见 `subagent-dispatch-contract.md` 的「通则承载与前缀文件」节。
+
+> **通则缺席的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
 > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
 > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
 
@@ -208,6 +214,20 @@ SAD="$REPO/openspec/architecture/sad.md"                # SAD 单例
 主 session（提问/规则集判断/拍板编排/裁决）与**冷走查子代理均用强档**，无可下放弱档的步——机械活已全部
 脚本化（scaffold/lint 零模型），带门禁的判断步弱档 = 假绿放行。档位与缺省见规则根 `model-tiers.md`（经
 `~/.sdflow/hack/resolve-workflow.sh` 解析；DEC-12①）。
+
+## 档位解析与宿主参数（首次派发之前，每轮恰好一次）
+
+冷走查（4.1）与升档镜阵（4.3）都用强档。model 与 effort 经 `resolve-models.sh` 解析后显式传入，不内联具体模型 id。
+解析在步骤 ④ 首次派发之前做一次，之后各派发点只读这次导出的变量。
+
+<!-- sdflow:tier-resolution:start v1 -->
+**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` 与三 `$SDFLOW_EFFORT_*` MUST 非空；`host=claude` 时三 `$SDFLOW_EFFORT_*` MUST 分别精确 ∈ {low,medium,high,xhigh,max}，`host=codex` 时 MUST 分别精确 ∈ {low,medium,high,xhigh,max,ultra}，任何非空非法值 MUST 在派发前 fail-closed——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）、`$SDFLOW_EFFORT_STRONG`/`$SDFLOW_EFFORT_MID`/`$SDFLOW_EFFORT_LIGHT`（按档位解析的 effort 值；已知宿主必须完整，`unknown` 路径不派发时忽略它们）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+<!-- sdflow:tier-resolution:end -->
+
+- `host=claude`：带 `model: "$SDFLOW_TIER_STRONG"` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`。
+- `host=codex`：用 `spawn_agent` 派 fresh 子代理，带 `model: "$SDFLOW_TIER_STRONG"`、`reasoning_effort: "$SDFLOW_EFFORT_STRONG"` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。
+- `host=unknown`：无法派发 fresh 子代理，冷走查走 4.1 的降级分支。
+- 冷走查与镜阵是人门前的门禁判断：请求 effort 解析为 `low` 或 `medium` 时不派发，报告配置错误并将强档 effort 改为 `high` 或更高后重试。
 
 ---
 
@@ -341,6 +361,14 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "step=3 r
 
 ## 步骤 ④ 冷走查 + 升档判定 + 人门
 
+### 4.0 通则承载与 run 目录（首次派发之前建，4.1 冷走查与 4.3 镜阵共用）
+
+本入口的 run 目录创建、忽略校验、前缀文件渲染、承载判定、读文件指令、回执比对与任务记录字段，一律按规则根 `subagent-dispatch-contract.md`「通则承载与前缀文件」节执行。派发 prompt MUST NOT 内联通则原文。本入口只声明差异：
+
+- **父目录**：`openspec/architecture/.outside-voice/`。
+- **承载判定所用 `subagent_type`**：本次派发所带的 `subagent_type`（只有 Claude 宿主会带）。
+- **回执与失败出口**：冷走查与镜阵均为只读任务。通过后先剥掉回执行再使用返回内容；不符则同一任务重派一次，再不符按 4.1 的失败处置显式报告缺口，MUST NOT 无走查静默过人门。
+
 ### 4.1 冷走查（默认档，每次必跑）
 
 **走查 MUST 由 fresh 子代理执行**——派一个 fresh-context 子代理（Agent 工具），让它读
@@ -356,12 +384,14 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "走查 �
 
 **走查失败重派一次**（子代理无矩阵产出）→ 再失败 **显式报告缺口**，**MUST NOT 无走查静默过人门**。
 
-**Codex 宿主降级分支**：若运行宿主无 fresh 子代理 fan-out 原语（如 Codex CLI 宿主——setup.sh 双宿主分发
-无 opt-out），SHALL **显式降级**：走查由主 session 执行，并 **MUST 响亮留痕**
-`walkthrough=self-review-degraded` + 建议操作者换有子代理原语的宿主复跑，**MUST NOT 佯装冷走查**：
+Codex 宿主派发子代理后，按规则根 `subagent-dispatch-contract.md` 的「Codex 结果收集」节在同一回合内收齐结果，时长上限取缺省 30 分钟。
+
+**`host=unknown` 降级分支**：宿主未知（resolver 跑成但判不出宿主），无法派发 fresh 子代理。SHALL **显式降级**：
+走查由主 session 执行，并 **MUST 响亮留痕** `walkthrough=self-review-degraded` + 建议操作者换受支持宿主复跑，
+**MUST NOT 佯装冷走查**。Claude 与 Codex 宿主都有派发原语（Codex 用 `spawn_agent`），MUST NOT 走本分支：
 
 ```
-python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "走查 轮次=1 洞数=N walkthrough=self-review-degraded 执行者=main-session（宿主无 fresh 子代理原语，建议换宿主复跑）"
+python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "走查 轮次=1 洞数=N walkthrough=self-review-degraded 执行者=main-session（宿主未知，无法派发 fresh 子代理，建议换宿主复跑）"
 ```
 
 ### 4.2 升档判定（信号表，显式一行 + 留痕）
@@ -385,6 +415,8 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "升档�
 S4 对抗找缝镜 / S6 一致性镜 / S7 考虑面完整性镜 / S8 目标态镜 / S9 风险对位镜 / S10 切片自足性镜 /
 S11 演进可维护性镜，按命中风险取镜）。**MUST NOT 整体调用 `/sdflow-spec-review`**——它锚定 change 四件套，
 硬套则领域段空转、产物语义错配。
+
+镜阵每面镜的派发参数同 4.1：强档 model 与 effort，按「档位解析与宿主参数」节的 `host` 分支传入。
 
 **outside voice 镜**：升档且 wrapper 可用时，**至少一面镜用跨模型**，放 prior 依赖最强镜位（S4 对抗找缝 /
 S8 目标态）。调用经 `~/.sdflow/hack/outside-voice.sh`（**契约单一源 = 脚本头注释，此处只给分支决策，不转述

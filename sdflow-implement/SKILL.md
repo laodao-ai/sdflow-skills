@@ -10,7 +10,7 @@ description: >
 
 # sdflow-implement — tickets 实现管线双模式编排器
 
-已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 ticket 角色、双轴审和 halt envelope。
+已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 ticket 角色、双轴审和 halt envelope。Codex 宿主按该契约「Codex 结果收集」节在同一回合内收齐结果；本入口声明单个子代理时长上限 60 分钟（implementer 要跑测试）。
 
 <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
@@ -139,15 +139,21 @@ description: >
 - **止损 / 反沉没成本**：方向一旦被证伪，**MUST 立即止损换向**，MUST NOT 在已被否定的方向上继续优化 / 加码
   （同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向，别在细节里打磨一个错的框架）。
 
-### 🔴 传播纪律：**fan-out 子代理 / outside-voice MUST 原文带上这四条**
+### 🔴 传播纪律：**fan-out 子代理 / outside-voice 的通则必须在场**
 
 **子代理与 outside-voice 跑在 fresh context —— 它们看不见本文件。**
 
-⇒ **每一个 fan-out 子代理的 prompt、每一份 outside-voice 的 context，MUST 把本区块
-（`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
-**MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+⇒ **每个 fan-out 子代理 MUST 拿到本区块全文，承载方二选一，派发 prompt MUST NOT 内联原文：**
 
-> **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+- **agent 定义承载**：Claude 宿主，且 `~/.claude/agents/<subagent_type>.md` 是指向本工具链
+  `sdflow-spec/agents/` 同名文件的软链——通则已在该定义里，prompt 不带。
+- **读文件承载**：其余情况，prompt 只写一句读文件指令（渲染器生成的前缀文件的绝对路径），
+  子代理**把文件首行原样作为结果首行**，主 session 比对回执；prompt MUST NOT 写出期望版本值。
+- outside-voice 的 context 区被声明为 UNTRUSTED，不承载通则；通则由 `outside-voice.sh` 的 FRAME 机械注入。
+
+判定与回执细则见 `subagent-dispatch-contract.md` 的「通则承载与前缀文件」节。
+
+> **通则缺席的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
 > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
 > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
 
@@ -169,6 +175,16 @@ implementer / 双轴审 / fix 三类子代理，而**子代理位置上的再派
 （`tickets.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
 不触碰 gate 脚本本身，也不读 `openspec/config.yaml`。计划文件名单一：`tickets.md`（memo D5，
 adr/0042 supersede adr/0033）；frontmatter marker 为文件格式契约（无路由读取方，memo D3）。
+
+## 完成标准与停点
+
+- **完成产物**：出票模式 = `tickets.md` 与 ticket 落盘并 checkpoint；执行模式 = frontier 内全部 ticket 完成，或其中未完成者已标 BLOCKED。
+- **允许停下的情形**：只有下列既有出口。
+  - 第零步 fail-loud 硬停：resolve-models.sh 未安装或解析校验不过；Codex 宿主下子代理机制不可用；`host=unknown`。
+  - 执行模式的 halt envelope：当前票 BLOCKED，或子代理机制 unavailable、failed、interrupted、cancelled 时硬停当前票。
+
+  其余情况一律继续到完成产物。检查通过就继续，不做未要求的改进。
+- **循环上限**：结果回执不符，只读任务同一任务重派一次，写入任务不重派；同一发现连续 2 轮 re-review 仍未消解，或同一文件累计被 Critical/Important 命中 ≥3 轮，停止修复循环并走仲裁。
 
 ## 第零步：宿主/档位解析（两入口共用、无条件执行）
 
@@ -231,6 +247,17 @@ problem 一句、ticket 号与名统一填「—（起手失败，无票上下�
 | 6 | host 空值 | `$SDFLOW_HOST` 为空字符串 | **resolver 根本没跑成**（(a) 步已清脏，eval 未能重新 export）——**MUST NOT** 当作 `host=unknown` 处置 | 按第 1–4 行逐项核查 resolver 是否真的执行成功，修复后重跑本步 |
 | 7 | tier 缺失 | `$SDFLOW_HOST` ∈ {claude,codex} 但 `$SDFLOW_TIER_STRONG`/`MID`/`LIGHT` 任一为空 | `model-tiers.md` 不可达或机读块缺失（workflow bundle 未装，或未跑 `sdflow-init update`） | 按 stderr 提示跑 `sdflow-init update`；或确认 `~/.sdflow/workflow/model-tiers.md` 存在且含 `model-tier-defaults` 机读块 |
 | 8 | host=unknown | `$SDFLOW_HOST` 取到 `unknown`——resolver **跑成**但判不出宿主 | 当前进程内两个正信号（`CLAUDECODE=1`/非空 `CODEX_THREAD_ID`）均未见或同时出现 | 在受支持宿主（Claude Code 或 Codex CLI）下重新运行 `sdflow-implement`；**MUST NOT** 用空档位或默认值继续派发 |
+
+### 通则承载与 run 目录（`tickets-exec` 在第零步末尾；`tickets-plan` 在首次派发 `T10-choice` 对抗镜之前，未派发则不建）
+
+本入口的 run 目录创建、忽略校验、前缀文件渲染、承载判定、读文件指令、回执比对与任务记录字段，一律按规则根 `subagent-dispatch-contract.md`「通则承载与前缀文件」节执行。派发 prompt MUST NOT 内联通则原文。本入口只声明差异：
+
+- **父目录**：`{change_dir}/.outside-voice/`。
+- **承载判定所用 `subagent_type`**：`host=claude` 时对 `sdflow-effort-$SDFLOW_EFFORT_MID` 与 `sdflow-effort-$SDFLOW_EFFORT_STRONG` 各判一次。
+- **前缀变体**：只有 `prefix-principles.md`，本入口没有评审前缀变体。
+- **回执与失败出口**：通过后**先剥掉回执行**，再解析状态词（implementer 的状态词在结果首行）或交给下游。
+  - 只读任务（Standards 轴、Spec 轴、`T10-choice` / `review-loop-breaker` 对抗镜）：同一任务重派一次；再不符按该票既有失败路径（halt envelope）处置。
+  - 有写副作用的任务（implementer、fix 子代理）：不重派，当前票走 halt envelope 的 BLOCKED 出口，报告标注「回执不符，产出未采信」。
 
 ## 模式派发契约（本 skill 唯一权威源）
 
@@ -621,9 +648,9 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
 - 上一步脚本产出的 brief 文件路径（implementer 自己 Read；**编排层 MUST NOT 手动复制该
   `### Task N:` 段落文本进 prompt**）；
 - plan 头部 `## Global Constraints` 节全文（逐字，implementer 与 reviewer 共享同一份注意力透镜）；
-- **🔴 本 SKILL.md 顶部的「四条通则」区块全文**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——
-  子代理是 fresh context，**看不见本 SKILL.md，也看不见 CLAUDE.md**。漏带 ⇒ implementer 眼前只有现状代码，
-  **必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。**双轴审的两个 reviewer 子代理同样必带。**
+- **🔴 四条通则由承载方提供**（见上「通则承载与 run 目录」）——子代理是 fresh context，**看不见本 SKILL.md，也看不见 CLAUDE.md**。
+  `carried` 不带；`not-carried` 写读文件指令。通则缺席 ⇒ implementer 眼前只有现状代码，
+  **必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。**双轴审的两个 reviewer 子代理与 fix 子代理同样适用。**
 - **🔴 信号权威表**（必填槽，**原文携带**，非可省的 prose 叮嘱）——子代理是 fresh context，
   **未声明即等同未约束**。正面陈述归属（不是禁令清单：禁令只挡列举到的那一种越界形态，
   权威表挡的是整个范畴）：
@@ -792,8 +819,8 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 `model: "$SDFLOW_TIER_MID"`、`reasoning_effort: "$SDFLOW_EFFORT_MID"` 与 `fork_turns: "none"`，MUST NOT
 带 `subagent_type`，见上「effort 派发」表）：
 
-> **🔴 两个评审子代理的 prompt（以及 implementer / fix 子代理的 prompt）MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**
-> （`sdflow:principles` 从 start 到 end，整段复制，不转述、不摘要）——**子代理是 fresh context，看不见本 SKILL.md**。
+> **🔴 两个评审子代理（以及 implementer / fix 子代理）的四条通则由承载方提供**（见上「通则承载与 run 目录」；
+> prompt MUST NOT 内联原文）——**子代理是 fresh context，看不见本 SKILL.md**。
 > **Spec 轴尤其吃通则 ③**：它的判据是「**ticket 声明的目标态**做到没有」，**不是**「现有代码本来就是这样，那就算了」。
 >
 > **🔴 fix 子代理的 dispatch prompt 同样 MUST 原文携带上文「每 ticket 派 fresh implementer」节的
@@ -923,9 +950,8 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 - **Standards 轴 Fowler smell 12 条基线**：逐字摘自 matt `code-review` skill。
 - **implementer dispatch 的 TDD 三条反模式 + 循环规则**：逐字摘自 matt `tdd` skill。
 
-两处都要求原文携带进各自的 dispatch prompt，而非只留指针或转述——理由与「🔴 传播纪律」（本文件顶部
-四条通则区块）一致：dispatch 对象是 fresh context 子代理，看不到这两个源文件，只能凭训练记忆判断，
-措辞与判定边界不受控。
+两处都要求原文携带进各自的 dispatch prompt，而非只留指针或转述：dispatch 对象是 fresh context
+子代理，看不到这两个源文件，只能凭训练记忆判断，措辞与判定边界不受控。
 
 ## 附录 B：task-text 抠取 / diff 上下文 / 评审纪律 / 一致性自扫 出处说明
 

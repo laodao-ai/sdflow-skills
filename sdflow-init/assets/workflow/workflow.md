@@ -73,7 +73,7 @@
 #### A. 实现管线
 
 - **唯一管线**：路由至 `sdflow-implement` 出票执行（产出 `tickets.md`〔D5/adr-0033〕）；逐 ticket checkpoint。
-- 🔴 **派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，看不见 CLAUDE.md。
+- 🔴 **派 implementer / task-reviewer / fix / 终审子代理时，通则由承载方提供**（agent 定义承载，或子代理读渲染器生成的前缀文件并回显首行；dispatch prompt MUST NOT 内联原文，见 `subagent-dispatch-contract.md`「通则承载与前缀文件」节）——子代理是 fresh context，看不见 CLAUDE.md。
 
 #### B. sdflow-code-review
 

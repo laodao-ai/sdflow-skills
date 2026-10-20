@@ -2,6 +2,10 @@
 
 - **sdflow-spec 角色定义**（`sdflow-local-researcher` / `sdflow-web-researcher` / `sdflow-spec-writer`）——
   各自持有角色语义与工具面，仅由 `/sdflow-spec` 编排派发。
+  三个定义的 `model` 与 `effort` 写成 `model-tiers.md` 机读块的 Claude 缺省：研究员取 `claude.light`
+  （haiku / medium），成文员取 `claude.mid`（sonnet / medium）；`hack/tests/test_sdflow_spec_agents.py`
+  读两个机读块比对 frontmatter。启用后派发仍须显式传 `model: $SDFLOW_TIER_*`；`config.yaml` 的
+  effort 覆盖管不到这三个定义（frontmatter 是静态值）。
 - **effort 档位定义**（`sdflow-effort-{low,medium,high,xhigh,max}`）——不承载角色语义，仅供各编排 SKILL
   以 `subagent_type: sdflow-effort-<档位>` 派发时选用档位，值来自 `model-tiers.md` 的
   `effort-tier-defaults` 机读块（经 `resolve-models.sh` 导出 `SDFLOW_EFFORT_*`）。

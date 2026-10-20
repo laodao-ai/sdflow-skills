@@ -219,13 +219,36 @@ def test_every_definition_has_an_exclusive_description():
             assert "其它场景MUSTNOT选用" in desc, f"{p.name} 的 description 缺「其它场景禁用」"
 
 
+def _tier_defaults(fence):
+    """读 model-tiers.md 的机读块（`model-tier-defaults` / `effort-tier-defaults`）。"""
+    text = (REPO / "sdflow-init" / "assets" / "workflow" / "model-tiers.md").read_text(encoding="utf-8")
+    block = re.search(rf"```{fence}\n(.*?)```", text, re.S).group(1)
+    return dict(line.split(": ", 1) for line in block.strip().splitlines())
+
+
+def test_light_effort_defaults_are_official_starting_values():
+    """HAE-11：轻档 effort 缺省 = Claude medium / Codex high。"""
+    effort = _tier_defaults("effort-tier-defaults")
+    assert effort["claude.light"] == "medium"
+    assert effort["codex.light"] == "high"
+
+
 def test_frontmatter_tiers_match_the_design():
-    """`model: inherit`（档位由派发参数覆盖）+ 各自的 effort 档。"""
-    for p, effort in ((LOCAL, "low"), (WEB, "low"), (WRITER, "medium")):
+    """SA-07：研究员取 claude.light 档、成文员取 claude.mid 档；model 与 effort 均读机读块比对。"""
+    models = _tier_defaults("model-tier-defaults")
+    efforts = _tier_defaults("effort-tier-defaults")
+    for p, tier in ((LOCAL, "light"), (WEB, "light"), (WRITER, "mid")):
         fm = frontmatter(p)
         assert fm["name"] == p.stem, f"{p.name} 的 name 与文件名不一致（派发按 name 找）"
-        assert fm["model"] == "inherit", f"{p.name} 写死了 model —— 档位机制被绕过"
-        assert fm["effort"] == effort, f"{p.name} 的 effort 应为 {effort}"
+        assert fm["model"] == models[f"claude.{tier}"], f"{p.name} 的 model 应为 claude.{tier} 缺省"
+        assert fm["effort"] == efforts[f"claude.{tier}"], f"{p.name} 的 effort 应为 claude.{tier} 缺省"
+
+
+def test_readme_states_dispatch_still_passes_model_explicitly():
+    """SA-07：README 写明启用后派发仍须显式传 model，且 config.yaml 的 effort 覆盖管不到三个角色定义。"""
+    text = _squash((AGENT_DIR / "README").read_text(encoding="utf-8"))
+    assert "model:$SDFLOW_TIER_*" in text
+    assert "effort覆盖管不到" in text
 
 
 # ══════════════════════════════════════════════════════════════════════════════

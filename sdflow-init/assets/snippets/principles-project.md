@@ -62,6 +62,6 @@ MUST NOT 因为「我觉得这样更好」就**悄悄**改了方案——**沉�
 MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回纠结。
 **止损**：方向一旦被证伪 MUST 立即换向（同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向）。
 
-> fan-out 子代理 / outside-voice 跑在 fresh context，看不见本文件 ⇒ 它们的 prompt MUST 原文带上这四条。
+> fan-out 子代理 / outside-voice 跑在 fresh context，看不见本文件 ⇒ 通则由 agent 定义承载或让子代理读文件，prompt 不内联原文（见各 SKILL 的传播纪律）。
 
 <!-- sdflow:principles:end -->

@@ -201,3 +201,192 @@ def test_missing_base_checklist_other_layer_still_works(sandbox_home):
     r = _run(sandbox_home, "--layer", "spec-review")
     assert r.returncode == 0, f"stderr:\n{r.stderr}"
     assert r.stdout.strip()
+
+
+# ── implement-optimize-codex-workflow-quickwins · Task 1：新参数与写文件 ──────────
+# 对应 design.md「渲染器接口」组合表，一行一个用例。
+
+import hashlib
+import json
+
+VARIANTS = ["spec-review", "spec-review-np", "code-review", "code-review-np", "principles"]
+
+
+def _args_for(variant: str):
+    if variant == "principles":
+        return ["--layer", "principles"]
+    if variant.endswith("-np"):
+        return ["--layer", variant[:-3], "--no-principles"]
+    return ["--layer", variant]
+
+
+def _assert_three_part_stderr(stderr: str):
+    for key in ("problem", "cause", "fix"):
+        assert key in stderr, f"stderr 缺 {key} 段:\n{stderr}"
+
+
+def test_legacy_stdout_unchanged_shape(sandbox_home):
+    """行 1：不带新参数，stdout = 通则原文 + 契约 + checklist 原文（首尾由真实源文件独立给出）。"""
+    for layer, checklist in (("code-review", REAL_CODE_CHECKLIST), ("spec-review", REAL_SPEC_CHECKLIST)):
+        r = _run(sandbox_home, "--layer", layer)
+        assert r.returncode == 0
+        out = r.stdout.encode("utf-8")
+        assert out.startswith(REAL_PRINCIPLES.read_bytes())
+        assert out.endswith(checklist.read_bytes())
+        assert "评审子代理通用契约" in r.stdout
+
+
+def test_layer_principles_outputs_principles_only(sandbox_home):
+    """行 2：stdout = 通则段；不调 resolver、不读 checklist。"""
+    (sandbox_home / "hack" / "resolve-workflow.sh").unlink()
+    import shutil
+
+    shutil.rmtree(sandbox_home / "workflow")
+    r = _run(sandbox_home, "--layer", "principles")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.encode("utf-8") == REAL_PRINCIPLES.read_bytes()
+
+
+@pytest.mark.parametrize("layer", ["code-review", "spec-review"])
+def test_no_principles_outputs_contract_plus_checklist(sandbox_home, layer):
+    """行 3：stdout = 契约 + checklist，不含通则。"""
+    checklist = REAL_CODE_CHECKLIST if layer == "code-review" else REAL_SPEC_CHECKLIST
+    full = _run(sandbox_home, "--layer", layer).stdout.encode("utf-8")
+    r = _run(sandbox_home, "--layer", layer, "--no-principles")
+    assert r.returncode == 0, r.stderr
+    out = r.stdout.encode("utf-8")
+    assert full == REAL_PRINCIPLES.read_bytes() + out
+    assert out.endswith(checklist.read_bytes())
+    assert "sdflow:principles:start" not in r.stdout
+
+
+def test_principles_with_no_principles_is_usage_error(sandbox_home):
+    """行 4。"""
+    r = _run(sandbox_home, "--layer", "principles", "--no-principles")
+    assert r.returncode == 64
+    assert r.stdout == ""
+
+
+@pytest.mark.parametrize("extra", [["--no-principles"], ["--out-dir", "x"]])
+def test_new_flags_without_layer_is_usage_error(sandbox_home, extra):
+    """行 5。"""
+    r = _run(sandbox_home, *extra)
+    assert r.returncode == 64
+    assert r.stdout == ""
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--layer", "code-review", "--out-dir"],
+        ["--layer", "code-review", "--out-dir", ""],  # [impl-review-fix] 空串不得静默退回 stdout 模式
+        ["--layer", "code-review", "--layer", "spec-review"],
+        ["--layer", "code-review", "--no-principles", "--no-principles"],
+        ["--layer", "code-review", "--out-dir", "a", "--out-dir", "b"],
+    ],
+)
+def test_missing_value_or_duplicate_is_usage_error(sandbox_home, args):
+    """行 6。"""
+    r = _run(sandbox_home, *args)
+    assert r.returncode == 64
+    assert r.stdout == ""
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_out_dir_writes_versioned_file_and_json(sandbox_home, tmp_path, variant):
+    """行 7：文件名、首行版本、哈希与正文一致、JSON 字段。"""
+    out_dir = tmp_path / "run"
+    out_dir.mkdir()
+    r = _run(sandbox_home, *_args_for(variant), "--out-dir", str(out_dir))
+    assert r.returncode == 0, r.stderr
+    info = json.loads(r.stdout)
+    target = out_dir / f"prefix-{variant}.md"
+    assert info["path"] == str(target.resolve())
+    raw = target.read_bytes()
+    assert info["bytes"] == len(raw)
+    first, _, body = raw.partition(b"\n")
+    sha12 = hashlib.sha256(body).hexdigest()[:12]
+    assert first.decode() == f"<!-- prefix-version: {variant}-{sha12} -->"
+    assert info["version"] == f"{variant}-{sha12}"
+    # 正文与 stdout 模式一致（独立来源）
+    plain = _run(sandbox_home, *_args_for(variant)).stdout.encode("utf-8")
+    assert body == plain
+    assert [p.name for p in out_dir.iterdir()] == [f"prefix-{variant}.md"], "不得残留临时文件"
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_out_dir_rerender_is_byte_identical(sandbox_home, tmp_path, variant):
+    d1, d2 = tmp_path / "a", tmp_path / "b"
+    d1.mkdir()
+    d2.mkdir()
+    _run(sandbox_home, *_args_for(variant), "--out-dir", str(d1))
+    _run(sandbox_home, *_args_for(variant), "--out-dir", str(d2))
+    assert (d1 / f"prefix-{variant}.md").read_bytes() == (d2 / f"prefix-{variant}.md").read_bytes()
+
+
+def test_relative_out_dir_yields_absolute_path(sandbox_home):
+    (sandbox_home / "rel").mkdir()
+    r = _run(sandbox_home, "--layer", "principles", "--out-dir", "rel")
+    assert r.returncode == 0, r.stderr
+    path = json.loads(r.stdout)["path"]
+    assert os.path.isabs(path)
+    assert Path(path) == (sandbox_home / "rel" / "prefix-principles.md").resolve()
+    assert Path(path).exists()
+
+
+def test_out_dir_nonexistent_is_exit2_no_file(sandbox_home, tmp_path):
+    r = _run(sandbox_home, "--layer", "code-review", "--out-dir", str(tmp_path / "nope"))
+    assert r.returncode == 2
+    assert r.stdout == ""
+    _assert_three_part_stderr(r.stderr)
+    assert not (tmp_path / "nope").exists()
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root 不受目录权限约束")
+def test_out_dir_unwritable_is_exit2_no_file(sandbox_home, tmp_path):
+    d = tmp_path / "ro"
+    d.mkdir()
+    d.chmod(0o555)
+    try:
+        r = _run(sandbox_home, "--layer", "code-review", "--out-dir", str(d))
+        assert r.returncode == 2
+        assert r.stdout == ""
+        _assert_three_part_stderr(r.stderr)
+        assert list(d.iterdir()) == []
+    finally:
+        d.chmod(0o755)
+
+
+def test_out_dir_without_python3_is_exit2_no_file(sandbox_home, tmp_path):
+    """[impl-review-fix] PATH 里没有 python3：exit 2 + 三段 stderr，而非 shell 裸 127。"""
+    d = tmp_path / "run"
+    d.mkdir()
+    empty_bin = tmp_path / "empty-bin"
+    empty_bin.mkdir()
+    env = dict(os.environ)
+    env["SDFLOW_HOME"] = str(sandbox_home)
+    env["PATH"] = str(empty_bin)
+    r = subprocess.run(
+        [bash_executable(), bash_path(SCRIPT), "--layer", "principles", "--out-dir", str(d)],
+        cwd=str(sandbox_home),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert r.returncode == 2
+    assert r.stdout == ""
+    _assert_three_part_stderr(r.stderr)
+    assert "python3" in r.stderr
+    assert list(d.iterdir()) == []
+
+
+def test_unknown_arg_three_part_stderr(sandbox_home):
+    """行 8：未知参数 exit 64，stderr 三段指向 setup.sh。"""
+    r = _run(sandbox_home, "--layer", "code-review", "--bogus")
+    assert r.returncode == 64
+    assert r.stdout == ""
+    _assert_three_part_stderr(r.stderr)
+    assert "setup.sh" in r.stderr

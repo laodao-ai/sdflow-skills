@@ -325,3 +325,89 @@ def test_managed_index_matches_canonical_index_entry():
     source_contract = next(row for row in source_rows if row["名称"] == "`subagent-dispatch-contract`")
     index_contract = next((row for row in index_rows if row["名称"] == "`subagent-dispatch-contract`"), None)
     assert index_contract == source_contract
+
+
+# ---- Codex 结果收集（HAE-14 / HAE-15 / HAE-18）----
+COLLECTION_HEADING = "## Codex 结果收集"
+COLLECTION_REFERENCERS = (
+    "sdflow-implement",
+    "sdflow-done",
+    "sdflow-roadmap",
+    "sdflow-adr",
+    "sdflow-architecture",
+    "sdflow-devenv",
+)
+BARRIER_LINES = (
+    ("sdflow-spec-review", "进合并去重前 MUST 先完成 outside-voice collect barrier"),
+    ("sdflow-code-review", "进汇总去重前 MUST 先完成 outside-voice collect barrier"),
+)
+
+
+def _collection_section(text=None):
+    text = CONTRACT.read_text(encoding="utf-8") if text is None else text
+    assert COLLECTION_HEADING in text
+    body = text.split(COLLECTION_HEADING, 1)[1]
+    return body.split("\n## ", 1)[0]
+
+
+def _barrier_line(skill, anchor):
+    text = (ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
+    lines = [ln for ln in text.splitlines() if anchor in ln]
+    assert len(lines) == 1, (skill, lines)
+    return lines[0]
+
+
+def test_contract_has_codex_collection_section_with_five_points():
+    section = _collection_section()
+    for required in (
+        "wait_agent",  # 1 同回合循环
+        "list_agents",
+        "date -u +%s",  # 2 单子代理计时
+        "30 分钟",
+        "60 分钟",
+        "interrupt_agent",  # 3 超限处置
+        "interrupted",
+        "未确认停止",
+        "N - 1 - A",  # 4 名额
+        "send_message",
+        "followup_task",
+        "close_agent",
+        "thread limit reached",  # 5 名额耗尽
+        "需新开会话",
+    ):
+        assert required in section, required
+    assert "MUST NOT 结束回合" in section
+
+
+def test_collection_section_does_not_lock_wait_agent_return_fields():
+    section = _collection_section()
+    for field in ("status", "result", "agent_id", "timed_out"):
+        assert f"`{field}`" not in section, field
+
+
+def test_collection_section_mutation_is_rejected():
+    mutated = CONTRACT.read_text(encoding="utf-8").replace("thread limit reached", "XX")
+    assert "thread limit reached" not in _collection_section(mutated)
+
+
+def test_six_entrypoints_reference_collection_section():
+    for skill in COLLECTION_REFERENCERS:
+        text = (ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
+        assert "Codex 结果收集" in text, skill
+        assert "subagent-dispatch-contract.md" in text, skill
+
+
+def test_implement_declares_sixty_minute_limit():
+    text = (ROOT / "sdflow-implement/SKILL.md").read_text(encoding="utf-8")
+    assert "60 分钟" in text
+
+
+def test_review_barrier_summary_is_split_by_host():
+    for skill, anchor in BARRIER_LINES:
+        line = _barrier_line(skill, anchor)
+        claude_side, codex_side = line.split("Codex 宿主", 1)
+        assert "Claude 宿主等完成通知" in claude_side, skill
+        assert "让出轮次等通知" not in codex_side, skill
+        assert "等通知" not in codex_side, skill
+        assert "有界 `await`" in codex_side, skill
+        assert "⑥ codex-host" in codex_side, skill

@@ -27,8 +27,8 @@ CASES = [
 """,
         "lint_clean": True,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("high", "xhigh", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("high", "xhigh", "high"),
         },
     },
     {
@@ -39,8 +39,8 @@ CASES = [
 """,
         "lint_clean": False,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("high", "medium", "high"),
         },
     },
     {
@@ -50,8 +50,8 @@ CASES = [
 """,
         "lint_clean": False,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("high", "medium", "high"),
         },
     },
     {
@@ -61,8 +61,8 @@ CASES = [
 """,
         "lint_clean": False,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("high", "medium", "high"),
         },
     },
     {
@@ -75,8 +75,8 @@ CASES = [
 """,
         "lint_clean": True,
         "efforts": {
-            "claude": ("xhigh", "medium", "low"),
-            "codex": ("ultra", "medium", "low"),
+            "claude": ("xhigh", "medium", "medium"),
+            "codex": ("ultra", "medium", "high"),
         },
     },
     {
@@ -84,8 +84,8 @@ CASES = [
         "yaml_block": "effort-tiers: {codex: {strong: ultra}}\n",
         "lint_clean": True,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("ultra", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("ultra", "medium", "high"),
         },
     },
     {
@@ -93,8 +93,8 @@ CASES = [
         "yaml_block": "effort-tiers:\n  codex: {strong: ultra}\n",
         "lint_clean": True,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("ultra", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("ultra", "medium", "high"),
         },
     },
     {
@@ -106,8 +106,8 @@ CASES = [
 """,
         "lint_clean": True,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("ultra", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("ultra", "medium", "high"),
         },
     },
     {
@@ -119,8 +119,8 @@ CASES = [
 """,
         "lint_clean": True,
         "efforts": {
-            "claude": ("max", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "claude": ("max", "medium", "medium"),
+            "codex": ("high", "medium", "high"),
         },
     },
     {
@@ -128,8 +128,8 @@ CASES = [
         "yaml_block": "effort-tiers: ultra\n",
         "lint_clean": False,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("high", "medium", "high"),
         },
         "resolver_warns": True,
     },
@@ -140,8 +140,8 @@ CASES = [
 """,
         "lint_clean": False,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("high", "medium", "high"),
         },
         "resolver_warns": True,
     },
@@ -150,8 +150,8 @@ CASES = [
         "yaml_block": "effort-tiers: null\n",
         "lint_clean": False,
         "efforts": {
-            "claude": ("high", "medium", "low"),
-            "codex": ("high", "medium", "low"),
+            "claude": ("high", "medium", "medium"),
+            "codex": ("high", "medium", "high"),
         },
         "resolver_warns": True,
     },

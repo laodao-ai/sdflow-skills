@@ -1,9 +1,9 @@
-"""断言四个编排 SKILL 的「宿主/档位解析」核心段【逐字节相同】。
+"""断言七个派发 SKILL 的「宿主/档位解析」核心段【逐字节相同】。
 
 【守什么】
-`sdflow-implement`/`sdflow-done`/`sdflow-code-review`/`sdflow-spec-review` 四个 SKILL.md 各自在
-第零步做同一件事：清脏 unset → 预检 `resolve-models.sh` 可执行 → 捕获退出码后 eval → eval 后校验
-`$SDFLOW_HOST`/`$SDFLOW_TIER_*`。这段机制性文本【站点无关】——四处必须逐字一致，否则某个 skill
+`sdflow-implement`/`sdflow-done`/`sdflow-code-review`/`sdflow-spec-review` 四个编排 SKILL 与
+`sdflow-adr`/`sdflow-architecture`/`sdflow-devenv` 三个派发 SKILL 各自在首次派发之前做同一件事：清脏 unset → 预检 `resolve-models.sh` 可执行 → 捕获退出码后 eval → eval 后校验
+`$SDFLOW_HOST`/`$SDFLOW_TIER_*`。这段机制性文本【站点无关】——七处必须逐字一致，否则某个 skill
 的档位解析会静默漂出一套不同的失败语义（如漏了空值/unknown 分家、或漏了清脏步骤），而这是
 load-bearing 的正确性，不是风格问题。∴ 用 marker 圈定 + 机械等值门，一次封死漂移面
 （CLAUDE.md 基准 1 + 面治优先于点补，仿 `check_async_branch_parity.py`）。
@@ -18,7 +18,7 @@ load-bearing 的正确性，不是风格问题。∴ 用 marker 圈定 + 机械�
 只认两个 marker token，单行字面量匹配——有界，∴ 可手写。MUST NOT 演化成「解析 Markdown 结构」。
 
 用法：
-    python3 hack/check_tier_resolution_parity.py            # 查仓内四处（CI / pytest / setup.sh）
+    python3 hack/check_tier_resolution_parity.py            # 查仓内七处（CI / pytest / setup.sh）
     python3 hack/check_tier_resolution_parity.py A.md B.md   # 查指定文件（测试用，≥2 个）
 """
 import sys
@@ -35,6 +35,9 @@ SITES = [
     "sdflow-done/SKILL.md",
     "sdflow-code-review/SKILL.md",
     "sdflow-spec-review/SKILL.md",
+    "sdflow-adr/SKILL.md",
+    "sdflow-architecture/SKILL.md",
+    "sdflow-devenv/SKILL.md",
 ]
 
 # 尾随空格是 token 边界：没有它，`<!-- sdflow:tier-resolution:startX ... -->` 这类
@@ -42,12 +45,15 @@ SITES = [
 START_LINE_PREFIX = "<!-- sdflow:tier-resolution:start "
 END_LINE = "<!-- sdflow:tier-resolution:end -->"
 
-# 圈内不许出现的字样——出现即说明这段被写死到了某一侧的语境里（四站点无关性前提）。
+# 圈内不许出现的字样——出现即说明这段被写死到了某一侧的语境里（站点无关性前提）。
 FORBIDDEN_IN_SEGMENT = [
     "sdflow-implement",
     "sdflow-done",
     "sdflow-code-review",
     "sdflow-spec-review",
+    "sdflow-adr",
+    "sdflow-architecture",
+    "sdflow-devenv",
 ]
 
 

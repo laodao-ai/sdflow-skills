@@ -12,7 +12,7 @@ description: |
 
 # Roadmap Planner
 
-已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 strategy、plan-eng 与 fallback 的角色和未审待恢复策略。
+已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 strategy、plan-eng 与 fallback 的角色和未审待恢复策略。Codex 宿主按该契约「Codex 结果收集」节在同一回合内收齐结果，时长上限取缺省 30 分钟。
 
 ## 本轮 roadmap review 派发与收集
 
@@ -30,6 +30,7 @@ description: |
 | 探针容量满载 / 容量拒绝 | 按共享契约等待和有界重试。 | 不缩减双镜。 |
 | 容量重试耗尽 | 写入「未审待恢复」，MUST NOT 标为 `unavailable`。 | 阻塞收尾。 |
 | `completed` 但缺本轮有效 `result_ref` | 拒绝空结果、无效结构及旧轮结果。 | 写入「未审待恢复」。 |
+| 读文件分支的广审镜，结果首行缺回执或与 `prefix-principles.md` 首行不符 | 记 `result-invalid-or-unattributed`，同一镜重派一次；再不符写入「未审待恢复」，MUST NOT 作为成功 review。 | 写入「未审待恢复」。 |
 | `failed` / `interrupted` / `cancelled` | 写入「未审待恢复」。 | 阻塞收尾。 |
 
 <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
@@ -159,15 +160,21 @@ description: |
 - **止损 / 反沉没成本**：方向一旦被证伪，**MUST 立即止损换向**，MUST NOT 在已被否定的方向上继续优化 / 加码
   （同一方向被纠正 ≥2 次 / 起手前提被推翻 → 停下重定方向，别在细节里打磨一个错的框架）。
 
-### 🔴 传播纪律：**fan-out 子代理 / outside-voice MUST 原文带上这四条**
+### 🔴 传播纪律：**fan-out 子代理 / outside-voice 的通则必须在场**
 
 **子代理与 outside-voice 跑在 fresh context —— 它们看不见本文件。**
 
-⇒ **每一个 fan-out 子代理的 prompt、每一份 outside-voice 的 context，MUST 把本区块
-（`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
-**MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+⇒ **每个 fan-out 子代理 MUST 拿到本区块全文，承载方二选一，派发 prompt MUST NOT 内联原文：**
 
-> **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+- **agent 定义承载**：Claude 宿主，且 `~/.claude/agents/<subagent_type>.md` 是指向本工具链
+  `sdflow-spec/agents/` 同名文件的软链——通则已在该定义里，prompt 不带。
+- **读文件承载**：其余情况，prompt 只写一句读文件指令（渲染器生成的前缀文件的绝对路径），
+  子代理**把文件首行原样作为结果首行**，主 session 比对回执；prompt MUST NOT 写出期望版本值。
+- outside-voice 的 context 区被声明为 UNTRUSTED，不承载通则；通则由 `outside-voice.sh` 的 FRAME 机械注入。
+
+判定与回执细则见 `subagent-dispatch-contract.md` 的「通则承载与前缀文件」节。
+
+> **通则缺席的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
 > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
 > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
 
@@ -502,7 +509,7 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子�
 **两镜各自 prompt 契约（MUST 含，不 AskUserQuestion）**：
 
 1. 评审对象路径（调用方 SKILL 在本区块外声明的具体路径/文件集）。
-2. **四条通则原文整段复制**（`sdflow:principles` 从 start 到 end，不转述、不摘要——见各 SKILL 传播纪律）。
+2. **四条通则由承载方提供**（agent 定义承载，或读 `prefix-principles.md` 并回显首行；prompt MUST NOT 内联原文——见契约「通则承载与前缀文件」节）。
 3. 本镜职责清单（上表对应行的 R 项范围）。
 4. 返回**结构化** findings 列表（每条：问题 / 证据 `{file, line, quote}` 或 `evidence_pack`〔调用方若接入
    机械引用核 `findings_ref_check.py`（DD4，implement-workflow-optimization-2026-08-p2）消费此字段；未接入
@@ -528,8 +535,13 @@ strategy/plan-eng 双镜（镜职责定义见上方「广审镜（strategy / pla
 ### 双镜派发（恒跑，不分档）
 
 1. **resolve-models 一次**：先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL SDFLOW_EFFORT_STRONG SDFLOW_EFFORT_MID SDFLOW_EFFORT_LIGHT`；`[ -x ~/.sdflow/hack/resolve-models.sh ]` 不成立 → fail-loud 并写入「未审待恢复」。否则先捕获 `MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"` 的退出码，非零时 fail-loud 并写入「未审待恢复」；成功后执行 `eval "$MODELS_ENV"; EVAL_RC=$?`，`EVAL_RC` 非零时 fail-loud 并写入「未审待恢复」。随后校验 `$SDFLOW_HOST` 精确属于 `{claude,codex,unknown}` 且非空；host≠unknown 时三 `$SDFLOW_TIER_*` 与三 `$SDFLOW_EFFORT_*` MUST 非空；`host=claude` 时三 `$SDFLOW_EFFORT_*` MUST 分别精确 ∈ {low,medium,high,xhigh,max}，`host=codex` 时 MUST 分别精确 ∈ {low,medium,high,xhigh,max,ultra}，任何非空非法值 MUST 在派发前 fail-closed。任一失败保持「未审待恢复」并阻塞收尾；`unknown` 是成功解析的既有路径，不猜机队。本轮全程只 eval 这一次。
-2. **双镜恒跑，host-adaptive**：strategy 镜 + plan-eng 镜进入完整派发任务清单；容量只能改变批次，MUST NOT 删除任务、减少镜数。按容量分批派完，MUST NOT 按商业化信号或容量增减镜数。`host=claude` 以 `model: $SDFLOW_TIER_MID` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID` 派发；`host=codex` 以 `model: $SDFLOW_TIER_MID`、`reasoning_effort: $SDFLOW_EFFORT_MID`、`fork_turns: "none"` 派 fresh 子代理，MUST NOT 带 `subagent_type`；`host=unknown` 保持原有双镜路径。
-3. **voice 与双镜重叠启动**：双镜派出后**立即**前台跑 sync voice（不串行等双镜返回再跑），墙钟
+2. **run 目录 + 前缀文件 + 通则承载判定（双镜与 voice 派发之前，每轮恰好一次）**：run 目录创建、忽略校验、前缀文件渲染、承载判定、读文件指令、回执比对与任务记录字段，一律按规则根 `subagent-dispatch-contract.md`「通则承载与前缀文件」节执行；派发 prompt MUST NOT 内联通则原文。本入口只声明差异：
+   - **父目录**：`openspec/roadmaps/{name}/.outside-voice/`；voice 的 context 文件复用同一目录，不再另建。
+   - **承载判定所用 `subagent_type`**：`host=claude` 时对 `sdflow-effort-$SDFLOW_EFFORT_MID` 判一次。
+   - **失败出口**：run 目录未被忽略或渲染器非零退出 → fail-loud 并写入「未审待恢复」，不写文件、不派发。
+   - **回执**：双镜是只读任务。通过后先剥掉回执行再合并 findings；不符则同一镜重派一次（`result-invalid-or-unattributed`），再不符写入「未审待恢复」。
+3. **双镜恒跑，host-adaptive**：strategy 镜 + plan-eng 镜进入完整派发任务清单；容量只能改变批次，MUST NOT 删除任务、减少镜数。按容量分批派完，MUST NOT 按商业化信号或容量增减镜数。`host=claude` 以 `model: $SDFLOW_TIER_MID` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID` 派发；`host=codex` 以 `model: $SDFLOW_TIER_MID`、`reasoning_effort: $SDFLOW_EFFORT_MID`、`fork_turns: "none"` 派 fresh 子代理，MUST NOT 带 `subagent_type`；`host=unknown` 保持原有双镜路径。
+4. **voice 与双镜重叠启动**：双镜派出后**立即**前台跑 sync voice（不串行等双镜返回再跑），墙钟
    ≈ max(双镜, voice) 而非相加。`$SDFLOW_HOST="unknown"` 时双镜仍恒跑，但**不调 voice**（task-log 留一行
    `runner=none reason_code=host-unknown`，见下方「review 结果如何处理」）。
 
@@ -551,7 +563,7 @@ collect barrier / 两 SKILL 等值门，那套仪式是为 async 两条路径与
 
 - **context**：`design.md`「Decisions」+ `roadmap.md` 全文（超 200KB 收敛，同全量 diff 截断纪律；
   `task-log.md` 有意不入 context——整体 plan 契约由双镜承载，voice 只补充第二意见维度，控制出境体积）。
-- **run 目录**：`openspec/roadmaps/{name}/.outside-voice/<run-id>/`（`mktemp -d` 占坑，`.gitignore` 的
+- **run 目录**：复用「双镜派发」第 2 步已建的 `openspec/roadmaps/{name}/.outside-voice/<run-id>/`，不再另建（`.gitignore` 的
   `**/.outside-voice/` 递归覆盖，同 spec-review helper 契约）。
 - **命令**：`SDFLOW_VOICE_RUNNER=<runner> SDFLOW_VOICE_MODEL=<model> ~/.sdflow/hack/outside-voice.sh exec --timeout 300 --context-file "<f>"`
   ——内层 `--timeout` 恒 `300`（沿 helper sync 分支既有常量，roadmap context 量级小于全量 diff，300s
