@@ -19,6 +19,7 @@ frontmatter overlay）的**只读**解析——不 import `sdflow_issues_core`�
 """
 
 import argparse
+import contextlib
 import datetime
 import glob
 import json
@@ -496,6 +497,8 @@ def cmd_add(args):
         except (OSError, subprocess.TimeoutExpired):
             pass
 
+    _auto_reindex(args, "新增")
+
     print(json.dumps(
         {
             "id": issue_id, "pool": pool, "status": "OPEN",
@@ -591,6 +594,8 @@ def cmd_set_status(args):
                 _die(f"git mv 失败（{rel_open} → {rel_closed}）：{mv.stderr.strip()}")
         else:
             os.rename(path, closed_path)
+
+    _auto_reindex(args, "状态变更")
 
     out_path = closed_path if closed_path else path
     print(json.dumps(
@@ -861,6 +866,20 @@ def cmd_reindex(args):
         f"reindex：已重建 {index_path}（open {len(open_items)} 项）与 "
         f"{closed_path}（closed {len(closed_items)} 项）"
     )
+
+
+def _auto_reindex(args, effect):
+    """add / set-status 写盘后命令内 reindex，INDEX/CLOSED 不再依赖调用方记得手跑。
+
+    reindex 提示改走 stderr：两命令的 stdout 契约是单行 JSON，调用方直接 json.loads。
+    reindex 失败时写操作已生效，按 reopen 同款语义明示可重跑自愈。"""
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            cmd_reindex(args)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        _die(f"{effect}已生效，重跑 reindex 即自愈：{exc}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

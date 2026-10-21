@@ -1,8 +1,12 @@
 """真实 CLI 测试使用项目根目录，运行产物放进 .test/，不改用户信任配置。
 
-运行前需由用户信任项目根目录。普通离线测试继续使用自己的 tmp_path。
+运行前需由用户信任项目根目录；未信任时（如发布快照、使用者新 clone）显式 skip。
+普通离线测试继续使用自己的 tmp_path。
 """
 
+import re
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -18,9 +22,24 @@ def pytest_collection_modifyitems(items):
         (REPO / ".test").mkdir(mode=0o700, exist_ok=True)
 
 
+def _skip_if_workspace_untrusted():
+    """信任与否让 claude 自己回答：跑一条无模型的 `--bg --exec true`，报未信任即 skip。"""
+    claude = shutil.which("claude")
+    probe = subprocess.run(
+        [claude, "--bg", "--exec", "true"],
+        capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace",
+        cwd=REPO)
+    if probe.returncode != 0 and "not trusted" in probe.stderr:
+        pytest.skip(f"项目根未被 claude 信任（{REPO}）：在该目录跑一次 `claude` 接受信任提示后重跑")
+    match = re.search(r"backgrounded\W+([0-9a-f]{6,40})\b", probe.stdout or "")
+    if match:
+        subprocess.run([claude, "rm", match.group(1)], capture_output=True, timeout=60, cwd=REPO)
+
+
 @pytest.fixture
 def real_cli_repo():
     """固定工作区满足 CLI 信任前置，每轮新建目录避免并行或重复运行互相覆盖。"""
+    _skip_if_workspace_untrusted()
     scratch = REPO / ".test" / "outside-voice" / "codex-to-claude"
     scratch.mkdir(mode=0o700, parents=True, exist_ok=True)
     run_dir = Path(tempfile.mkdtemp(prefix="run-", dir=scratch))

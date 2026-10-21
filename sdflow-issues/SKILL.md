@@ -287,6 +287,8 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id T7  
   `resolved_by`（同 `source_change` 的自动探测逻辑）、`closed_reason`（WONTFIX/WONTDO 时=`--reason`），
   并 `git mv open/{ID}.md → closed/{ID}.md`（非 git 仓降级 `os.rename`；未 tracked 的文件先自动
   `git add`）。
+- `add` 与 `set-status` 均在命令内自动 `reindex`，INDEX/CLOSED 无需手动补跑；reindex 提示走 stderr，
+  stdout 仍是单行 JSON。reindex 自身失败时写操作已生效，按提示重跑 `reindex` 即自愈。
 - 已在 `closed/` 的终态 issue **不可经 `set-status` 再改 status**（拒绝并报非零退出码）；
   唯一受控逆转换见下方 `reopen`。
 
@@ -311,8 +313,7 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py reopen --id T7  --re
   `os.rename`）——与 `set-status` 的 M-2 原子序方向相反、写法对称。中途中断会在 `closed/` 留下
   一个 status 已非终态的文件；对同 ID **重跑 `reopen` 即可幂等续跑迁移**（不会重复清字段或
   重复追加历史行），`reindex` 也会对这类残留文件输出 WARNING 提示。
-- 命令内自动 `reindex`（`add`/`set-status` 不自动 reindex 的既有惯例本命令不沿用，理由见
-  design.md D3）。
+- 命令内自动 `reindex`（同 `add`/`set-status`）。
 
 ### 扫描 / 盘点（`scan`）
 

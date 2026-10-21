@@ -493,6 +493,38 @@ def test_cli_set_status_untracked_file_is_git_added_before_mv(tmp_path):
     assert "closed/bug/B5.md" in status.stdout
 
 
+def test_cli_add_auto_reindexes_and_keeps_stdout_single_json(tmp_path):
+    """add 命令内自动 reindex：新 issue 即刻进 INDEX；reindex 提示走 stderr，stdout 仍是单行 JSON。"""
+    repo = _init_repo(tmp_path / "repo")
+    proc = _run_cli(repo, "add", "--pool", "todo",
+                    "--json", json.dumps({"module": "m", "summary": "s"}))
+    assert proc.returncode == 0, proc.stderr
+    issue_id = json.loads(proc.stdout)["id"]
+    assert "reindex" in proc.stderr
+
+    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
+    assert f"[{issue_id}]" in index_text
+
+
+def test_cli_set_status_auto_reindexes_on_terminal_and_non_terminal(tmp_path):
+    """set-status 命令内自动 reindex：非终态改 status 列即刻反映，终态即刻从 INDEX 移到 CLOSED。"""
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "todo", module="m", summary="s")
+    index_path = repo / "openspec" / "issues" / "INDEX.md"
+    closed_path = repo / "openspec" / "issues" / "CLOSED.md"
+
+    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "PROPOSED")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["new"] == "PROPOSED"
+    assert "PROPOSED" in _read(index_path)
+
+    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTDO", "--reason", "r")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["new"] == "WONTDO"
+    assert f"[{issue_id}]" not in _read(index_path)
+    assert issue_id in _read(closed_path)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # cmd_reopen (CLI integration) —— 终态唯一受控逆转换（R-IS1）
 # ══════════════════════════════════════════════════════════════════════════════

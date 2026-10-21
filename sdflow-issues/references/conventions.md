@@ -56,7 +56,7 @@ closed_reason: null           # WONTFIX/WONTDO 必填理由（关闭时填）
 ## 命令面（单一入口 `issues_v2.py`，全部命令共用）
 
 `add --pool {bug|todo} --json '{...}'` / `set-status --id {ID} --to {STATUS} [--evidence] [--reason]` /
-`reopen --id {ID} --reason {理由} [--to OPEN|PROPOSED]`（终态唯一受控逆转换，命令内自动 reindex）/
+`reopen --id {ID} --reason {理由} [--to OPEN|PROPOSED]`（终态唯一受控逆转换）——三个写命令均在命令内自动 reindex /
 `scan [--pool] [--status]* [--source-change] [--all] [--json]` / `reindex` / `next-id --pool {bug|todo}` /
 `migrate`（一次性迁移）。原 `buglist.py`/`todolist.py`（per-pool 薄入口）与
 `issues.py`（跨池薄入口：`reindex`/`batch`/`sweep`）三脚本已合一，`batch`/`sweep`/`triage` 机制随单文件

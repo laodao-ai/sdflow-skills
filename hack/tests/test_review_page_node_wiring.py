@@ -1,6 +1,8 @@
 """三个人审节点接入评审页的 SKILL 文本守卫（RVP-06、RVP-07、RVP-08）。"""
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -131,6 +133,14 @@ def test_docs_mention_review_page_assets():
     assert "render-review-page.py" in init and "review-page/" in init
     readme = read("README.md")
     assert "评审页" in readme and "render-review-page.py" in readme
+
+
+# 发布快照剔除 CLAUDE.md（开发期资产）⇒ 缺载体时显式 skip，完整仓里照跑
+@pytest.mark.skipif(
+    not (ROOT / "CLAUDE.md").exists(),
+    reason="本门守本仓手写 CLAUDE.md 一节；发布 clone 不含 CLAUDE.md",
+)
+def test_claude_md_mentions_review_page_assets():
     claude = read("CLAUDE.md")
     assert "review-page/" in claude and "~/.sdflow/hack/review-page/" in claude
 
