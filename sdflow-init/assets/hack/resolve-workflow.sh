@@ -2,7 +2,7 @@
 # resolve-workflow.sh — workflow 规则根解析器（两步链的确定性执行体，fix-probe-scan-precision
 # 起本地 pin 步已删——规则解析只剩「全局 canonical → 显式降级」）
 # 契约（minimize-repo-footprint R-MRF-2 / adr-0006 机队锚定：机械协议脚本化，skill 只调用）：
-#   stdout : 规则根路径（唯一 stdout 输出）
+#   stdout : 规则根路径（唯一 stdout 输出；-h/--help 时改为用法说明并 exit 0）
 #   exit 0 : 解析成功（全局 canonical）
 #   exit 2 : 全局 bundle 不可达/不完整 → 调用方显式降级通用评审 + 转发本脚本 stderr 告警
 #   exit 64: 用法错误
@@ -13,13 +13,34 @@ SDFLOW_HOME="${SDFLOW_HOME:-$HOME/.sdflow}"
 ROOT=""
 EXPLAIN=0
 
+usage() {
+  cat <<'USAGE'
+用法：resolve-workflow.sh [--root <仓根>] [--explain]
+
+解析 workflow 规则根（全局 canonical），把路径打印到 stdout。
+
+  --root <仓根>  指定仓根；缺省取当前目录所在 git 仓根，不在 git 仓内则取当前目录
+  --explain      在 stderr 说明命中来源
+  -h, --help     打印本说明
+
+环境变量：
+  SDFLOW_HOME    全局目录，缺省 ~/.sdflow
+
+退出码：
+  0   解析成功
+  2   全局 bundle 不可达或不完整：调用方显式降级为通用评审，并转发本脚本的 stderr 告警
+  64  用法错误
+USAGE
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
+    -h|--help) usage; exit 0 ;;
     --root)    [ $# -ge 2 ] || { echo "resolve-workflow: --root requires a value" >&2; exit 64; }
                case "$2" in -*) echo "resolve-workflow: --root requires a value" >&2; exit 64;; esac
                ROOT="$2"; shift 2 ;;
     --explain) EXPLAIN=1; shift ;;
-    *) echo "resolve-workflow: unknown arg: $1" >&2; exit 64 ;;
+    *) echo "resolve-workflow: unknown arg: $1（用 --help 看用法）" >&2; exit 64 ;;
   esac
 done
 

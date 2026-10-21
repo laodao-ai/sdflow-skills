@@ -448,6 +448,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
      阈值常量取值不强制求注释 / 无害冗余不标（Suppressions 既有口径不变）；理由落「已裁掉」区（不标
      `[ref-check]`，与机械裁掉来源可辨）。
    - **defer**：真实但拿不准优先级/方案 → 进 Step4 defer 台账（buglist/todolist）。
+   - **溯源三查（定性前）**：判「失鲜还是现行设计」、或要裁掉 / 定性一条涉及既有措辞的存疑 finding 前，MUST 做三查并把结论一句话写进该条：① 全仓 grep 该措辞的全部消费面（不带 `--include` 过滤）；② `git log -S '<措辞>'` 找出它出生的 change；③ 对读 `openspec/specs/` 里的权威措辞。
    **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**，无特殊通道（历史沿革见
    `references/evolution-notes.md` §2）；`host-adaptive-execution` 单一源矩阵继续供其余用途（如
    anchor 校验、declared-sites 完整性）引用，未被删除。

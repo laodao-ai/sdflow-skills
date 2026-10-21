@@ -208,9 +208,13 @@ sys.exit(2)
 '''
 
 # fake outside-voice.sh —— 只认 `exec --context-file <f> --timeout <n>` 这一条既有契约，
-# 不调任何模型；行为由环境变量 FAKE_HELPER_* 驱动。
+# 不调任何模型；行为由 FAKE_HELPER_* 驱动：先读同目录 `fake-helper.env`（若有），再看环境变量。
+# 真 `claude --bg` 由常驻后台服务起 worker，worker 继承的是服务启动时的环境、不是调用方的，
+# 测试设的环境变量传不到那里 ⇒ 真 CLI 用例必须走配置文件。
 FAKE_HELPER = r'''#!/usr/bin/env bash
 set -u
+_cfg="$(dirname "$0")/fake-helper.env"
+if [ -f "$_cfg" ]; then . "$_cfg"; fi
 # 证明「started sidecar 在 child 起跑之前已发布」：child 自己看盘面，把结论写进 stdout。
 if [ -n "${FAKE_HELPER_STARTED_PROBE:-}" ]; then
   if [ -f "$FAKE_HELPER_STARTED_PROBE" ]; then
@@ -1183,8 +1187,11 @@ def test_background_worker_survives_dispatching_shell_exit(fake_job_home, real_c
     """真 `claude --bg --exec`：发起 shell 退出后，无模型 worker 仍跑到终态。"""
     repo = real_cli_repo
     env = os.environ.copy()
-    env["FAKE_HELPER_MARKER"] = "cross-shell"
-    env["FAKE_HELPER_SLEEP"] = "6"      # 明显长于 dispatch 调用本身
+    # 写进 helper 同目录的配置文件而非环境变量：worker 由 claude 后台服务拉起，拿不到本进程的环境
+    (fake_job_home / "fake-helper.env").write_text(
+        "FAKE_HELPER_MARKER=cross-shell\n"
+        "FAKE_HELPER_SLEEP=6\n",      # 明显长于 dispatch 调用本身
+        encoding="utf-8")
     started = time.monotonic()
     proc = _run_job(fake_job_home, _dispatch_args(repo, fake_job_home), env, timeout=60,
                     cwd=repo["root"])

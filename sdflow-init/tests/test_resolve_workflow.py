@@ -259,6 +259,23 @@ class TestEdgeCases:
         assert r.returncode == 64
         assert "--root requires a value" in r.stderr   # T13: 缺值须显式报错文案，非静默 exit
 
+    @pytest.mark.parametrize("flag", ["--help", "-h"])
+    def test_help_prints_usage_to_stdout_and_exits_0(self, tmp_path, flag):
+        """--help 不解析仓根、不碰 SDFLOW_HOME：用法进 stdout，三档退出码都写明。"""
+        repo = make_repo(tmp_path / "repo")
+        r = run_resolve(repo, tmp_path / "no-sdflow", args=(flag,))
+        assert r.returncode == 0
+        assert r.stdout.startswith("用法：resolve-workflow.sh")
+        for token in ("--root", "--explain", "SDFLOW_HOME", "64"):
+            assert token in r.stdout
+        assert r.stderr == ""
+
+    def test_unknown_arg_points_to_help(self, tmp_path):
+        repo = make_repo(tmp_path / "repo")
+        r = run_resolve(repo, tmp_path / "no-sdflow", args=("--bogus",))
+        assert r.returncode == 64
+        assert "unknown arg: --bogus" in r.stderr and "--help" in r.stderr
+
     def test_root_flag_swallows_next_flag_exits_64(self, tmp_path):
         """--root 后紧跟另一个 flag（如 --explain）时不得把它当值吞掉（B1-F4）。"""
         repo = make_repo(tmp_path / "repo")

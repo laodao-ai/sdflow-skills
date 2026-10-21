@@ -8,7 +8,7 @@ SCRIPT = Path(__file__).parents[1] / "scripts/init.py"
 SPEC = importlib.util.spec_from_file_location("sdflow_init_runtime", SCRIPT)
 INIT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(INIT)
-ENTRY = b"/openspec/issues/.recorder.lock\n"
+ENTRY = b"/openspec/.ff0-ack\n"
 
 # canonical 全集（**不写死条目内容**）：本组用例约束的是「每条 canonical 条目恰一条 +
 # 用户 bytes 逐字节保留」这条不变量，而不是「canonical 里恰好有哪一条」——后者写死会让
@@ -36,7 +36,7 @@ def test_merge_runtime_gitignore_is_idempotent_and_preserves_bytes(tmp_path):
     target.write_bytes(b"# user\r\ncustom/*\r\n")
     INIT.merge_runtime_gitignore(tmp_path, ENTRY)
     once = target.read_bytes()
-    assert once == b"# user\r\ncustom/*\r\n/openspec/issues/.recorder.lock\n"
+    assert once == b"# user\r\ncustom/*\r\n/openspec/.ff0-ack\n"
     INIT.merge_runtime_gitignore(tmp_path, ENTRY)
     assert target.read_bytes() == once
 

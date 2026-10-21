@@ -274,7 +274,7 @@
 
     <div class="arch-diagram"><pre>
   spec-quality-base.md  ──────  code-review-base.md
-  (设计审通用 · 30 条)          (代码审通用 · 11 条)
+  (设计审通用 · 30 条)          (代码审通用 · 12 条)
         │  每份 spec 必过              │  每次 code-review 必过
         ▼                              ▼
   domains/                       domains/
@@ -314,7 +314,7 @@
           <tr>
             <td><strong>base</strong></td>
             <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">BASE-01~30</span></td>
-            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">CR-01~11</span></td>
+            <td><span class="pill pill-ok"><span class="pill-dot"></span>就绪</span> <span class="count">CR-01~12</span></td>
             <td>无条件</td>
           </tr>
 
@@ -437,7 +437,7 @@
     <div class="domain-grid">
       <div class="domain-card">
         <div class="card-title">base 通用</div>
-        <div class="card-extends">code-review-base.md · 11 条</div>
+        <div class="card-extends">code-review-base.md · 12 条</div>
         <div class="card-desc">错误处理正确性、四路径完整性、nil 安全、资源清理、并发互斥、整数转换安全、日志可观测、魔法数字、测试质量、命令注入、枚举完备性。语言无关。</div>
       </div>
       <div class="domain-card">
@@ -533,7 +533,7 @@
         <tbody>
           <tr><td><strong>审什么</strong></td><td>设计对不对（方案、接口、边界）</td><td>实现对不对（代码、逻辑、安全）</td></tr>
           <tr><td><strong>谁用</strong></td><td><code>sdflow-spec-review</code></td><td><code>sdflow-code-review</code> + <code>sdflow-implement</code> Standards 轴</td></tr>
-          <tr><td><strong>base 规模</strong></td><td>30 条（含三级分层）</td><td>11 条（扁平）</td></tr>
+          <tr><td><strong>base 规模</strong></td><td>30 条（含三级分层）</td><td>12 条（扁平）</td></tr>
           <tr><td><strong>落点列</strong></td><td>有（T/C/S/R 四种）</td><td>无（全部为 R 评审型）</td></tr>
           <tr><td><strong>单侧领域</strong></td><td>devex（DX，设计审独有）</td><td>llm（CR-LLM，代码审独有）</td></tr>
         </tbody>

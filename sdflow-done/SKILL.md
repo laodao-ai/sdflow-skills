@@ -571,9 +571,12 @@ b. **对每条 ADDED/MODIFIED 需求，用 Grep/Read 核对实际代码**（迁�
    **以代码为准改写**该需求后再同步。
 c. 新能力（proposal New Capabilities）：openspec/specs/<cap>/spec.md 新建，
    套 `# <cap> Specification` + `## Purpose`（一段目的）+ `## Requirements`，放需求。
-d. 改的能力：把（已按代码核对的）需求**追加**到主 spec 的 `## Requirements` 末尾，
-   **匹配该主 spec 自身风格**：英文结构用 `### Requirement:`/`#### Scenario:`；
-   中文遗留用 `### 需求:`/`#### 场景:`（别往遗留中文 spec 塞英文关键字）。
+d. 改的能力，按 delta 的节分别处理（**匹配该主 spec 自身风格**：英文结构用 `### Requirement:`/`#### Scenario:`；
+   中文遗留用 `### 需求:`/`#### 场景:`，别往遗留中文 spec 塞英文关键字）：
+   - ADDED：把（已按代码核对的）需求追加到 `## Requirements` 末尾；
+   - MODIFIED：**整条替换**主 spec 里的同名需求，MUST NOT 追加成第二份；
+   - REMOVED：从主 spec 删除同名需求（连同其 Scenario）；
+   - RENAMED：把 FROM 名的需求标题改为 TO 名。
 e. INDEX 登记：openspec/INDEX.md「按主题分组（specs/）」对应组加一行新能力。
 f. 校验：对每个动过的 spec 跑 `openspec validate <cap> --type spec`。
    - 你新建/追加导致的 valid→invalid **必须修**。
@@ -596,6 +599,21 @@ MUST 段之后或行内。
 
 子代理报告里若出现「核心 delta 与代码严重不符无法判定」之类 BLOCKED，停止并交回用户。
 
+### 3.1 归档同步核对（主 session 亲跑，第四步之前）
+
+无论归档走 happy path 还是 fallback，主 session 都对归档目录跑一次机械核对：
+
+```bash
+python3 ~/.claude/skills/sdflow-done/scripts/delta_sync_check.py --archive-dir {archive_dir}
+```
+
+（脚本路径同 §2.2 的 sibling 约定，兜底 `~/.agents/skills/…` 或本仓 `find . -name delta_sync_check.py`。）
+它按名字核对归档 delta 与主 spec：ADDED/MODIFIED 恰好一条、REMOVED 已不在、RENAMED 旧名不在且新名恰好一条。
+
+- 退出码 0 → 进入 3.9。
+- 退出码 1 → **MUST NOT 进入第四步**：按输出清单补同步主 spec（可再派 archive 子代理只做补同步），重跑本核对直到 0。
+- 退出码 2（脚本缺失 / 目录不可读）→ 同样不进入第四步，报告原因交回用户。
+
 ---
 
 ### 3.9 生成收尾评审页（RVP-07，归档完成之后、第四步提交之前，主 session 亲跑）
@@ -615,7 +633,12 @@ python3 ~/.sdflow/hack/render-review-page.py --preset shipped --dir {archive_dir
 
 1. git status
 2. git add openspec/   （归档目录 + INDEX + 同步的主 specs 全部 openspec/ 变更）
-3. git add -u          （已追踪实现文件的修改；不暂存无关新增未追踪文件）
+3. **openspec/ 外已追踪改动检查**：`git -c core.quotePath=false diff --name-only -- . ':(exclude)openspec'`
+   列出 openspec/ 之外**已追踪且未暂存**的改动。非空 ⇒ **非交互 halt+报告**（同第五步 untracked 硬检查的处置）：
+   列出文件清单，建议「属于本 change 的先 `git add <文件>` 后重跑本步；无关的先移走（另行提交或 stash）」，
+   MUST NOT 用 AskUserQuestion 中途问、MUST NOT 用 `git add -u` 把它们一并带进提交。人已 `git add` 的文件视为已确认，照常提交。
+   为什么：实现期逐 ticket 已各自提交，到这一步仍未暂存的 openspec/ 外改动多半与本 change 无关；手工实现后单跑
+   `/sdflow-done` 时它们正是实现本身——两种情况都交人一眼判定，而不是静默提交。
 4. git diff --staged --name-only（输出供核对）
 5. git diff --staged（读摘要，生成 message）
 6. Conventional Commits 中文 message：type(scope): 动词开头描述

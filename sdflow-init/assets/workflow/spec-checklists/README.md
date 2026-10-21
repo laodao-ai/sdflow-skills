@@ -50,7 +50,9 @@
 | `GO-NN` | backend-go delta | `GO-01 errgroup 生命周期` |
 | `EMB-NN` | embedded 通用 | `EMB-02 任务栈预算` |
 | `ML307C-NN` / `ESP32-NN` | 芯片 delta | `ESP32-02 OTA 双槽安全` |
+| `FE-NN` | frontend 通用 | `FE-01 交互边缘场景` |
 | `REACT-NN` | frontend-react delta | `REACT-01 Suspense/加载边界设计` |
+| `DX-NN` | devex（spec-review-only） | `DX-01 TTHW 分档` |
 
 ID 一经分配不复用、不重排——删除规则只留空号，新增规则取新号。
 

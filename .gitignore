@@ -27,7 +27,6 @@ __pycache__/
 .pytest_cache/
 # 真实 CLI 集成测试产物；Claude 从已信任的项目根目录启动，产物按轮隔离。
 /.test/
-/openspec/issues/.recorder.lock
 
 # FF-0 守卫的一次性 ack 哨兵（人 touch、hook 读到即删）——本地令牌，不该入库
 /openspec/.ff0-ack

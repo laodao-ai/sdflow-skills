@@ -112,9 +112,9 @@ D9 新鲜度 = **录内容指纹 + 比 digest**〔sweep-pool-debt D2/D3/D9，取
         终态而非 diff ⇒ evil-merge 引入的源码改动经顶层 tree oid 反映、不再漏检（两域同源修复）；
     〔harden-gate-git-layer 残余面·design ADR-3〕**归档终态盲区**：`verify` 检查点之后到 `merge`
         之间无失鲜检查——① 已提交路径 archive 后 cdir 不存在，D3 短路凭归档 verify=PASS 判 SHIPPED，
-        全程不调 is_stale；② 未提交路径 gate 只看 committed，sdflow-done 的无范围 `git add -u` 会把
-        早躺工作树的改动收编进最终提交。接受理由：done 在 verify 后的动作（archive/commit/merge）本身
-        不改源码，正常走完时该窗口为空，且 merge 前有 untracked 硬检查兜一层。与 T179 同盲区两半；
+        全程不调 is_stale；② 未提交路径 gate 只看 committed，早躺工作树的改动由 sdflow-done 提交步的
+        「openspec/ 外已追踪未暂存改动」检查 halt 交人判定（不再经 `git add -u` 静默收编）。接受理由：done
+        在 verify 后的动作（archive/commit/merge）本身不改源码，正常走完时该窗口为空，且 merge 前有 untracked 硬检查兜一层。与 T179 同盲区两半；
     〔harden-gate-git-layer 残余面·design ADR-3〕**窗口右边界间隙**：「实现刚完成」与「代码审进行中」
         盘面不可区分（都是 plan 全勾 + 无 cr 报告）⇒ 该间隙内的四件套改动不被 design 域求值。纯盘面
         判据关不上（要关须加新盘面信号，与本 change 简化方向相悖）；第二层由代码审 scope-drift 检查
