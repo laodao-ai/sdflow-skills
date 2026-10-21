@@ -28,6 +28,11 @@ def run_setup(tmp_path, path_prefix=None):
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     env = dict(os.environ, HOME=bash_path(home), SDFLOW_HOME=bash_path(home / ".sdflow"))
+    # 假 HOME 会丢掉真实全局配置里的 safe.directory：仓库属主不是当前用户时，setup.sh 的
+    # git describe 会报 dubious ownership、版本退化成 unknown。补回仓根这一条，追加不覆盖。
+    n = int(env.get("GIT_CONFIG_COUNT", "0") or 0)
+    env.update({"GIT_CONFIG_COUNT": str(n + 1), f"GIT_CONFIG_KEY_{n}": "safe.directory",
+                f"GIT_CONFIG_VALUE_{n}": str(REPO)})
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env['PATH']}"
     r = subprocess.run([bash_executable(), bash_path(REPO / "setup.sh")],

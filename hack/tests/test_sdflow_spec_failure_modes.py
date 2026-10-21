@@ -516,8 +516,17 @@ def test_fault6_real_cli_payload_carries_every_documented_field(tmp_path):
     out = subprocess.run(
             [OPENSPEC, "instructions", "design", "--change", "demo", "--json"],
         cwd=str(root), capture_output=True, text=True, timeout=_CLI_TIMEOUT_S, encoding="utf-8", errors="replace")
-    assert out.returncode == 0, f"CLI 非零退出：{out.stderr}"
-    payload = assert_instructions_schema(out.stdout)   # 缺字段/类型不符 ⇒ 这里抛
+    # 判的是「本机这个 openspec 带不带得动 sdflow-spec」——红时把实际跑的是哪份 CLI 带出来，
+    # PATH 里有更旧的一份排在前面是最常见的成因
+    version = subprocess.run([OPENSPEC, "--version"], capture_output=True, text=True,
+                             timeout=_CLI_TIMEOUT_S, encoding="utf-8", errors="replace")
+    where = (f"本机 openspec={OPENSPEC}（--version: {version.stdout.strip() or version.stderr.strip()}）；"
+             f"fix=升级 openspec，或检查 PATH 里是否有更旧的一份排在前面（which -a openspec）")
+    assert out.returncode == 0, f"CLI 非零退出：{out.stderr} / {where}"
+    try:
+        payload = assert_instructions_schema(out.stdout)   # 缺字段/类型不符 ⇒ 这里抛
+    except AssertionError as exc:
+        raise AssertionError(f"{exc} / {where}") from None
     assert payload["artifactId"] == "design"
     assert payload["context"] == "fixture context"
     assert payload["rules"] == ["fixture design constraint"]

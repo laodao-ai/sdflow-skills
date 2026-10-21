@@ -53,10 +53,10 @@
    hand-off.md ── 异步 ──▶ 人类读 → 决定开"清理 change" → 作为下个 change 输入
 ```
 
-> **sdflow-done 含 issues sweep 子步**（§2.1，I5/I6）：verify 判完、写 hand-off 正文前，分诊**本 change**新增的
-> OPEN 项入**单一批次**（key=本 change 名）→ 末尾跑 `issues.py reindex` 刷新 INDEX/批次状态 → hand-off 第 2 段引用该批次号
-> （不再逐条罗列裸 ID）。脚本分工：`sdflow-issues` 的两池 `scan`/`triage` 分诊 +
-> `batch add`/`reindex` 管批次与索引。细则见 `sdflow-done` skill 的 SKILL.md §2.1（配套 skill，不在本 bundle 内，随 sdflow-skills `setup.sh` 安装）。
+> **sdflow-done 含 issues scan 子步**（§2.1）：verify 判完、写 hand-off 正文前，只读查询**本 change**新增的
+> 未闭合项（`issues_v2.py scan --json --source-change {change} --status OPEN --status PROPOSED`）→ hand-off 第 2 段
+> 逐条列出这些 ID。纯读、不写台账；INDEX/CLOSED 由 `sdflow-issues` 的写命令（add / set-status / reopen）自动重建。
+> 细则见 `sdflow-done` skill 的 SKILL.md §2.1（配套 skill，不在本 bundle 内，随 sdflow-skills `setup.sh` 安装）。
 > **跨模型 outside voice**：sdflow-spec-review / sdflow-code-review 默认开；命中 **HR-TG** 再单开一次领域 cross-model（C2/C3/C4）。调用协议见两 SKILL 的「outside-voice helper 调用协议」节；helper 契约 = `~/.sdflow/hack/outside-voice.sh` 头注释。
 
 ## 二、逐步 prompt（可直接复制）
@@ -88,7 +88,7 @@
 
 #### C. sdflow-done
 
-verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 change OPEN 项入批次 → reindex）→ hand-off.md → archive（+ delta 对码核验/同步）→ commit → merge。**必跑（闭环）**。
+verify（防假✅，证据锚点）→ issues scan 子步（§2.1：只读列出本 change 新增的未闭合项）→ hand-off.md → archive（+ delta 对码核验/同步）→ commit → merge。**必跑（闭环）**。
 
 ## 三、关键设计决策
 

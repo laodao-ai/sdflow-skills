@@ -7,6 +7,10 @@ name: Mechanical gates
 
 on:
   push:
+    # 发布同时推分支与版本 tag，两者指向同一 commit；tag 推送不再重跑一遍。
+    # 只写 tags-ignore 会让分支推送也不触发（GitHub 规则：未声明的 ref 类型不匹配），须同时声明 branches
+    branches: ['**']
+    tags-ignore: ['**']
   pull_request:
   workflow_dispatch:
 

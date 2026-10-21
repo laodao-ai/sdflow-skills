@@ -125,9 +125,11 @@ def test_parse_frontmatter_round_trips_backslashes():
     assert v2.parse_frontmatter(v2.render_frontmatter(fm)) == fm
 
 
-@pytest.mark.skipif(shutil.which("yq") is None, reason="yq 未安装")
 def test_rendered_frontmatter_with_backslashes_is_valid_yaml_for_yq():
     # ship_gate 经 yq 读 source_change；反斜杠未转义时 yq 整份拒读，source_change 读成 None
+    # yq 是必需环境依赖（adr/0036）：缺失即红，不 skip
+    assert shutil.which("yq") is not None, (
+        "yq(mikefarah) 未安装——sdflow 必需依赖（macOS: brew install yq）")
     rendered = v2.render_frontmatter(_backslash_fm())
     out = subprocess.run(["yq", "-o=json", "."], input=rendered, capture_output=True,
                          text=True, encoding="utf-8", errors="replace", check=True).stdout

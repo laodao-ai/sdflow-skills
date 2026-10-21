@@ -35,11 +35,15 @@ UNBRACED_THEN_NON_ASCII = re.compile(r"\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]")
 # 仓内**全部** .sh 一次扫全，不只 bundle 的 assets/hack/——bash 3.2 的这个坑
 # 与文件属于哪个目录无关，只与「脚本里有没有 `$var` 紧贴非 ASCII」有关〔基准③ 面治〕。
 # 排除点目录（.git / .claude 等）：非本仓维护的源，改不了也不该由本门判红。
-SHELL_FILES = sorted(
-    p
-    for p in REPO.rglob("*.sh")
-    if not any(part.startswith(".") for part in p.relative_to(REPO).parts)
-)
+# 例外：`.agents/skills/sdflow-*` 是本仓自用 skill（如 sdflow-publish），照扫。
+def _owned(p):
+    parts = p.relative_to(REPO).parts
+    if parts[:2] == (".agents", "skills") and len(parts) > 2 and parts[2].startswith("sdflow-"):
+        parts = parts[3:]
+    return not any(part.startswith(".") for part in parts)
+
+
+SHELL_FILES = sorted(p for p in REPO.rglob("*.sh") if _owned(p))
 
 
 def _offenders(text: str):
