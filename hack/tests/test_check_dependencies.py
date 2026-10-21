@@ -7,7 +7,6 @@ Python 候选选择仍由 setup.sh 负责，不属于快速层的覆盖范围。
 """
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -20,14 +19,52 @@ SETUP = REPO / "setup.sh"
 DEPENDENCIES = REPO / "hack" / "setup-dependencies.sh"
 
 
-def _path_without_yq():
-    """把真实 PATH 中含可解析 `yq` 的目录剔除——让"未安装"分支在任何机器上都确定性复现。"""
+def _is_yq_entry(name):
+    """`yq`、`yq.exe`、`yq.cmd` 等都算 yq 提供者。"""
+    return name.split(".", 1)[0].lower() == "yq"
+
+
+def _entries(directory):
+    try:
+        return list(Path(directory).iterdir())
+    except OSError:
+        return []
+
+
+def _has_yq_entry(directory):
+    # 按目录项判断，不用 shutil.which：Windows 上 which 只认 PATHEXT 扩展名，
+    # 看不见 Git Bash 能执行的无扩展名脚本。
+    return any(_is_yq_entry(entry.name) for entry in _entries(directory))
+
+
+def _path_without_yq(mirror_root):
+    """返回一个解析不到 `yq`、其余命令照旧可用的 PATH——让"未安装"分支在任何机器上都确定性复现。
+
+    含 `yq` 的目录换成 `mirror_root` 下的镜像目录：镜像里是原目录除 yq 以外每一项的软链。
+    不能整目录剔除：GitHub ubuntu runner 把 yq 预装在 /usr/bin（/bin 是它的软链），
+    剔掉它会连带 dirname / grep / head 一起丢，setup.sh 第 8 行就 `dirname: command not found`。
+    Windows CI 把 yq 装在独立目录而不是 Git 的 /usr/bin：PATH 里的 C:\\Program Files\\Git\\bin
+    进了 Git Bash 会变成 /bin，而 /bin 挂载的是 usr/bin。本函数按 Windows 视角检查 Git\\bin
+    （里面没有 yq），摘不掉 Git Bash 看到的那份。
+    """
     raw = os.environ.get("PATH", "")
-    # A user shell may expose both a shim and the actual installation. Remove
+    # A user shell may expose both a shim and the actual installation. Hide
     # every provider, including extensionless Git Bash shims on Windows.
-    parts = [p for p in raw.split(os.pathsep)
-             if not shutil.which("yq", path=p)
-             and not (Path(p) / "yq").is_file()]
+    parts = []
+    for index, p in enumerate(raw.split(os.pathsep)):
+        if not _has_yq_entry(p):
+            parts.append(p)
+            continue
+        mirror = mirror_root / f"path-{index}"
+        mirror.mkdir(parents=True)
+        try:
+            for entry in Path(p).iterdir():
+                if not _is_yq_entry(entry.name):
+                    (mirror / entry.name).symlink_to(entry)
+        except OSError:
+            # 建不了软链（如未开开发者模式的 Windows）⇒ 退回整目录剔除，yq 照样被摘掉。
+            continue
+        parts.append(str(mirror))
     return os.pathsep.join(parts)
 
 
@@ -44,11 +81,18 @@ def test_missing_yq_path_removes_every_provider(tmp_path, monkeypatch):
     providers = [tmp_path / "shim", tmp_path / "installation"]
     for provider in providers:
         _fake_yq(provider, "fixture yq")
+    # 与 yq 同目录的其他命令必须保留（ubuntu runner 上 yq 与 dirname 同在 /usr/bin）。
+    neighbour = providers[1] / "neighbour"
+    neighbour.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    neighbour.chmod(0o755)
     clean = tmp_path / "clean"
     clean.mkdir()
     monkeypatch.setenv("PATH", os.pathsep.join(map(str, [*providers, clean])))
-    filtered = _path_without_yq()
-    assert filtered == str(clean)
+    filtered = _path_without_yq(tmp_path / "path-mirror")
+    dirs = filtered.split(os.pathsep)
+    assert not any(_has_yq_entry(d) for d in dirs)
+    assert any((Path(d) / "neighbour").exists() for d in dirs)
+    assert filtered.split(os.pathsep)[-1] == str(clean)
 
 
 def _deps_section(stdout):
@@ -145,9 +189,9 @@ def test_python3_status_line_is_not_duplicated(fake_home):
     assert len(matches) == 1, f"python3 状态行重复或缺失：{matches}\n{r.stdout}"
 
 
-def test_missing_yq_reports_cross_and_three_platform_install_commands(fake_home):
+def test_missing_yq_reports_cross_and_three_platform_install_commands(fake_home, tmp_path):
     """③ yq 未安装 ⇒ `✗ yq` + 三平台安装命令，且 setup.sh 不中止。"""
-    r = _run_dependencies(fake_home, path=_path_without_yq())
+    r = _run_dependencies(fake_home, path=_path_without_yq(tmp_path / "path-mirror"))
     assert r.returncode == 0, r.stdout + r.stderr
 
     deps = _deps_section(r.stdout)
@@ -163,7 +207,7 @@ def test_kislyuk_yq_warns_and_gives_correct_install_guidance(fake_home, tmp_path
     """④ 已安装但是 kislyuk/yq（无 `mikefarah` 字样）⇒ 警告 + 正确版本安装指引，不中止。"""
     bin_dir = tmp_path / "fake-bin-kislyuk"
     _fake_yq(bin_dir, "yq 3.4.1")
-    path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
+    path = f"{bin_dir}{os.pathsep}{_path_without_yq(tmp_path / 'path-mirror')}"
 
     r = _run_dependencies(fake_home, path=path)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -181,7 +225,7 @@ def test_mikefarah_yq_with_sufficient_version_reports_ok(fake_home, tmp_path):
     """⑤ mikefarah/yq 且版本 >= 4.16.0 ⇒ `✓ yq`，不告警。"""
     bin_dir = tmp_path / "fake-bin-ok"
     _fake_yq(bin_dir, "yq (https://github.com/mikefarah/yq/) version v4.44.3")
-    path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
+    path = f"{bin_dir}{os.pathsep}{_path_without_yq(tmp_path / 'path-mirror')}"
 
     r = _run_dependencies(fake_home, path=path)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -196,7 +240,7 @@ def test_mikefarah_yq_below_min_version_warns_upgrade(fake_home, tmp_path):
     """⑥ mikefarah/yq 但版本 < 4.16.0（`--front-matter` 支持下限，spec R1）⇒ 版本过低警告 + 升级指引。"""
     bin_dir = tmp_path / "fake-bin-old"
     _fake_yq(bin_dir, "yq (https://github.com/mikefarah/yq/) version v4.9.2")
-    path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
+    path = f"{bin_dir}{os.pathsep}{_path_without_yq(tmp_path / 'path-mirror')}"
 
     r = _run_dependencies(fake_home, path=path)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -207,9 +251,9 @@ def test_mikefarah_yq_below_min_version_warns_upgrade(fake_home, tmp_path):
     assert "✓ yq" not in deps
 
 
-def test_full_setup_reports_missing_yq_once_and_continues(fake_home):
+def test_full_setup_reports_missing_yq_once_and_continues(fake_home, tmp_path):
     """缺失 yq 仍完成真实安装；预检接线、非致命性、重复报告一起守住。"""
-    r = _run_full_setup(fake_home, path=_path_without_yq())
+    r = _run_full_setup(fake_home, path=_path_without_yq(tmp_path / "path-mirror"))
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout.count("运行依赖预检：") == 1
     deps = _deps_section(r.stdout)

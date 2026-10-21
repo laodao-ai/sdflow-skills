@@ -1,8 +1,6 @@
 import subprocess, sys, pathlib, shutil, os, unicodedata
 import pytest
-from conftest import make_sad  # noqa: E402  (模块级导入：repo-wide pytest 下多 tests/ 目录同名
-                                # conftest.py 在 sys.modules 只留一个绑定；模块级导入随本文件
-                                # collection 期早绑定，避开函数级运行期延迟导入撞名的坑)
+from sad_helpers import make_sad
 SCRIPT = pathlib.Path(__file__).parent.parent / "scripts" / "sad_scaffold.py"
 
 def run(args, cwd):

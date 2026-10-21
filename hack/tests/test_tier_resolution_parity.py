@@ -1,12 +1,12 @@
-"""守四个编排 SKILL 的「宿主/档位解析」核心段【逐字节相同】。
+"""守七个派发 SKILL 的「宿主/档位解析」核心段【逐字节相同】。
 
 【为什么需要这个测试】
-`sdflow-implement`/`sdflow-done`/`sdflow-code-review`/`sdflow-spec-review` 各自的第零步都要做
-同一件事（清脏 unset → 预检 resolve-models.sh 可执行 → 捕获退出码后 eval → eval 后校验），这段
-文本被【复制】进四个 SKILL.md。四份若漂——某个 skill 的档位解析会静默行为分叉（漏清脏 / 漏预检 /
+`sdflow-implement`/`sdflow-done`/`sdflow-code-review`/`sdflow-spec-review`/`sdflow-adr`/
+`sdflow-architecture`/`sdflow-devenv` 各自首次派发前都要做同一件事（清脏 unset → 预检 resolve-models.sh 可执行 → 捕获退出码后 eval → eval 后校验），这段
+文本被【复制】进七个 SKILL.md。七份若漂——某个 skill 的档位解析会静默行为分叉（漏清脏 / 漏预检 /
 把空值误判成 unknown），而这是 load-bearing 的正确性，不是风格问题。
 —— CLAUDE.md 基准 1：能用「可固化规则 + 脚本」保证的一致性，MUST 机械化。
-   复制是必要的（四个 SKILL 是独立分发单元），但复制【不能靠手】。
+   复制是必要的（七个 SKILL 是独立分发单元），但复制【不能靠手】。
 
 【语法面】
 只认两个 marker token（start / end），单行字面量匹配，有界（基准 5）。
@@ -44,7 +44,7 @@ def test_repo_sites_are_byte_identical():
     assert P.main([]) == 0
 
 
-def test_all_four_sites_carry_the_markers():
+def test_all_sites_carry_the_markers():
     """七处 marker 都真的存在（不是「都没有 ∴ 都一致」的空绿）。"""
     assert len(P.SITES) == 7, "四个编排 SKILL + adr / architecture / devenv——site 枚举不应变多变少"
     for rel in P.SITES:
@@ -63,7 +63,7 @@ def test_interior_is_non_empty():
 
 
 def test_interior_names_no_orchestrating_skill():
-    """圈内 MUST NOT 出现任一编排 SKILL 的名字——同一串字节要在四处【各自语义正确】。"""
+    """圈内 MUST NOT 出现任一编排 SKILL 的名字——同一串字节要在七处【各自语义正确】。"""
     for rel in P.SITES:
         interior = P.extract(REPO / rel)
         for bad in P.FORBIDDEN_IN_SEGMENT:
@@ -242,7 +242,7 @@ def test_cli_requires_at_least_two_paths(tmp_path):
 # ══════════════════════════════════════════════════════════════════════════════
 # 段内内容契约（harden-implement-review-loop Task 1）
 #
-# 等值门只保证「四侧一样」，不保证「一样的那份是对的」。本节是段内**内容**的
+# 等值门只保证「各侧一样」，不保证「一样的那份是对的」。本节是段内**内容**的
 # golden：四类清脏变量、fail-loud 硬停措辞、host 空值/unknown 分家判据——MUST NOT
 # 只查 SITES[0] 再靠等值门推其余三侧（等值门若被误删，这里就成了盲区）。
 # ══════════════════════════════════════════════════════════════════════════════

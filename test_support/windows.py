@@ -40,6 +40,20 @@ def bash_path(value: str | os.PathLike[str]) -> str:
     return path
 
 
+def native_path(value: str, *, windows: bool = os.name == "nt") -> str:
+    """Inverse of bash_path: turn a Git Bash `/c/...` path printed by a script
+    back into `C:/...` so Python's Path can resolve it.
+
+    Only applied on Windows: there `/c/x` would otherwise be read as
+    `<cwd drive>:/c/x`. On POSIX `/c/x` is a real path and stays unchanged.
+    """
+    if windows:
+        match = re.match(r"^/([A-Za-z])(/|$)", value)
+        if match:
+            return f"{match.group(1).upper()}:/{value[3:]}"
+    return value
+
+
 def bash_argv(values) -> list[str]:
     """Translate native path-shaped argv items while leaving ordinary text intact."""
     return [bash_path(value) for value in values]

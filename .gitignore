@@ -34,3 +34,6 @@ __pycache__/
 
 # sdflow-upstream-watch facts 中间产物（collect 写、advance 读，一轮一份，非留存状态）
 /openspec/upstream/.facts/
+
+# 双轴审 diff 快照：可由 git 再生的瞬态产物，不入库（防 checkpoint add -A 带入并随 archive 永久留存）
+**/impl-reports/*review-package*.diff

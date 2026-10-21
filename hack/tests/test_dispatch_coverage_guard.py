@@ -143,7 +143,7 @@ LONG_SKILLS = {
             "未审待恢复",
             "HARD-GATE",
         ),
-        "loops": ("同一镜重派一次",),
+        "loops": ("读文件指令与回执",),
         "artifacts": ("spec-review-report.md", "锚行自检", "checkpoint"),
     },
     "sdflow-code-review": {
@@ -153,7 +153,7 @@ LONG_SKILLS = {
             "容量重试耗尽",
             "fail-loud 拒写",
         ),
-        "loops": ("同一镜重派一次", "硬上限 2 轮"),
+        "loops": ("读文件指令与回执", "硬上限 2 轮"),
         "artifacts": ("code-review-report.md", "自动修复", "checkpoint"),
     },
     "sdflow-implement": {
@@ -163,7 +163,7 @@ LONG_SKILLS = {
             "halt envelope",
             "BLOCKED",
         ),
-        "loops": ("同一任务重派一次", "连续 2 轮", "≥3 轮"),
+        "loops": ("读文件指令与回执", "连续 2 轮", "≥3 轮"),
         "artifacts": ("ticket 落盘", "checkpoint", "frontier"),
     },
 }
@@ -194,8 +194,21 @@ def test_declaration_artifacts_and_loops(name):
         assert token in decl, f"{name} 声明段缺 {token!r}"
 
 
+def test_spec_review_receipt_loop_anchor_points_to_retry_once_rule():
+    """spec-review 的循环上限只引用契约「读文件指令与回执」；重派次数的数字锚在契约那一节。"""
+    decl, _ = _declaration("sdflow-spec-review")
+    assert "读文件指令与回执" in decl
+    contract = (ROOT / "sdflow-init/assets/workflow/subagent-dispatch-contract.md").read_text(encoding="utf-8")
+    section = contract.split("### 读文件指令与回执", 1)[1].split("\n### ", 1)[0]
+    assert "只读任务（评审镜" in section
+    assert "同一任务重派一次" in section
+
+
 @pytest.mark.parametrize("name", LONG_SKILLS)
 def test_declared_stops_exist_in_body(name):
+    """弱存在性检查：BLOCKED / HARD-GATE 等词在正文几乎必然出现，
+    这里只能拦住“整个词从正文消失”，不证明停点真有对应出口。
+    """
     decl, body = _declaration(name)
     for stop in LONG_SKILLS[name]["stops"]:
         assert stop in decl, f"{name} 声明段缺停点 {stop!r}"

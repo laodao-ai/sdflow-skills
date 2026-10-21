@@ -229,6 +229,24 @@ def test_diagnostic_missing_recovery_action_mutation_is_rejected():
     assert not all(row[column] for column in DIAGNOSTIC_COLUMNS[1:])
 
 
+def row_line(text, name):
+    return next(ln for ln in text.splitlines() if ln.startswith("| " + name))
+
+
+def test_effort_fallback_diagnostic_keeps_task_model_prompt_and_runner():
+    """失败矩阵 effort-fallback 行的恢复动作须声明保留同一任务、model、prompt 与 runner。"""
+    rows = _table_rows(CONTRACT.read_text(encoding="utf-8"), "## 运行诊断与恢复")
+    row = next(row for row in rows if row["诊断"] == "`effort-fallback`")
+    assert "保留同一任务、model、prompt 与 runner" in row["可执行恢复动作"]
+    full = CONTRACT.read_text(encoding="utf-8")
+    # 先定位目标句：变异点不存在时测试自身红，而不是 replace 空转后误判
+    target = "、prompt 与 runner。 |"
+    assert full.count(target) >= 1 and target in row_line(full, "`effort-fallback`"), "变异目标句不在 effort-fallback 行"
+    mutated = full.replace(target, "、prompt。 |", 1)
+    mutated_row = next(r for r in _table_rows(mutated, "## 运行诊断与恢复") if r["诊断"] == "`effort-fallback`")
+    assert "runner" not in mutated_row["可执行恢复动作"]
+
+
 def test_effort_fields_have_distinct_semantics():
     """请求、接受证据、实际 effort 与回退原因不可互相代替。"""
     rows = _table_rows(CONTRACT.read_text(encoding="utf-8"), "每次调用分别记录下列互不混写的字段：")
@@ -357,26 +375,41 @@ def _barrier_line(skill, anchor):
     return lines[0]
 
 
+COLLECTION_REQUIRED_TERMS = (
+    "wait_agent",  # 1 同回合循环
+    "list_agents",
+    "date -u +%s",  # 2 单子代理计时
+    "interrupt_agent",  # 3 超限处置
+    "interrupted",
+    "未确认停止",
+    "N - 1 - A",  # 4 名额
+    "send_message",
+    "followup_task",
+    "close_agent",
+    "thread limit reached",  # 5 名额耗尽
+    "等它们进入终态后重试一次",
+    "不再重试",
+    "需新开会话",
+    "MUST NOT 结束回合",
+)
+# 各入口引用「Codex 结果收集」节的原句片段
+COLLECTION_REFERENCE_SENTENCES = {
+    "sdflow-implement": "Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果",
+    "sdflow-done": "Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果",
+    "sdflow-roadmap": "Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果",
+    "sdflow-adr": "Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果",
+    "sdflow-architecture": "Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果",
+    "sdflow-devenv": "Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果",
+}
+
+
+def _missing_collection_terms(text=None):
+    section = _collection_section(text)
+    return [term for term in COLLECTION_REQUIRED_TERMS if term not in section]
+
+
 def test_contract_has_codex_collection_section_with_five_points():
-    section = _collection_section()
-    for required in (
-        "wait_agent",  # 1 同回合循环
-        "list_agents",
-        "date -u +%s",  # 2 单子代理计时
-        "30 分钟",
-        "60 分钟",
-        "interrupt_agent",  # 3 超限处置
-        "interrupted",
-        "未确认停止",
-        "N - 1 - A",  # 4 名额
-        "send_message",
-        "followup_task",
-        "close_agent",
-        "thread limit reached",  # 5 名额耗尽
-        "需新开会话",
-    ):
-        assert required in section, required
-    assert "MUST NOT 结束回合" in section
+    assert _missing_collection_terms() == []
 
 
 def test_collection_section_does_not_lock_wait_agent_return_fields():
@@ -387,19 +420,21 @@ def test_collection_section_does_not_lock_wait_agent_return_fields():
 
 def test_collection_section_mutation_is_rejected():
     mutated = CONTRACT.read_text(encoding="utf-8").replace("thread limit reached", "XX")
-    assert "thread limit reached" not in _collection_section(mutated)
+    assert "thread limit reached" in _missing_collection_terms(mutated)
 
 
 def test_six_entrypoints_reference_collection_section():
-    for skill in COLLECTION_REFERENCERS:
+    assert set(COLLECTION_REFERENCE_SENTENCES) == set(COLLECTION_REFERENCERS)
+    for skill, sentence in COLLECTION_REFERENCE_SENTENCES.items():
         text = (ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
-        assert "Codex 结果收集" in text, skill
+        assert sentence in text, skill
         assert "subagent-dispatch-contract.md" in text, skill
 
 
-def test_implement_declares_sixty_minute_limit():
+def test_implement_declares_180_minute_limit():
     text = (ROOT / "sdflow-implement/SKILL.md").read_text(encoding="utf-8")
-    assert "60 分钟" in text
+    assert "本入口的 implementer、fix 子代理时长上限 180 分钟（要跑测试），Standards 轴与 Spec 轴按契约表 60 分钟。" in text
+    assert "60 分钟（implementer" not in text
 
 
 def test_review_barrier_summary_is_split_by_host():
@@ -411,3 +446,219 @@ def test_review_barrier_summary_is_split_by_host():
         assert "等通知" not in codex_side, skill
         assert "有界 `await`" in codex_side, skill
         assert "⑥ codex-host" in codex_side, skill
+
+
+# ---- 子代理时长上限 / Claude 结果收集（HAE-20 / HAE-21）----
+LIMIT_HEADING = "## 子代理时长上限"
+CLAUDE_COLLECTION_HEADING = "## Claude 结果收集"
+RECORD_HEADING = "## 每轮任务记录"
+EIGHT_ENTRIES = (
+    "sdflow-spec-review",
+    "sdflow-code-review",
+    "sdflow-implement",
+    "sdflow-done",
+    "sdflow-roadmap",
+    "sdflow-adr",
+    "sdflow-architecture",
+    "sdflow-devenv",
+)
+# 禁用词清单：契约不得用这些词描述"空闲阈值 / 输出文件判定"。
+# 覆盖边界：只拦清单内的字面词；换一种说法描述同一判定不会被这条断言发现。
+FORBIDDEN_IDLE_TERMS = (
+    "空闲阈值",
+    "空闲时长",
+    "静默时长",
+    "静默阈值",
+    "无输出时长",
+    "输出文件判定",
+    "输出文件的修改时间",
+    "输出文件未更新",
+    "活动判定",
+    "活动信号",
+    "mtime",
+    "idle",
+    "stall",
+)
+
+
+def _section(heading, text=None):
+    text = CONTRACT.read_text(encoding="utf-8") if text is None else text
+    assert heading in text, heading
+    return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+
+def test_contract_has_time_limit_section():
+    section = _section(LIMIT_HEADING)
+    for term in ("60 分钟", "180 分钟", "implementer", "fix", "评审镜", "verify", "archive",
+                 "更长的上限", "主 session 自己的计时"):
+        assert term in section, term
+
+
+def test_time_limit_section_mutation_is_rejected():
+    mutated = CONTRACT.read_text(encoding="utf-8").replace("180 分钟", "XX 分钟")
+    assert "180 分钟" not in _section(LIMIT_HEADING, mutated)
+
+
+CLAUDE_COLLECTION_REQUIRED_TERMS = (
+    "TaskStop",
+    "run_in_background",
+    "date +%s; sleep",
+    "截止时刻",
+    "闹钟任务 ID",
+    "最早的截止时刻",
+    "忽略",  # 任务 ID 不符的闹钟通知
+    "闹钟异常重起",
+    "休眠",
+    "120 秒",
+    "顺延",
+    "interrupted",
+    "超过时长上限 N 分钟",
+    "未确认停止，可能仍在写入",
+    "MUST NOT 重派",
+    "MUST NOT 撤销其改动",
+    "HAE-18",
+    "停止后才到达的完成通知",
+    "记账丢失",
+    "按上限表中最长的一档重新计时",
+    "outside-voice",
+    "不起闹钟",
+)
+
+
+def test_contract_has_claude_collection_section_with_all_nine_rules():
+    section = _section(CLAUDE_COLLECTION_HEADING)
+    missing = [term for term in CLAUDE_COLLECTION_REQUIRED_TERMS if term not in section]
+    assert missing == []
+    numbered = re.findall(r"^(\d)\. \*\*", section, flags=re.M)
+    assert numbered == [str(i) for i in range(1, 10)], numbered
+
+
+def test_claude_collection_clamps_alarm_seconds_and_handles_already_finished_stop():
+    section = _section(CLAUDE_COLLECTION_HEADING)
+    assert "差值不足 60 时取 60" in section
+    assert "任务已结束" in section
+    assert "不再计入在途、不记 `interrupted`" in section
+
+
+def test_done_adr_sync_interrupted_branch_does_not_revert():
+    text = (ROOT / "sdflow-done/SKILL.md").read_text(encoding="utf-8")
+    flow = text[text.index("## 第 1.5 步：ADR 同步"):text.index("## 第二步：产出 hand-off.md")]
+    assert "子代理 interrupted（超过时长上限被停）" in flow
+    assert "MUST NOT 撤销" in flow
+    assert "ADR 同步超时未完成：改动保留待人工核对" in flow
+    assert "/sdflow-adr sync" in flow
+
+
+def test_no_entry_lists_interrupted_with_revert_for_adr_sync():
+    # done、adr 正文与 sync-prompt 都不得再把 interrupted 与撤销并列
+    # 空白先归一化：断言不依赖 Markdown 折行位置
+    def flat(text):
+        return re.sub(r"\s+", "", text)
+
+    done = flat((ROOT / "sdflow-done/SKILL.md").read_text(encoding="utf-8"))
+    adr = (ROOT / "sdflow-adr/SKILL.md").read_text(encoding="utf-8")
+    prompt = flat((ROOT / "sdflow-adr/references/sync-prompt.md").read_text(encoding="utf-8"))
+    assert flat("`failed`/`interrupted`/`cancelled` 一律按第 1.5 步") not in done
+    assert flat("`interrupted`（超时被停）不撤销") in done
+    step4 = flat(adr[adr.index("4. **任何终态后对实际改动集跑 lint**"):adr.index("5. sync **不做全目录 lint**")])
+    assert flat("子代理 `interrupted`（超过时长上限被停）→ MUST NOT 撤销") in step4
+    assert flat("子代理非 `completed`") not in step4
+    assert flat("非 `completed` 终态") not in prompt
+    assert flat("`interrupted`（超过时长上限被停）不撤销") in prompt
+
+
+def test_task_record_section_has_deadline_and_alarm_id_fields():
+    section = _section(RECORD_HEADING)
+    assert "截止时刻" in section
+    assert "闹钟任务 ID" in section
+
+
+def _idle_term_hits(text):
+    # 英文词按词边界匹配，避免 "install" 之类含 "stall" 的词误命中；中文词按子串匹配。
+    hits = []
+    for term in FORBIDDEN_IDLE_TERMS:
+        if term.isascii():
+            pattern = r"(?<![A-Za-z0-9_])" + re.escape(term) + r"(?![A-Za-z0-9_])"
+        else:
+            pattern = re.escape(term)
+        if re.search(pattern, text, flags=re.I):
+            hits.append(term)
+    return hits
+
+
+def test_contract_has_no_idle_threshold_or_output_file_judgement():
+    text = CONTRACT.read_text(encoding="utf-8")
+    assert _idle_term_hits(text) == []
+
+
+def test_forbidden_idle_terms_check_detects_injection():
+    text = CONTRACT.read_text(encoding="utf-8") + "\n按空闲阈值判定。\n"
+    assert _idle_term_hits(text) == ["空闲阈值"]
+    assert _idle_term_hits("the stall timer and mtime check") == ["mtime", "stall"]
+
+
+def test_forbidden_idle_terms_ignore_words_that_merely_contain_a_term():
+    assert _idle_term_hits("先 install 再 reinstall，idle_timeout 不算 idle") == ["idle"]
+    assert _idle_term_hits("先 install 再 reinstall，installation 完成") == []
+
+
+def test_codex_collection_section_points_to_claude_section_and_limit_table():
+    section = _section(COLLECTION_HEADING)
+    # 开头说明段：从节首到第一条编号项之前，不依赖空行分段数。
+    assert "\n1. " in section, "Codex 结果收集节应有编号项"
+    intro = section.split("\n1. ", 1)[0]
+    assert "「Claude 结果收集」节" in intro
+    assert "Claude 宿主等完成通知，不适用本节" not in section
+    assert "「子代理时长上限」节" in section
+    for stale in ("30 分钟", "60 分钟", "180 分钟"):
+        assert stale not in section, stale
+
+
+def test_eight_entrypoints_reference_limit_and_claude_collection_sections():
+    for skill in EIGHT_ENTRIES:
+        text = (ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
+        assert "「子代理时长上限」节" in text, skill
+        assert "「Claude 结果收集」节" in text, skill
+        assert "subagent-dispatch-contract.md" in text, skill
+
+
+# 入口声明的时长上限整句允许清单：只有 implement 入口可以写数字，其余入口引用契约上限表。
+ALLOWED_LIMIT_SENTENCES = (
+    "本入口的 implementer、fix 子代理时长上限 180 分钟（要跑测试），Standards 轴与 Spec 轴按契约表 60 分钟。",
+)
+LIMIT_LITERAL = re.compile(r"\d+\s*分钟")
+
+
+def _hardcoded_limits(text, skill="sdflow-implement"):
+    # 整句允许清单只对 implement 入口生效；其他入口写了同句也算硬编码
+    if skill == "sdflow-implement":
+        for sentence in ALLOWED_LIMIT_SENTENCES:
+            text = text.replace(sentence, "")
+    return LIMIT_LITERAL.findall(text)
+
+
+def test_entrypoints_do_not_hardcode_default_limit():
+    for skill in EIGHT_ENTRIES:
+        text = (ROOT / skill / "SKILL.md").read_text(encoding="utf-8")
+        assert "时长上限取缺省" not in text, skill
+        assert "缺省 30 分钟" not in text, skill
+        assert _hardcoded_limits(text, skill) == [], skill
+
+
+def test_hardcoded_limit_guard_rejects_injected_number_and_allows_implement_sentence():
+    implement = (ROOT / "sdflow-implement/SKILL.md").read_text(encoding="utf-8")
+    assert _hardcoded_limits(implement) == []
+    assert _hardcoded_limits(implement + "\n子代理时长上限 60 分钟。\n") == ["60 分钟"]
+    assert _hardcoded_limits("评审镜上限 90分钟") == ["90分钟"]
+    # 允许句只对 implement 入口豁免，其他入口出现同句仍判硬编码
+    assert _hardcoded_limits(ALLOWED_LIMIT_SENTENCES[0], "sdflow-done") != []
+
+
+def test_review_barrier_summary_claude_side_mentions_alarm_fallback():
+    for skill, anchor in BARRIER_LINES:
+        line = _barrier_line(skill, anchor)
+        claude_side = line.split("Codex 宿主", 1)[0]
+        assert "Agent 子代理（含 outside-voice 的 fallback 子代理）起闹钟" in claude_side, skill
+        assert "outside-voice 的后台 Bash 不起" in claude_side, skill
+        assert "outside-voice 站点不起闹钟" not in claude_side, skill
+        assert "「Claude 结果收集」节" in claude_side, skill

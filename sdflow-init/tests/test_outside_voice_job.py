@@ -189,7 +189,13 @@ if "--bg" in argv:
         time.sleep(60)
         sys.exit(0)
     if mode == "run":
-        subprocess.Popen(command, shell=True, start_new_session=True)
+        # 真 `claude --bg` 把命令交给 supervisor 跑，命令的 stdio 不连回调用方。
+        # 替身也 MUST 断开：Debian/Ubuntu 的 dash 打了补丁关掉 `sh -c` 的 exec 优化，
+        # sh 会一直持有继承来的 stdout 管道直到 worker 退出，dispatch 的 communicate()
+        # 就被拖到 helper 跑完，await 永远看不到「在飞」态。
+        subprocess.Popen(command, shell=True, start_new_session=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
     sys.stdout.write("Starting background service…\n")
     # `backgrounded · <id> · <cmd>` 是 research preview 格式；FAKE_CLAUDE_BG_HINT_ID
     # 用来模拟它漂移成一个与 canonical id 不同的值。

@@ -212,8 +212,11 @@ def _task_started_row(turn_id, ts):
     return _row("event_msg", {"type": "task_started", "turn_id": turn_id}, ts=ts)
 
 
-def _task_complete_row(turn_id, ts):
-    return _row("event_msg", {"type": "task_complete", "turn_id": turn_id}, ts=ts)
+def _task_complete_row(turn_id, ts, duration_ms=None):
+    payload = {"type": "task_complete", "turn_id": turn_id}
+    if duration_ms is not None:
+        payload["duration_ms"] = duration_ms
+    return _row("event_msg", payload, ts=ts)
 
 
 _ZERO_USAGE = {
@@ -1459,3 +1462,107 @@ class TestDoneFinalCodexRegression:
         assert by_session[ROOT_ID]["anchor"] is True
         assert by_session[CHILD_ID]["reason"] == "thread-not-found"
         assert by_session[CHILD_ID]["anchor"] is False
+
+
+class TestCodexDurationFromPayload:
+    """T318：task_complete.payload.duration_ms 优先，缺失或非法时回落信封时间戳相减。"""
+
+    def _run(self, tmp_path, complete_row):
+        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
+        codex_home = _codex_home(tmp_path)
+        _write_rollout_rows(_rollout_path(codex_home, ROOT_ID), [
+            _session_meta_row(ROOT_ID, branch="feat/demo-change"),
+            _task_started_row("turn-1", "2026-09-21T00:00:00.000Z"),
+            complete_row,
+        ])
+        r = _run_token_snapshot_directly(repo, tmp_path / "home", "ff",
+                                          extra_env=_codex_extra_env(codex_home, ROOT_ID))
+        assert r.returncode == 0, r.stdout + r.stderr
+        return _token_log_lines(repo, "demo-change")[0]
+
+    def test_payload_duration_ms_preferred_over_envelope_diff(self, tmp_path):
+        # 真实 rollout 里出现过信封时间戳相同、payload.duration_ms 才是真时长的 turn
+        row = self._run(tmp_path, _task_complete_row(
+            "turn-1", "2026-09-21T00:00:00.000Z", duration_ms=106212))
+        assert row["duration_ms"] == 106212
+
+    def test_invalid_payload_duration_ms_falls_back_to_envelope_diff(self, tmp_path):
+        row = self._run(tmp_path, _task_complete_row(
+            "turn-1", "2026-09-21T00:00:01.500Z", duration_ms=-5))
+        assert row["duration_ms"] == 1500
+
+
+class TestCodexSigalrmOutsideInnerTry:
+    """T321：_Timeout 在内层 try 之外命中时，外层 handler 排空队列，逐线程写 timeout 行。"""
+
+    def test_outer_timeout_drains_queue_and_writes_per_thread_rows(self, tmp_path, monkeypatch):
+        ts_mod = _import_token_snapshot_module()
+        codex_home = _codex_home(tmp_path)
+        _write_rollout_rows(_rollout_path(codex_home, ROOT_ID), [
+            _session_meta_row(ROOT_ID, branch="feat/demo-change"),
+            _item_completed_subagent_row(ROOT_ID, "turn-r", CHILD_ID),
+            _item_completed_subagent_row(ROOT_ID, "turn-r", CHILD2_ID),
+            _item_completed_subagent_row(ROOT_ID, "turn-r", CHILD3_ID),
+        ])
+        for cid in (CHILD_ID, CHILD2_ID, CHILD3_ID):
+            _write_rollout_rows(_rollout_path(codex_home, cid),
+                                 [_session_meta_row(cid, parent=ROOT_ID)])
+
+        real_finalize = ts_mod._finalize_codex_line
+
+        def fake_finalize(step, kind, tid, projected):
+            if tid == CHILD_ID:
+                raise ts_mod._Timeout()
+            return real_finalize(step, kind, tid, projected)
+
+        monkeypatch.setattr(ts_mod, "_finalize_codex_line", fake_finalize)
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        monkeypatch.setenv("CODEX_THREAD_ID", ROOT_ID)
+        monkeypatch.delenv("CLAUDECODE", raising=False)
+
+        log_path = tmp_path / "token-log.jsonl"
+        ts_mod._codex_collect_and_write("ff", log_path)
+
+        lines = [json.loads(l) for l in log_path.read_text(encoding="utf-8").splitlines()]
+        by_session = {l["session"]: l for l in lines}
+        assert len(lines) == 4
+        assert by_session[ROOT_ID]["reason"] == "no-usage-events"
+        for cid in (CHILD_ID, CHILD2_ID, CHILD3_ID):
+            assert by_session[cid]["reason"] == "timeout"
+            assert by_session[cid]["kind"] == "child"
+
+
+class TestCodexStartFromChildThread:
+    """T323 / TSA-01 R5：CODEX_THREAD_ID 为子线程 id 时，按 parent_thread_id 上溯到根再枚举。"""
+
+    def _setup(self, tmp_path):
+        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
+        codex_home = _codex_home(tmp_path)
+        _write_rollout_rows(_rollout_path(codex_home, ROOT_ID), [
+            _session_meta_row(ROOT_ID, branch="feat/demo-change"),
+            _item_completed_subagent_row(ROOT_ID, "turn-r", CHILD_ID),
+        ])
+        _write_rollout_rows(_rollout_path(codex_home, CHILD_ID), [
+            _session_meta_row(CHILD_ID, parent=ROOT_ID, branch="feat/demo-change",
+                              agent_path="/root/task1", depth=1),
+        ])
+        return repo, codex_home
+
+    def test_child_thread_id_walks_up_to_root_and_enumerates(self, tmp_path):
+        repo, codex_home = self._setup(tmp_path)
+        r = _run_token_snapshot_directly(repo, tmp_path / "home", "ff",
+                                          extra_env=_codex_extra_env(codex_home, CHILD_ID))
+        assert r.returncode == 0, r.stdout + r.stderr
+        lines = _token_log_lines(repo, "demo-change")
+        assert [(l["kind"], l["session"]) for l in lines] == [
+            ("root", ROOT_ID), ("child", CHILD_ID)]
+        assert lines[1]["parent"] == ROOT_ID
+
+    def test_parent_rollout_missing_starts_from_child_with_kind_child(self, tmp_path):
+        repo, codex_home = self._setup(tmp_path)
+        _rollout_path(codex_home, ROOT_ID).unlink()
+        r = _run_token_snapshot_directly(repo, tmp_path / "home", "ff",
+                                          extra_env=_codex_extra_env(codex_home, CHILD_ID))
+        assert r.returncode == 0, r.stdout + r.stderr
+        lines = _token_log_lines(repo, "demo-change")
+        assert [(l["kind"], l["session"]) for l in lines] == [("child", CHILD_ID)]

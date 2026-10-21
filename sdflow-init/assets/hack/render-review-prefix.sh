@@ -36,7 +36,7 @@ NO_PRINCIPLES=0
 SEEN_LAYER=0
 SEEN_OUT=0
 
-usage_dup() {
+usage_bad_arg() {
   echo "render-review-prefix: ✗ problem=参数重复或缺值「$1」 cause=每个参数只能出现一次且需带值 fix=去掉重复项或补上值后重跑" >&2
   exit 64
 }
@@ -44,17 +44,19 @@ usage_dup() {
 while [ $# -gt 0 ]; do
   case "$1" in
     --layer)
-      [ "$SEEN_LAYER" -eq 0 ] || usage_dup "--layer"
-      [ $# -ge 2 ] || usage_dup "--layer"
+      [ "$SEEN_LAYER" -eq 0 ] || usage_bad_arg "--layer"
+      [ $# -ge 2 ] || usage_bad_arg "--layer"
       SEEN_LAYER=1; LAYER="$2"; shift 2 ;;
     --out-dir)
-      [ "$SEEN_OUT" -eq 0 ] || usage_dup "--out-dir"
-      [ $# -ge 2 ] || usage_dup "--out-dir"
+      [ "$SEEN_OUT" -eq 0 ] || usage_bad_arg "--out-dir"
+      [ $# -ge 2 ] || usage_bad_arg "--out-dir"
       # [impl-review-fix] 空串也算缺值：否则下方 -z 判断会静默退回 stdout 模式，调用方拿不到 JSON
-      [ -n "$2" ] || usage_dup "--out-dir"
+      [ -n "$2" ] || usage_bad_arg "--out-dir"
+      # 值以 -- 开头多半是漏写目录、吞了下一个参数；按缺值 exit 64，否则会走到后面的 exit 2
+      case "$2" in --*) usage_bad_arg "--out-dir" ;; esac
       SEEN_OUT=1; OUT_DIR="$2"; shift 2 ;;
     --no-principles)
-      [ "$NO_PRINCIPLES" -eq 0 ] || usage_dup "--no-principles"
+      [ "$NO_PRINCIPLES" -eq 0 ] || usage_bad_arg "--no-principles"
       NO_PRINCIPLES=1; shift ;;
     *)
       echo "render-review-prefix: ✗ problem=未知参数「$1」 cause=渲染器版本旧于调用它的 SKILL fix=在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh 更新 ~/.sdflow/hack/" >&2

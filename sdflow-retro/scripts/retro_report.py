@@ -228,7 +228,31 @@ def is_archive_rename(root, sha, name):
     return moved_out and into_archive
 
 
-def stage_walltimes(root, name, commits):
+# adr/0009(c)：人类门的等待时间单列。两类机器锚：
+#   1. grill 类 checkpoint——区间落在 stage=="grill" 上（相位 B 对抗拷问，对话等待）；
+#   2. 设计门拍板——spec-review-report.md frontmatter 首次出现 `design_approved: true` 的提交
+#      （find_design_approval_sha），其前驱→该提交的区间为人读报告并拍板。
+# 判据用 checkpoint 阶段与文件内容，不用 subject 文本。
+HUMAN_GATE_GRILL = "grill"
+HUMAN_GATE_DESIGN = "design-gate"
+_APPROVED_RE = re.compile(r"(?m)^[ \t]*design_approved:[ \t]*true[ \t]*$")
+
+
+def find_design_approval_sha(root, name):
+    """返回该 change 首次把 spec-review-report.md 写成 `design_approved: true` 的提交 sha；
+    找不到返回 None。只查归档前路径（拍板发生在归档之前，git 对该 pathspec 历史可达）。"""
+    rel = f"openspec/changes/{name}/spec-review-report.md"
+    out = _run_git(root, "log", "--reverse", "--format=%H", "-G", "design_approved", "--", rel)
+    for sha in out.split():
+        # 命中提交可能是删除/改名该文件的提交（该 sha 下路径不存在）⇒ 静默当空，不走 _run_git 的 stderr 留痕
+        proc = subprocess.run(["git", "-C", root, "show", f"{sha}:{rel}"],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if proc.returncode == 0 and _APPROVED_RE.search(proc.stdout):
+            return sha
+    return None
+
+
+def stage_walltimes(root, name, commits, approval_sha=None):
     """
     计算相邻 commit 时间差累加到各阶段的墙钟数。
 
@@ -247,6 +271,7 @@ def stage_walltimes(root, name, commits):
         {"stages": {stage: minutes}, "total_min": float, "n_ckpt": int, "reorder_suspected": bool}
     """
     stages = {}
+    human = {}  # 人类门等待分钟：{HUMAN_GATE_*: min}，已包含在 stages 里，另行拆出
     reorder = False
 
     # 相邻提交差计入后一个提交（完成点）的阶段
@@ -268,17 +293,41 @@ def stage_walltimes(root, name, commits):
         # 累加到该阶段（秒转分钟）
         stages[stage] = stages.get(stage, 0.0) + delta_s / 60.0
 
+        # 人类门拆分（互斥计一次）：拍板提交优先，其余按 grill 阶段
+        if approval_sha and nxt["sha"] == approval_sha:
+            human[HUMAN_GATE_DESIGN] = human.get(HUMAN_GATE_DESIGN, 0.0) + delta_s / 60.0
+        elif stage == HUMAN_GATE_GRILL:
+            human[HUMAN_GATE_GRILL] = human.get(HUMAN_GATE_GRILL, 0.0) + delta_s / 60.0
+
     # 首提交若是 archive rename，单独标记 done 存在（无前驱 Δ 可归属——对称于旧口径下
     # 末提交的等价边界情形，旧口径末提交从不作为 cur、新口径首提交从不作为 nxt）
     if commits and is_archive_rename(root, commits[0]["sha"], name):
         stages.setdefault("done", 0.0)
 
     total = sum(stages.values())
+    human_total = sum(human.values())
+    # 扣除后的阶段墙钟：拍板等待从其所在阶段扣，grill 阶段整体视为人类门
+    stages_excl = dict(stages)
+    if HUMAN_GATE_DESIGN in human:
+        # 拍板提交的阶段（通常 spec-review）按其区间扣；此处按阶段名重算
+        for i in range(len(commits) - 1):
+            if commits[i + 1]["sha"] == approval_sha:
+                st = "done" if is_archive_rename(root, approval_sha, name) \
+                    else map_stage(commits[i + 1]["subject"])
+                d = max(commits[i + 1]["ts"] - commits[i]["ts"], 0) / 60.0
+                stages_excl[st] = max(stages_excl.get(st, 0.0) - d, 0.0)
+    if HUMAN_GATE_GRILL in human:
+        stages_excl[HUMAN_GATE_GRILL] = max(
+            stages_excl.get(HUMAN_GATE_GRILL, 0.0) - human[HUMAN_GATE_GRILL], 0.0)
     return {
         "stages": stages,
         "total_min": round(total, 1),
         "n_ckpt": len(commits),
-        "reorder_suspected": reorder
+        "reorder_suspected": reorder,
+        "human_gate": {k: round(v, 1) for k, v in human.items()},
+        "human_gate_min": round(human_total, 1),
+        "stages_excl_human": stages_excl,
+        "total_excl_human_min": round(total - human_total, 1),
     }
 
 
@@ -1427,8 +1476,12 @@ def build_report(root, scan_codex_sessions=False, sessions_root_override=None):
     stage_totals = {}
     for name, info in sorted(changes.items()):
         b = boundary_for_change(root, name, info, seed)
-        wt = stage_walltimes(root, name, b["commits"]) if not b["unresolved"] else \
-            {"stages": {}, "total_min": 0.0, "n_ckpt": len(b["commits"]), "reorder_suspected": False}
+        wt = stage_walltimes(root, name, b["commits"],
+                             approval_sha=find_design_approval_sha(root, name)) \
+            if not b["unresolved"] else \
+            {"stages": {}, "total_min": 0.0, "n_ckpt": len(b["commits"]), "reorder_suspected": False,
+             "human_gate": {}, "human_gate_min": 0.0, "stages_excl_human": {},
+             "total_excl_human_min": 0.0}
         val = lens_value_for_change(info)
         hr = hr_tg_flags(info)
         if val["has_anchor"]:
@@ -1451,6 +1504,8 @@ def build_report(root, scan_codex_sessions=False, sessions_root_override=None):
     lines = ["# 全项目 change 成本×价值复盘（view-only 再生）", "",
              f"> 覆盖 {N} change / 有真锚 {M} / 边界不可解析 {K}",
              "> 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。",
+             "> 「人类门」= grill 阶段区间 + 设计门拍板区间（spec-review-report.md 首次 design_approved: true 的提交），"
+             "已含在总墙钟与阶段 Δ 内；「扣除后」列为减去人类门后的值。",
              "", surfacing_block(root), "", summary_md]
 
     # per-change 表
@@ -1461,9 +1516,10 @@ def build_report(root, scan_codex_sessions=False, sessions_root_override=None):
     # 现在对归档 change 有真实非零值，此列才变得有意义。
     # [task4] tokens 列（读 token-log.jsonl，Δ 归属见 compute_token_deltas）——插在 独立Σ 与
     # 状态 之间，紧邻其余度量列，状态列殿后。
-    lines.append("| change | 总墙钟(min) | spec-rev Δ | impl Δ | code-rev Δ | done Δ | #ckpt | "
+    lines.append("| change | 总墙钟(min) | 人类门(min) | 扣除后总墙钟(min) | spec-rev Δ | spec-rev Δ(扣除后) | "
+                 "impl Δ | code-rev Δ | done Δ | #ckpt | "
                  "spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | tokens | 状态 |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     token_deltas = compute_token_deltas(root, changes)
     # [task1] v2 分流：Codex 六计数归属，独立于 v1 扫描（v1/v2 全局互不相加互不差分）；
     # bad_line_total 只在此处汇总（reader 侧唯一坏行计数源），footnote 里可见（WFR-01）。
@@ -1478,7 +1534,10 @@ def build_report(root, scan_codex_sessions=False, sessions_root_override=None):
             rate += " ⚠数值非法"
         tokens_cell = format_tokens_cell_combined(token_deltas.get(name), v2_deltas.get(name))
         lines.append(f'| {name} | {wt["total_min"]}{note} | '
-                     f'{_stage_col(wt, "spec-review")} | {_stage_col(wt, "impl")} | '
+                     f'{wt["human_gate_min"] or "—"} | {wt["total_excl_human_min"]} | '
+                     f'{_stage_col(wt, "spec-review")} | '
+                     f'{_stage_col({"stages": wt["stages_excl_human"]}, "spec-review")} | '
+                     f'{_stage_col(wt, "impl")} | '
                      f'{_stage_col(wt, "code-review")} | {_stage_col(wt, "done")} | '
                      f'{wt["n_ckpt"]} | '
                      f'{hr["spec_hr_tg"]} | {hr["code_hr_tg"]} | '

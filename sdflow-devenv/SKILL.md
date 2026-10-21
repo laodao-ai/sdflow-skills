@@ -372,13 +372,13 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" verify-lane --id mqtt-real
    > 「`dial tcp 127.0.0.1:1883: connection refused` —— 看起来 mosquitto 没起。`brew services start mosquitto` 后 `/sdflow-devenv continue`。」
 
    **你的职责是「建 + 验」，不是「调通」。** 一旦开始 debug，你会在一条泳道上耗光整个 session。**跑不绿本来就是合法状态。**
-4. **真硬件泳道天然不跑**（要烧板）→ 直接 `scaffolded` + 指向 `embedded-test-sop` 的手动 SOP，**不复述那份 SOP**。
+4. **真硬件泳道天然不跑**（要烧板）→ 直接 `scaffolded`（`executor: human`），`blocked_by` 写明「需真机」，由操作者手动执行；**不替操作者写烧录 / 上板步骤**。
 
 ---
 
 ### ④ 冷审 + 人门
 
-Codex 宿主派发冷审子代理后，按规则根 `subagent-dispatch-contract.md` 的「Codex 结果收集」节在同一回合内收齐结果，时长上限取缺省 30 分钟。
+派发冷审子代理后，时长上限见规则根 `subagent-dispatch-contract.md` 的「子代理时长上限」节；Claude 宿主按其「Claude 结果收集」节维持闹钟，Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果。
 
 **🔴 MUST 由 fresh 子代理执行**（禁生成 session 自查——写的人看不见自己的盲区）。
 
@@ -393,7 +393,7 @@ Codex 宿主派发冷审子代理后，按规则根 `subagent-dispatch-contract.
 - `host=claude`：带 `model: "$SDFLOW_TIER_STRONG"` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`。
 - `host=codex`：带 `model: "$SDFLOW_TIER_STRONG"`、`reasoning_effort: "$SDFLOW_EFFORT_STRONG"` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。
 - `host=unknown`：无法派发 fresh 子代理，显式报告缺口，MUST NOT 无冷审静默过人门。
-- 冷审是人门前的门禁判断：请求 effort 解析为 `low` 或 `medium` 时不派发，报告配置错误并将强档 effort 改为 `high` 或更高后重试（不低于 high）。
+- 冷审是人门前的门禁判断：请求 effort 解析为 `low` 或 `medium` 时不派发，报告配置错误并将强档 effort 改为 `high` 或更高后重试（不低于 high）。effort 回退与门禁放行条件以契约「Codex effort 回退与门禁」节为准（规则根 `subagent-dispatch-contract.md`）。
 
 **通则承载与 run 目录（首次派发冷审之前建）**
 
@@ -401,7 +401,7 @@ Codex 宿主派发冷审子代理后，按规则根 `subagent-dispatch-contract.
 
 - **父目录**：`openspec/architecture/.outside-voice/`。
 - **承载判定所用 `subagent_type`**：本次派发所带的 `subagent_type`（只有 Claude 宿主会带）。
-- **回执与失败出口**：冷审镜均为只读任务。通过后先剥掉回执行再使用返回内容；不符则同一任务重派一次，再不符显式报告缺口，MUST NOT 无冷审静默过人门。
+- **回执与失败出口**：冷审镜均为只读任务。通过后先剥掉回执行再使用返回内容；回执不符的重派规则以契约「通则承载与前缀文件」节「读文件指令与回执」为准（规则根 `subagent-dispatch-contract.md`）；最终仍不符显式报告缺口，MUST NOT 无冷审静默过人门。
 
 > 通则缺席的后果很具体：一个冷镜子看到「e2e 层只有 planned 泳道」，会说「这个项目本来也没在跑 e2e，先这样吧」——**那正是通则 ③ 要杀的话。**
 

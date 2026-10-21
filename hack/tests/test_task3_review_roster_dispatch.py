@@ -226,15 +226,7 @@ def test_failure_matrix_preserves_terminal_result_and_capacity_paths(entry):
         assert status in _failure_matrix_errors(mutated), (entry, status)
 
 
-@pytest.mark.parametrize("entry", ENTRIES.values(), ids=ENTRIES)
-def test_effort_fallback_is_bounded_without_changing_dispatch_identity(entry):
-    """只允许两级 effort 回退，不能换 model、prompt、runner 或缩 roster。"""
-    section = _section(_text(entry), "## 本轮")
-    for required in (
-        "canonical 默认", "省略 `reasoning_effort`",
-        "不得改变 model、任务、prompt、runner 或完整派发任务清单",
-    ):
-        assert required in section, (entry, required)
+# effort 回退引用句与契约侧身份 token 的断言只在 test_principles_carriage.py（T374②：只留一处）。
 
 
 def test_roadmap_keeps_review_pending_when_dispatch_or_recovery_fails():

@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-{{HASH_MARKED}}' 'sha256-{{HASH_APP}}' https://cdn.jsdelivr.net/npm/mermaid@12.2.0/dist/mermaid.min.js; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+:root {
+  --fg: #1f2328;
+  --muted: #59636e;
+  --line: #d8dee4;
+  --bg: #ffffff;
+  --bg-soft: #f6f8fa;
+  --accent: #0b5c63;
+  --warn-bg: #fff4d6;
+  --warn-fg: #6b4e00;
+  --err-bg: #fde8e8;
+  --err-fg: #8a1c1c;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  color: var(--fg);
+  background: var(--bg);
+  font: 16px/1.7 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  display: grid;
+  grid-template-columns: 18rem minmax(0, 1fr);
+  align-items: start;
+}
+body.has-notes { grid-template-columns: 18rem minmax(0, 1fr) 20rem; }
+.skip-link {
+  position: absolute; left: -999px; top: 0;
+  background: var(--accent); color: #fff; padding: .5rem 1rem; z-index: 10;
+}
+.skip-link:focus { left: 0; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#toc-wrap {
+  position: sticky; top: 0; height: 100vh; overflow: auto;
+  padding: 1rem; border-right: 1px solid var(--line); background: var(--bg-soft);
+  font-size: .9rem; line-height: 1.5;
+}
+#toc-wrap summary { display: none; font-weight: 600; cursor: pointer; }
+#toc-title { margin: 0 0 .5rem; font-size: 1rem; }
+#toc ul { list-style: none; margin: 0; padding: 0; }
+#toc > ul > li { margin: .6rem 0; }
+#toc a { text-decoration: none; display: block; padding: .1rem 0; overflow-wrap: anywhere; }
+#toc a:hover { text-decoration: underline; }
+#toc .doc-link { font-weight: 600; }
+#toc .lvl-2 { padding-left: .8rem; }
+#toc .lvl-3 { padding-left: 1.6rem; color: var(--muted); }
+
+main { padding: 1.5rem 2rem 4rem; max-width: 56rem; min-width: 0; }
+.page-title { margin: 0 0 1.5rem; font-size: 1.6rem; line-height: 1.3; }
+.doc { margin: 0 0 3rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+.doc-head {
+  display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: baseline;
+  margin-bottom: 1rem; color: var(--muted); font-size: .85rem;
+}
+.doc-label { color: var(--fg); font-weight: 700; font-size: .95rem; }
+.doc-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.doc-body h1, .doc-body h2, .doc-body h3, .doc-body h4 { line-height: 1.3; scroll-margin-top: 1rem; }
+.doc-body h1 { font-size: 1.5rem; margin-top: 1.5rem; }
+.doc-body h2 { font-size: 1.25rem; margin-top: 2rem; padding-bottom: .25rem; border-bottom: 1px solid var(--line); }
+.doc-body h3 { font-size: 1.08rem; margin-top: 1.5rem; }
+.doc-body p, .doc-body li { overflow-wrap: anywhere; }
+.doc-body blockquote { margin: 1rem 0; padding: .1rem 1rem; border-left: 3px solid var(--line); color: var(--muted); }
+.doc-body code {
+  font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg-soft); padding: .1em .35em; border-radius: 3px;
+}
+.doc-body pre {
+  background: var(--bg-soft); border: 1px solid var(--line); border-radius: 4px;
+  padding: .8rem 1rem; overflow-x: auto; line-height: 1.5;
+}
+.doc-body pre code { background: none; padding: 0; font-size: .85rem; }
+.doc-body pre.raw-html { white-space: pre-wrap; overflow-wrap: anywhere; }
+.table-wrap { overflow-x: auto; margin: 1rem 0; }
+.doc-body table { border-collapse: collapse; font-size: .92rem; }
+.doc-body th, .doc-body td { border: 1px solid var(--line); padding: .35rem .7rem; text-align: left; vertical-align: top; }
+.doc-body th { background: var(--bg-soft); }
+.doc-body img { max-width: 100%; }
+.doc-body hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
+.doc-error {
+  background: var(--err-bg); color: var(--err-fg); padding: .6rem 1rem; border-radius: 4px; margin-bottom: .75rem;
+}
+.mermaid-note {
+  background: var(--warn-bg); color: var(--warn-fg); padding: .35rem .8rem; border-radius: 4px;
+  margin: 1rem 0 .25rem; font-size: .85rem;
+}
+.mermaid-fig { overflow-x: auto; margin: 1rem 0; }
+.mermaid-fig svg { max-width: 100%; height: auto; }
+
+#sdflow-notes {
+  position: sticky; top: 0; height: 100vh; overflow: auto;
+  padding: 1rem; border-left: 1px solid var(--line); background: var(--bg-soft);
+}
+#sdflow-notes[hidden] { display: none; }
+
+.notice {
+  grid-column: 1 / -1;
+  background: var(--warn-bg); color: var(--warn-fg); padding: .5rem 1rem; border-bottom: 1px solid var(--line);
+}
+main:focus { outline: none; }
+mark.sdflow-hl {
+  background: #ffe58a; color: inherit;
+  text-decoration: underline; text-decoration-color: #9a3412; text-decoration-thickness: 2px; text-underline-offset: 2px;
+}
+mark.sdflow-hl.flash { background: #ffc94d; }
+mark.sdflow-saved-hl {
+  background: #e6f4f1; color: inherit; border: 2px dashed var(--accent); border-radius: 2px; padding: 0 1px;
+}
+mark.sdflow-saved-hl.flash { background: #b8e0d8; }
+#sdflow-annotate {
+  position: fixed; z-index: 15; font: inherit; font-size: .9rem;
+  background: var(--accent); color: #fff; border: 0; border-radius: 4px; padding: .35rem .8rem; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+}
+#sdflow-annotate[hidden] { display: none; }
+.sdflow-btn {
+  font: inherit; font-size: .85rem; padding: .3rem .7rem; cursor: pointer;
+  background: #fff; color: var(--fg); border: 1px solid var(--line); border-radius: 4px;
+}
+.sdflow-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sdflow-btn:disabled { color: #8c959f; background: var(--bg-soft); border-color: var(--line); cursor: not-allowed; }
+.overlay {
+  position: fixed; inset: 0; z-index: 20; background: rgba(31, 35, 40, .4);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.overlay[hidden] { display: none; }
+.dlg-panel {
+  background: #fff; border-radius: 6px; padding: 1rem 1.25rem; width: min(40rem, 100%);
+  max-height: 90vh; overflow: auto; box-shadow: 0 8px 32px rgba(0, 0, 0, .3);
+}
+.dlg-panel h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
+.dlg-quote {
+  margin: 0 0 .75rem; padding: .3rem .8rem; border-left: 3px solid var(--line); color: var(--muted);
+  max-height: 7rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .9rem;
+}
+.dlg-panel textarea {
+  width: 100%; font: inherit; font-size: .95rem; padding: .5rem; border: 1px solid var(--line); border-radius: 4px; resize: vertical;
+}
+.dlg-hint { margin: .4rem 0 .75rem; color: var(--muted); font-size: .8rem; }
+.dlg-error { margin: .4rem 0 0; color: var(--warn-fg); font-size: .85rem; }
+.dlg-error:empty { margin: 0; }
+.dlg-panel textarea[aria-invalid="true"] { border-color: var(--warn-fg); }
+.notes-hint { margin: 0 0 .5rem; color: var(--muted); font-size: .85rem; }
+.notes-hint:empty { margin: 0; }
+.dlg-actions { display: flex; gap: .5rem; justify-content: flex-end; }
+#sdflow-notes h2 { margin: 0 0 .5rem; font-size: 1rem; }
+.notes-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
+.notes-empty { color: var(--muted); font-size: .85rem; margin: 0 0 .75rem; }
+.notes-list { list-style: none; margin: 0; padding: 0; }
+.note-item { border: 1px solid var(--line); background: #fff; border-radius: 4px; padding: .5rem .7rem; margin-bottom: .6rem; font-size: .85rem; line-height: 1.5; }
+.note-head { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.saved-group { margin-top: 1rem; }
+.saved-group h3 { margin: 0 0 .5rem; font-size: .95rem; }
+.note-item.saved-item { border-style: dashed; border-color: var(--accent); }
+.note-badge { display: inline-block; margin-left: .4rem; padding: 0 .4rem; border-radius: 3px; background: var(--bg-soft); border: 1px solid var(--line); color: var(--muted); font-size: .75rem; }
+.note-quote { margin: .3rem 0; padding-left: .6rem; border-left: 3px solid #ffe58a; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; max-height: 5rem; overflow: auto; }
+.note-comment { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-actions { display: flex; gap: .4rem; margin-top: .4rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 899px) {
+  body, body.has-notes { display: block; }
+  #toc-wrap {
+    position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line);
+  }
+  #toc-wrap summary { display: block; }
+  #toc-title { display: none; }
+  main { padding: 1rem 1rem 3rem; }
+  #sdflow-notes { position: static; height: auto; border-left: 0; border-top: 1px solid var(--line); }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到正文</a>
+<nav id="toc-wrap" aria-label="目录">
+<details id="toc-details" open>
+<summary>目录</summary>
+<h2 id="toc-title">目录</h2>
+<div id="toc"></div>
+</details>
+</nav>
+<main id="main">
+<h1 class="page-title">{{TITLE}}</h1>
+<div id="docs"></div>
+</main>
+<aside id="sdflow-notes" aria-label="意见" hidden></aside>
+<script type="application/json" id="sdflow-docs">{{DOCS_JSON}}</script>
+<script type="application/json" id="sdflow-saved-notes">{{SAVED_NOTES_JSON}}</script>
+<script id="sdflow-marked">{{MARKED}}</script>
+<script id="sdflow-app">
+(function () {
+  'use strict';
+
+  var MERMAID_URL = 'https://cdn.jsdelivr.net/npm/mermaid@12.2.0/dist/mermaid.min.js';
+  var MERMAID_SRI = 'sha384-8xUhuLNMjW/cI2Dacg3DR4WliYznvIg0LVG1stctThKD/YVrJFI9TNCFxft5NYgp';
+  var MERMAID_SLOW_MS = 10000;
+  // 用拼接写注释记号：避免脚本源码里出现字面 "<" + "!--"，不与 HTML 脚本数据状态的转义规则纠缠。
+  var COMMENT_RE = new RegExp('<' + '!--[\\s\\S]*?--' + '>', 'g');
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  var docs = JSON.parse(document.getElementById('sdflow-docs').textContent);
+  var currentDoc = null;
+
+  // ── 纯函数（不碰 window / document；node --test 按下面两个标记切出本段单测）────────────
+  // @@PURE-BEGIN
+  // 浏览器解析 URL 时会丢掉控制字符与空白（"java\tscript:" 等），先同样处理再判协议。
+  function squash(url) {
+    return String(url || '').replace(/[\u0000-\u0020\u007f-\u009f]/g, '');
+  }
+
+  function dirOf(path) {
+    var i = path.lastIndexOf('/');
+    return i < 0 ? '' : path.slice(0, i);
+  }
+
+  function normalizePath(path) {
+    var out = [];
+    path.split('/').forEach(function (seg) {
+      if (seg === '' || seg === '.') return;
+      if (seg === '..') { out.pop(); return; }
+      out.push(seg);
+    });
+    return out.join('/');
+  }
+
+  function docIndexOf(docs, path) {
+    if (!path) return -1;
+    var target = normalizePath(path);
+    for (var i = 0; i < docs.length; i++) if (normalizePath(docs[i].path) === target) return i;
+    return -1;
+  }
+
+  // GitHub 标题 slug（同 github-slugger）：转小写；保留字母（含 Alphabetic 属性的符号，如 Ⓐ）、
+  // 组合标记、十进制数字、字母数字（如 Ⅻ）、连接标点（如 _）、空格与 -，其余删掉（含 ² 这类其他数字）；
+  // 空格换连字符；重名依次加 -1、-2，跳过已被占用的 slug（字面标题 risks-1 先到或后到都不会与重名后缀相撞）。
+  // texts 为同一份文档里按出现顺序排列的标题文字，返回等长的 slug 数组。
+  function githubSlugs(texts) {
+    var used = Object.create(null);
+    return texts.map(function (t) {
+      var base = String(t).toLowerCase().replace(/[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\p{Alphabetic} \-]/gu, '').replace(/ /g, '-');
+      var slug = base;
+      while (slug in used) { used[base] += 1; slug = base + '-' + used[base]; }
+      used[slug] = 0;
+      return slug;
+    });
+  }
+
+  // 片段先解码（失败用原串）并转小写再查「slug → 标题 id」表；查不到返回 null。
+  function lookupAnchor(table, fragment) {
+    if (!table || !fragment) return null;
+    var key = fragment;
+    try { key = decodeURIComponent(fragment); } catch (e) { /* 非法转义：沿用原串 */ }
+    key = key.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : null;
+  }
+
+  // 返回 {href, external} 或 null（null = 按纯文本显示）。
+  // docs 为页内文档列表，currentPath 为正在渲染的文档路径（无则相对链接一律降级）。
+  // anchors[i] 为第 i 份文档的「slug → 标题 id」表；标题在链接之后才有 id，渲染期传 null：
+  // 依赖该表的链接返回 {pending: true}，待所有文档渲染完再用完整的表重新判定。
+  function classifyLink(rawHref, docs, currentPath, anchors) {
+    var h = squash(rawHref);
+    if (!h) return null;
+    if (h.charAt(0) === '#') {
+      if (!anchors) return { href: h, external: false, pending: true };
+      var cur = docIndexOf(docs, currentPath);
+      var own = cur < 0 ? null : lookupAnchor(anchors[cur], h.slice(1));
+      return own ? { href: '#' + own, external: false } : null;
+    }
+    if (/^(\/\/|\\\\)/.test(h)) return null;
+    var scheme = /^([a-zA-Z][a-zA-Z0-9+.\-]*):/.exec(h);
+    if (scheme) {
+      var p = scheme[1].toLowerCase();
+      if (p === 'http' || p === 'https' || p === 'mailto') return { href: h, external: p !== 'mailto' };
+      return null;
+    }
+    var pathOnly = h.split('#')[0].split('?')[0];
+    if (!/\.md$/i.test(pathOnly) || !currentPath) return null;
+    var base = pathOnly.charAt(0) === '/' ? '' : dirOf(currentPath);
+    var i = docIndexOf(docs, pathOnly.charAt(0) === '/' ? pathOnly : base + '/' + pathOnly);
+    if (i < 0) return null;
+    var hashAt = h.indexOf('#');
+    var fragment = hashAt >= 0 ? h.slice(hashAt + 1) : '';
+    if (!fragment) return { href: '#doc-' + i, external: false };
+    if (!anchors) return { href: h, external: false, pending: true };
+    var hit = lookupAnchor(anchors[i], fragment);
+    return { href: hit ? '#' + hit : '#doc-' + i, external: false };
+  }
+
+  // 图片只放行 data:，返回可用的 src 或 null。
+  function classifyImage(rawHref) {
+    var href = squash(rawHref);
+    return /^data:/i.test(href) ? href : null;
+  }
+
+  // 页面当前的仓库相对路径：pathname 先解码（失败用原串），去 Windows 盘符前的 "/"，
+  // 取最后一个 "/openspec/" 段起的后缀（外层目录也叫 openspec 时取最内层）；没有该段则用解码后的路径。
+  function pagePathFromPathname(pathname) {
+    var p = String(pathname);
+    try { p = decodeURIComponent(p); } catch (e) { /* 非法转义：沿用原串 */ }
+    if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1);
+    var i = p.lastIndexOf('/openspec/');
+    return i >= 0 ? p.slice(i + 1) : p;
+  }
+
+  function notesPathFromPathname(pathname) {
+    var dir = dirOf(pagePathFromPathname(pathname));
+    return (dir ? dir + '/' : '') + 'review-notes.md';
+  }
+
+  var QUOTE_MAX = 500;
+  var CONTEXT_MAX = 32;
+  function isHigh(c) { return c >= 0xD800 && c <= 0xDBFF; }
+  function isLow(c) { return c >= 0xDC00 && c <= 0xDFFF; }
+
+  // 取前 max 个码点，不把代理对切开；末尾若剩孤立高位代理项（输入本身被切过）一并去掉。
+  function headCodepoints(text, max) {
+    var s = String(text), i = 0, count = 0;
+    while (i < s.length && count < max) {
+      i += (isHigh(s.charCodeAt(i)) && i + 1 < s.length && isLow(s.charCodeAt(i + 1))) ? 2 : 1;
+      count += 1;
+    }
+    var out = s.slice(0, i);
+    if (out.length && isHigh(out.charCodeAt(out.length - 1))) out = out.slice(0, -1);
+    return out;
+  }
+
+  // 取后 max 个码点；开头若是孤立低位代理项（输入本身被切过）去掉。
+  function tailCodepoints(text, max) {
+    var s = String(text), i = s.length, count = 0;
+    while (i > 0 && count < max) {
+      i -= (isLow(s.charCodeAt(i - 1)) && i - 2 >= 0 && isHigh(s.charCodeAt(i - 2))) ? 2 : 1;
+      count += 1;
+    }
+    var out = s.slice(i);
+    if (out.length && isLow(out.charCodeAt(0))) out = out.slice(1);
+    return out;
+  }
+
+  function truncateQuote(text) { return headCodepoints(text, QUOTE_MAX); }
+
+  // 选区在文档纯文本 text 里从 start 起、长 length。返回截断后的原文与前后文。
+  // 后文从截断后原文的末尾起算，与原文相邻，「前文 + 原文 + 后文」才能在全文里原样找到。
+  function selectionContext(text, start, length) {
+    var quote = truncateQuote(text.slice(start, start + length));
+    var end = start + quote.length;
+    return {
+      quote: quote,
+      before: tailCodepoints(text.slice(Math.max(0, start - 2 * CONTEXT_MAX), start), CONTEXT_MAX),
+      after: headCodepoints(text.slice(end, end + 2 * CONTEXT_MAX), CONTEXT_MAX),
+    };
+  }
+
+  var NOTE_ID_RE = /^[0-9a-f]{16}$/;
+  function isNoteId(s) { return typeof s === 'string' && NOTE_ID_RE.test(s); }
+  function idFromBytes(bytes) {
+    var out = '';
+    for (var i = 0; i < bytes.length; i++) out += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+    return out;
+  }
+
+  // 在文档纯文本里找意见原文的起点；找不到返回 -1。
+  // 先用「前文 + 原文 + 后文」，再「前文 + 原文」，最后原文全篇唯一才采用。
+  // 前两级只在对应的上下文非空时才用（与生成脚本的 locate_line 一致）：上下文为空时它们退化成
+  // 「取第一处」，原文出现多处时会高亮到错的位置。
+  function locateNote(hay, note) {
+    var q = note.quote;
+    if (!q) return -1;
+    var before = note.before || '';
+    var after = note.after || '';
+    var i;
+    if (before || after) {
+      i = hay.indexOf(before + q + after);
+      if (i >= 0) return i + before.length;
+    }
+    if (before) {
+      i = hay.indexOf(before + q);
+      if (i >= 0) return i + before.length;
+    }
+    i = hay.indexOf(q);
+    if (i >= 0 && hay.indexOf(q, i + 1) < 0) return i;
+    return -1;
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function formatLocalTime(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' +
+      pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+
+  function oneLine(s) { return String(s).replace(/\s*[\r\n]+\s*/g, ' ').trim(); }
+
+  // 复制文本：落盘指示 + 按序正文 + 末尾 JSON 块（v2，一行）。
+  // args = {title, pathname, copiedAt, notes:[{n, id, doc, path, heading, quote, before, after, comment, inFigure}]}；
+  // pathname 为 location.pathname 原串。inFigure（在图内划选）每条都写成布尔值，回显时据此标「未在正文高亮」。
+  function buildCopyText(args) {
+    var pagePath = pagePathFromPathname(args.pathname);
+    var parts = [];
+    parts.push('请先把下面全文原样追加到 `' + notesPathFromPathname(args.pathname) + '`（不存在则新建），再逐条处理这些意见。');
+    parts.push('');
+    parts.push('# 评审意见 · ' + oneLine(args.title));
+    parts.push('');
+    parts.push('页面：`' + pagePath + '`');
+    parts.push('复制于：' + args.copiedAt);
+    args.notes.forEach(function (n) {
+      var head = '## ' + n.n + '. ' + oneLine(n.doc) + (n.path ? '（' + oneLine(n.path) + '）' : '') +
+        (n.heading ? ' › ' + oneLine(n.heading) : '');
+      var quote = String(n.quote).replace(/\r\n?/g, '\n').split('\n').map(function (l) { return '> ' + l; });
+      var comment = String(n.comment).replace(/\r\n?/g, '\n').split('\n').map(function (l) {
+        return l.charAt(0) === '#' ? '\\' + l : l;
+      });
+      parts.push('');
+      parts.push(head);
+      parts.push('');
+      parts.push(quote.join('\n'));
+      parts.push('');
+      parts.push(comment.join('\n'));
+    });
+    var json = JSON.stringify({
+      v: 2,
+      page: pagePath,
+      copied_at: args.copiedAt,
+      notes: args.notes.map(function (n) {
+        return { n: n.n, id: n.id, doc: n.doc, path: n.path || '', heading: n.heading, quote: n.quote,
+          before: n.before || '', after: n.after || '', comment: n.comment, inFigure: n.inFigure === true };
+      }),
+    });
+    var body = parts.join('\n');
+    var longest = 0;
+    (body + '\n' + json).replace(/`+/g, function (run) { if (run.length > longest) longest = run.length; return run; });
+    var fence = new Array(Math.max(3, longest + 1) + 1).join('`');
+    return body + '\n\n' + fence + 'json\n' + json + '\n' + fence + '\n';
+  }
+
+  // 解析嵌入的已落盘意见数据块文本。返回 {ok, notes}；非法 JSON 或不是数组时 ok=false。
+  // 每条带 key（高亮与意见栏用的键：id，无 id 时用序位）与 status（定位结果，restoreHighlights 填）。
+  function parseSavedNotes(text) {
+    var data;
+    try { data = JSON.parse(text); } catch (e) { return { ok: false, notes: [] }; }
+    if (!Array.isArray(data)) return { ok: false, notes: [] };
+    function str(v) { return typeof v === 'string' ? v : ''; }
+    var out = [];
+    data.forEach(function (r) {
+      if (!r || typeof r !== 'object' || typeof r.quote !== 'string' || typeof r.comment !== 'string') return;
+      var id = isNoteId(r.id) ? r.id : '';
+      out.push({
+        id: id, key: id || 'idx-' + out.length, status: null, n: typeof r.n === 'number' ? r.n : 0,
+        doc: str(r.doc), path: str(r.path), heading: str(r.heading), quote: r.quote,
+        before: str(r.before), after: str(r.after), comment: r.comment, copied_at: str(r.copied_at),
+        line: typeof r.line === 'number' && r.line > 0 ? r.line : null, inFigure: r.inFigure === true,
+      });
+    });
+    return { ok: true, notes: out };
+  }
+
+  // 合并浏览器暂存与已落盘意见：返回要显示的暂存意见 [{note, modified}]。
+  // 同 id：暂存版已复制，或意见正文与已落盘版相同 → 只显示已落盘版（暂存版不出现）；
+  //        暂存版未复制且正文不同 → 两条都显示，暂存版 modified=true。
+  // 已落盘意见无 id：doc + quote + comment 都相同的暂存意见视为同一条。
+  function mergeNotes(staged, saved) {
+    var byId = {}, byText = {};
+    saved.forEach(function (s) {
+      if (s.id) byId[s.id] = s;
+      else byText[JSON.stringify([s.doc, s.quote, s.comment])] = true;
+    });
+    var out = [];
+    staged.forEach(function (n) {
+      if (byText[JSON.stringify([n.doc, n.quote, n.comment])]) return;
+      var s = Object.prototype.hasOwnProperty.call(byId, n.id) ? byId[n.id] : null;
+      if (!s) { out.push({ note: n, modified: false }); return; }
+      if (n.copied || n.comment === s.comment) return;
+      out.push({ note: n, modified: true });
+    });
+    return out;
+  }
+  // @@PURE-END
+
+  var md = new marked.Marked({ gfm: true });
+  md.use({
+    renderer: {
+      // 块级与行内两种 html token：先删注释（保留同一 token 里的其余文字），再整体转义。
+      html: function (token) {
+        var text = String(token.text).replace(COMMENT_RE, '');
+        if (token.block) {
+          if (!/\S/.test(text)) return '';
+          return '<pre class="raw-html">' + esc(text.replace(/\n+$/, '')) + '</pre>\n';
+        }
+        return esc(text);
+      },
+      link: function (token) {
+        var inner = this.parser.parseInline(token.tokens);
+        var ok = classifyLink(token.href, docs, currentDoc && currentDoc.path, null);
+        if (!ok) return inner;
+        var title = token.title ? ' title="' + esc(token.title) + '"' : '';
+        // 标题 id 在整份文档渲染后才有：先留占位，全部文档渲染完由 resolvePendingLinks 重新判定。
+        if (ok.pending) return '<a href="#" data-pending-href="' + esc(token.href) + '"' + title + '>' + inner + '</a>';
+        var extra = ok.external ? ' target="_blank" rel="noopener noreferrer"' : '';
+        return '<a href="' + esc(ok.href) + '"' + title + extra + '>' + inner + '</a>';
+      },
+      image: function (token) {
+        var src = classifyImage(token.href);
+        if (src) {
+          var title = token.title ? ' title="' + esc(token.title) + '"' : '';
+          return '<img src="' + esc(src) + '" alt="' + esc(token.text) + '"' + title + '>';
+        }
+        return '[图片：' + esc(token.text) + ']';
+      }
+    }
+  });
+
+  // ── 渲染文档 ────────────────────────────────────────────────────────────────
+  var docsRoot = document.getElementById('docs');
+  var tocRoot = document.getElementById('toc');
+  var tocList = document.createElement('ul');
+  tocRoot.appendChild(tocList);
+
+  var anchors = [];   // anchors[i]：第 i 份文档的「slug → 标题 id」表
+
+  function renderDoc(doc, index) {
+    var section = document.createElement('section');
+    section.className = 'doc';
+    section.id = 'doc-' + index;
+    section.setAttribute('data-doc-index', String(index));
+    section.setAttribute('data-label', doc.label);
+
+    var head = document.createElement('div');
+    head.className = 'doc-head';
+    var label = document.createElement('span');
+    label.className = 'doc-label';
+    label.textContent = doc.label;
+    var path = document.createElement('code');
+    path.className = 'doc-path';
+    path.textContent = doc.path;
+    head.appendChild(label);
+    head.appendChild(path);
+
+    var body = document.createElement('div');
+    body.className = 'doc-body';
+    currentDoc = doc;
+    try {
+      body.innerHTML = md.parse(doc.text);
+    } catch (err) {
+      body.innerHTML = '';
+      var box = document.createElement('div');
+      box.className = 'doc-error';
+      box.setAttribute('role', 'alert');
+      box.textContent = '这份文档渲染失败：' + (err && err.message ? err.message : String(err)) + '。下面是原文。';
+      var pre = document.createElement('pre');
+      var code = document.createElement('code');
+      code.textContent = doc.text;
+      pre.appendChild(code);
+      body.appendChild(box);
+      body.appendChild(pre);
+    }
+    currentDoc = null;
+
+    section.appendChild(head);
+    section.appendChild(body);
+    docsRoot.appendChild(section);
+
+    Array.prototype.forEach.call(body.querySelectorAll('table'), function (table) {
+      var wrap = document.createElement('div');
+      wrap.className = 'table-wrap';
+      table.parentNode.insertBefore(wrap, table);
+      wrap.appendChild(table);
+    });
+
+    // marked 18 不生成标题 id：按「文档序号-序号」自己生成，重名标题不冲突。
+    var tocItem = document.createElement('li');
+    var docLink = document.createElement('a');
+    docLink.className = 'doc-link';
+    docLink.href = '#doc-' + index;
+    docLink.textContent = doc.label;
+    tocItem.appendChild(docLink);
+    var sub = document.createElement('ul');
+    tocItem.appendChild(sub);
+    var counter = 0;
+    var headingEls = [];
+    Array.prototype.forEach.call(body.querySelectorAll('h1, h2, h3, h4, h5, h6'), function (h) {
+      counter += 1;
+      h.id = 'd' + index + '-' + counter;
+      headingEls.push(h);
+      var level = Number(h.tagName.charAt(1));
+      if (level > 3) return;
+      var li = document.createElement('li');
+      li.className = 'lvl-' + level;
+      var a = document.createElement('a');
+      a.href = '#' + h.id;
+      a.textContent = h.textContent;
+      li.appendChild(a);
+      sub.appendChild(li);
+    });
+    tocList.appendChild(tocItem);
+
+    var table = Object.create(null);
+    githubSlugs(headingEls.map(function (h) { return h.textContent; })).forEach(function (slug, k) {
+      table[slug] = headingEls[k].id;
+    });
+    anchors[index] = table;
+  }
+
+  docs.forEach(renderDoc);
+
+  // 页内 #片段 与跨文档 x.md#片段：所有文档的标题 id 都就绪后再判定。
+  // 命中改写为真实标题 id；同文档未命中降为纯文字；跨文档未命中跳到该文档开头。
+  Array.prototype.slice.call(document.querySelectorAll('a[data-pending-href]')).forEach(function (a) {
+    var section = a.closest('section.doc');
+    var ok = classifyLink(a.getAttribute('data-pending-href'), docs, docs[Number(section.getAttribute('data-doc-index'))].path, anchors);
+    if (!ok) {
+      while (a.firstChild) a.parentNode.insertBefore(a.firstChild, a);
+      a.parentNode.removeChild(a);
+      return;
+    }
+    a.setAttribute('href', ok.href);
+    a.removeAttribute('data-pending-href');
+  });
+
+  // ── 窄屏：目录折叠到顶部 ────────────────────────────────────────────────────
+  var details = document.getElementById('toc-details');
+  var narrow = window.matchMedia('(max-width: 899px)');
+  function syncToc() { details.open = !narrow.matches; }
+  syncToc();
+  if (narrow.addEventListener) narrow.addEventListener('change', syncToc);
+  else if (narrow.addListener) narrow.addListener(syncToc);
+
+  // ── mermaid：渲染后发现 language-mermaid 块才加载 ───────────────────────────
+  var mermaidBlocks = Array.prototype.slice.call(document.querySelectorAll('pre > code.language-mermaid'));
+  if (mermaidBlocks.length) loadMermaid(mermaidBlocks);
+
+  function setNote(blocks, text) {
+    blocks.forEach(function (code) {
+      var pre = code.parentNode;
+      if (!pre || !pre.parentNode) return;
+      var note = pre.previousElementSibling;
+      if (!note || !note.classList.contains('mermaid-note')) {
+        note = document.createElement('p');
+        note.className = 'mermaid-note';
+        note.setAttribute('role', 'status');
+        pre.parentNode.insertBefore(note, pre);
+      }
+      note.textContent = text;
+    });
+  }
+
+  function clearNotes(blocks) {
+    blocks.forEach(function (code) {
+      var pre = code.parentNode;
+      var note = pre && pre.previousElementSibling;
+      if (note && note.classList.contains('mermaid-note')) note.parentNode.removeChild(note);
+    });
+  }
+
+  function renderMermaid(blocks) {
+    try {
+      window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+    } catch (err) {
+      setNote(blocks, 'mermaid 初始化失败：' + (err && err.message ? err.message : String(err)));
+      return;
+    }
+    blocks.forEach(function (code, i) {
+      var pre = code.parentNode;
+      Promise.resolve()
+        .then(function () { return window.mermaid.render('sdflow-mmd-' + i, code.textContent); })
+        .then(function (result) {
+          var fig = document.createElement('div');
+          fig.className = 'mermaid-fig';
+          // 信任边界：result.svg 来自 securityLevel:'strict' 的 mermaid；脚本执行另由 CSP 拦住。
+          fig.innerHTML = result.svg;
+          pre.parentNode.replaceChild(fig, pre);
+        })
+        .catch(function (err) {
+          setNote([code], 'mermaid 渲染失败：' + (err && err.message ? err.message : String(err)));
+        });
+    });
+  }
+
+  function loadMermaid(blocks) {
+    var settled = false;
+    var timer = setTimeout(function () {
+      if (!settled) setNote(blocks, 'mermaid 未加载（离线或网络慢）');
+    }, MERMAID_SLOW_MS);
+    var s = document.createElement('script');
+    s.src = MERMAID_URL;
+    s.integrity = MERMAID_SRI;
+    s.crossOrigin = 'anonymous';
+    s.async = true;
+    s.addEventListener('load', function () {
+      settled = true;
+      clearTimeout(timer);
+      clearNotes(blocks);
+      renderMermaid(blocks);
+    });
+    s.addEventListener('error', function () {
+      settled = true;
+      clearTimeout(timer);
+      setNote(blocks, '离线，mermaid 图未渲染');
+    });
+    document.head.appendChild(s);
+  }
+
+  // ── 标注与复制 ──────────────────────────────────────────────────────────────
+  var STORE_KEY = 'sdflow-review:' + location.pathname;
+  var state = { next: 1, notes: [] };
+  // 已落盘意见（生成脚本嵌入，只读）。解析失败按空列表处理并在意见栏提示。
+  var savedNotes = [];
+  var savedUnreadable = false;
+  (function () {
+    var el = document.getElementById('sdflow-saved-notes');
+    var parsed = parseSavedNotes(el ? el.textContent : '[]');
+    savedNotes = parsed.notes;
+    savedUnreadable = !parsed.ok;
+  })();
+  // 意见栏当前显示的暂存意见（mergeNotes 的结果，[{note, modified}]）。只在 refreshView 里重算。
+  var view = [];
+  var pending = null;        // 当前暂存的选区：{range, docLabel, heading, quote, before, after}
+  var dlg = null;            // 意见对话框状态：{mode: 'new'|'edit', noteId, returnFocus}
+  var copyState = null;      // 复制文本框状态：{ids, returnFocus}
+  var warningEl = null;
+
+  function showStorageWarning() {
+    if (warningEl) return;
+    warningEl = document.createElement('div');
+    warningEl.className = 'notice';
+    warningEl.setAttribute('role', 'alert');
+    warningEl.textContent = '意见无法跨刷新保留，请及时复制';
+    document.body.insertBefore(warningEl, document.body.firstChild);
+  }
+
+  function newNoteId() {
+    return idFromBytes(crypto.getRandomValues(new Uint8Array(8)));
+  }
+
+  function pathOfDoc(label) {
+    for (var i = 0; i < docs.length; i++) if (docs[i].label === label) return docs[i].path;
+    return '';
+  }
+
+  function storable(n) {
+    return { id: n.id, n: n.n, doc: n.doc, heading: n.heading, quote: n.quote, before: n.before, after: n.after,
+      comment: n.comment, copied: !!n.copied, inFigure: !!n.inFigure };
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ next: state.next, notes: state.notes.map(storable) }));
+    } catch (e) { showStorageWarning(); }
+  }
+
+  function loadState() {
+    // 先探一次写入：隐私模式等环境读得出、写不进。探测键无论成败都删掉，不留在暂存里。
+    try {
+      localStorage.setItem(STORE_KEY + ':probe', '1');
+    } catch (e) {
+      showStorageWarning();
+      return;
+    } finally {
+      try { localStorage.removeItem(STORE_KEY + ':probe'); } catch (e2) { /* 删不掉也不影响使用 */ }
+    }
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.notes)) return;
+      var maxN = 0, repaired = false;
+      data.notes.forEach(function (n) {
+        if (!n || typeof n.quote !== 'string' || typeof n.comment !== 'string' || typeof n.n !== 'number') return;
+        var id = n.id;
+        if (!isNoteId(id)) { id = newNoteId(); repaired = true; }
+        state.notes.push({
+          id: id, n: n.n, doc: String(n.doc || ''), heading: String(n.heading || ''), quote: n.quote,
+          before: String(n.before || ''), after: String(n.after || ''), comment: n.comment, copied: !!n.copied,
+          inFigure: n.inFigure === true,
+        });
+        if (n.n > maxN) maxN = n.n;
+      });
+      state.next = Math.max(Number(data.next) || 1, maxN + 1);
+      if (repaired) saveState();
+    } catch (e) { /* 存档损坏：当作没有意见 */ }
+  }
+
+  function findNote(id) {
+    for (var i = 0; i < state.notes.length; i++) if (state.notes[i].id === id) return state.notes[i];
+    return null;
+  }
+
+  // ── 高亮：只在选区落在同一个文本节点内时包 <mark>，跨元素只记录 ─────────────────
+  function docBodyByLabel(label) {
+    var sections = document.querySelectorAll('section.doc');
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].getAttribute('data-label') === label) return sections[i].querySelector('.doc-body');
+    }
+    return null;
+  }
+
+  function rangeAt(root, start, length) {
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    var pos = 0, node, range = document.createRange(), startSet = false, end = start + length;
+    while ((node = walker.nextNode())) {
+      var len = node.data.length;
+      if (!startSet && start < pos + len) { range.setStart(node, start - pos); startSet = true; }
+      if (startSet && end <= pos + len) { range.setEnd(node, end - pos); return range; }
+      pos += len;
+    }
+    return null;
+  }
+
+  // 节点本身是元素就取它，文本节点取父元素。
+  function elementOf(node) {
+    return node && (node.nodeType === 1 ? node : node.parentElement);
+  }
+
+  // kind: 'note'（暂存意见，data-note）| 'saved'（已落盘意见，data-saved）；key 一律是 id（或无 id 时的序位键）。
+  function wrapRange(range, key, kind) {
+    // 图内（SVG 的 <text> 或 foreignObject 里的 HTML）与 mermaid 源码块内不插 <mark>：
+    // SVG 文字里插入 HTML 元素会让文字消失，源码块在图渲染后整块被替换。
+    var startEl = elementOf(range.startContainer);
+    if (startEl && (startEl.closest('svg') || startEl.closest('pre > code.language-mermaid'))) return false;
+    if (range.startContainer !== range.endContainer || range.startContainer.nodeType !== 3) return false;
+    var mark = document.createElement('mark');
+    if (kind === 'saved') {
+      mark.className = 'sdflow-saved-hl';
+      mark.dataset.saved = key;
+    } else {
+      mark.className = 'sdflow-hl';
+      mark.dataset.note = key;
+    }
+    try { range.surroundContents(mark); } catch (e) { return false; }
+    return true;
+  }
+
+  // 以 dataset 比对取 mark，不把 id 拼进选择器。
+  function marksOf(kind, key) {
+    var cls = kind === 'saved' ? 'mark.sdflow-saved-hl' : 'mark.sdflow-hl';
+    return Array.prototype.filter.call(document.querySelectorAll(cls), function (m) {
+      return (kind === 'saved' ? m.dataset.saved : m.dataset.note) === key;
+    });
+  }
+
+  function unwrapMarks(key) {
+    marksOf('note', key).forEach(function (m) {
+      var parent = m.parentNode;
+      while (m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+      parent.normalize();
+    });
+  }
+
+  // 给每条意见定位并（能的话）高亮；status: 'hl' | 'unmarked'（已定位但没高亮上）| 'orphan'（对不上）。
+  // 找不到起点时：图内划选的意见、或原文在正文出现多处而前后文无法区分，都记 unmarked，不记 orphan。
+  function unlocatedStatus(body, note) {
+    if (!body) return 'orphan';
+    return note.inFigure || (note.quote && body.textContent.indexOf(note.quote) >= 0) ? 'unmarked' : 'orphan';
+  }
+
+  // 定位一条意见并（能的话）高亮，返回 status。图内划选的意见不在正文里找：
+  // 原文与正文某处同名时会被高亮到那里（RVP-13）。
+  function highlightOne(note, key, kind) {
+    var body = docBodyByLabel(note.doc);
+    if (body && note.inFigure) return 'unmarked';
+    var idx = body ? locateNote(body.textContent, note) : -1;
+    if (idx < 0) return unlocatedStatus(body, note);
+    var range = rangeAt(body, idx, note.quote.length);
+    return range && wrapRange(range, key, kind) ? 'hl' : 'unmarked';
+  }
+
+  function restoreHighlights() {
+    // 与已落盘版重复的暂存意见不在 view 里，不显示也不高亮。
+    view.forEach(function (v) { v.note.status = highlightOne(v.note, v.note.id, 'note'); });
+    savedNotes.forEach(function (sn) { sn.status = highlightOne(sn, sn.key, 'saved'); });
+  }
+
+  // ── 选区暂存与「写意见」按钮 ─────────────────────────────────────────────────
+  var annotateBtn = document.createElement('button');
+  annotateBtn.type = 'button';
+  annotateBtn.id = 'sdflow-annotate';
+  annotateBtn.textContent = '写意见';
+  annotateBtn.hidden = true;
+  document.body.appendChild(annotateBtn);
+
+  function bodyOf(node) {
+    var el = elementOf(node);
+    return el && el.closest ? el.closest('#main .doc-body') : null;
+  }
+
+  function captureSelection() {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+    var r = sel.getRangeAt(0);
+    var body = bodyOf(r.startContainer);
+    if (!body || body !== bodyOf(r.endContainer)) return null;
+    var full = r.toString();
+    if (!/\S/.test(full)) return null;
+    var pre = document.createRange();
+    pre.selectNodeContents(body);
+    pre.setEnd(r.startContainer, r.startOffset);
+    var ctx = selectionContext(body.textContent, pre.toString().length, full.length);
+    var heading = '';
+    Array.prototype.forEach.call(body.querySelectorAll('h1, h2, h3, h4, h5, h6'), function (h) {
+      if (r.comparePoint(h, 0) === -1) heading = h.textContent.replace(/\s+/g, ' ').trim();
+    });
+    var startEl = elementOf(r.startContainer);
+    return {
+      range: r.cloneRange(),
+      section: body.parentNode,
+      inFigure: !!(startEl && startEl.closest('svg')),
+      docLabel: body.parentNode.getAttribute('data-label'),
+      heading: heading,
+      quote: ctx.quote,
+      before: ctx.before,
+      after: ctx.after,
+    };
+  }
+
+  // 按钮紧随选区所在的文档节之后，划选后按 Tab 先到它，不必越过后面所有文档里的链接（D14）。
+  // 按钮正拿着焦点时不挪：挪动会让它失焦。
+  function dockAnnotateBtn() {
+    if (!pending || !pending.section || document.activeElement === annotateBtn) return;
+    if (annotateBtn.previousElementSibling !== pending.section) {
+      pending.section.parentNode.insertBefore(annotateBtn, pending.section.nextSibling);
+    }
+  }
+
+  function placeAnnotateBtn() {
+    if (!pending || annotateBtn.hidden) return;
+    var rects = pending.range.getClientRects();
+    var rect = rects.length ? rects[rects.length - 1] : pending.range.getBoundingClientRect();
+    var top = rect.bottom + 8;
+    if (top > window.innerHeight - 44) top = rect.top - 44;
+    // 选区滚出视口时按钮钉在视口边缘，仍然点得到。
+    top = Math.min(Math.max(8, top), window.innerHeight - 44);
+    var left = Math.min(Math.max(8, rect.right), window.innerWidth - 100);
+    annotateBtn.style.top = top + 'px';
+    annotateBtn.style.left = left + 'px';
+  }
+
+  function hideAnnotateBtn() { annotateBtn.hidden = true; }
+
+  document.addEventListener('selectionchange', function () {
+    if (dlg || copyState) return;
+    var cap = captureSelection();
+    if (cap) {
+      pending = cap;
+      dockAnnotateBtn();
+      annotateBtn.hidden = false;
+      placeAnnotateBtn();
+    } else if (document.activeElement !== annotateBtn) {
+      pending = null;
+      hideAnnotateBtn();
+    }
+  });
+  window.addEventListener('scroll', placeAnnotateBtn, { passive: true });
+  window.addEventListener('resize', placeAnnotateBtn);
+  // 点按钮会让选区丢失：mousedown 阻止默认行为，选区保持，pending 里也另存了 Range。
+  annotateBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  annotateBtn.addEventListener('click', function () { if (pending) openDialog('new', null, annotateBtn); });
+
+  // ── 对话框：意见输入 ────────────────────────────────────────────────────────
+  function makeButton(text, cls) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sdflow-btn' + (cls ? ' ' + cls : '');
+    b.textContent = text;
+    return b;
+  }
+
+  function makeOverlay(id, titleText) {
+    var overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.hidden = true;
+    var panel = document.createElement('div');
+    panel.className = 'dlg-panel';
+    panel.id = id;
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-labelledby', id + '-title');
+    var h = document.createElement('h2');
+    h.id = id + '-title';
+    h.textContent = titleText;
+    panel.appendChild(h);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    return { overlay: overlay, panel: panel, title: h };
+  }
+
+  var noteDlg = makeOverlay('sdflow-note-dialog', '写意见');
+  var dlgQuote = document.createElement('blockquote');
+  dlgQuote.className = 'dlg-quote';
+  var dlgLabel = document.createElement('label');
+  dlgLabel.htmlFor = 'sdflow-note-text';
+  dlgLabel.className = 'sr-only';
+  dlgLabel.textContent = '意见';
+  var dlgText = document.createElement('textarea');
+  dlgText.id = 'sdflow-note-text';
+  dlgText.rows = 5;
+  dlgText.setAttribute('aria-describedby', 'sdflow-note-error');
+  // 空意见的错误写进这个 role=status 节点（平时为空），读屏才会读出来。
+  var dlgError = document.createElement('p');
+  dlgError.className = 'dlg-error';
+  dlgError.id = 'sdflow-note-error';
+  dlgError.setAttribute('role', 'status');
+  var dlgHint = document.createElement('p');
+  dlgHint.className = 'dlg-hint';
+  var HINT = 'Ctrl/⌘ + Enter 保存，Esc 取消';
+  dlgHint.textContent = HINT;
+  var dlgActions = document.createElement('div');
+  dlgActions.className = 'dlg-actions';
+  var dlgCancel = makeButton('取消');
+  var dlgSave = makeButton('保存', 'primary');
+  dlgActions.appendChild(dlgCancel);
+  dlgActions.appendChild(dlgSave);
+  [dlgQuote, dlgLabel, dlgText, dlgError, dlgHint, dlgActions].forEach(function (el) { noteDlg.panel.appendChild(el); });
+
+  function focusables(panel) {
+    return Array.prototype.filter.call(panel.querySelectorAll('textarea, button'), function (el) {
+      return !el.disabled && !el.hidden && el.getClientRects().length > 0;
+    });
+  }
+
+  // 对话框打开期间在 document 上统一处理键盘：焦点落到页面主体时 Esc 也能关闭、Tab 能回到对话框内。
+  // 输入法组字期间的按键留给输入法；对话框关闭后这里什么都不做。
+  document.addEventListener('keydown', function (e) {
+    var open = copyState ? copyDlg : dlg ? noteDlg : null;
+    if (!open) return;
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (open === copyDlg) closeCopy(); else closeDialog(true);
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    var items = focusables(open.panel);
+    if (!items.length) return;
+    var first = items[0], last = items[items.length - 1];
+    if (!open.panel.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  // 正文区域平时不带 tabindex：带了的话，在正文里按下鼠标划选会让 main 拿到焦点，
+  // 之后的 Tab 从正文开头起算而不是从选区起算，「写意见」按钮紧随文档节之后就白放了（D14）。
+  // 只在要把焦点移到正文时临时设上，失焦即撤掉。
+  var mainEl = document.getElementById('main');
+  function focusMain() {
+    mainEl.tabIndex = -1;
+    mainEl.focus();
+  }
+  mainEl.addEventListener('blur', function () { mainEl.removeAttribute('tabindex'); });
+  // 「跳到正文」照旧把焦点移进正文（默认的锚点跳转只滚动，main 不带 tabindex 时拿不到焦点）。
+  document.querySelector('.skip-link').addEventListener('click', focusMain);
+
+  // 关闭对话框后还原焦点：目标仍在文档中、未隐藏、未禁用、有布局盒才聚焦，否则聚焦正文区域。
+  function restoreFocus(target) {
+    if (target && document.body.contains(target) && !target.hidden && !target.disabled && target.getClientRects().length > 0) {
+      target.focus();
+      return;
+    }
+    focusMain();
+  }
+
+  function clearNoteError() {
+    dlgError.textContent = '';
+    dlgText.removeAttribute('aria-invalid');
+  }
+
+  function openDialog(mode, note, opener) {
+    dlg = { mode: mode, noteId: note ? note.id : null, returnFocus: opener || document.activeElement };
+    noteDlg.title.textContent = mode === 'edit' ? '编辑意见' : '写意见';
+    dlgQuote.textContent = (note ? note.quote : pending.quote).slice(0, 300);
+    dlgText.value = note ? note.comment : '';
+    clearNoteError();
+    dlgHint.textContent = HINT;
+    noteDlg.overlay.hidden = false;
+    dlgText.focus();
+  }
+
+  function closeDialog(restoreSelection) {
+    var d = dlg;
+    if (!d) return;
+    dlg = null;
+    noteDlg.overlay.hidden = true;
+    if (d.mode === 'new' && restoreSelection && pending) {
+      // 取消：把选区放回去，「写意见」按钮仍在。
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(pending.range);
+      annotateBtn.hidden = false;
+      placeAnnotateBtn();
+    }
+    restoreFocus(d.returnFocus);
+  }
+
+  function saveDialog() {
+    var comment = dlgText.value.trim();
+    if (!comment) {
+      dlgError.textContent = '意见不能为空';
+      dlgText.setAttribute('aria-invalid', 'true');
+      dlgText.focus();
+      return;
+    }
+    var d = dlg;
+    if (d.mode === 'edit') {
+      var existing = findNote(d.noteId);
+      if (existing) { existing.comment = comment; existing.copied = false; }
+      saveState();
+      renderNotes();
+      // 「编辑」按钮随意见栏重建；改回与已落盘版相同的意见不再显示，找不到就交给 restoreFocus 落到正文。
+      var item = noteItemOf('note', d.noteId);
+      d.returnFocus = item ? item.querySelector('.edit-btn') : null;
+      closeDialog(false);
+      return;
+    }
+    var note = {
+      id: newNoteId(), n: state.next++, doc: pending.docLabel, heading: pending.heading, quote: pending.quote,
+      before: pending.before, after: pending.after, comment: comment, copied: false, inFigure: !!pending.inFigure,
+    };
+    window.getSelection().removeAllRanges();
+    note.status = wrapRange(pending.range, note.id, 'note') ? 'hl' : 'unmarked';
+    state.notes.push(note);
+    saveState();
+    renderNotes();
+    pending = null;
+    hideAnnotateBtn();
+    d.returnFocus = null;
+    closeDialog(false);
+  }
+
+  dlgSave.addEventListener('click', saveDialog);
+  dlgCancel.addEventListener('click', function () { closeDialog(true); });
+  dlgText.addEventListener('input', clearNoteError);
+  dlgText.addEventListener('keydown', function (e) {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveDialog(); }
+  });
+
+  // ── 意见栏 ──────────────────────────────────────────────────────────────────
+  var notesRoot = document.getElementById('sdflow-notes');
+  var notesTitle = document.createElement('h2');
+  notesTitle.tabIndex = -1;
+  var notesEmpty = document.createElement('p');
+  notesEmpty.className = 'notes-empty';
+  notesEmpty.textContent = '在正文划选文字，点「写意见」。';
+  var notesActions = document.createElement('div');
+  notesActions.className = 'notes-actions';
+  var copyBtn = makeButton('复制意见', 'primary');
+  copyBtn.id = 'sdflow-copy-new';
+  var copyAllBtn = makeButton('复制全部');
+  copyAllBtn.id = 'sdflow-copy-all';
+  var clearBtn = makeButton('清空');
+  clearBtn.id = 'sdflow-clear';
+  [copyBtn, copyAllBtn, clearBtn].forEach(function (b) { notesActions.appendChild(b); });
+  var notesList = document.createElement('ol');
+  notesList.className = 'notes-list';
+  // 「定位」找不到高亮时在这里提示（role=status，平时为空）。
+  var jumpHint = document.createElement('p');
+  jumpHint.className = 'notes-hint';
+  jumpHint.id = 'sdflow-jump-hint';
+  jumpHint.setAttribute('role', 'status');
+  var savedWarn = document.createElement('p');
+  savedWarn.className = 'notes-empty';
+  savedWarn.setAttribute('role', 'status');
+  savedWarn.textContent = '已落盘意见无法读取';
+  savedWarn.hidden = !savedUnreadable;
+  var savedGroup = document.createElement('section');
+  savedGroup.className = 'saved-group';
+  savedGroup.setAttribute('aria-label', '已落盘意见');
+  savedGroup.hidden = true;
+  var savedTitle = document.createElement('h3');
+  var savedList = document.createElement('ol');
+  savedList.className = 'notes-list';
+  savedGroup.appendChild(savedTitle);
+  savedGroup.appendChild(savedList);
+  [notesTitle, notesEmpty, notesActions, jumpHint, notesList, savedWarn, savedGroup].forEach(function (el) { notesRoot.appendChild(el); });
+  notesRoot.hidden = false;
+  document.body.classList.add('has-notes');
+
+  var STATUS_TEXT = { orphan: '原文已对不上，仅列出', unmarked: '未在正文高亮' };
+  var SAVED_STATUS_TEXT = { orphan: '原文已变', unmarked: '未在正文高亮' };
+  var clearTimer = null;
+
+  function appendBadge(parent, text) {
+    var b = document.createElement('span');
+    b.className = 'note-badge';
+    b.textContent = text;
+    parent.appendChild(b);
+  }
+
+  // 暂存意见被合并掉（不显示）时，它在正文的暂存高亮一并拿掉，不留无主的 mark。
+  // 编辑回与已落盘版相同、或改过的意见复制后（RVP-19）都会从列表消失。
+  function refreshView() {
+    view = mergeNotes(state.notes, savedNotes);
+    var shown = Object.create(null);
+    view.forEach(function (v) { shown[v.note.id] = true; });
+    state.notes.forEach(function (n) { if (!shown[n.id]) unwrapMarks(n.id); });
+  }
+
+  // 意见栏的一条。o = {className, kind, key, head, badges, quote, comment, buttons}；
+  // kind 即 dataset 名（'note' → data-note，'saved' → data-saved）。内容一律 textContent，没有按钮时不建按钮行。
+  function buildNoteItem(o) {
+    var li = document.createElement('li');
+    li.className = o.className;
+    li.dataset[o.kind] = o.key;
+    var head = document.createElement('div');
+    head.className = 'note-head';
+    head.textContent = o.head;
+    o.badges.forEach(function (text) { appendBadge(head, text); });
+    var quote = document.createElement('div');
+    quote.className = 'note-quote';
+    quote.textContent = o.quote;
+    var comment = document.createElement('div');
+    comment.className = 'note-comment';
+    comment.textContent = o.comment;
+    [head, quote, comment].forEach(function (el) { li.appendChild(el); });
+    if (o.buttons.length) {
+      var actions = document.createElement('div');
+      actions.className = 'note-actions';
+      o.buttons.forEach(function (b) { actions.appendChild(b); });
+      li.appendChild(actions);
+    }
+    return li;
+  }
+
+  // 「定位」只给找得到位置的意见（已高亮，或已定位但没高亮上）。
+  function jumpButtons(kind, key, status) {
+    if (status !== 'hl' && status !== 'unmarked') return [];
+    var jump = makeButton('定位');
+    jump.classList.add('jump-btn');
+    jump.addEventListener('click', function () { jumpTo(kind, key); });
+    return [jump];
+  }
+
+  // 意见栏里某条意见的 <li>：以 dataset 比对取（同 marksOf，不把 id 拼进选择器）；找不到返回 null。
+  function noteItemOf(kind, key) {
+    var list = kind === 'saved' ? savedList : notesList;
+    return Array.prototype.filter.call(list.children, function (li) { return li.dataset[kind] === key; })[0] || null;
+  }
+
+  // 暂存或已落盘意见有变动后调用：重算 view 再重画意见栏。
+  function renderNotes() {
+    refreshView();
+    drawNotes();
+  }
+
+  function drawNotes() {
+    // 重置「清空」确认态前先撤掉旧定时器，否则它会把之后新进入的确认态提前还原。
+    clearTimeout(clearTimer);
+    jumpHint.textContent = '';
+    var total = view.length;
+    var fresh = view.filter(function (v) { return !v.note.copied; }).length;
+    notesTitle.textContent = '意见（' + total + '）';
+    notesEmpty.hidden = total > 0;
+    copyBtn.disabled = fresh === 0;
+    copyBtn.textContent = '复制意见' + (total ? '（' + fresh + '）' : '');
+    copyBtn.title = total === 0 ? '还没有意见' : fresh === 0 ? '没有未复制的意见，可用「复制全部」' : '';
+    copyAllBtn.disabled = total === 0;
+    clearBtn.disabled = state.notes.length === 0;
+    clearBtn.textContent = '清空';
+    clearBtn.dataset.armed = '';
+    while (notesList.firstChild) notesList.removeChild(notesList.firstChild);
+    view.forEach(function (v) {
+      var note = v.note;
+      var badges = [];
+      if (v.modified) badges.push('已修改，未落盘');
+      if (note.copied) badges.push('已复制');
+      if (STATUS_TEXT[note.status]) badges.push(STATUS_TEXT[note.status]);
+      var edit = makeButton('编辑');
+      edit.classList.add('edit-btn');
+      edit.addEventListener('click', function () { openDialog('edit', note, edit); });
+      var del = makeButton('删除');
+      del.classList.add('del-btn');
+      del.addEventListener('click', function () { deleteNote(note.id); });
+      notesList.appendChild(buildNoteItem({
+        className: 'note-item', kind: 'note', key: note.id,
+        head: '#' + note.n + ' ' + note.doc + (note.heading ? ' › ' + note.heading : ''),
+        badges: badges, quote: note.quote, comment: note.comment,
+        buttons: jumpButtons('note', note.id, note.status).concat([edit, del]),
+      }));
+    });
+    renderSaved();
+  }
+
+  // 已落盘意见：只读；0 条时整组不显示。
+  function renderSaved() {
+    while (savedList.firstChild) savedList.removeChild(savedList.firstChild);
+    savedGroup.hidden = savedNotes.length === 0;
+    savedTitle.textContent = '已落盘意见（' + savedNotes.length + '）';
+    savedNotes.forEach(function (sn, k) {
+      var where = sn.path ? sn.path + (sn.line ? ':' + sn.line : '') : sn.doc;
+      savedList.appendChild(buildNoteItem({
+        className: 'note-item saved-item', kind: 'saved', key: sn.key,
+        head: '已落盘 ' + (k + 1) + ' ' + where + (sn.heading ? ' › ' + sn.heading : ''),
+        badges: SAVED_STATUS_TEXT[sn.status] ? [SAVED_STATUS_TEXT[sn.status]] : [],
+        quote: sn.quote, comment: sn.comment,
+        buttons: jumpButtons('saved', sn.key, sn.status),
+      }));
+    });
+  }
+
+  function findSaved(key) {
+    for (var i = 0; i < savedNotes.length; i++) if (savedNotes[i].key === key) return savedNotes[i];
+    return null;
+  }
+
+  function jumpTo(kind, key) {
+    var mark = marksOf(kind, key)[0];
+    if (mark) {
+      jumpHint.textContent = '';
+      mark.scrollIntoView({ block: 'center' });
+      mark.classList.add('flash');
+      setTimeout(function () { mark.classList.remove('flash'); }, 1200);
+      return;
+    }
+    // 没有高亮可去（图内划选、原文出现多处，或高亮已被拿掉）：滚到所在文档并提示。
+    var note = kind === 'saved' ? findSaved(key) : findNote(key);
+    if (!note) return;
+    var body = docBodyByLabel(note.doc);
+    if (body) body.parentNode.scrollIntoView({ block: 'start' });
+    if (note.status === 'hl') {
+      // 记着已高亮、mark 却不在了：改标「未在正文高亮」，重画后焦点放回这条的「定位」。
+      note.status = 'unmarked';
+      renderNotes();
+      var item = noteItemOf(kind, key);
+      var btn = item && item.querySelector('.jump-btn');
+      if (btn) btn.focus();
+    }
+    jumpHint.textContent = '未在正文高亮';
+  }
+
+  function deleteNote(id) {
+    unwrapMarks(id);
+    state.notes = state.notes.filter(function (x) { return x.id !== id; });
+    saveState();
+    renderNotes();
+    notesTitle.focus();
+  }
+
+  // 清空要点两次：第一次变成「再点一次确认」，4 秒内不点就还原。
+  clearBtn.addEventListener('click', function () {
+    if (clearBtn.dataset.armed === '1') {
+      clearTimeout(clearTimer);
+      state.notes.forEach(function (x) { unwrapMarks(x.id); });
+      state.notes = [];
+      saveState();
+      renderNotes();
+      notesTitle.focus();
+      return;
+    }
+    clearBtn.dataset.armed = '1';
+    clearBtn.textContent = '再点一次确认清空';
+    clearTimer = setTimeout(function () { clearBtn.dataset.armed = ''; clearBtn.textContent = '清空'; }, 4000);
+  });
+
+  // ── 复制 ────────────────────────────────────────────────────────────────────
+  var copyDlg = makeOverlay('sdflow-copy-dialog', '复制意见');
+  var copyStatus = document.createElement('p');
+  copyStatus.className = 'dlg-hint';
+  copyStatus.id = 'sdflow-copy-status';
+  copyStatus.setAttribute('role', 'status');
+  var copyLabel = document.createElement('label');
+  copyLabel.htmlFor = 'sdflow-copy-text';
+  copyLabel.className = 'sr-only';
+  copyLabel.textContent = '意见全文';
+  var copyText = document.createElement('textarea');
+  copyText.id = 'sdflow-copy-text';
+  copyText.rows = 14;
+  copyText.readOnly = true;
+  var copyActions = document.createElement('div');
+  copyActions.className = 'dlg-actions';
+  var markBtn = makeButton('标记为已复制');
+  markBtn.hidden = true;
+  var copyClose = makeButton('关闭', 'primary');
+  copyClose.id = 'sdflow-copy-close';
+  copyActions.appendChild(markBtn);
+  copyActions.appendChild(copyClose);
+  [copyStatus, copyLabel, copyText, copyActions].forEach(function (el) { copyDlg.panel.appendChild(el); });
+
+  function markCopied(ids) {
+    state.notes.forEach(function (n) { if (ids.indexOf(n.id) >= 0) n.copied = true; });
+    saveState();
+    renderNotes();
+  }
+
+  // 依次试 Clipboard API、execCommand；resolve(true/false)，不抛错。
+  function autoCopy(text) {
+    return new Promise(function (resolve) {
+      function legacy() {
+        var ok = false;
+        try { copyText.focus(); copyText.select(); ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        resolve(ok);
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { resolve(true); }, legacy);
+          return;
+        }
+      } catch (e) { /* 落到 execCommand */ }
+      legacy();
+    });
+  }
+
+  function doCopy(all, opener) {
+    var picked = view.map(function (v) { return v.note; })
+      .filter(function (n) { return all || !n.copied; });
+    if (!picked.length) return;
+    var text = buildCopyText({
+      title: document.title,
+      pathname: location.pathname,
+      copiedAt: formatLocalTime(new Date()),
+      notes: picked.map(function (n) {
+        var out = storable(n);
+        out.path = pathOfDoc(n.doc);
+        return out;
+      }),
+    });
+    var ids = picked.map(function (n) { return n.id; });
+    var myState = { ids: ids, returnFocus: opener };
+    copyState = myState;
+    copyText.value = text;
+    copyStatus.textContent = '正在复制…';
+    markBtn.hidden = true;
+    copyDlg.overlay.hidden = false;
+    copyText.focus();
+    copyText.select();
+    autoCopy(text).then(function (ok) {
+      // 剪贴板已写入就标已复制，不论对话框此时是否还是本次那个
+      if (ok) markCopied(ids);
+      if (copyState !== myState) return;
+      copyText.focus();
+      copyText.select();
+      if (ok) {
+        copyStatus.textContent = '已复制 ' + ids.length + ' 条意见到剪贴板。若粘贴不出来，可在下面已全选的文本框里手动复制。';
+      } else {
+        copyStatus.textContent = '自动复制失败。下面的全文已全选，请按 Ctrl/⌘ + C 手动复制。';
+        markBtn.hidden = false;
+      }
+    });
+  }
+
+  function closeCopy() {
+    var c = copyState;
+    if (!c) return;
+    copyState = null;
+    copyDlg.overlay.hidden = true;
+    restoreFocus(c.returnFocus);
+  }
+
+  copyBtn.addEventListener('click', function () { doCopy(false, copyBtn); });
+  copyAllBtn.addEventListener('click', function () { doCopy(true, copyAllBtn); });
+  copyClose.addEventListener('click', closeCopy);
+  markBtn.addEventListener('click', function () {
+    if (copyState) markCopied(copyState.ids);
+    markBtn.hidden = true;
+    copyStatus.textContent = '已标记为已复制。';
+  });
+
+  loadState();
+  refreshView();
+  restoreHighlights();
+  drawNotes();
+})();
+</script>
+</body>
+</html>

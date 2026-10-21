@@ -77,8 +77,8 @@ python3 <issues_v2.py 路径> --root . add --pool bug --json '{
 
 末尾附**已触碰文件清单**（本批中被你 Edit/Write 过的 ADR 文件绝对路径，无论最终是否保留——
 供主 session 人工核对；主 session 实际以 `git diff --name-only -- <本批候选路径>` 取到的
-改动集为准（只看本批候选路径，**MUST NOT** 改本批以外的 ADR），对该集合跑 `adr.py lint`，非 `completed` 终态或该集合内任一文件仍有红项，
-会对该集合整体 `git checkout --` 撤销）：
+改动集为准（只看本批候选路径，**MUST NOT** 改本批以外的 ADR），对该集合跑 `adr.py lint`；`failed`/`cancelled` 终态，或 `completed` 但该集合内任一文件仍有红项，
+会对该集合整体 `git checkout --` 撤销；`interrupted`（超过时长上限被停）不撤销，保留改动待人工核对）：
 
 ```
 已触碰文件：

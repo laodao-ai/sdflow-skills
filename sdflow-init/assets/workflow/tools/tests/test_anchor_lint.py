@@ -1,4 +1,4 @@
-import json, subprocess, sys, importlib.util
+import json, re, subprocess, sys, importlib.util
 from pathlib import Path
 import pytest
 
@@ -36,7 +36,8 @@ def _write_catalog(dest_dir, members="TG-04, TG-16"):
 def _ov(**kw):
     """outside-voice 锚构造器（矩阵测试用）。默认合法跨模型：host=claude runner=codex reason_code=ok。"""
     # async-outside-voice §3.5：site 默认取 code-voice（e2e 夹具多为 code-review 层，per-site 核按层比对期望集）
-    base = dict(site="code-voice", host="claude", runner="codex", reason_code="ok")
+    # truncated 默认 "false"：SKILL 锚模板恒写该字段，截断声明核据此判定是否需要声明
+    base = dict(site="code-voice", host="claude", runner="codex", reason_code="ok", truncated="false")
     base.update(kw)
     return "<!-- sdflow:outside-voice v1 " + " ".join(f'{k}="{v}"' for k, v in base.items()) + " -->"
 
@@ -1485,4 +1486,143 @@ def test_gq_cli_code_review_layer_no_gate_questions_needed(tmp_path):
            '<!-- sdflow:declared-sites v1 declared="code-voice" -->\n')
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
     r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 0, r.stderr
+
+
+# --- T171：outside-voice context 截断 ⇒ 报告须落覆盖残缺声明锚 --------------------------------
+# outside-voice 锚 truncated="true" 时，报告 MUST 有一条同 site 的
+# `<!-- sdflow:ov-truncation v1 site="…" dropped_bytes="N" dropped="…" gap="…" -->`。
+# lint 只核：声明存在、与截断锚按 site 一一对应、dropped_bytes 为正整数、dropped/gap 非空白；
+# dropped/gap 是人读自由文本，MUST NOT 解析其内容。
+
+def _ovt(**kw):
+    base = dict(site="code-voice", dropped_bytes="784210",
+                dropped="中段 12 个文件的 diff：a.py,b.sh", gap="上述文件未经跨模型第二意见，仅领域镜与对抗镜覆盖")
+    base.update(kw)
+    return "<!-- sdflow:ov-truncation v1 " + " ".join(f'{k}="{v}"' for k, v in base.items()) + " -->"
+
+
+def _tdv(report):
+    return _mod().check_truncation_disclosure(report)
+
+
+def _kinds(v):
+    return [x["kind"] for x in v]
+
+
+def test_td_untruncated_needs_no_disclosure():
+    """truncated="false" 且无声明 → 零违规。"""
+    assert _tdv(_ov(truncated="false")) == []
+
+
+def test_td_truncated_without_disclosure_is_red():
+    """truncated="true" 却无同 site 声明 → missing-truncation-disclosure。"""
+    v = _tdv(_ov(truncated="true"))
+    assert _kinds(v) == ["missing-truncation-disclosure"]
+    assert v[0]["detail"] == "code-voice"
+
+
+def test_td_truncated_with_disclosure_ok():
+    """truncated="true" + 同 site 完整声明 → 零违规。"""
+    assert _tdv(_ov(truncated="true") + "\n" + _ovt()) == []
+
+
+def test_td_disclosure_for_other_site_does_not_count():
+    """声明的 site 与截断锚不同 → 截断锚缺声明 + 该声明成孤儿，两条都红。"""
+    rpt = _ov(site="code-voice", truncated="true") + "\n" + _ov(site="hr-tg") + "\n" + _ovt(site="hr-tg")
+    assert sorted(_kinds(_tdv(rpt))) == ["missing-truncation-disclosure", "orphan-truncation-disclosure"]
+
+
+def test_td_orphan_disclosure_on_untruncated_site_is_red():
+    """一一对应的反向：truncated="false" 的站点不得有截断声明。"""
+    assert _kinds(_tdv(_ov(truncated="false") + "\n" + _ovt())) == ["orphan-truncation-disclosure"]
+
+
+def test_td_two_truncated_sites_each_need_own_disclosure():
+    """两个站点都截断，只声明一个 → 另一个红。"""
+    rpt = (_ov(site="code-voice", truncated="true") + "\n" + _ov(site="hr-tg", truncated="true")
+           + "\n" + _ovt(site="code-voice"))
+    v = _tdv(rpt)
+    assert _kinds(v) == ["missing-truncation-disclosure"] and v[0]["detail"] == "hr-tg"
+
+
+def test_td_duplicate_disclosure_same_site_is_red():
+    rpt = _ov(truncated="true") + "\n" + _ovt() + "\n" + _ovt()
+    assert _kinds(_tdv(rpt)) == ["duplicate-truncation-disclosure"]
+
+
+def test_td_outside_voice_missing_truncated_field_fail_closed():
+    """outside-voice 锚缺 truncated= → 无从判定是否需要声明 ⇒ missing-field（不按 false 放行）。"""
+    rpt = '<!-- sdflow:outside-voice v1 site="code-voice" host="claude" runner="codex" reason_code="ok" -->'
+    v = _tdv(rpt)
+    assert _kinds(v) == ["missing-field"] and v[0]["field"] == "truncated"
+
+
+@pytest.mark.parametrize("val", ["", "yes", "True", "true|false", "…"])
+def test_td_outside_voice_bad_truncated_value_fail_closed(val):
+    assert _kinds(_tdv(_ov(truncated=val))) == ["bad-truncated"]
+
+
+@pytest.mark.parametrize("field", ["site", "dropped_bytes", "dropped", "gap"])
+def test_td_disclosure_missing_field(field):
+    ovt = _ovt()
+    ovt = re.sub(rf' {field}="[^"]*"', "", ovt)
+    v = _tdv(_ov(truncated="true") + "\n" + ovt)
+    assert {"kind": "missing-field", "field": field} in [{"kind": x["kind"], "field": x.get("field")} for x in v]
+
+
+@pytest.mark.parametrize("field", ["dropped", "gap"])
+def test_td_disclosure_blank_text_field(field):
+    v = _tdv(_ov(truncated="true") + "\n" + _ovt(**{field: "   "}))
+    assert _kinds(v) == ["blank-field"] and v[0]["field"] == field
+
+
+@pytest.mark.parametrize("val", ["0", "-5", "abc", "", "12.5"])
+def test_td_disclosure_bad_dropped_bytes(val):
+    v = _tdv(_ov(truncated="true") + "\n" + _ovt(dropped_bytes=val))
+    assert _kinds(v) == ["bad-dropped-bytes"]
+
+
+def test_td_disclosure_dup_key_fail_closed():
+    ovt = _ovt().replace(" -->", ' site="hr-tg" -->')
+    v = _tdv(_ov(truncated="true") + "\n" + ovt)
+    assert "dup-key" in _kinds(v)
+
+
+def test_td_free_text_not_parsed():
+    """dropped/gap 内容任意（不含引号即可），lint 不解析其语义。"""
+    rpt = _ov(truncated="true") + "\n" + _ovt(dropped="x", gap="y")
+    assert _tdv(rpt) == []
+
+
+def test_td_fenced_template_anchors_ignored():
+    """fence 内的模板示例（截断锚 / 声明锚）都不参与判定。"""
+    rpt = ("```\n" + _ov(truncated="true") + "\n" + _ovt(site="hr-tg") + "\n```\n" + _ov(truncated="false"))
+    assert _tdv(rpt) == []
+
+
+def test_td_prefix_registered():
+    assert _mod().anchor_prefix(_ovt()) == "ov-truncation"
+
+
+def test_td_cli_end_to_end_violation(tmp_path):
+    """端到端：main() 接入截断声明核——截断无声明 → exit 1 + JSON 含 missing-truncation-disclosure。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(truncated="true") + '\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n' + _ds("code-voice") + "\n")
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 1, r.stderr
+    assert any(x["kind"] == "missing-truncation-disclosure" for x in json.loads(r.stdout)["violations"])
+
+
+def test_td_cli_end_to_end_clean(tmp_path):
+    """端到端正例（spec-review 层同样适用）：截断 + 声明 → CLEAN。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(site="design-voice", truncated="true") + "\n" + _ovt(site="design-voice") + "\n"
+           + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+           + _ds("design-voice") + "\n" + _gq() + "\n")
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "spec-review", root)
     assert r.returncode == 0, r.stderr

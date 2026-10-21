@@ -46,8 +46,8 @@ jobs:
           - { os: macos-latest,  python: "3.12" }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       # yq(mikefarah) —— 7 份 `_yq()` 消费点（shared-yaml-subset-parser）的运行依赖，
@@ -57,11 +57,11 @@ jobs:
       # 随时间漂移会让 CI 的绿依赖于时点；且 ubuntu runner 的 snapd 在 Actions 环境里不总
       # 可靠、`brew install` 拿到的是当天的最新版而非固定版本。用 `uname -m` 自适应架构而非
       # 写死 amd64——GitHub 已把 `macos-latest` 指向 Apple Silicon（arm64）runner，且该指向
-      # 会随时间推移改变。版本与本仓开发环境实测通过的版本一致（v4.53.3，mikefarah/yq）。
-      - name: Install yq (mikefarah/yq, pinned v4.53.3)
+      # 会随时间推移改变。版本与本仓开发环境实测通过的版本一致（v4.53.6，mikefarah/yq）。
+      - name: Install yq (mikefarah/yq, pinned v4.53.6)
         run: |
           set -eu
-          YQ_VERSION="v4.53.3"
+          YQ_VERSION="v4.53.6"
           OS="$(uname -s | tr '[:upper:]' '[:lower:]')"   # linux / darwin
           ARCH="$(uname -m)"
           case "$ARCH" in
@@ -105,19 +105,20 @@ jobs:
       # 同一信息重复 4 次，而 macOS 泳道按 10 倍计费。选最廉价的 ubuntu-latest × 3.12。
       #
       # **钉死版本**（同第 31 行「MUST NOT 用浮动版本」）：这 6 条用例断言的是
-      # **CLI 1.9.0 的具体行为**（`validate --strict` 只覆盖 delta specs），
-      # 浮动到新版会在发布当天无预警变红且历史 job 不可复现。本机实测基线即 1.9.0
-      # 〔sweep-pool-debt-2026-08 T294：1.5.0→1.9.0，同一批复核 6 条断言在 1.9.0 下仍绿〕。
+      # **CLI 的具体行为**（`validate --strict` 只覆盖 delta specs），
+      # 浮动到新版会在发布当天无预警变红且历史 job 不可复现。本机实测基线即 1.14.3
+      # 〔T377：1.9.0→1.14.3，test_decision_memo_gate.py 19 条在 1.14.3 下全绿；
+      # 1.14 起 `validate --archived` 只认 `[x]` 为完成，`[~]` 算未完成〕。
       # node 下限来自该包的 `engines: {node: ">=20.19.0"}`（实查 npm 全局包 package.json）。
       - name: Setup Node (openspec CLI 的运行时 — 仅这一条泳道)
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
       - name: Install openspec CLI (让 validate 门真跑起来)
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         run: |
-          npm install -g @fission-ai/openspec@1.9.0
+          npm install -g @fission-ai/openspec@1.14.3
           openspec --version
 
       # 四道门各自独立跑、各自能红——不合并成一步，否则先失败的那道会掩盖后面的。
@@ -140,3 +141,17 @@ jobs:
         # 零信号静默降级的经典形态（泳道绿，但那几条根本没跑）。不打印理由就只能靠
         # 数数猜是哪几条——本仓 fix-mechanical-layer-silent-failures 治的正是这类病。
         run: python -m pytest -q -rs -W error
+
+      # 评审页 DOM 回归测试（harden-review-page-followups · RVP-16）。
+      # 🔴 `!cancelled()`：前面任一 step（如「归档面校验」）红了也照跑，否则前面一红这条真浏览器门就静默不跑。
+      # 只铺 ubuntu-latest × 3.12 一条泳道：测的是页面行为，与 os / python 版本无关，铺满只是重复验证；
+      # Node 沿用上面该泳道已装的 22。
+      # `SDFLOW_REQUIRE_DOM=1`：依赖没装好时判 FAIL，不以 skip 通过。
+      # 上面的 `Full test suite` 先于本 step 的 `npm ci`，那时没有 node_modules，该测试在全量步骤里 skip，不重复跑。
+      - name: Gate — 评审页 DOM 回归测试
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && matrix.python == '3.12' }}
+        timeout-minutes: 15
+        run: |
+          set -eu
+          (cd sdflow-init/tests/dom && npm ci && npx playwright install --with-deps chromium)
+          SDFLOW_REQUIRE_DOM=1 python -m pytest -q -rs sdflow-init/tests/test_review_page_dom.py

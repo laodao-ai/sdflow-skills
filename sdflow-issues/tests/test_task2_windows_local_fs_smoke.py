@@ -81,7 +81,8 @@ def test_windows_setup_uses_owned_copies_and_refreshes_them(tmp_path):
         assert result.returncode == 0, result.stderr
         assert "mode: copy (Windows)" in result.stdout
 
-    for host in (".claude", ".codex"):
+    # Codex 的落点自 a4b786f8 起是 ~/.agents/skills（setup.sh 的 TARGET_DIRS）。
+    for host in (".claude", ".agents"):
         installed = home / host / "skills" / "sdflow-issues"
         assert installed.is_dir() and not installed.is_symlink()
         assert (installed / ".sdflow-skills").is_file()

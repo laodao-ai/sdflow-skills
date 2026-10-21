@@ -33,7 +33,7 @@ def _failure_matrix_errors(matrix):
         ("`failed` / `interrupted` / `cancelled`", "停止当前收尾。", "保留原错误并重跑对应子任务。"),
         ("坏 verify 报告", "不派 archive。", "修复 `verify-report.md` 结构与锚后重跑 verify。"),
         ("旧 archive 结果", "拒绝本轮成功。", "核验本轮 `run_id/task_id` 与 archive 对码后重跑。"),
-        ("low` 或 `medium` 门禁请求", "派发前拒绝。", "将 verify effort 改为 high 或更高。"),
+        ("`low` 或 `medium` 门禁请求", "派发前拒绝。", "将 verify effort 改为 high 或更高。"),
     )
     return [
         f"missing-or-changed:{condition}"
@@ -112,11 +112,11 @@ def test_done_native_parameters_gate_effort_and_main_session_commit():
         "host=claude", "subagent_type: sdflow-effort-", "host=codex",
         "reasoning_effort", 'fork_turns: "none"', "MUST NOT 带 `subagent_type`",
         "verify", "请求 effort", "low` 或 `medium`", "派发前拒绝",
-        "high` 或更高", "accepted_request_evidence", "effective_effort=unknown",
-        "省略 `reasoning_effort`", "最初被拒的 high 请求 MUST NOT",
+        "high` 或更高", "Codex effort 回退与门禁",
         "主 session", "commit message", "hand-off", "merge 理由", "最终接受",
     )
-    assert not _dispatch_errors(dispatch, required), _dispatch_errors(dispatch, required)
+    retired_effort = ("accepted_request_evidence", "最初被拒的 high 请求", "不得猜相邻")
+    assert not _dispatch_errors(dispatch, required, retired_effort), _dispatch_errors(dispatch, required, retired_effort)
     retired = _section(text, "## 第四步：Git Commit")
     assert "派发 Agent" not in retired
     assert "弱档子 agent" not in retired
@@ -172,7 +172,7 @@ def test_task4_failure_matrix_mutations_are_observable():
             "| 旧 archive 结果 | 接受本轮成功。 | 核验本轮 `run_id/task_id` 与 archive 对码后重跑。 |", 1
         )),
         ("删去低档请求行", matrix.replace(
-            "| low` 或 `medium` 门禁请求 | 派发前拒绝。 | 将 verify effort 改为 high 或更高。 |\n", "", 1
+            "| `low` 或 `medium` 门禁请求 | 派发前拒绝。 | 将 verify effort 改为 high 或更高。 |\n", "", 1
         )),
     )
     for name, mutated in mutations:

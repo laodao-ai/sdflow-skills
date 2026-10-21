@@ -1,12 +1,18 @@
 """断言七个派发 SKILL 的「宿主/档位解析」核心段【逐字节相同】。
 
 【守什么】
-`sdflow-implement`/`sdflow-done`/`sdflow-code-review`/`sdflow-spec-review` 四个编排 SKILL 与
-`sdflow-adr`/`sdflow-architecture`/`sdflow-devenv` 三个派发 SKILL 各自在首次派发之前做同一件事：清脏 unset → 预检 `resolve-models.sh` 可执行 → 捕获退出码后 eval → eval 后校验
-`$SDFLOW_HOST`/`$SDFLOW_TIER_*`。这段机制性文本【站点无关】——七处必须逐字一致，否则某个 skill
-的档位解析会静默漂出一套不同的失败语义（如漏了空值/unknown 分家、或漏了清脏步骤），而这是
-load-bearing 的正确性，不是风格问题。∴ 用 marker 圈定 + 机械等值门，一次封死漂移面
-（CLAUDE.md 基准 1 + 面治优先于点补，仿 `check_async_branch_parity.py`）。
+七个派发 SKILL 在首次派发之前都做同一件事：
+- 清脏 unset；
+- 预检 `resolve-models.sh` 可执行；
+- 捕获退出码后 eval；
+- eval 后校验 `$SDFLOW_HOST` / `$SDFLOW_TIER_*`。
+
+七个 SKILL 是 `sdflow-implement`、`sdflow-done`、`sdflow-code-review`、`sdflow-spec-review`、
+`sdflow-adr`、`sdflow-architecture`、`sdflow-devenv`。
+
+这段文本与站点无关，七处必须逐字一致。漂移会让某个 SKILL 的档位解析静默换一套失败语义
+（如漏了空值/unknown 分家，或漏了清脏步骤）。这是正确性问题，不是风格问题。
+用 marker 圈定 + 机械等值门一次封死漂移面（CLAUDE.md 基准 1 + 面治优先于点补，仿 `check_async_branch_parity.py`）。
 
 【圈外留什么】
 每个 skill 引出该段的标题/编号（"3."/"4."/"### 0.4"/`## 第零步`）、host=unknown 后是硬停还是

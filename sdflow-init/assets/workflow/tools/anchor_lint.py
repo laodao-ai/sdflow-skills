@@ -75,6 +75,7 @@ ANCHOR_PREFIXES = {
     "<!-- sdflow:fanout-capability v1": "fanout-capability",   # add-codex-host-support：会话级探针锚，always-on 一致性 lint 判据源
     "<!-- sdflow:declared-sites v1": "declared-sites",         # async-outside-voice：本层「应有锚站点集」声明，per-site 完整性核判据源
     "<!-- sdflow:gate-questions v1": "gate-questions",         # implement-workflow-optimization-2026-08-p5：拍板三问声明锚（design Db）
+    "<!-- sdflow:ov-truncation v1": "ov-truncation",           # T171：outside-voice context 截断的覆盖残缺声明锚
 }
 _KV = re.compile(r'([^\s=]+)="([^"]*)"')                    # 受限 kv：key="value"
 _FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')               # CommonMark fence：0-3 空格 + ≥3 marker
@@ -716,6 +717,72 @@ def check_gate_questions(report_text, layer, findings):
         findings.append({"anchor": anchor, "field": "q", "kind": "q-value-mismatch"})
 
 
+# --- T171：outside-voice context 截断 ⇒ 覆盖残缺声明锚机验 -------------------------------------
+# outside-voice.sh 超过 OV_MAX_CONTEXT_BYTES 时只保头尾、丢中段（stderr 报 OV_TRUNCATED=true 与
+# OV_TRUNCATED_DROPPED_BYTES=N）。丢掉的中段对跨模型 voice 不可见，报告须明说。声明形态：
+#   <!-- sdflow:ov-truncation v1 site="<同 outside-voice 锚>" dropped_bytes="N" dropped="…" gap="…" -->
+# 本核只判结构：截断锚 site 集 == 声明 site 集（一一对应）、dropped_bytes 为正整数、dropped/gap 非空白。
+# dropped/gap 是人读自由文本，MUST NOT 解析其内容（写得对不对是语义残余，留给人读）。
+
+_TRUNCATED_VALUES = frozenset({"true", "false"})
+_OV_TRUNCATION_REQUIRED = ("site", "dropped_bytes", "dropped", "gap")
+_POS_INT = re.compile(r'^[1-9]\d*$')
+
+
+def check_truncation_disclosure(report_text):
+    """截断覆盖残缺声明核（always-on，两层都查，不受 metrics 门控——判据源锚由 SKILL 直接落）。
+    ① 每条 fence 外 outside-voice 锚 MUST 带 truncated ∈ {true,false}：缺 → missing-field，
+       越域 → bad-truncated（fail-closed：判不出是否截断就判不出是否需要声明，MUST NOT 当 false 放行）。
+    ② 每个 truncated="true" 的 site MUST 恰有一条同 site 的 ov-truncation 锚（missing-/duplicate-）；
+       声明的 site 若不是截断站点 → orphan-truncation-disclosure（一一对应的反向）。
+    ③ 声明锚字段：缺 → missing-field；dropped_bytes 非正整数 → bad-dropped-bytes；
+       dropped/gap 仅空白 → blank-field；重复键 → dup-key 并跳过该锚（末值胜歧义）。
+    outside-voice 锚的重复键 / 缺 site 已由 check_legal_combo / check_declared_sites 报，此处跳过不重复报。"""
+    v = []
+    truncated_sites = set()
+    disclosed = {}
+    for ln in fence_outside_lines(report_text):
+        name = anchor_prefix(ln)
+        if name == "outside-voice":
+            anchor = ln.strip()[:80]
+            kv, dup = parse_kv_strict(ln)
+            if dup:
+                continue
+            if "truncated" not in kv:
+                v.append({"anchor": anchor, "field": "truncated", "kind": "missing-field"})
+                continue
+            if kv["truncated"] not in _TRUNCATED_VALUES:
+                v.append({"anchor": anchor, "field": "truncated", "kind": "bad-truncated"})
+                continue
+            if kv["truncated"] == "true" and "site" in kv:
+                truncated_sites.add(kv["site"])
+        elif name == "ov-truncation":
+            anchor = ln.strip()[:80]
+            kv, dup = parse_kv_strict(ln)
+            for dk in dup:
+                v.append({"anchor": anchor, "field": dk, "kind": "dup-key"})
+            if dup:
+                continue
+            for f in _OV_TRUNCATION_REQUIRED:
+                if f not in kv:
+                    v.append({"anchor": anchor, "field": f, "kind": "missing-field"})
+            if "dropped_bytes" in kv and not _POS_INT.match(kv["dropped_bytes"]):
+                v.append({"anchor": anchor, "field": "dropped_bytes", "kind": "bad-dropped-bytes"})
+            for f in ("dropped", "gap"):
+                if f in kv and kv[f].strip() == "":
+                    v.append({"anchor": anchor, "field": f, "kind": "blank-field"})
+            if "site" in kv:
+                site = kv["site"]
+                if site in disclosed:
+                    v.append({"anchor": anchor, "field": "site", "kind": "duplicate-truncation-disclosure"})
+                disclosed[site] = anchor
+    for s in sorted(truncated_sites - disclosed.keys()):
+        v.append({"kind": "missing-truncation-disclosure", "detail": s})
+    for s in sorted(disclosed.keys() - truncated_sites):
+        v.append({"anchor": disclosed[s], "kind": "orphan-truncation-disclosure", "detail": s})
+    return v
+
+
 _FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # dead-fanout-multi-mirror 去重计数域（不含 broad——
                                                                                   # broad 有主 session 亲做的合法降级路径，机制死却报 broad 不构成自相矛盾）
 _MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # `mirrors=` 合法 token 集（供 skew 探测信号读此常量名，
@@ -929,6 +996,8 @@ def main(argv=None):
     violations += check_declared_sites(report_text, args.layer, hr_tg_subset)
     # implement-workflow-optimization-2026-08-p5（GQ）：拍板三问声明锚 always-on，layer=spec-review 内分治
     check_gate_questions(report_text, args.layer, violations)
+    # T171：截断覆盖残缺声明核 always-on，两层都查（判据源 outside-voice 锚 truncated= 由 SKILL 直接落）
+    violations += check_truncation_disclosure(report_text)
     if metrics_on:
         violations += check_lens_metric(report_text, args.layer, enums)
     if violations:

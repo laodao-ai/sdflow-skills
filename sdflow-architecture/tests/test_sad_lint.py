@@ -1,7 +1,7 @@
 import subprocess, sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 import sad_schema as S
-from conftest import make_sad
+from sad_helpers import make_sad
 SCRIPT = pathlib.Path(__file__).parent.parent / "scripts" / "sad_lint.py"
 
 def lint(tmp_path, text):
@@ -214,7 +214,7 @@ def test_fenced_contract_lines_are_scanned():
       · `sad-template.md` 明确要求 contract 行写在 fence 内（「contract 行格式示例（fence 内）」）
       · 而 `_section5_body_lines` 原走 `body_lines`（DEC-2，**剥 fence**）
       · ⇒ 真实 SAD 上抽出 **0 条**，`_check_contract_invariants` **从来没触发过**
-      · 而测试是绿的 —— 因为 `conftest.py` 的 fixture 恰好把 contract 行写在 fence **外**
+      · 而测试是绿的 —— 因为 `sad_helpers.py` 的 helper 恰好把 contract 行写在 fence **外**
 
     **producer 说 fence 内，parser 剥 fence，fixture 站在 parser 这边 ⇒ 三方各说各话。**
     修复后在试点项目的真 SAD 上当场抓到 3 条真违规（status=skeleton-ready 但 contract[validated]）。

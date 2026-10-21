@@ -227,7 +227,7 @@ SAD="$REPO/openspec/architecture/sad.md"                # SAD 单例
 - `host=claude`：带 `model: "$SDFLOW_TIER_STRONG"` 与 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_STRONG`。
 - `host=codex`：用 `spawn_agent` 派 fresh 子代理，带 `model: "$SDFLOW_TIER_STRONG"`、`reasoning_effort: "$SDFLOW_EFFORT_STRONG"` 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。
 - `host=unknown`：无法派发 fresh 子代理，冷走查走 4.1 的降级分支。
-- 冷走查与镜阵是人门前的门禁判断：请求 effort 解析为 `low` 或 `medium` 时不派发，报告配置错误并将强档 effort 改为 `high` 或更高后重试。
+- 冷走查与镜阵是人门前的门禁判断：请求 effort 解析为 `low` 或 `medium` 时不派发，报告配置错误并将强档 effort 改为 `high` 或更高后重试。effort 回退与门禁放行条件以契约「Codex effort 回退与门禁」节为准（规则根 `subagent-dispatch-contract.md`）。
 
 ---
 
@@ -367,7 +367,7 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "step=3 r
 
 - **父目录**：`openspec/architecture/.outside-voice/`。
 - **承载判定所用 `subagent_type`**：本次派发所带的 `subagent_type`（只有 Claude 宿主会带）。
-- **回执与失败出口**：冷走查与镜阵均为只读任务。通过后先剥掉回执行再使用返回内容；不符则同一任务重派一次，再不符按 4.1 的失败处置显式报告缺口，MUST NOT 无走查静默过人门。
+- **回执与失败出口**：冷走查与镜阵均为只读任务。通过后先剥掉回执行再使用返回内容；回执不符的重派规则以契约「通则承载与前缀文件」节「读文件指令与回执」为准（规则根 `subagent-dispatch-contract.md`）；最终仍不符按 4.1 的失败处置显式报告缺口，MUST NOT 无走查静默过人门。
 
 ### 4.1 冷走查（默认档，每次必跑）
 
@@ -384,7 +384,7 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "走查 �
 
 **走查失败重派一次**（子代理无矩阵产出）→ 再失败 **显式报告缺口**，**MUST NOT 无走查静默过人门**。
 
-Codex 宿主派发子代理后，按规则根 `subagent-dispatch-contract.md` 的「Codex 结果收集」节在同一回合内收齐结果，时长上限取缺省 30 分钟。
+派发子代理后，时长上限见规则根 `subagent-dispatch-contract.md` 的「子代理时长上限」节；Claude 宿主按其「Claude 结果收集」节维持闹钟，Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果。
 
 **`host=unknown` 降级分支**：宿主未知（resolver 跑成但判不出宿主），无法派发 fresh 子代理。SHALL **显式降级**：
 走查由主 session 执行，并 **MUST 响亮留痕** `walkthrough=self-review-degraded` + 建议操作者换受支持宿主复跑，

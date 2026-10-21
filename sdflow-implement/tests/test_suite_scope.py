@@ -18,6 +18,7 @@
 文件名的限制，后者需要跨进程篡改 PATH，二者走直接调用更精确、更省沙盒开销）。
 """
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -748,17 +749,41 @@ test-suites:
 # 顶替真实 yq 所在目录，否则 git 本身先找不到、报的是无关的 FileNotFoundError）。
 # ---------------------------------------------------------------------------
 
-def _git_only_path_env(extra_dir=None):
-    import os
+def _is_yq_entry(name):
+    return name.split(".", 1)[0].lower() == "yq"
+
+
+def _git_only_path_env(tmp_path, extra_dir=None):
     import shutil as _shutil
-    git_bin = _shutil.which("git")
-    assert git_bin, "本机需有 git 才能跑这组测试"
-    git_dir = str(Path(git_bin).parent)
+    found = _shutil.which("git")
+    assert found, "本机需有 git 才能跑这组测试"
+    git_bin = Path(found)
+    git_dir = git_bin.parent
+    if any(_is_yq_entry(entry.name) for entry in git_dir.iterdir()):
+        # git 与 yq 同目录（GitHub ubuntu runner 的 /usr/bin、macOS 的 Homebrew 目录）时，
+        # 整目录放进 PATH 会让「yq 缺失」分支拿到真 yq ⇒ 只放一个指向 git 的软链。
+        # 不同目录时直接用 git 所在目录：Windows 的 Git\cmd\git.exe 是按自身位置找
+        # 安装根的启动器，软链出去不保证能用。
+        git_dir = tmp_path / "git-only-bin"
+        git_dir.mkdir()
+        (git_dir / git_bin.name).symlink_to(git_bin)
     parts = [str(extra_dir)] if extra_dir is not None else []
-    parts.append(git_dir)
+    parts.append(str(git_dir))
     env = dict(os.environ)
-    env["PATH"] = ":".join(parts)
+    env["PATH"] = os.pathsep.join(parts)
     return env
+
+
+def _write_fake_yq(bin_dir, sh_body, cmd_body):
+    """写一个假 yq。impl_route 用 shutil.which + subprocess 直接起 yq，不经 bash：
+    Windows 上无扩展名脚本既找不到也起不来，按仓内约定写 yq.cmd
+    （同 hack/tests/test_sdflow_spec_failure_modes.py 的 _fake_openspec）。"""
+    if os.name == "nt":
+        (bin_dir / "yq.cmd").write_text("@echo off\n" + cmd_body, encoding="utf-8", newline="\r\n")
+    else:
+        fake = bin_dir / "yq"
+        fake.write_text("#!/bin/sh\n" + sh_body, encoding="utf-8")
+        fake.chmod(0o755)
 
 
 def test_cli_yq_missing_exit6(tmp_path):
@@ -766,7 +791,7 @@ def test_cli_yq_missing_exit6(tmp_path):
     _write(repo, "hack/bar.sh", "x\n")
     empty_bin = tmp_path / "empty-bin"
     empty_bin.mkdir()
-    env = _git_only_path_env(empty_bin)
+    env = _git_only_path_env(tmp_path, empty_bin)
     code, out, err = _run_suite_scope(repo, env=env, check_exit=6)
     assert "problem:" in err
     # [closeout-suite-scope-leftovers T304 用例⑥] fix 含安装指引
@@ -778,10 +803,10 @@ def test_cli_yq_wrong_identity_exit6(tmp_path):
     _write(repo, "hack/bar.sh", "x\n")
     fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
-    fake_yq = fake_bin / "yq"
-    fake_yq.write_text("#!/bin/sh\necho 'kislyuk/yq fakeversion'\nexit 0\n", encoding="utf-8")
-    fake_yq.chmod(0o755)
-    env = _git_only_path_env(fake_bin)
+    _write_fake_yq(fake_bin,
+                   sh_body="echo 'kislyuk/yq fakeversion'\nexit 0\n",
+                   cmd_body="echo kislyuk/yq fakeversion\nexit /b 0\n")
+    env = _git_only_path_env(tmp_path, fake_bin)
     code, out, err = _run_suite_scope(repo, env=env, check_exit=6)
     assert "problem:" in err
 
@@ -794,10 +819,8 @@ def test_cli_yq_version_probe_nonzero_exit6(tmp_path):
     _write(repo, "hack/bar.sh", "x\n")
     fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
-    fake_yq = fake_bin / "yq"
-    fake_yq.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-    fake_yq.chmod(0o755)
-    env = _git_only_path_env(fake_bin)
+    _write_fake_yq(fake_bin, sh_body="exit 1\n", cmd_body="exit /b 1\n")
+    env = _git_only_path_env(tmp_path, fake_bin)
     code, out, err = _run_suite_scope(repo, env=env, check_exit=6)
     assert "problem:" in err
     assert "损坏或不可执行" in err
@@ -827,14 +850,17 @@ def test_cli_yq_non_json_stdout_exit6(tmp_path):
     _write(repo, "hack/bar.sh", "x\n")
     fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
-    fake_yq = fake_bin / "yq"
-    fake_yq.write_text(
-        "#!/bin/sh\n"
-        "case \"$1\" in --version) echo 'yq (https://github.com/mikefarah/yq/) version v4.0.0';;"
-        " *) echo 'this is not json';; esac\n",
-        encoding="utf-8")
-    fake_yq.chmod(0o755)
-    env = _git_only_path_env(fake_bin)
+    _write_fake_yq(
+        fake_bin,
+        sh_body=("case \"$1\" in --version) echo 'yq (https://github.com/mikefarah/yq/) version v4.0.0';;"
+                 " *) echo 'this is not json';; esac\n"),
+        cmd_body=("if \"%~1\"==\"--version\" goto version\n"
+                  "echo this is not json\n"
+                  "exit /b 0\n"
+                  ":version\n"
+                  "echo yq (https://github.com/mikefarah/yq/) version v4.0.0\n"
+                  "exit /b 0\n"))
+    env = _git_only_path_env(tmp_path, fake_bin)
     code, out, err = _run_suite_scope(repo, env=env, check_exit=6)
     assert "problem:" in err
     assert "非合法 JSON" in err

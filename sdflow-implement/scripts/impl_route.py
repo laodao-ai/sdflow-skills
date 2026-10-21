@@ -7,6 +7,7 @@
     `task-text`    —— 机械抠出单张 Task 段原文落盘，供 dispatch prompt 引用文件路径
                        （替代编排层手抄 Task N 段落全文——手抄=转录风险）
     `suite-scope`  —— 按 diff 路径归域求值收尾票测试层集合（`adr/0045`；design.md 决策 §2）
+    `plan-budget`  —— 出票后统计预算票 / 迁移批次 / 收尾票，超限或豁免不合规即报（T249）
 `frontier`/`task-text` 共用同一份 `parse_blocked_by` 拓扑解析（Blocked-by 依赖图单一源，
 基准 5：无界语法禁手搓）。
 
@@ -272,6 +273,105 @@ def extract_task_text(plan_text: str, task_id: int) -> Optional[str]:
     if not seen:
         return None
     return "\n".join(out_lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# plan-budget：出票预算计量（T249）
+# 预算票 = 全部票 − 合规迁移批次 − 唯一 R-ID: all 收尾票，预算票数 ≤ BUDGET_MAX。
+# 迁移批次豁免须机读声明 + 结构合规；「各批是否同一机械变换」无确定性信号，留给
+# SKILL.md 的 strong 档对抗镜复核（诚实边界）。
+# ---------------------------------------------------------------------------
+
+BUDGET_MAX = 6
+MIGRATION_OF_RE = re.compile(r"\*{0,2}Migration-of:\*{0,2}\s*(.*)$")
+TRANSFORM_RE = re.compile(r"\*{0,2}Transform:\*{0,2}\s*(.*)$")
+
+
+def _task_marker_values(plan_text: str, marker_re: "re.Pattern[str]") -> Dict[int, List[str]]:
+    """按 `### Task N:` 分段收集某标记行的值（fence-aware，口径同 parse_blocked_by）。"""
+    fence = _FenceTracker()
+    cur: Optional[int] = None
+    values: Dict[int, List[str]] = {}
+    for line in plan_text.splitlines():
+        if fence.feed(line) or fence.inside:
+            continue
+        m = TASK_HEADER_RE.match(line)
+        if m:
+            cur = int(m.group(1))
+            continue
+        if cur is None:
+            continue
+        mm = marker_re.search(line)
+        if mm:
+            values.setdefault(cur, []).append(mm.group(1).strip())
+    return values
+
+
+def plan_budget(plan_text: str) -> dict:
+    """统计预算票 / 迁移批次 / 收尾票并给出违规清单。拓扑非法 ⇒ raise TopoError。"""
+    deps = parse_blocked_by(plan_text)   # 同时完成 fence 未闭合、缺 Blocked-by 等结构校验
+    # R-ID 解析单一源 = ship_gate（第四道校验认收尾票的同一口径）；惰性 import，
+    # 模块顶层已把 gate 目录放进 sys.path（见 FenceTracker 导入处）。
+    from ship_gate import _plan_task_r_ids, CLOSING_TICKET_R_ID  # type: ignore
+
+    r_ids = _plan_task_r_ids(plan_text)
+    closing = sorted(int(t) for t, v in r_ids.items()
+                     if v.lower() == CLOSING_TICKET_R_ID and int(t) in deps)
+    violations: List[str] = []
+    if len(closing) > 1:
+        violations.append(f"多张 R-ID: all 票 {closing}，收尾票须唯一，仅豁免一张")
+    closing_ids = set(closing[:1])
+
+    migration_of = _task_marker_values(plan_text, MIGRATION_OF_RE)
+    transforms = _task_marker_values(plan_text, TRANSFORM_RE)
+
+    batches: Dict[int, int] = {}   # 批次号 → expand 号（只收结构合规的）
+    for tid, vals in sorted(migration_of.items()):
+        if len(vals) > 1:
+            violations.append(f"Task {tid} Migration-of 声明重复")
+            continue
+        raw = vals[0]
+        if not raw.isdigit() or int(raw) not in deps:
+            violations.append(f"Task {tid} Migration-of 指向不存在的 Task: {raw!r}")
+            continue
+        expand = int(raw)
+        if expand == tid or expand in migration_of or expand in closing_ids or tid in closing_ids:
+            violations.append(
+                f"Task {tid} Migration-of: {expand} 非法（expand 票不能是批次票或收尾票）")
+            continue
+        if deps[tid] != {expand}:
+            violations.append(
+                f"Task {tid} 是迁移批次，Blocked-by 须恰为 {expand}（expand 票），"
+                f"实为 {sorted(deps[tid]) or 'none'}")
+            continue
+        if not any(v for v in transforms.get(expand, [])):
+            violations.append(
+                f"Task {tid} 的 expand 票 Task {expand} 缺 Transform: 声明（单一机械变换的一句话描述）")
+            continue
+        batches[tid] = expand
+
+    for expand in sorted(set(batches.values())):
+        group = {b for b, e in batches.items() if e == expand}
+        has_contract = any(
+            tid not in batches and tid not in closing_ids and tid != expand and group <= dep_set
+            for tid, dep_set in deps.items())
+        if not has_contract:
+            violations.append(
+                f"expand 票 Task {expand} 的迁移批次 {sorted(group)} 缺 contract 票"
+                "（Blocked-by 须覆盖全部批次）")
+
+    budgeted = sorted(t for t in deps if t not in batches and t not in closing_ids)
+    if len(budgeted) > BUDGET_MAX:
+        violations.append(
+            f"预算票 {len(budgeted)} 张，超出上限 {BUDGET_MAX}：{budgeted}"
+            "（迁移批次须以 Migration-of/Transform 机读声明并结构合规才豁免）")
+    return {
+        "budget_max": BUDGET_MAX,
+        "budgeted": budgeted,
+        "migration_batches": sorted(batches),
+        "closing": sorted(closing_ids),
+        "violations": violations,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -833,6 +933,24 @@ def _cmd_task_text(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_plan_budget(args: argparse.Namespace) -> int:
+    """退出码：0 无违规 · 1 有违规（修票后重跑）· 6 plan 缺失或拓扑非法。"""
+    plan_path = Path(args.plan)
+    if not plan_path.exists():
+        print(f"plan 文件不存在: {plan_path}", file=sys.stderr)
+        return EXIT_ROUTE_STOP
+    text = plan_path.read_text(encoding="utf-8", errors="replace")
+    try:
+        result = plan_budget(text)
+    except TopoError as e:
+        print(str(e), file=sys.stderr)
+        return EXIT_ROUTE_STOP
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    for v in result["violations"]:
+        print(v, file=sys.stderr)
+    return 1 if result["violations"] else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="sdflow-implement tickets 调度 stdlib helper（只读，不改 ship_gate.py）")
@@ -848,6 +966,10 @@ def build_parser() -> argparse.ArgumentParser:
     task_text_p.add_argument("--task", required=True, type=int, help="Task 号")
     task_text_p.add_argument(
         "--out", help="输出路径（默认 <change_dir>/impl-reports/task<N>-brief.md）")
+
+    plan_budget_p = sub.add_parser(
+        "plan-budget", help="统计出票预算（预算票/迁移批次/收尾票），超限或豁免不合规即退出 1")
+    plan_budget_p.add_argument("--plan", required=True, help="plan 文件路径")
 
     suite_scope_p = sub.add_parser(
         "suite-scope", help="按 diff 路径归域求值收尾票测试层集合（adr/0045）")
@@ -871,6 +993,8 @@ def main(argv=None) -> int:
         return _cmd_task_text(args)
     if args.cmd == "suite-scope":
         return _cmd_suite_scope(args)
+    if args.cmd == "plan-budget":
+        return _cmd_plan_budget(args)
     parser.error(f"未知子命令: {args.cmd}")  # pragma: no cover
     return 2
 

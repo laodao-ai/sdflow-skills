@@ -9,6 +9,7 @@
 import json
 import multiprocessing
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -106,6 +107,33 @@ def test_parse_frontmatter_unescapes_embedded_double_quote():
     rendered = v2.render_frontmatter(fm)
     parsed = v2.parse_frontmatter(rendered)
     assert parsed["summary"] == 'true # x: "quoted" bit'
+
+
+BACKSLASH_SUMMARY = r'正则 [\p{L}\d] 与 C:\path\ 末尾反斜杠 \" 相邻'
+
+
+def _backslash_fm():
+    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
+    fm.update({"id": "T1", "pool": "todo", "status": "OPEN",
+               "date": "2026-08-03", "module": "m",
+               "source_change": "c", "summary": BACKSLASH_SUMMARY})
+    return fm
+
+
+def test_parse_frontmatter_round_trips_backslashes():
+    fm = _backslash_fm()
+    assert v2.parse_frontmatter(v2.render_frontmatter(fm)) == fm
+
+
+@pytest.mark.skipif(shutil.which("yq") is None, reason="yq 未安装")
+def test_rendered_frontmatter_with_backslashes_is_valid_yaml_for_yq():
+    # ship_gate 经 yq 读 source_change；反斜杠未转义时 yq 整份拒读，source_change 读成 None
+    rendered = v2.render_frontmatter(_backslash_fm())
+    out = subprocess.run(["yq", "-o=json", "."], input=rendered, capture_output=True,
+                         text=True, encoding="utf-8", errors="replace", check=True).stdout
+    parsed = json.loads(out)
+    assert parsed["summary"] == BACKSLASH_SUMMARY
+    assert parsed["source_change"] == "c"
 
 
 def test_parse_frontmatter_rejects_illegal_line():

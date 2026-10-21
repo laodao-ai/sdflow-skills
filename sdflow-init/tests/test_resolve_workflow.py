@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from test_support.windows import bash_executable, bash_path
+from test_support.windows import bash_executable, bash_path, native_path
 
 SCRIPT = Path(__file__).parent.parent / "assets" / "hack" / "resolve-workflow.sh"
 
@@ -81,7 +81,7 @@ class TestHappyPaths:
         _symlink_or_skip(sdflow / "workflow", bundle)
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
-        assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+        assert Path(native_path(r.stdout.strip())).resolve() == bundle.resolve()
 
     def test_pointer_file_fallback(self, tmp_path):
         repo = make_repo(tmp_path / "repo")
@@ -91,7 +91,7 @@ class TestHappyPaths:
         (sdflow / "workflow-path").write_text(str(bundle) + "\n", encoding="utf-8")
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
-        assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+        assert Path(native_path(r.stdout.strip())).resolve() == bundle.resolve()
 
     def test_script_is_executable(self):
         if os.name == "nt":
@@ -111,7 +111,7 @@ class TestLocalCopyIgnored:
         _symlink_or_skip(sdflow / "workflow", bundle)
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
-        resolved = Path(r.stdout.strip()).resolve()
+        resolved = Path(native_path(r.stdout.strip())).resolve()
         assert resolved == bundle.resolve()
         assert resolved != (repo / "openspec" / "workflow").resolve()
 
@@ -210,7 +210,7 @@ class TestEdgeCases:
         (sdflow / "workflow-path").write_text(str(bundle) + "  \r\n", encoding="utf-8")
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
-        assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+        assert Path(native_path(r.stdout.strip())).resolve() == bundle.resolve()
 
     def test_root_flag_overrides_cwd(self, tmp_path):
         repo = make_repo(tmp_path / "repo")
@@ -222,7 +222,7 @@ class TestEdgeCases:
         sub.mkdir(parents=True)
         r = run_resolve(sub, sdflow, args=("--root", str(repo)))
         assert r.returncode == 0
-        assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+        assert Path(native_path(r.stdout.strip())).resolve() == bundle.resolve()
 
     def test_explain_reports_source(self, tmp_path):
         repo = make_repo(tmp_path / "repo")
@@ -311,4 +311,4 @@ class TestEdgeCases:
         (sdflow / "workflow-path").write_text(str(bundle) + "\n", encoding="utf-8")
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
-        assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+        assert Path(native_path(r.stdout.strip())).resolve() == bundle.resolve()

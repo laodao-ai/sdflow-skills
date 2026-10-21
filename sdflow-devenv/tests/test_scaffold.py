@@ -216,7 +216,7 @@ def test_confirm_lane_marks_human_attested(repo, capsys):
     run("init", "--root", repo)
     run("set-lane", "--root", repo, "--id", "board", "--layer", "e2e",
         "--status", "planned", "--method", "按 SOP 烧板并跑冒烟",
-        "--executor", "human", "--source", "embedded-test-sop")
+        "--executor", "human", "--source", "board-bringup-sop.md")
     assert run("confirm-lane", "--root", repo, "--id", "board",
                "--confirmed-what", "烧了 3 块板，冒烟全过") == 0
 

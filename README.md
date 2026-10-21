@@ -98,6 +98,7 @@ bash setup.sh
   - **Unix**：绝对路径 symlink —— 改源即时生效，仅新增/删 skill 后才需重跑。
   - **Windows**：复制目录 + 写 `.sdflow-skills` 标记文件用于更新检测（名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属并可刷新）。
   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
+- **评审页**：设计门（`sdflow-spec-review`）、change 收尾（`sdflow-done`）、roadmap review（`sdflow-roadmap`）三个人审节点各生成一份静态 HTML 评审页（`<目录>/review/<节点页>.html`，进 git），出口文字附路径；人在浏览器里划选原文写意见、复制后粘回会话，agent 追加到同目录 `review-notes.md`。生成脚本 `render-review-page.py`、模板与固定版本渲染库（`review-page/`）由 `setup.sh` 装进 `~/.sdflow/hack/`，消费仓无需额外安装。
 - **spec 工作流 bundle 的权威源与分发**：`sdflow-init/assets/workflow/` 是这套规则集的**唯一权威源**，
   但规则文件与评审 `tools/` **不进消费仓**——`sdflow-init` 只往消费项目落一份人读手册
   `openspec/workflow/WORKFLOW-GUIDE.md`，评审运行时经 `~/.sdflow/hack/resolve-workflow.sh` 解析到

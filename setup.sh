@@ -603,6 +603,28 @@ cleanup_agent_orphans() {
   done < <(find "$dest" -mindepth 1 -maxdepth 1)
 }
 
+# 原子安装单个 hack 文件：先拷到同目录临时文件（含 chmod），再 mv 覆盖。
+# 为什么：调用方（outside-voice.sh 等）可能正在读目标；直接 cp 覆盖会让它读到半截文件。
+# 同目录 mv 是同文件系统 rename，原子。任一步失败返回非零并清掉临时文件，旧文件不动。
+# 返回码而非 exit：调用方按 `if ! install_hack_file` 降级进 skipped[]（set -e 下不中止）。
+install_hack_file() {  # $1=src $2=dest $3=1 则 chmod +x
+  local src="$1" dest="$2" want_exec="$3" tmp
+  tmp="$(dirname "$dest")/.$(basename "$dest").tmp.$$"
+  if ! cp "$src" "$tmp" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  fi
+  if [ "$want_exec" = 1 ] && ! chmod +x "$tmp" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  fi
+  if ! mv -f "$tmp" "$dest" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  fi
+  return 0
+}
+
 # ─── sdflow global home: canonical bundle anchor + hack scripts ──
 # canonical 只接管自属软链/指针（对齐 skills 的所有权守卫）；~/.sdflow 其余视为本工具独占命名空间。
 install_sdflow() {
@@ -677,7 +699,7 @@ install_sdflow() {
   for f in "$REPO_DIR/sdflow-init/assets/hack/"*.sh; do
     [ -f "$f" ] || continue
     base="$(basename "$f")"
-    if ! cp "$f" "$sdflow/hack/$base" 2>/dev/null || ! chmod +x "$sdflow/hack/$base" 2>/dev/null; then
+    if ! install_hack_file "$f" "$sdflow/hack/$base" 1; then
       skipped+=("hack/$base @ $sdflow — 装不上（落点只读？磁盘满？），未安装")
       cap_broken=1
       continue
@@ -690,7 +712,7 @@ install_sdflow() {
   for f in "$REPO_DIR/sdflow-init/assets/hack/"*.md; do
     [ -f "$f" ] || continue
     base="$(basename "$f")"
-    if ! cp "$f" "$sdflow/hack/$base" 2>/dev/null; then
+    if ! install_hack_file "$f" "$sdflow/hack/$base" 0; then
       skipped+=("hack/$base @ $sdflow — 装不上（落点只读？磁盘满？），未安装")
       cap_broken=1
       continue
@@ -703,13 +725,31 @@ install_sdflow() {
   for f in "$REPO_DIR/sdflow-init/assets/hack/"*.py; do
     [ -f "$f" ] || continue
     base="$(basename "$f")"
-    if ! cp "$f" "$sdflow/hack/$base" 2>/dev/null || ! chmod +x "$sdflow/hack/$base" 2>/dev/null; then
+    if ! install_hack_file "$f" "$sdflow/hack/$base" 1; then
       skipped+=("hack/$base @ $sdflow — 装不上（落点只读？磁盘满？），未安装")
       cap_broken=1
       continue
     fi
     installed+=("hack/$base @ $sdflow")
   done
+
+  # 评审页资产目录（模板 + 固定版本 marked + LICENSE）：render-review-page.py 按自身所在目录找它。
+  # 先删后拷，避免旧版文件残留；失败只进 skipped[]，既不中止安装，也不置 cap_broken
+  # （它不是 capability manifest 的成员，装不上只影响评审页生成，生成脚本会报「资产缺失」）。
+  local rp_src="$REPO_DIR/sdflow-init/assets/hack/review-page"
+  if [ -d "$rp_src" ]; then
+    if ! rm -rf "$sdflow/hack/review-page" 2>/dev/null; then
+      skipped+=("hack/review-page @ $sdflow — 旧目录清不掉（只读？占用？），未安装")
+    elif ! cp -R "$rp_src" "$sdflow/hack/review-page" 2>/dev/null; then
+      rm -rf "$sdflow/hack/review-page" 2>/dev/null || true
+      skipped+=("hack/review-page @ $sdflow — 装不上（落点只读？磁盘满？），未安装")
+    else
+      installed+=("hack/review-page @ $sdflow")
+    fi
+  else
+    # 源目录缺失（残缺 checkout / 误删）：不是静默跳过——进汇总，让人知道评审页生成会报「资产缺失」
+    skipped+=("hack/review-page @ $sdflow — 源目录缺失（${rp_src}），评审页资产未安装")
+  fi
 
   # 快照收尾：manifest 由 job helper 自己算（**单一计算源**——写与验共用
   # `compute_manifest()`；MUST NOT 在 shell 里抄第二份 hash 口径）。

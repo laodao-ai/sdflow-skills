@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable
+
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "sdflow-init" / "assets" / "hack" / "export-codex-collab-evidence.py"
@@ -562,7 +564,8 @@ def test_setup_installs_exporter_as_executable_copy(tmp_path):
     env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
 
     result = subprocess.run(
-        ["bash", str(REPO / "setup.sh")],
+        # 裸 "bash" 在 Windows 上解析到 System32 的 WSL 启动器，跑不了 setup.sh。
+        [bash_executable(), str(REPO / "setup.sh")],
         env=env,
         capture_output=True,
         text=True,

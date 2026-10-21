@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from test_support.windows import bash_executable, bash_path
+from test_support.windows import bash_executable, bash_path, native_path
 
 
 def test_bash_path_converts_windows_drive_and_separators():
@@ -13,6 +13,17 @@ def test_bash_path_converts_windows_drive_and_separators():
 
 def test_bash_path_keeps_posix_path():
     assert bash_path(Path("/tmp/example")) == "/tmp/example"
+
+
+def test_native_path_inverts_bash_drive_spelling_on_windows():
+    assert native_path("/c/dir with spaces/x", windows=True) == "C:/dir with spaces/x"
+    assert native_path("/d", windows=True) == "D:/"
+    assert native_path("C:/already/native", windows=True) == "C:/already/native"
+    assert native_path("/tmp/x", windows=True) == "/tmp/x"
+
+
+def test_native_path_keeps_posix_path_off_windows():
+    assert native_path("/c/x", windows=False) == "/c/x"
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows-specific Bash selection")

@@ -10,7 +10,7 @@ description: >
 
 # sdflow-implement — tickets 实现管线双模式编排器
 
-已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 ticket 角色、双轴审和 halt envelope。Codex 宿主按该契约「Codex 结果收集」节在同一回合内收齐结果；本入口声明单个子代理时长上限 60 分钟（implementer 要跑测试）。
+已决定派发后的容量分批、effort 回退和本轮结果双门统一遵循规则根 `subagent-dispatch-contract.md`；本入口只定义 ticket 角色、双轴审和 halt envelope。时长上限见该契约「子代理时长上限」节；Claude 宿主按其「Claude 结果收集」节维持闹钟，Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果；本入口的 implementer、fix 子代理时长上限 180 分钟（要跑测试），Standards 轴与 Spec 轴按契约表 60 分钟。
 
 <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
@@ -184,7 +184,7 @@ adr/0042 supersede adr/0033）；frontmatter marker 为文件格式契约（无�
   - 执行模式的 halt envelope：当前票 BLOCKED，或子代理机制 unavailable、failed、interrupted、cancelled 时硬停当前票。
 
   其余情况一律继续到完成产物。检查通过就继续，不做未要求的改进。
-- **循环上限**：结果回执不符，只读任务同一任务重派一次，写入任务不重派；同一发现连续 2 轮 re-review 仍未消解，或同一文件累计被 Critical/Important 命中 ≥3 轮，停止修复循环并走仲裁。
+- **循环上限**：结果回执不符的重派上限见契约「读文件指令与回执」；同一发现连续 2 轮 re-review 仍未消解，或同一文件累计被 Critical/Important 命中 ≥3 轮，停止修复循环并走仲裁。
 
 ## 第零步：宿主/档位解析（两入口共用、无条件执行）
 
@@ -210,8 +210,7 @@ adr/0042 supersede adr/0033）；frontmatter marker 为文件格式契约（无�
 `host=claude` 时，上表每处 dispatch MUST 传对应档位的 `model: "$SDFLOW_TIER_<档位>"` 并附带 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_<档位>`。
 `host=codex` 时，必须显式传对应档位的 `model: "$SDFLOW_TIER_<档位>"`、`reasoning_effort: "$SDFLOW_EFFORT_<档位>"`
 与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。
-仅宿主明确拒绝 effort 参数或 model×effort 组合时，按共享契约依次尝试 canonical 默认和省略
-`reasoning_effort`；省略后记录 `effective_effort=unknown`，不得把它写成已证明的 high。
+effort 回退与门禁放行条件以契约「Codex effort 回退与门禁」节为准（规则根 `subagent-dispatch-contract.md`）。
 
 **`$SDFLOW_HOST="codex"`：能力探针 + 不可用则硬停（不缩 roster）**〔spec-review-amendment H10〕：
 
@@ -255,9 +254,9 @@ problem 一句、ticket 号与名统一填「—（起手失败，无票上下�
 - **父目录**：`{change_dir}/.outside-voice/`。
 - **承载判定所用 `subagent_type`**：`host=claude` 时对 `sdflow-effort-$SDFLOW_EFFORT_MID` 与 `sdflow-effort-$SDFLOW_EFFORT_STRONG` 各判一次。
 - **前缀变体**：只有 `prefix-principles.md`，本入口没有评审前缀变体。
-- **回执与失败出口**：通过后**先剥掉回执行**，再解析状态词（implementer 的状态词在结果首行）或交给下游。
-  - 只读任务（Standards 轴、Spec 轴、`T10-choice` / `review-loop-breaker` 对抗镜）：同一任务重派一次；再不符按该票既有失败路径（halt envelope）处置。
-  - 有写副作用的任务（implementer、fix 子代理）：不重派，当前票走 halt envelope 的 BLOCKED 出口，报告标注「回执不符，产出未采信」。
+- **回执与失败出口**：通过后**先剥掉回执行**，再解析状态词（implementer 的状态词在结果首行）或交给下游；回执不符的重派规则以契约「通则承载与前缀文件」节「读文件指令与回执」为准（规则根 `subagent-dispatch-contract.md`）。
+  - Standards 轴、Spec 轴、`T10-choice` / `review-loop-breaker` 对抗镜：最终仍不符按该票既有失败路径（halt envelope）处置。
+  - implementer、fix 子代理：回执不符，当前票走 halt envelope 的 BLOCKED 出口。
 
 ## 模式派发契约（本 skill 唯一权威源）
 
@@ -281,6 +280,10 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
   下一批 next-ready ticket 号）：
   ```
   python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py frontier --plan <plan路径> --done <1,2|none>
+  ```
+- **plan-budget**（出票模式写盘后调用，统计预算票 / 迁移批次 / 收尾票并列违规，见「预算计量口径」）：
+  ```
+  python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py plan-budget --plan <plan路径>
   ```
 
 ## 出 ticket 模式（`mode=tickets-plan`）
@@ -365,12 +368,20 @@ HARD-GATE，是流程中唯一被强档模型审过、人门可见的切分判�
 
 **宽重构例外〔T120〕**：单一机械改动、blast radius 扫全仓的宽重构（批量改名、改共享类型签名等）
 **MUST NOT** 强行拆成垂直切片；改走 **expand–contract** 序列：
-1. 1 张 expand ticket（新旧形态并存，不破坏任何调用点）；
-2. 若干迁移批次 ticket（各自 `Blocked-by: <expand ticket 号>`，按包/目录切批，批数由 blast radius
-   决定，可任意多张）；
+1. 1 张 expand ticket（新旧形态并存，不破坏任何调用点），含一行 `**Transform:** <这一个机械变换的一句话描述>`；
+2. 若干迁移批次 ticket（各自含 `**Migration-of:** <expand 号>`，`Blocked-by:` **恰为** expand 号，
+   按包/目录切批，批数由 blast radius 决定，可任意多张）；
 3. 1 张 contract ticket（`Blocked-by:` 全部迁移批次号，删旧形态）。
 
-**迁移批次 ticket 不占 3–6 张垂直切片预算**〔E5〕——只有 expand 与 contract 两端计入预算。
+**预算计量口径〔T249〕**：预算票 = 全部票 − 合规迁移批次 − 唯一 `R-ID: all` 收尾票，预算票 ≤ 6
+（expand、contract 与其余功能票都计入）。迁移批次只在**同一机械变换按目录分批**时豁免——批次之间
+要各自做判断的活（逐条审计、逐模块设计）不是迁移批次，按功能票计数，超预算就合并票或拆 change。
+- **机械部分**：`impl_route.py plan-budget` 校验预算票数与豁免结构（`Migration-of` 指向带 `Transform`
+  的 expand 票、批次 `Blocked-by` 恰为 expand、存在覆盖全部批次的 contract 票），在下方「落盘 →
+  checkpoint」第 1 步执行。没有机读声明的「迁移批次」一律计入预算。
+- **语义部分**：「各批是否真是同一个 `Transform`」无确定性信号。出票含 `Migration-of` 批次 ⇒ 必派
+  **strong 档**对抗镜复核这一点（与上方三条必触发条件并存，派发参数与记录格式同上）。🔴 这是
+  **指令层约束，MUST NOT 被表述为机械保证**。
 
 ### 强制「实现验证」收尾 ticket（D3/D3b，出票模式恒产出，不计入 3–6 预算）
 
@@ -385,7 +396,8 @@ ticket**，承担该聚合回归执行点：
 - `R-ID: all`——**这是该票自身的需求标注**，语义 = 覆盖本 change 全部需求的聚合验证，Spec 轴据此
   核验而非逐条溯源〔spec-review-amendment M6〕；**与上一条「Blocked-by 写全部依赖号」是两件不同
   的事，不要混淆**：`R-ID: all` 是需求标注字面量、`Blocked-by:` 是依赖号的逗号列表。
-- **不计入 3–6 张垂直切片预算**（与宽重构迁移批次同属预算外产出）。
+- **不计入 3–6 张垂直切片预算**：它恒为 1 张，唯一性由 `ship_gate` 第四道校验机械保证，不能借它
+  扩票；`plan-budget` 也只豁免一张 `R-ID: all` 票。
 - 验收标准 = 「按下方「聚合套件发现契约」运行本 change **命中域的全部层**并全部通过」
   〔scope-aggregate-suite-by-diff-domain · adr/0045〕。
 - **该票的存在与位置由 `ship_gate` 第四道 plan 校验机械保证**〔H12/M17，见下「外衣」节〕——
@@ -549,7 +561,12 @@ impl-pipeline: tickets
 出 ticket 模式收尾按固定顺序执行——**返回发生在 checkpoint 之后**，不是「落盘即返回」；模型读到
 「立即返回」不得跳过第②③步：
 
-1. **写盘**：完成 `tickets.md`（结构见上「外衣」节）。
+1. **写盘**：完成 `tickets.md`（结构见上「外衣」节），然后跑预算校验〔T249〕：
+   ```
+   python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py plan-budget --plan {change_dir}/tickets.md
+   ```
+   退出 1 ⇒ 按 stderr 的违规行修票（合并票 / 补齐机读声明）后重跑；修不了（目标本身超出一个
+   change）⇒ 停并上抛，MUST NOT 带违规进 checkpoint。退出 6 ⇒ plan 缺失或 `Blocked-by` 拓扑非法，按 stderr 修声明后重跑。
 2. **全 ticket 语义一致性自扫**（附录 B 有出处说明）：checkpoint 前，编排层自己通读一遍刚写好的
    全部 ticket，找「ticket 之间互相矛盾、或与 `## Global Constraints` 矛盾」的迹象（例如某张
    ticket 假设的接口形状被另一张明确废弃）——Blocked-by **环**已由 `impl_route.py frontier`
@@ -643,7 +660,7 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
 **派发 Agent（model: `$SDFLOW_TIER_MID`——第零步已 eval 出的中档模型 id；config.yaml model-tiers 段
 已在 resolve-models.sh 内按机队分键覆盖），MUST NOT 内联具体模型 id；`host=claude` 附
 `subagent_type: sdflow-effort-$SDFLOW_EFFORT_MID`；`host=codex` 附 `reasoning_effort: "$SDFLOW_EFFORT_MID"`
-与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。仅明确的 effort 不支持错误可按共享契约回退**，dispatch prompt 必含：
+与 `fork_turns: "none"`，MUST NOT 带 `subagent_type`。effort 回退与门禁放行条件以契约「Codex effort 回退与门禁」节为准**，dispatch prompt 必含：
 
 - 上一步脚本产出的 brief 文件路径（implementer 自己 Read；**编排层 MUST NOT 手动复制该
   `### Task N:` 段落文本进 prompt**）；
@@ -799,6 +816,7 @@ git log --oneline | grep "checkpoint({change}:task<N>-"
   } > {change_dir}/impl-reports/task<N>-review-package.diff
   ```
   dispatch prompt 携带该文件路径，**MUST NOT** 把大 diff 贴进 prompt 正文。
+  该文件是可由 git 再生的瞬态产物，已被 `.gitignore` 排除，不随 checkpoint 入库；无任何下游读方。
   - 🔴 **`<before-sha>` 取值按轮次分列**〔curb-rework-loop-cost〕：**首轮**（implementer 首次报
     `DONE`/`DONE_WITH_CONCERNS`）`<before-sha>` = 该 ticket 起点 SHA，范围不变；**fix 轮**（第 2
     轮起）`<before-sha>` = **上一轮已审的 `<after-sha>`**（即"上轮已审 SHA..HEAD"），**MUST NOT**

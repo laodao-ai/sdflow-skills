@@ -1,13 +1,16 @@
 # 子代理派发契约
 
 适用于 `sdflow-spec-review`、`sdflow-code-review`、`sdflow-implement`、`sdflow-done` 与
-`sdflow-roadmap`、`sdflow-adr`、`sdflow-architecture` 与 `sdflow-devenv` 已经决定派发子代理之后的调度和结果收集。本文件不决定未被某个 skill、全局规则或
+`sdflow-roadmap`、`sdflow-adr`、`sdflow-architecture` 与 `sdflow-devenv`
+已经决定派发子代理之后的调度和结果收集。本文件不决定未被某个 skill、全局规则或
 用户指令要求的场景是否派发；各入口仍定义自己的任务角色、完整派发任务清单和失败策略。
 
 ## 每轮任务记录
 
 派发前固定本轮完整派发任务清单。每项至少记录 `run_id`、`task_id`、角色、`requested_model`、
-`requested_effort`、上下文模式、预期 `result_ref` 和生命周期状态。容量只能改变批次与墙钟时间，
+`requested_effort`、上下文模式、预期 `result_ref`、生命周期状态、截止时刻（派出时刻 + 该角色的时长上限，
+见「子代理时长上限」节）和闹钟任务 ID（Claude 宿主，见「Claude 结果收集」节；Codex 宿主留空）。
+容量只能改变批次与墙钟时间，
 MUST NOT 删除任务、减少镜数，或让主 session 的结果冒充独立子代理结果。
 
 生命周期只有 `pending`、`running`、`completed`、`failed`、`interrupted`、`cancelled` 六态。
@@ -27,23 +30,80 @@ MUST NOT 删除任务、减少镜数，或让主 session 的结果冒充独立�
 活动任务，只再重试一次。仍失败则进入入口既有阻塞、降级或硬停路径。权限、网络、未知模型、坏 prompt
 及其他非容量错误保留原错误，MUST NOT 伪装成容量不足或进入容量重试。
 
+## 子代理时长上限
+
+两宿主共用一张按角色定的时长上限表。子代理从派出起运行到上限仍未终态，即停止并记 `interrupted`。
+本表是上限数值的唯一原文，「Claude 结果收集」「Codex 结果收集」两节与八个派发入口都引用这里。
+
+| 角色 | 上限 |
+|---|---|
+| 评审镜、轴审、verify、adr sync/audit、architecture 走查、devenv 冷审、roadmap 广审镜、scope 审计、archive、outside-voice 同族 fallback 子代理 | 60 分钟 |
+| implementer、fix | 180 分钟 |
+
+- 入口 MAY 在自身收集段声明更长的上限。
+- 超限判定只依据主 session 自己的计时（派出时刻与当前时刻的差），MUST NOT 依据子代理输出的内容、
+  文件状态或模型的判断。
+- 上限只用于控制，不产出任何 per-agent 时长度量。
+
+## Claude 结果收集
+
+适用于 Claude 宿主派发后台 Agent 子代理。子代理完成时 harness 推送通知唤醒主 session；本节在此之上
+加一个闹钟，保证卡死的子代理不会让主 session 永远等下去。
+
+1. **记截止时刻**：派发时在「每轮任务记录」里给每个任务记角色与截止时刻（派出时刻 + 该角色上限）。
+   上下文压缩后靠这些字段继续。
+2. **每入口一个闹钟**：以 `run_in_background` 起 `date +%s; sleep <秒>; date +%s`，
+   秒数 = 在途任务中最早的截止时刻 − 当前时刻，差值不足 60 时取 60（防止已过截止的任务让秒数为负、闹钟立即异常退出并无限重起）；闹钟任务 ID 记进同一条记录。
+   中途补派任务（容量分批、frontier 滚动、重派）使最早截止时刻提前时，`TaskStop` 旧闹钟，按新时刻重起。
+   任何时候起新闹钟前都先 `TaskStop` 旧闹钟并更新记录里的闹钟任务 ID；任务 ID 与记录不符的闹钟通知
+   一律忽略，保证每个入口只有一个有效闹钟。
+3. **等通知**：结束回合，等通知。
+4. **完成通知照常收集**：在途任务全部终态时，`TaskStop` 停掉闹钟，忽略停闹钟产生的通知。
+5. **闹钟到点**：
+   - 先处理已到达的完成通知，以完成为准。
+   - 闹钟通知不是正常结束（被回收、被停、输出缺少结束时间戳，或实际耗时明显短于设定秒数）且不是本节
+     主动停的：视为闹钟异常，不停止任何任务，按最早截止时刻重起闹钟，报告标注「闹钟异常重起」。
+   - 闹钟输出的实际耗时比设定秒数多 120 秒以上：视为系统休眠，所有在途任务的截止时刻顺延
+     （实际耗时 − 设定秒数），按新的最早截止时刻重起闹钟，不停止任何任务。
+   - 其余已过截止时刻的未终态任务：`TaskStop`，记 `interrupted`，报告写「超过时长上限 N 分钟」与续跑方式，
+     按入口既有失败路径处理。`TaskStop` 返回失败且原因不是「任务已结束」时，同样记 `interrupted`，
+     并标注「未确认停止，可能仍在写入」。
+     `TaskStop` 返回「任务已结束」时，该任务不再计入在途、不记 `interrupted`，等它的完成通知按第 7 条处理；
+     重起闹钟只看其余在途任务。
+   - 仍有在途任务时，按最早截止时刻重起闹钟，回到第 3 条。
+6. **写入任务**：有写副作用的任务（implementer、fix、archive、adr sync）被停后，MUST NOT 重派、
+   MUST NOT 撤销其改动，沿用 HAE-18 的写入任务规则。
+7. **晚到的通知**：停止后才到达的完成通知，为成功且带结果正文时，以完成为准改记成功；否则保持 `interrupted`。
+8. **记账丢失**：上下文压缩后记录也丢失时，从当次闹钟起按上限表中最长的一档重新计时，并在报告标注「记账丢失」。
+9. **适用范围**：本节只管 Agent 子代理。outside-voice 的后台 Bash 有 helper 内层超时，不起闹钟。
+
 ## Codex 结果收集
 
-适用于 Codex 宿主。Claude 宿主等完成通知，不适用本节。各入口可在自身收集段声明其他时长上限。
+适用于 Codex 宿主。Claude 宿主的收集见「Claude 结果收集」节。时长上限见「子代理时长上限」节，
+各入口可在自身收集段声明更长的值。
 
 1. **同回合收齐**：派发一批后，在同一回合内循环调 `wait_agent`（`timeout_ms` 取 60000–300000）；
+   `timeout_ms` 同时不得超过在途任务中最早到期者的剩余时间（上限 − 已用时长，换成毫秒），
+   剩余不足 60000 时取剩余值，但不低于宿主下限 10000。剩余为零或负数时不再等待，直接按第 3 条处置。
    返回后用 `list_agents` 刷新各任务状态；进入终态的任务按宿主实际提供的方式取结果正文
    （`list_agents`、邮箱通知或 `result_ref`）。本契约不锁定 `wait_agent` 返回值的字段名。
    MUST NOT 结束回合去等通知。
 2. **单子代理计时**：每个子代理从派出起单独计时，循环持续到本批全部终态，或某个子代理超过时长上限。
-   缺省上限 30 分钟；`sdflow-implement` 声明 60 分钟（implementer 要跑测试）。派出时跑一次
+   上限按「子代理时长上限」节的角色表。派出时跑一次
    `date -u +%s` 记该任务起点，每次 `wait_agent` 返回后再取一次，差值即该任务已用时长。
 3. **超限处置**：工具集有 `interrupt_agent` 就调用，再用 `list_agents` 确认它已停下，确认后记
    `interrupted`；没有该工具或确认不了，记 `interrupted` 并在报告标注「未确认停止，可能仍在写入」。
    `interrupt_agent` 只停当前回合，不关闭子代理、不保证释放名额。报告列出任务名与续跑方式（新回合继续
    `wait_agent`，或新开会话重跑该入口），并按入口既有失败路径处理。有写副作用的任务在确认停下之前，
    MUST NOT 重派、MUST NOT 撤销其改动。
+   - **同批其余在途任务一并中断**：先 `list_agents` 收一次已进终态的结果，再对本批仍未终态的任务逐个按本条
+     中断并记 `interrupted`，报告标注「同批任务 X 超限，连带中断」。不继续等待它们：入口既有失败路径
+     对任何非 `completed` 都要停下或阻塞，继续等只会让失败处置与在途写入交错。
+   - **迟到结果不采信**：已记 `interrupted` 的任务，之后才出现的 `completed` 结果不采信、不改记成功，
+     只在报告标注「迟到完成，未采信」。Claude 宿主第 7 条允许改记成功，Codex 不允许：
+     此时失败处置已经开始。
 4. **名额**：在途数不超过 `N - 1 - A`（同「容量分批」）；本批跑完后名额回收，再派下一批。
+   A 包含已记 `interrupted` 但未确认关闭的子代理：中断不释放名额，这些子代理仍占着 A。
    不给已进入终态的子代理发 `send_message` / `followup_task`：给已完成的子代理留下未取走的消息，
    会让它一直占着名额。工具集有 `close_agent` 时逐个关闭已收集的子代理，没有则不尝试。
 5. **`thread limit reached`**：
@@ -64,9 +124,9 @@ Codex 宿主派发子代理时，`spawn_agent` 的 `task_name` 即该派发项�
 Codex 派发使用本轮 resolver 的 model、`reasoning_effort` 与 `fork_turns: "none"`。Claude 派发同样 MUST 传本轮 resolver 的 model，并以 `subagent_type: sdflow-effort-<档位>` 选 effort（effort agent 定义为 `model: inherit`，漏传 model 即继承主 session 模型）；本契约不把主 session 的模型切换交给 resolver，也不以子代理的 strong
 档位冒充主 session 已满足门禁。
 
-仅明确的 effort 参数或 model×effort 组合不支持，才可回退：先以同一 model、任务和 prompt 尝试该档
+仅明确的 effort 参数或 model×effort 组合不支持，才可回退：先以同一 model、任务、prompt 和 runner 尝试该档
 canonical 默认；请求值已经是默认值时跳过重复调用；默认值仍被明确拒绝时省略 `reasoning_effort` 继续。
-不得猜相邻 effort，不得改变 model、任务、prompt 或完整派发任务清单。其他错误不得走 effort 回退。
+不得猜相邻 effort，不得改变 model、任务、prompt、runner 或完整派发任务清单。其他错误不得走 effort 回退。
 
 每次调用分别记录下列互不混写的字段：
 
@@ -79,7 +139,7 @@ canonical 默认；请求值已经是默认值时跳过重复调用；默认值�
 
 成功返回只证明请求被接受，不能证明实际 effort。门禁子任务只有在 high+ 请求有本轮
 `accepted_request_evidence`、任务 `completed`、结果有效且归属本轮、并完成最终主审核验时才能放行。
-此时 `effective_effort=unknown` 可以放行，但必须显著披露实际值未获证明。省略 effort 后完成的任务继续
+此时 `effective_effort=unknown` 可以放行，但必须显著披露实际值未获证明。省略 effort 后记录 `effective_effort=unknown`，不得写成已证明的 high；完成的任务继续
 执行，但最初被拒的 high 请求不得作为放行证据。可信元数据已知实际低于 high 时不得放行。
 
 ## 通则承载与前缀文件
@@ -190,7 +250,7 @@ SKILL，fix 是回运行 checkout 跑 `bash setup.sh`。
 | `capacity-unknown` | 不能可靠计算可派发数。 | 总上限或活动状态不可得。 | 串行执行完整清单。 | 每批只派一个尚未处理的任务。 |
 | `terminal-not-completed` | 子任务未形成可接受终态。 | 状态为 `failed`、`interrupted` 或 `cancelled`。 | 进入该入口既有失败路径。 | 保留状态与原错误，停止或按入口规则降级。 |
 | `result-invalid-or-unattributed` | `completed` 但结果不能判成功。 | `result_ref` 缺失、结构无效或不属于本轮，或读文件分支的回执首行缺失、不符。 | 拒绝成功锚。 | 记录 `run_id/task_id` 核验失败，进入入口既有失败或降级路径。 |
-| `effort-fallback` | 请求 effort 明确不受支持。 | 宿主拒绝 effort 参数或 model×effort 组合。 | 依次尝试 canonical 默认和省略 effort。 | 记录四个 effort 字段；保留同一任务、model 与 prompt。 |
+| `effort-fallback` | 请求 effort 明确不受支持。 | 宿主拒绝 effort 参数或 model×effort 组合。 | 依次尝试 canonical 默认和省略 effort。 | 记录四个 effort 字段；保留同一任务、model、prompt 与 runner。 |
 | `dispatch-other-error` | 派发因非容量、非 effort 原因失败。 | 权限、网络、未知模型、坏 prompt 或其他原始错误。 | 不做错误分类转换。 | 保留原始错误并进入该入口既有失败路径。 |
 
 ## 发布与回退

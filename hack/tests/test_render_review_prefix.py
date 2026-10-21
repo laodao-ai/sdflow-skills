@@ -19,7 +19,10 @@ tools 非空 / lens-metric-contract.md 非空）。
 【本文件照不到的面】resolve-workflow.sh 自身解析逻辑的正确性——那是它自己的测试职责
 （本文件只当它是黑盒依赖，验证 render-review-prefix.sh 对其 exit code / stdout 的消费）。
 """
+import hashlib
+import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -177,8 +180,6 @@ def test_missing_resolver_fails_loud_with_guidance(sandbox_home):
 
 def test_resolver_failure_propagates_fail_loud(sandbox_home):
     """resolve-workflow.sh 本体存在但解析失败（canonical 不 sane）⇒ 非零退出 + stderr，无半段输出。"""
-    import shutil
-
     shutil.rmtree(sandbox_home / "workflow")
     r = _run(sandbox_home, "--layer", "code-review")
     assert r.returncode != 0
@@ -206,9 +207,6 @@ def test_missing_base_checklist_other_layer_still_works(sandbox_home):
 # ── implement-optimize-codex-workflow-quickwins · Task 1：新参数与写文件 ──────────
 # 对应 design.md「渲染器接口」组合表，一行一个用例。
 
-import hashlib
-import json
-
 VARIANTS = ["spec-review", "spec-review-np", "code-review", "code-review-np", "principles"]
 
 
@@ -234,13 +232,14 @@ def test_legacy_stdout_unchanged_shape(sandbox_home):
         assert out.startswith(REAL_PRINCIPLES.read_bytes())
         assert out.endswith(checklist.read_bytes())
         assert "评审子代理通用契约" in r.stdout
+        # 整段逐字节：通则文件字节 + --no-principles 输出
+        no_principles = _run(sandbox_home, "--layer", layer, "--no-principles").stdout.encode("utf-8")
+        assert out == REAL_PRINCIPLES.read_bytes() + no_principles
 
 
 def test_layer_principles_outputs_principles_only(sandbox_home):
     """行 2：stdout = 通则段；不调 resolver、不读 checklist。"""
     (sandbox_home / "hack" / "resolve-workflow.sh").unlink()
-    import shutil
-
     shutil.rmtree(sandbox_home / "workflow")
     r = _run(sandbox_home, "--layer", "principles")
     assert r.returncode == 0, r.stderr
@@ -279,6 +278,7 @@ def test_new_flags_without_layer_is_usage_error(sandbox_home, extra):
     "args",
     [
         ["--layer", "code-review", "--out-dir"],
+        ["--layer", "code-review", "--out-dir", "--no-principles"],  # 值以 -- 开头按缺值处理
         ["--layer", "code-review", "--out-dir", ""],  # [impl-review-fix] 空串不得静默退回 stdout 模式
         ["--layer", "code-review", "--layer", "spec-review"],
         ["--layer", "code-review", "--no-principles", "--no-principles"],

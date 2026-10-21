@@ -39,44 +39,60 @@ jobs:
       matrix:
         python-version: ["3.12", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install yq (mikefarah/yq, pinned v4.53.3)
+      - name: Install yq (mikefarah/yq, pinned v4.53.6)
         shell: bash
+        # 装进独立目录再加到 PATH，不放 Git 的 /usr/bin：「yq 缺失」类测试要从 PATH 里
+        # 摘掉 yq，但 PATH 里的 Git\bin 在 Git Bash 中是 /bin，挂载的就是 usr/bin，
+        # 放那里就摘不掉。独立目录也与用户用 winget 安装后的布局一致。
         run: |
           set -eu
-          YQ_VERSION="v4.53.3"
-          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_windows_amd64.exe" -o /usr/bin/yq.exe
-          yq --version
+          YQ_VERSION="v4.53.6"
+          yq_dir="$(cygpath -u "$RUNNER_TEMP")/yq-bin"
+          mkdir -p "$yq_dir"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_windows_amd64.exe" -o "$yq_dir/yq.exe"
+          cygpath -w "$yq_dir" >> "$GITHUB_PATH"
+          "$yq_dir/yq.exe" --version
       - name: Install pytest
         shell: bash
-        run: py -m pip install "pytest>=8"
+        # 用 python 而非 py：py 启动器挑机器上最新的 Python（runner 预装 3.14），
+        # 不是 setup-python 选的版本，3.12 矩阵项会实际跑在 3.14 上。
+        run: python -m pip install "pytest>=8"
       - name: Run full pytest suite
         shell: bash
-        run: py -m pytest -q
+        run: python -m pytest -q
 
   windows-recorder-and-encoding-smoke:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Install yq (mikefarah/yq, pinned v4.53.3)
+      - name: Install yq (mikefarah/yq, pinned v4.53.6)
         shell: bash
+        # 装进独立目录再加到 PATH，不放 Git 的 /usr/bin：「yq 缺失」类测试要从 PATH 里
+        # 摘掉 yq，但 PATH 里的 Git\bin 在 Git Bash 中是 /bin，挂载的就是 usr/bin，
+        # 放那里就摘不掉。独立目录也与用户用 winget 安装后的布局一致。
         run: |
           set -eu
-          YQ_VERSION="v4.53.3"
-          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_windows_amd64.exe" -o /usr/bin/yq.exe
-          yq --version
+          YQ_VERSION="v4.53.6"
+          yq_dir="$(cygpath -u "$RUNNER_TEMP")/yq-bin"
+          mkdir -p "$yq_dir"
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_windows_amd64.exe" -o "$yq_dir/yq.exe"
+          cygpath -w "$yq_dir" >> "$GITHUB_PATH"
+          "$yq_dir/yq.exe" --version
       - name: Install pytest
         shell: bash
-        run: py -m pip install "pytest>=8"
+        # 用 python 而非 py：py 启动器挑机器上最新的 Python（runner 预装 3.14），
+        # 不是 setup-python 选的版本，3.12 矩阵项会实际跑在 3.14 上。
+        run: python -m pip install "pytest>=8"
       - name: Run actual Windows local-disk recorder smoke
         shell: bash
-        run: py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error
+        run: python -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error
       - name: Run setup with a forced GBK child process
         shell: bash
         run: |

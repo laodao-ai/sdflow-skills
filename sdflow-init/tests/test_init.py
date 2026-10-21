@@ -1050,8 +1050,13 @@ class TestAdrMigrationCheck:
     @staticmethod
     def _fake_adr_py(tmp_path, exitcode, stderr=""):
         script = tmp_path / "fake_adr.py"
+        # 与真 adr.py 一样带 reconfigure 前导（仓内入口脚本的约定）：不带时 Windows 上
+        # 管道的 stderr 走 cp1252 + backslashreplace，中文变成 \uXXXX 字面量。
         script.write_text(
             "import sys\n"
+            "for _s in (sys.stdout, sys.stderr):\n"
+            "    try: _s.reconfigure(encoding='utf-8', errors='replace')\n"
+            "    except Exception: pass\n"
             f"sys.stderr.write({stderr!r})\n"
             f"sys.exit({exitcode})\n",
             encoding="utf-8",

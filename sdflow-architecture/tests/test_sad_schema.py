@@ -1,7 +1,7 @@
 import sys, pathlib, unicodedata, pytest
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 import sad_schema as S
-from conftest import make_sad
+from sad_helpers import make_sad
 
 ANSWERED = {"positioning": "answered", "external_systems": "answered", "hard_constraints": "answered"}
 

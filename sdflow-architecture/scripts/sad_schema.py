@@ -391,7 +391,7 @@ def _section5_body_lines(text):
     原实现走 `body_lines`（DEC-2，剥 fence）⇒ **在任何真实 SAD 上都抽出 0 条** ⇒
     `_check_contract_invariants` 从来没触发过，`devenv_lint` 的 contract 差集恒空。
 
-    **测试当时是绿的** —— 因为 `tests/conftest.py` 的 fixture 恰好把 contract 行写在 fence 外。
+    **测试当时是绿的** —— 因为 `tests/conftest.py`（现名 `tests/sad_helpers.py`）的 fixture 恰好把 contract 行写在 fence 外。
     **producer 说 fence 内，parser 剥 fence，fixture 站在 parser 这边 ⇒ 三方各说各话的假绿。**
 
     【为什么不必担心误伤】：A6② 的顾虑是「全文扫描会误伤附录/散文里的类比提及」——

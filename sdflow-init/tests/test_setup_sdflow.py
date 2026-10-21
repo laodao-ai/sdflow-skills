@@ -1,6 +1,8 @@
 """setup.sh 的 ~/.sdflow 建链测试。HOME/SDFLOW_HOME 全部重定向 tmp_path。"""
 import json
 import os
+import re
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -17,11 +19,17 @@ if os.name == "nt":
 
 REPO = Path(__file__).parent.parent.parent
 
+# setup.sh 的汇总首行是 `sdflow-skills <git describe> ready → ...`。版本段不一定以 `v` 开头：
+# 浅克隆（CI 的 actions/checkout 默认 fetch-depth 1）拿不到 tag，describe 退化为短 SHA。
+SUMMARY_LINE = re.compile(r"^sdflow-skills \S+ ready", re.MULTILINE)
 
-def run_setup(tmp_path):
+
+def run_setup(tmp_path, path_prefix=None):
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     env = dict(os.environ, HOME=bash_path(home), SDFLOW_HOME=bash_path(home / ".sdflow"))
+    if path_prefix is not None:
+        env["PATH"] = f"{path_prefix}{os.pathsep}{env['PATH']}"
     r = subprocess.run([bash_executable(), bash_path(REPO / "setup.sh")],
                        env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r, home / ".sdflow"
@@ -274,7 +282,7 @@ class TestSetEDoesNotKillTheWholeInstall:
 
         assert r.returncode == 0, "~/.sdflow 只读竟中止了整个 setup.sh：\n" + r.stdout + r.stderr
         assert "skipped (" in r.stdout, "失败没进汇总 —— 只剩一行裸 ln/cp 错误"
-        assert "sdflow-skills v" in r.stdout, "汇总段根本没打出来"
+        assert SUMMARY_LINE.search(r.stdout), "汇总段根本没打出来"
 
     def test_two_concurrent_runs_both_finish(self, tmp_path):
         """⭐ 复现（代码审 F5）：两个 setup.sh 并发铺同一个全新 HOME。
@@ -293,7 +301,7 @@ class TestSetEDoesNotKillTheWholeInstall:
         outs = [p.communicate(timeout=300)[0] for p in procs]
         for i, (p, out) in enumerate(zip(procs, outs)):
             assert p.returncode == 0, f"并发第 {i} 个进程被 set -e 打断：\n{out}"
-            assert "sdflow-skills v" in out, f"并发第 {i} 个进程没走到汇总：\n{out}"
+            assert SUMMARY_LINE.search(out), f"并发第 {i} 个进程没走到汇总：\n{out}"
 
 
 class TestResolveModelsInstallPath:
@@ -454,7 +462,8 @@ class TestCapabilitySnapshot:
     def test_interrupted_install_leaves_no_consistent_snapshot(self, tmp_path):
         """成员没装上 ⇒ MUST NOT 留下 / 写出一份「自洽但陈旧」的 manifest。
 
-        制造真实失败：把已安装的 shell helper 置为只读 ⇒ 下一次 `cp` 失败。
+        制造真实失败：PATH 前置一个 cp 垫片，目标含 `outside-voice.sh` 时退出 1。
+        不用「置只读」：setup 先拷临时文件再 mv 覆盖，只读的旧文件照样被替换。
         此时 manifest MUST 不在场（安装步先删后写、且**本趟不补写**），于是 preflight
         fail-closed，而不是拿着一份给「新旧混装现场」签的名声称快照一致。
 
@@ -466,14 +475,20 @@ class TestCapabilitySnapshot:
         """
         r, sdflow = run_setup(tmp_path)
         assert JOB.verify_manifest(sdflow / "hack")["ok"] is True
-        victim = sdflow / "hack" / "outside-voice.sh"
-        victim.chmod(0o444)
-        try:
-            r2, _ = run_setup(tmp_path)
-            assert "outside-voice.sh" in r2.stdout and "未安装" in r2.stdout, \
-                "cp 到只读目标未失败、或失败没进汇总 ⇒ 本用例未制造出中断：\n" + r2.stdout
-            assert not (sdflow / "hack" / JOB.MANIFEST_NAME).exists(), \
-                "成员没装上却仍写/留了 manifest ⇒ 新旧混装的现场被签成一致"
-            assert JOB.verify_manifest(sdflow / "hack")["ok"] is False
-        finally:
-            victim.chmod(0o755)
+        shim = tmp_path / "shim"
+        shim.mkdir()
+        real_cp = shutil.which("cp")
+        (shim / "cp").write_text(
+            "#!/bin/sh\n"
+            'for a in "$@"; do last="$a"; done\n'
+            'case "$last" in *outside-voice.sh*) exit 1;; esac\n'
+            f'exec "{real_cp}" "$@"\n',
+            encoding="utf-8",
+        )
+        (shim / "cp").chmod(0o755)
+        r2, _ = run_setup(tmp_path, path_prefix=shim)
+        assert "outside-voice.sh" in r2.stdout and "未安装" in r2.stdout, \
+            "cp 垫片未让安装失败、或失败没进汇总 ⇒ 本用例未制造出中断：\n" + r2.stdout
+        assert not (sdflow / "hack" / JOB.MANIFEST_NAME).exists(), \
+            "成员没装上却仍写/留了 manifest ⇒ 新旧混装的现场被签成一致"
+        assert JOB.verify_manifest(sdflow / "hack")["ok"] is False

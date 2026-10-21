@@ -164,7 +164,7 @@ description: >
 定义（AM-1）；所有确定性检查（编号、格式、取代目标存在性、候选召回）**只由** `scripts/adr.py`
 完成，模型只做「陈述与代码是否一致」这类无法机械判定的语义判断（基准 1 的残余）。
 
-sync 与 audit 派发子代理后，Codex 宿主按规则根 `subagent-dispatch-contract.md` 的「Codex 结果收集」节在同一回合内收齐结果，时长上限取缺省 30 分钟。
+sync 与 audit 派发子代理后，时长上限见规则根 `subagent-dispatch-contract.md` 的「子代理时长上限」节；Claude 宿主按其「Claude 结果收集」节维持闹钟，Codex 宿主按其「Codex 结果收集」节在同一回合内收齐结果。
 
 ### 档位解析与宿主参数
 
@@ -193,9 +193,10 @@ sync 与 audit 派发的子代理，其 run 目录创建、忽略校验、前缀
 - **sync 被 `sdflow-done` 第 1.5 步调用**：复用 done 第 0.5 步已建的 run 目录、`prefix-principles.md` 与承载判定，不另建。
 - **audit 与独立 sync 的父目录**：`openspec/adr/.outside-voice/`，首次派发之前建。
 - **承载判定所用 `subagent_type`**：本次派发所带的 `subagent_type`；Codex 宿主不带，记 `not-carried`。
-- **回执与失败出口**：通过后先剥掉回执行再读返回内容。
-  - audit（只读任务）：同一批重派一次；再不符，该批记为未完成，汇总里列出批次编号，不计入基线对比。
-  - sync（有写副作用）：不重派，走 sync 既有失败路径（对实际改动集撤销 + 记 issues todo），报告标注「回执不符，产出未采信」。
+- **回执与失败出口**：通过后先剥掉回执行再读返回内容；回执不符的重派规则以契约「通则承载与前缀文件」节「读文件指令与回执」为准（规则根 `subagent-dispatch-contract.md`）。
+  - audit：最终仍不符，该批记为未完成，汇总里列出批次编号，不计入基线对比。
+  - sync：回执不符走 sync 既有失败路径（对实际改动集撤销 + 记 issues todo）。
+- **effort 回退**：effort 回退与门禁放行条件以契约「Codex effort 回退与门禁」节为准（规则根 `subagent-dispatch-contract.md`）。本入口 audit 的门禁档位见上表。
 
 三个模式：
 
@@ -246,8 +247,10 @@ change、决策非显然、决策可能被质疑）不变，只是产出入口�
    `failed`/`interrupted`/`cancelled`，都先取 `git diff --name-only -- <本批候选路径...>`
    得到该批实际改动的文件集合（只看本批候选，其它批次的改动不会被本批撤销连带），对这些
    文件跑 `adr.py lint --root .`；集合为空则记「无 ADR 改动」、不跑 lint（不带文件参数的
-   lint 是全目录 lint）。子代理非
-   `completed`，或该集合内任一文件仍有红项 → `git checkout -- <该集合>`（起手已确认这些
+   lint 是全目录 lint）。子代理 `interrupted`（超过时长上限被停）→ MUST NOT 撤销（契约
+   「Claude 结果收集」第 6 条：写入任务被停后不撤销其改动），保留该集合，报告 lint 红项与续跑
+   方式（单独跑 `/sdflow-adr sync`）+ 记一条 issues todo。子代理 `failed`/`cancelled`，或
+   `completed` 但该集合内任一文件仍有红项 → `git checkout -- <该集合>`（起手已确认这些
    文件在 sync 前是干净的，撤销即精确回到 sync 前）+ 记一条 issues todo。
 5. sync **不做全目录 lint**——只管本轮实际改动的文件；不阻塞 merge，失败一律记 issues todo
    /  hand-off 一行后继续。

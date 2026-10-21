@@ -56,6 +56,8 @@ UUID_RE = re.compile(
 HOST_CLAUDE = "claude"
 HOST_CODEX = "codex"
 HOST_UNKNOWN = "unknown"
+# runner = 实际跑 usage 的 CLI；与 host（编排宿主）语义不同，值恰好相同时也不共用常量。
+RUNNER_CODEX = "codex"
 MAX_CODEX_DEPTH = 8
 
 # v2 行封闭字段清单（design.md §数据模型；kind=root/child 用，kind=cli 不在本 change 范围）。
@@ -132,6 +134,19 @@ def _cancel_timeout(old):
     signal.alarm(0)
     if old is not None:
         signal.signal(signal.SIGALRM, old)
+
+
+def _with_timeout(fn, fallback=None):
+    """在 SIGALRM 窗口内跑 `fn()`；任何异常（含 `_Timeout`）都转为 `fallback()` 的返回值
+    （无 fallback 则返回 None）。窗口总在返回前关闭。
+    """
+    old_handler = _install_timeout(TIMEOUT_SECONDS)
+    try:
+        return fn()
+    except Exception:  # `_Timeout` 也是 Exception 子类，超时与普通异常同一降级
+        return fallback() if fallback is not None else None
+    finally:
+        _cancel_timeout(old_handler)
 
 
 def _munge_cwd(cwd):
@@ -469,7 +484,13 @@ def _project_codex_rollout(path, own_id):
                         turn_id = payload.get("turn_id")
                         ts = _parse_iso_ts(obj.get("timestamp"))
                         start_ts = task_started_ts.pop(turn_id, None) if turn_id is not None else None
-                        if ts is not None and start_ts is not None and ts >= start_ts:
+                        # 宿主自带的 payload.duration_ms 优先（真实 rollout 里出现过信封时间戳
+                        # 相同而该字段才是真时长的 turn）；缺失或非法时回落信封时间戳相减。
+                        host_ms = _non_negative_int(payload.get("duration_ms"))
+                        if host_ms is not None:
+                            duration_sum += host_ms
+                            duration_any = True
+                        elif ts is not None and start_ts is not None and ts >= start_ts:
                             duration_sum += ts - start_ts
                             duration_any = True
                     elif etype == "item_completed":
@@ -511,11 +532,11 @@ def _project_codex_rollout(path, own_id):
     return result
 
 
-def _build_codex_line(step, kind, session, reason, projected=None, host=HOST_CODEX, runner=HOST_CODEX):
+def _build_codex_line(step, kind, session, reason, projected=None, host=HOST_CODEX, runner=RUNNER_CODEX):
     """v2 封闭 schema（design.md §数据模型）。字段值来自 `projected`（缺失即 `None`，MUST NOT 派生）。
 
     `host`/`runner` 默认 codex/codex（root/child 调用点不传，行为不变）；`kind=cli` 调用点显式传入
-    `host=detect_host()`（实际编排宿主）、`runner=HOST_CODEX`（TSA-04/HAE-02：cli 行记录的是
+    `host=detect_host()`（实际编排宿主）、`runner=RUNNER_CODEX`（TSA-04/HAE-02：cli 行记录的是
     「哪个宿主经 outside-voice 调用了 Codex」，不是「本进程判定的宿主」）。
     """
     p = projected or {}
@@ -602,6 +623,12 @@ def _project_cli_usage(jsonl_path):
     return {"session": session, "usage": usage, "turns": turns}
 
 
+def _cli_parse_error_line(host):
+    """`kind=cli` 的降级行（`anchor=false reason=parse-error`）。"""
+    return _build_codex_line(STEP_CLI_USAGE, "cli", "", "parse-error",
+                              projected={"role": ROLE_CLI_USAGE}, host=host, runner=RUNNER_CODEX)
+
+
 def _build_cli_usage_line(jsonl_path):
     """组装一行 `kind=cli`；`host` 为本进程判定的实际宿主（TSA-04：「Claude 宿主经 outside-voice
     调 Codex」场景 `host=claude runner=codex`），失败一律降级为 `anchor=false reason=parse-error`。
@@ -612,8 +639,7 @@ def _build_cli_usage_line(jsonl_path):
     except Exception:
         projected = None
     if projected is None:
-        return _build_codex_line(STEP_CLI_USAGE, "cli", "", "parse-error",
-                                  projected={"role": ROLE_CLI_USAGE}, host=host, runner=HOST_CODEX)
+        return _cli_parse_error_line(host)
     return _build_codex_line(
         STEP_CLI_USAGE, "cli", projected["session"], "ok",
         projected={
@@ -622,7 +648,7 @@ def _build_cli_usage_line(jsonl_path):
             "usage_source": "cli",
             "turns": projected["turns"],
         },
-        host=host, runner=HOST_CODEX,
+        host=host, runner=RUNNER_CODEX,
     )
 
 
@@ -634,23 +660,59 @@ def _cli_usage_entry(jsonl_path):
     if change_dir is None:
         return 0
 
-    old_handler = _install_timeout(TIMEOUT_SECONDS)
-    try:
-        line = _build_cli_usage_line(jsonl_path)
-    except _Timeout:
-        line = _build_codex_line(STEP_CLI_USAGE, "cli", "", "parse-error",
-                                  projected={"role": ROLE_CLI_USAGE}, host=detect_host(), runner=HOST_CODEX)
-    except Exception:
-        line = _build_codex_line(STEP_CLI_USAGE, "cli", "", "parse-error",
-                                  projected={"role": ROLE_CLI_USAGE}, host=detect_host(), runner=HOST_CODEX)
-    finally:
-        _cancel_timeout(old_handler)
+    line = _with_timeout(lambda: _build_cli_usage_line(jsonl_path),
+                         lambda: _cli_parse_error_line(detect_host()))
 
     try:
         _append_line(change_dir / "token-log.jsonl", line)
     except Exception:
         pass
     return 0
+
+
+def _peek_parent_thread_id(path, own_id):
+    """只读 rollout 里第一条 `session_meta`，返回合法 UUID 的 `parent_thread_id`；
+    无父、身份不符或任何读取异常 → None（`_Timeout` 照常上抛）。
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="strict") as f:
+            for raw_line in f:
+                if "session_meta" not in raw_line:
+                    continue
+                obj = json.loads(raw_line)
+                if not isinstance(obj, dict) or obj.get("type") != "session_meta":
+                    continue
+                payload = obj.get("payload")
+                if not isinstance(payload, dict) or payload.get("id") != own_id:
+                    return None
+                parent = payload.get("parent_thread_id")
+                return parent if _valid_uuid(parent) else None
+    except _Timeout:
+        raise
+    except Exception:
+        return None
+    return None
+
+
+def _find_start_thread(sessions_root, thread_id):
+    """TSA-01 R5：`CODEX_THREAD_ID` 可能是子线程 id。按 `parent_thread_id` 精确 UUID
+    定位父 rollout 逐级上溯（visited 去重、深度上限 `MAX_CODEX_DEPTH`），返回 `(起点 id, kind)`。
+    起点没有父 → root；父 rollout 找不到或链异常 → 停在当前线程，kind=child。
+    """
+    current = thread_id
+    seen = {current}
+    for _ in range(MAX_CODEX_DEPTH):
+        path = _locate_codex_rollout(sessions_root, current)
+        if path is None:
+            return current, "root"
+        parent = _peek_parent_thread_id(path, current)
+        if parent is None:
+            return current, "root"
+        if parent in seen or _locate_codex_rollout(sessions_root, parent) is None:
+            return current, "child"
+        current = parent
+        seen.add(current)
+    return current, "child"
 
 
 def _codex_collect_and_write(step, token_log_path):
@@ -666,6 +728,8 @@ def _codex_collect_and_write(step, token_log_path):
         except Exception:
             pass
 
+    queue = deque()
+    current = None  # 已出队但行尚未写完的线程；外层 handler 靠它补写 timeout 行
     try:
         thread_id_env = os.environ.get("CODEX_THREAD_ID", "")
         if not _valid_uuid(thread_id_env):
@@ -673,11 +737,12 @@ def _codex_collect_and_write(step, token_log_path):
             return
 
         sessions_root = _codex_sessions_root()
-        queue = deque([{"id": thread_id_env, "kind": "root", "depth": 0}])
+        start_id, start_kind = _find_start_thread(sessions_root, thread_id_env)
+        queue.append({"id": start_id, "kind": start_kind, "depth": 0})
         visited = set()
 
         while queue:
-            item = queue.popleft()
+            item = current = queue.popleft()
             tid = item["id"]
             if tid in visited:
                 continue
@@ -688,27 +753,27 @@ def _codex_collect_and_write(step, token_log_path):
                                           projected={"depth": item["depth"]}))
                 continue
 
-            try:
-                rollout_path = _locate_codex_rollout(sessions_root, tid)
-                if rollout_path is None:
-                    _write(_build_codex_line(step, item["kind"], tid, "thread-not-found"))
-                    continue
-                projected = _project_codex_rollout(rollout_path, tid)
-            except _Timeout:
-                _write(_build_codex_line(step, item["kind"], tid, "timeout"))
-                while queue:
-                    rest = queue.popleft()
-                    _write(_build_codex_line(step, rest["kind"], rest["id"], "timeout"))
-                return
+            rollout_path = _locate_codex_rollout(sessions_root, tid)
+            if rollout_path is None:
+                _write(_build_codex_line(step, item["kind"], tid, "thread-not-found"))
+                current = None
+                continue
+            projected = _project_codex_rollout(rollout_path, tid)
 
             _write(_finalize_codex_line(step, item["kind"], tid, projected))
+            current = None
 
             if not projected.get("parse_error"):
                 for child_id in projected.get("children", []):
                     if child_id not in visited:
                         queue.append({"id": child_id, "kind": "child", "depth": item["depth"] + 1})
     except _Timeout:
-        _write(_build_codex_line(step, "root", "", "timeout"))
+        # 在途线程 + 队列中尚未处理的线程各写一行 timeout；一行都没有可写时落一行 root。
+        pending = ([current] if current is not None else []) + list(queue)
+        if not pending:
+            pending = [{"id": "", "kind": "root"}]
+        for rest in pending:
+            _write(_build_codex_line(step, rest["kind"], rest["id"], "timeout"))
     except Exception:
         _write(_build_codex_line(step, "root", "", "parse-error"))
 
@@ -733,22 +798,11 @@ def main(argv=None):
     if detect_host() == HOST_CODEX:
         # codex 分支自成一体：自己的 SIGALRM 窗口、自己的逐线程 append，完全不碰
         # 下面 claude/unknown 路径的既有代码（--step 接口与该路径行为逐字节不变）。
-        old_handler = _install_timeout(TIMEOUT_SECONDS)
-        try:
-            _codex_collect_and_write(args.step, change_dir / "token-log.jsonl")
-        finally:
-            _cancel_timeout(old_handler)
+        _with_timeout(lambda: _codex_collect_and_write(args.step, change_dir / "token-log.jsonl"))
         return 0
 
-    old_handler = _install_timeout(TIMEOUT_SECONDS)
-    try:
-        line = _collect(args.step)
-    except _Timeout:
-        line = _build_line(args.step, "", False, "parse-error", None, detect_host())
-    except Exception:
-        line = _build_line(args.step, "", False, "parse-error", None, detect_host())
-    finally:
-        _cancel_timeout(old_handler)
+    line = _with_timeout(lambda: _collect(args.step),
+                         lambda: _build_line(args.step, "", False, "parse-error", None, detect_host()))
 
     try:
         _append_line(change_dir / "token-log.jsonl", line)

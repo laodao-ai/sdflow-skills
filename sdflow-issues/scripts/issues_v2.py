@@ -270,13 +270,18 @@ _FM_QUOTED_RE = re.compile(r'^([a-z_]+): "(.*)"$')
 _FM_NULL_RE = re.compile(r'^([a-z_]+): null$')
 
 
+_FM_ESCAPE_RE = re.compile(r'\\(["\\])')
+
+
 def _quote_value(value):
-    escaped = str(value).replace('"', '\\"')
+    # 按 YAML 双引号规则转义：先转反斜杠再转双引号，否则 yq 遇到 `\d` 这类非法转义会拒读整份 frontmatter
+    escaped = str(value).replace('\\', '\\\\').replace('"', '\\"')
     return f'"{escaped}"'
 
 
 def _unquote_value(raw):
-    return raw.replace('\\"', '"')
+    # 单遍还原 `\\` 与 `\"`；逐个 replace 会把 `\\"` 这类相邻转义还原错
+    return _FM_ESCAPE_RE.sub(r'\1', raw)
 
 
 def render_frontmatter(frontmatter):

@@ -137,7 +137,7 @@
 - **真板**：**时序 · 电气 · 真外设** —— 仿真给不了。
 
 **⚠️ 真硬件泳道天然 `executor: human`，且天然不自动跑**（要烧板）。
-⇒ **直接 `scaffolded` + 指向 [`embedded-test-sop`](../../embedded-test-sop/) 的手动 SOP，MUST NOT 复述那份 SOP。**
+⇒ **直接 `scaffolded`，`blocked_by` 写明「需真机」，由操作者手动执行；MUST NOT 替操作者写烧录 / 上板步骤。**
 
 **代价**：仿真 = 配置成本高但一次性；真板 = 每次都要人。
 

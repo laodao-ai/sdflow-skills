@@ -40,7 +40,7 @@
 design.md 决策区 **SHOULD** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）；节缺席时决策区
 **MUST** 写明一句为何不需要——「有节」或「有缺席理由」二择一恒成立，不存在两者皆缺的合规态。
 
-草图票数须落 **3–6 张垂直切片**预算内；超出该预算须在节内注明 expand–contract 例外依据。**不足预算
+草图票数须落 **3–6 张垂直切片**预算内；超出该预算须在节内注明 expand–contract 例外依据（迁移批次出票时须带 `Transform` / `Migration-of` 机读声明，由 `impl_route.py plan-budget` 校验）。**不足预算
 也有一条与 expand–contract 并列的合法例外**〔impl-review-fix，harden-ticket-slicing〕：**决策区**写明
 成立的「单票交付」缺席理由（即本节合规缺席）、且出票确为 1 张功能票时视为合规——该例外不需要额外
 注明依据，缺席理由本身即依据。拆分标准的完整规则与 why 见单一源

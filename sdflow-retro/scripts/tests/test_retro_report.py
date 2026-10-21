@@ -1849,3 +1849,65 @@ def test_main_scan_codex_sessions_flag_wires_through(tmp_path):
     assert proc.returncode == 0, proc.stderr
     out = (root / "openspec/retro/report.md").read_text(encoding="utf-8")
     assert "## Codex 会话覆盖核对（--scan-codex-sessions）" in out
+
+
+# ── T29 / adr/0009(c)：人类门等待单列 ───────────────────────────────────────
+def test_stage_walltimes_splits_grill_as_human_gate(tmp_path):
+    commits = [
+        {"sha": "a", "ts": 1000, "subject": "checkpoint(sdflow-spec-generate)"},
+        {"sha": "b", "ts": 1000 + 600, "subject": "checkpoint(sdflow-spec-grill)"},   # grill 600s
+        {"sha": "c", "ts": 1000 + 600 + 300, "subject": "checkpoint(spec-review)"},   # 300s
+    ]
+    got = R.stage_walltimes(str(tmp_path), "foo", commits)
+    assert got["human_gate"] == {"grill": 10.0}
+    assert got["human_gate_min"] == 10.0
+    assert got["total_min"] == 15.0
+    assert got["total_excl_human_min"] == 5.0
+    assert got["stages_excl_human"]["grill"] == 0.0
+    assert got["stages_excl_human"]["spec-review"] == 5.0
+
+
+def test_stage_walltimes_splits_design_approval_interval(tmp_path):
+    commits = [
+        {"sha": "a", "ts": 0, "subject": "checkpoint(spec-review)"},
+        {"sha": "b", "ts": 600, "subject": "checkpoint(spec-review)"},      # 评审 10min
+        {"sha": "c", "ts": 600 + 1800, "subject": "设计门拍板"},              # 拍板提交，subject 不可信
+    ]
+    got = R.stage_walltimes(str(tmp_path), "foo", commits, approval_sha="c")
+    assert got["human_gate"] == {"design-gate": 30.0}
+    assert got["total_excl_human_min"] == got["total_min"] - 30.0
+    assert got["stages_excl_human"].get("unknown", 0.0) == 0.0
+
+
+def test_stage_walltimes_without_human_gate_signals_is_unchanged(tmp_path):
+    commits = [
+        {"sha": "a", "ts": 0, "subject": "checkpoint(spec-review)"},
+        {"sha": "b", "ts": 600, "subject": "checkpoint(spec-review)"},
+    ]
+    got = R.stage_walltimes(str(tmp_path), "foo", commits)
+    assert got["human_gate_min"] == 0.0
+    assert got["total_excl_human_min"] == got["total_min"] == 10.0
+
+
+def test_find_design_approval_sha_picks_first_true_commit(tmp_path):
+    root = _init_repo(tmp_path)
+    rpt = "openspec/changes/foo/spec-review-report.md"
+    _commit(root, {rpt: "---\nship-gate:\n  design_approved: false\n---\n"}, "checkpoint(spec-review)")
+    _commit(root, {rpt: "---\nship-gate:\n  design_approved: true\n---\n"}, "x")
+    want = _git(root, "rev-parse", "HEAD").strip()
+    _commit(root, {rpt: "---\nship-gate:\n  design_approved: true\n---\nmore\n"}, "y")
+    assert R.find_design_approval_sha(str(root), "foo") == want
+
+
+def test_find_design_approval_sha_none_when_never_approved(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/spec-review-report.md": "design_approved: false\n"}, "z")
+    assert R.find_design_approval_sha(str(root), "foo") is None
+
+
+def test_build_report_has_human_gate_columns(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(spec-review)")
+    md = R.build_report(str(root))
+    assert "人类门(min)" in md and "扣除后总墙钟(min)" in md and "spec-rev Δ(扣除后)" in md
