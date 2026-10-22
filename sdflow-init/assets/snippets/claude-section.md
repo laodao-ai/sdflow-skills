@@ -76,7 +76,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 
 **强制操作规范**
 
-- **起手判触发**：收到 `opsx:ff` / `propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
+- **起手判触发**：收到 `opsx:propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
   子 agent 调度期间（sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。

@@ -4,7 +4,7 @@
 
 > **历史举例标注**：文中 `plan-ceo-review`（Phase 1 = 已退役 autoplan）、`brainstorming` 为历史工具名，
 > 现行对应设计门评审编排器 `sdflow-spec-review` 与 `/sdflow-spec` 拷问相位；本文不逐处改写举例，
-> `opsx:ff` 举例已改指 `/sdflow-spec`（仍兼容 `opsx:ff` 直呼）。
+> `opsx:ff` 举例已改指 `/sdflow-spec`（也可用 `opsx:propose` 直呼）。
 
 ---
 

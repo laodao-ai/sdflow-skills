@@ -1,6 +1,6 @@
 # 生成起手强制规范（FF-0 + D-1~D-6 + 切片建议）
 
-> **定位声明**：本规范是 `/sdflow-spec`（或 `/opsx:ff` 直呼）起手强制项的**唯一权威定义源**——含前置动作 **FF-0（开分支）**、生成硬约束 **D-1~D-6**、以及「切片建议」节的生成侧规范〔impl-review-fix，harden-ticket-slicing〕。
+> **定位声明**：本规范是 `/sdflow-spec`（或 `/opsx:propose` 直呼）起手强制项的**唯一权威定义源**——含前置动作 **FF-0（开分支）**、生成硬约束 **D-1~D-6**、以及「切片建议」节的生成侧规范〔impl-review-fix，harden-ticket-slicing〕。
 > 所有调用方（`config.yaml` rules 自动注入、`workflow/workflow.md` 流程、各处对比表/判定速查）
 > **只引用编号、不复制定义内容**。约束内容如有变更，只改本文件。
 >
@@ -11,7 +11,7 @@
 
 > FF-0 是 ff **起手必做的非 D 动作**（VCS 前置，不是内容约束，故与 D-x 区分编号）。
 
-**FF-0**：起手建 change（`/opsx:ff {change}`、或 `/sdflow-spec` 的相位 B 起手）时，**生成任何产物之前**必须过**三分支判定**——按当前分支恰好命中一条：
+**FF-0**：起手建 change（`/opsx:propose {change}`、或 `/sdflow-spec` 的相位 B 起手）时，**生成任何产物之前**必须过**三分支判定**——按当前分支恰好命中一条：
 
 | 当前分支 | 动作 |
 |---|---|
@@ -130,7 +130,7 @@ D 约束是稀缺资源——塞太多会触发过载。
 调用方（如 `workflow/workflow.md`）**不得复制上表定义文本**，只能写形如：
 
 ```
-/sdflow-spec {change}（或 /opsx:ff 直呼）。按 ~/.sdflow/workflow/ff-generation-constraints.md 注入：
+/sdflow-spec {change}（或 /opsx:propose 直呼）。按 ~/.sdflow/workflow/ff-generation-constraints.md 注入：
 默认 D-1/D-3/D-5；本变更涉及 <DB schema 迁移 / 外部依赖 / 产品 model>，
 追加对应条件约束 <D-2 / D-4 / D-6>。
 ```

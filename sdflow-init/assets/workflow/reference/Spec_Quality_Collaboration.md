@@ -14,7 +14,7 @@
 | 维度 | `/brainstorming` | `/autoplan` |
 |------|-----------------|------------|
 | **模式** | 对话驱动，生成设计 | 批量审查，评估计划 |
-| **输入** | 模糊想法 / opsx:ff 产出 | 已有 plan 文件 |
+| **输入** | 模糊想法 / opsx:propose 产出 | 已有 plan 文件 |
 | **输出** | 经批准的设计文档 | 4 个视角的评审报告 + 决策审计 |
 | **门禁** | HARD-GATE：设计未获批不写代码 | 前提假设门禁（用户必须确认） |
 | **AI 多视角** | 单视角（当前 session） | 双声音：Claude 子 agent + Codex 独立审查 |
@@ -69,7 +69,7 @@ Spec Self-Review（4 项）
 
 | 场景 | 是否适合用独立 skill |
 |------|-------------------|
-| opsx:ff 后快速扫描，决定是否需要 brainstorming | ✅ 适合，轻量无需对话 |
+| opsx:propose 后快速扫描，决定是否需要 brainstorming | ✅ 适合，轻量无需对话 |
 | 已有 design.md，人工修改后做质量验证 | ✅ 适合 |
 | eng-review 前的入场条件检查 | ✅ 适合 |
 | 对话中动态发现盲点 | ❌ 不适合，需要 brainstorming 的对话机制 |
@@ -108,7 +108,7 @@ autoplan Phase 3（Eng Review）产出物：
 ### 5.1 当前工作流的协作点
 
 ```
-/opsx:ff
+/opsx:propose
     ↓ 生成骨架（proposal + design + specs + tasks）
     │
     ├─ [快速路径 S 级]
@@ -133,10 +133,10 @@ autoplan Phase 3（Eng Review）产出物：
   └── 补充：autoplan CEO Phase（scope challenge，发现遗漏场景）
 
 准确（Accurate）
-  ├── 主责：opsx:ff D-1 约束（代码事实 grep 再写入）
+  ├── 主责：opsx:propose D-1 约束（代码事实 grep 再写入）
   └── 补充：autoplan Eng Phase（读实际代码，不凭记忆）
   ⚠️  brainstorming 和 autoplan 均无强制 grep 验证机制
-       → 该标准主要靠 /opsx:ff 的 D-1 约束保证，而非 review 环节
+       → 该标准主要靠 /opsx:propose 的 D-1 约束保证，而非 review 环节
 
 正确（Correct）
   ├── 主责：autoplan Eng Phase（双 AI 视角，架构图，失败模式）
@@ -151,7 +151,7 @@ autoplan Phase 3（Eng Review）产出物：
 ### 5.3 协作序列建议
 
 ```
-阶段 1：生成（opsx:ff）
+阶段 1：生成（opsx:propose）
   → 通过 D-1 约束保证代码事实准确性（Accurate）
 
 阶段 2：结构检查（brainstorming 第一层 or 独立 /spec-check）
@@ -176,7 +176,7 @@ autoplan Phase 3（Eng Review）产出物：
 - brainstorming 的 Spec Self-Review 是纯机械检查，与对话无依赖
 - OpenSpec 工作流中，spec-quality-checklist 已在 brainstorming prompt 中注入，说明这两层已被人为分开
 - S 级路径跳过 brainstorming 时，spec 结构检查没有兜底
-- 可作为 opsx:ff → eng-review 之间的快速门禁
+- 可作为 opsx:propose → eng-review 之间的快速门禁
 
 ### 反对提取
 
@@ -190,10 +190,10 @@ autoplan Phase 3（Eng Review）产出物：
 
 | 检查类型 | 当前工具 | 使用时机 |
 |---------|---------|--------|
-| 结构自检（占位符/歧义/scope） | `spec-quality-checklist.md` + brainstorming 第一层 | opsx:ff 后，eng-review 前 |
+| 结构自检（占位符/歧义/scope） | `spec-quality-checklist.md` + brainstorming 第一层 | opsx:propose 后，eng-review 前 |
 | 内容精炼（盲点/方案对比/对话） | brainstorming 第二层（`Spec self-review` 后的 `User reviews spec?`） | 结构自检通过后 |
 | 工程审查（架构/测试/安全） | plan-eng-review 或 autoplan Eng Phase | /clear 后 |
-| 代码事实验证（grep first） | opsx:ff D-1 约束 | spec 写入时，而非 review 时 |
+| 代码事实验证（grep first） | opsx:propose D-1 约束 | spec 写入时，而非 review 时 |
 
 ---
 
@@ -204,14 +204,14 @@ autoplan Phase 3（Eng Review）产出物：
 brainstorming 和 autoplan 都无法在 review 时验证 spec 中的代码事实（函数名/字段/路径）是否真实存在。
 
 现有防线：
-- opsx:ff 的 D-1 约束：写 design.md 时 grep 验证再写入
+- opsx:propose 的 D-1 约束：写 design.md 时 grep 验证再写入
 - plan-eng-review 的 "如有不确定的技术事实…使用 AskUserQuestion" 触发词
 
 缺口：
 - brainstorming 在讨论中产生的技术细节无强制验证
 - autoplan 的 Claude 子 agent 和 Codex 都只读 plan 文件，不 grep 代码库
 
-**补救方向：** opsx:ff 的 D-1 约束是主防线，必须在初始生成时执行，而不是指望 review 补救。
+**补救方向：** opsx:propose 的 D-1 约束是主防线，必须在初始生成时执行，而不是指望 review 补救。
 
 ---
 
