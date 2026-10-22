@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="sdflow 流程图卡片：从需求到合并，三个阶段、一个设计批准点。">
+<title>sdflow · 从需求到交付</title>
+<style>
+*{box-sizing:border-box}
+:root{color-scheme:light;--ink:#183d32;--muted:#63746b;--line:#dbe5db}
+body{margin:0;padding:32px 20px;background:#edf1eb;color:var(--ink);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.toolbar{max-width:960px;margin:0 auto 16px;display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:13px;color:var(--muted)}
+.toolbar a{color:inherit;text-underline-offset:4px}
+button{font:inherit;background:#fff;border:1px solid #ccd9ce;border-radius:8px;padding:8px 14px;color:var(--ink);cursor:pointer}
+:focus-visible{outline:3px solid #a65e2b;outline-offset:4px}
+.card{max-width:960px;margin:auto;background:#fcfdf9;border:1px solid #d6e0d5;border-radius:24px;box-shadow:0 15px 55px #183d3210;overflow:hidden}
+header{padding:38px 48px 24px;display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.brand{font-size:13px;font-weight:750;letter-spacing:2px;color:#28664e;margin-bottom:13px}
+h1{font-size:36px;line-height:1.3;letter-spacing:-1px;margin:0 0 12px}
+header p{font-size:14px;line-height:1.8;color:var(--muted);margin:0}
+.stamp{white-space:nowrap;border:1px solid #cbdacc;border-radius:30px;padding:8px 15px;font-size:12px;color:#38634c;margin-top:4px;background:#f0f5ec}
+.diagram{padding:0 24px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+svg .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.notes{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;border-top:1px solid var(--line);margin:4px 48px 0;padding:23px 0 28px}
+.notes b{font-size:13px;display:block;margin-bottom:6px}
+.notes p{font-size:12px;line-height:1.8;margin:0;color:var(--muted)}
+footer{border-top:1px solid var(--line);padding:15px 48px;display:flex;justify-content:space-between;gap:20px;font-size:11px;line-height:1.7;color:var(--muted);background:#f5f7f0}
+@media(max-width:640px){body{padding:16px 10px}.toolbar{font-size:12px}.card{border-radius:16px}header{padding:25px 22px 16px;display:block}h1{font-size:29px}.stamp{display:inline-block;margin-top:14px}.diagram{padding:0 6px;overflow-x:auto}.diagram svg{min-width:660px}.notes{margin:0 22px;grid-template-columns:1fr;gap:15px;padding:20px 0}.notes b{margin-bottom:3px}footer{padding:14px 22px;display:block}.mobile-hint{display:block!important;font-size:11px;color:var(--muted);margin:0 22px 12px}}
+@media print{@page{size:A4 portrait;margin:8mm}body{padding:0;background:white}.toolbar,.mobile-hint{display:none!important}.card{max-width:none;border:0;border-radius:0;box-shadow:none}header{padding:12px 25px 10px}h1{font-size:30px}.brand{margin-bottom:7px}.diagram{padding:0 12px;overflow:visible}.diagram svg{min-width:0}.notes{margin:0 25px;padding:12px 0;gap:15px}footer{padding:10px 25px}.stamp{margin-top:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+@media print{.diagram svg{height:210mm}.notes p{font-size:10px}.notes b{font-size:11px}footer{font-size:9px}}
+</style>
+</head>
+<body>
+<div class="toolbar"><a href="workflow-map.html">← 工作流全景图</a><button type="button" onclick="window.print()">打印 / 保存为 PDF</button></div>
+<main class="card">
+<header><div><div class="brand">SDFLOW / 工作流卡片</div><h1>从需求到交付</h1><p>先把目标说清楚，再批准设计，最后自动实现、验证与合并。</p></div><span class="stamp">3 个阶段 · 1 个设计批准点</span></header>
+<p class="mobile-hint" style="display:none">左右滑动查看完整流程图。</p>
+<div class="diagram" tabindex="0" role="region" aria-label="工作流图，窄屏可横向滚动">
+<svg viewBox="0 0 900 1160" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">sdflow 三阶段工作流</title>
+<desc id="flow-desc">从需求或想法开始。方向未定先探索，用户示意收敛后生成设计；需求清晰可直接生成设计。阶段一完成后清空会话并切换评审模型，进入设计审查。用户阅读一份报告和评审页，要求修改则改设计并窄复核后再批准，批准后写入设计锚、清空会话并启动交付。阶段三由 sdflow-ship 依次调用 sdflow-implement 实现任务、sdflow-code-review 审查代码、sdflow-done 完成验证、交接、归档、评审页、提交和合并。最后打开收尾评审页并阅读交接文档。阶段内部不清空会话；遇阻塞会报告原因；默认不自动推送。</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#789080"/></marker>
+<marker id="amber-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#aa7438"/></marker>
+</defs>
+
+<!-- 主路径与条件探索。 -->
+<rect x="362" y="10" width="176" height="46" rx="23" fill="#193f33"/>
+<text x="450" y="39" text-anchor="middle" fill="#fff" font-size="16" font-weight="650">需求 / 想法</text>
+<path d="M450 56V128" fill="none" stroke="#789080" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="465" y="97" fill="#63746b" font-size="12">目标清晰，直接开始</text>
+<path d="M362 33H214V58" fill="none" stroke="#789080" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="269" y="24" fill="#63746b" font-size="12">方向未定</text>
+<rect x="75" y="60" width="278" height="52" rx="11" fill="#f1f4ed" stroke="#d6dfd2"/>
+<text x="214" y="82" text-anchor="middle" fill="#244d3c" font-size="13" font-weight="600">先探索问题与方案</text>
+<text x="214" y="101" text-anchor="middle" fill="#63746b" font-size="12" class="mono">opsx:explore</text>
+<path d="M214 112V151H311" fill="none" stroke="#789080" stroke-width="1.6" marker-end="url(#arrow)"/>
+<text x="75" y="140" fill="#63746b" font-size="11">你说“做吧”，再收敛</text>
+
+<!-- 阶段一。 -->
+<rect x="36" y="168" width="828" height="160" rx="18" fill="#edf5ed" stroke="#d5e4d5"/>
+<circle cx="76" cy="203" r="18" fill="#d8e9d8"/>
+<text x="76" y="209" text-anchor="middle" fill="#286446" font-size="15" font-weight="700">01</text>
+<text x="107" y="200" fill="#234b36" font-size="18" font-weight="700">生成设计</text>
+<text x="107" y="221" fill="#5f7564" font-size="12">你与助手一起完成</text>
+<rect x="312" y="132" width="276" height="38" rx="9" fill="#27674c"/>
+<text x="450" y="156" text-anchor="middle" fill="#fff" font-size="14" class="mono">/sdflow-spec</text>
+<g fill="#fff" stroke="#cddfce"><rect x="263" y="193" width="164" height="48" rx="10"/><rect x="450" y="193" width="164" height="48" rx="10"/><rect x="637" y="193" width="191" height="48" rx="10"/></g>
+<g fill="#234b36" font-size="15" text-anchor="middle"><text x="345" y="223">澄清需求</text><text x="532" y="223">追问与取舍</text><text x="732" y="223">生成规格与设计</text></g>
+<g stroke="#789080" stroke-width="1.5" marker-end="url(#arrow)"><path d="M428 217H447"/><path d="M615 217H634"/></g>
+<line x1="263" y1="260" x2="828" y2="260" stroke="#d1dfd0"/>
+<text x="263" y="284" fill="#46634d" font-size="13">产出：提案 · 设计 · 规格 · 任务 + 决策备忘录</text>
+<text x="263" y="306" fill="#63746b" font-size="12">明确目标、范围与完成标准，关键决定写入文档。</text>
+<path d="M450 328V379" stroke="#789080" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="468" y="338" width="281" height="29" rx="14" fill="#f0f2eb"/>
+<text x="485" y="358" fill="#586b5d" font-size="12">/clear → 切换评审档模型 → 开始设计审</text>
+
+<!-- 阶段二和唯一人工批准点。 -->
+<rect x="36" y="382" width="828" height="165" rx="18" fill="#edf2fb" stroke="#d6dfef"/>
+<circle cx="76" cy="419" r="18" fill="#dae5f8"/>
+<text x="76" y="425" text-anchor="middle" fill="#3a5f9c" font-size="15" font-weight="700">02</text>
+<text x="107" y="416" fill="#304d7e" font-size="18" font-weight="700">设计审查</text>
+<text x="107" y="437" fill="#62738d" font-size="12">自动审查，你来批准</text>
+<text x="263" y="416" fill="#3a5f9c" font-size="14" class="mono">/sdflow-spec-review</text>
+<rect x="263" y="432" width="565" height="43" rx="9" fill="#fff" stroke="#d4dfef"/>
+<text x="545" y="459" text-anchor="middle" fill="#304d7e" font-size="14">多角度检查方案、工程约束与真实代码 → 一份报告</text>
+<text x="263" y="502" fill="#62738d" font-size="12">重点看：报告顶部需你拍板的取舍与推荐 · 自动裁决的依据</text>
+<text x="263" y="526" fill="#62738d" font-size="12">评审页 design-gate.html：在页面上划选写意见，粘回会话即存档</text>
+<path d="M450 547V570" stroke="#789080" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M450 572L606 625L450 678L294 625Z" fill="#fff0d9" stroke="#c49554" stroke-width="1.5"/>
+<text x="450" y="614" text-anchor="middle" fill="#815524" font-size="11" letter-spacing="1">唯一人工批准点</text>
+<text x="450" y="639" text-anchor="middle" fill="#71491e" font-size="18" font-weight="700">你批准设计吗？</text>
+<path d="M606 625H844V530" fill="none" stroke="#aa7438" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#amber-arrow)"/>
+<text x="622" y="612" fill="#946831" font-size="12">要求修改 → 改设计 → 窄复核</text>
+<path d="M450 678V736" stroke="#789080" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="389" y="705" fill="#286446" font-size="12" font-weight="700">批准 ↓</text>
+<text x="60" y="705" fill="#946831" font-size="11">批准后再改设计，交付会拒绝启动</text>
+<rect x="468" y="687" width="300" height="29" rx="14" fill="#f0f2eb"/>
+<text x="485" y="707" fill="#586b5d" font-size="12">写入设计锚 → /clear → 启动交付</text>
+
+<!-- 阶段三：sdflow-ship 依次调用三个 skill，阻塞另行报告。 -->
+<rect x="36" y="739" width="828" height="262" rx="18" fill="#fbf2e6" stroke="#eadcc9"/>
+<circle cx="76" cy="776" r="18" fill="#f2e2ca"/>
+<text x="76" y="782" text-anchor="middle" fill="#956334" font-size="15" font-weight="700">03</text>
+<text x="107" y="773" fill="#80562e" font-size="18" font-weight="700">实现与收尾</text>
+<text x="107" y="794" fill="#8a755f" font-size="12">批准后自动推进</text>
+<text x="263" y="773" fill="#80562e" font-size="14" class="mono">/sdflow-ship {change}</text>
+<text x="263" y="796" fill="#8a755f" font-size="11">将 {change} 替换为你的实际变更标识或目录；它依次调用下面三个 skill</text>
+<g fill="#fffdf9" stroke="#e5d8c5"><rect x="263" y="815" width="172" height="92" rx="10"/><rect x="457" y="815" width="172" height="92" rx="10"/><rect x="651" y="815" width="177" height="92" rx="10"/></g>
+<g text-anchor="middle">
+<g fill="#956334" font-size="12" class="mono"><text x="349" y="840">sdflow-implement</text><text x="543" y="840">sdflow-code-review</text><text x="739" y="840">sdflow-done</text></g>
+<g fill="#80562e" font-size="15" font-weight="650"><text x="349" y="866">任务实现</text><text x="543" y="866">独立代码审查</text><text x="739" y="866">验证与收尾</text></g>
+<g fill="#8a755f" font-size="11"><text x="349" y="890">出票 → 并行执行 → 逐票审查</text><text x="543" y="890">每次全审，能修的自动修</text><text x="739" y="890">每条结论附测试名或文件:行</text></g>
+</g>
+<g stroke="#aa8c65" stroke-width="1.5" marker-end="url(#arrow)"><path d="M436 861H454"/><path d="M630 861H648"/></g>
+<text x="263" y="936" fill="#80562e" font-size="13">验证通过 → 交接 → 归档并同步规格 → 生成评审页 → 提交 → 合并</text>
+<line x1="263" y1="952" x2="828" y2="952" stroke="#e5d8c5"/>
+<text x="263" y="976" fill="#8a755f" font-size="12">每步由门禁脚本核对进度；遇阻塞或验证失败，停下并报告原因。</text>
+<path d="M450 1001V1034" stroke="#789080" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="303" y="1037" width="294" height="52" rx="26" fill="#193f33"/>
+<text x="450" y="1069" text-anchor="middle" fill="#fff" font-size="17" font-weight="650">✓ 已验证 · 已归档 · 已合并</text>
+<path d="M450 1089V1116" stroke="#789080" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<text x="450" y="1141" text-anchor="middle" fill="#5f7564" font-size="13">打开评审页 shipped.html，读 hand-off.md → 决定后续清理是否另开变更</text>
+</svg>
+</div>
+<div class="notes"><div><b>阶段内部连续运行</b><p>仅在两处阶段交界使用 /clear；子任务运行中不清空会话。</p></div><div><b>中断后可以继续</b><p>再次运行 /sdflow-ship {change}，根据文件、报告和提交判断下一步，已完成的任务不重做。</p></div><div><b>合并不等于发布</b><p>默认 ff-only 合并，不自动 push；调用时说“不要 merge”可跳过。交接记录保留剩余事项。</p></div></div>
+<footer><span>依据各 sdflow skill 的 SKILL.md 与 WORKFLOW-GUIDE.md 整理。</span><span>sdflow · 用户流程速览</span></footer>
+</main>
+</body>
+</html>

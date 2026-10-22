@@ -344,6 +344,71 @@ def test_config_files_are_neutralized_in_child_env():
     assert env.get("GIT_CONFIG_SYSTEM") == os.devnull
 
 
+# ── [B37] 多账号共用仓：用户自己声明的 safe.directory MUST 透传，其余 config 仍禁读 ──
+#
+# 禁读 global/system 会连带吞掉用户在那两级声明的 `safe.directory` ⇒ 属主不是当前账号的仓
+# 被 git 判「dubious ownership」，全部 git 调用返回空。属主差异用 git 官方测试开关
+# `GIT_TEST_ASSUME_DIFFERENT_OWNER` 构造（无需第二个系统账号）；它是 GIT_ 前缀，会被 denylist
+# 剔掉，故包一层 `_git_env` 在剔除之后补回。
+
+def _assume_different_owner(monkeypatch):
+    real = _sg._git_env
+
+    def env_with_foreign_owner(*a, **kw):
+        env = real(*a, **kw)
+        env["GIT_TEST_ASSUME_DIFFERENT_OWNER"] = "1"
+        return env
+
+    monkeypatch.setattr(_sg, "_git_env", env_with_foreign_owner)
+    _sg._user_safe_directories.cache_clear()
+
+
+def _home_with_gitconfig(tmp_path, monkeypatch, body):
+    home = tmp_path / "shared-home"
+    home.mkdir(parents=True, exist_ok=True)
+    (home / ".gitconfig").write_text(body, encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home))
+    _sg._user_safe_directories.cache_clear()
+
+
+def test_foreign_owned_repo_is_refused_without_user_trust(repo, tmp_path, monkeypatch):
+    # 前提 + 保护不被拆：用户没声明信任 ⇒ git 照旧拒绝，脚本 MUST NOT 自行放行。
+    _home_with_gitconfig(tmp_path, monkeypatch, "[user]\n\tname = x\n")
+    _assume_different_owner(monkeypatch)
+    assert _sg.run_git(repo, "rev-parse", "--git-dir") == ""
+
+
+@pytest.mark.parametrize("entry", ["{repo}", "*", "{parent}/*"])
+def test_user_declared_safe_directory_lets_foreign_owned_repo_through(
+        repo, tmp_path, monkeypatch, entry):
+    value = entry.format(repo=repo, parent=Path(repo).parent)
+    _home_with_gitconfig(tmp_path, monkeypatch, f"[safe]\n\tdirectory = {value}\n")
+    _assume_different_owner(monkeypatch)
+    assert _sg.run_git(repo, "rev-parse", "--git-dir") != "", \
+        f"用户 global 已声明 safe.directory={value}，加固层仍把仓判为 dubious ownership"
+
+
+def test_repo_local_safe_directory_is_not_promoted(repo, tmp_path, monkeypatch):
+    # git 自己不认仓库级 safe.directory（防仓库给自己开后门）；透传 MUST 只取 system/global，
+    # 否则等于把 `.git/config` 提升成命令行级、替仓库开了这个后门。
+    _home_with_gitconfig(tmp_path, monkeypatch, "[user]\n\tname = x\n")
+    subprocess.run(["git", "-C", str(repo), "config", "--local", "--add",
+                    "safe.directory", str(repo)], check=True)
+    _assume_different_owner(monkeypatch)
+    assert _sg.run_git(repo, "rev-parse", "--git-dir") == ""
+
+
+def test_only_safe_directory_crosses_the_config_wall(repo, tmp_path, monkeypatch):
+    # 透传面只有 safe.directory 一个键：同一份 global 里的 GBK 污染 MUST 仍被禁读。
+    commit_all(repo, GBK_SUBJECT)
+    _home_with_gitconfig(
+        tmp_path, monkeypatch,
+        f"[safe]\n\tdirectory = {repo}\n[i18n]\n\tlogOutputEncoding = GBK\n")
+    _assume_different_owner(monkeypatch)
+    assert _sg.run_git(repo, "log", "-1", "--format=%s") == GBK_SUBJECT
+
+
 def test_env_is_a_denylist_not_an_allowlist(monkeypatch):
     # Windows 上 allowlist 会漏 SYSTEMROOT/COMSPEC 致子进程启动失败（本地 macOS 照不出），
     # 故在此机械守住口径：任意自定义键 MUST 在，且**只有** GIT_ 前缀键被剔除。

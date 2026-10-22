@@ -183,6 +183,7 @@ D9 新鲜度 = **录内容指纹 + 比 digest**〔sweep-pool-debt D2/D3/D9，取
 #   目标态论证：迁移期评估安全锚 producer 契约而非现存语料快照（见 design ADR-4）。
 import argparse
 import base64
+import functools
 import hashlib
 import json
 import os
@@ -342,7 +343,7 @@ _GIT_HARDEN = ("-c", "core.quotePath=false")
 GIT_TIMEOUT_SECONDS = 30
 
 
-def _git_env():
+def _git_env(user_config=False):
     """子进程 env：复制当前环境 → **剔除 `GIT_` 前缀键** → **本进程回填两个禁读键**。
 
     [harden-gate-git-layer Task2 · ADR-6 · tasks 3.3] MUST 用 denylist，**MUST NOT 用 allowlist**
@@ -385,16 +386,43 @@ def _git_env():
     引入非 builtin 的 git 子命令，剔掉 `GIT_EXEC_PATH` 可能令 git 找不到它而 rc≠0，
     `run_git` 返 `""` ⇒ **静默降级而非 UNKNOWN**。届时 MUST 改为按 buglist 口径分类剔除，
     而不是给这里打一个特例补丁。
+
+    [B37] `user_config=True` 只供 `_user_safe_directories` 读用户声明的 `safe.directory` 用：
+    照样剔 `GIT_*`，但不回填两个禁读键。
     """
     env = os.environ.copy()
     for key in [k for k in env if k.startswith("GIT_")]:
         del env[key]
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env["GIT_CONFIG_SYSTEM"] = os.devnull
+    if not user_config:
+        env["GIT_CONFIG_GLOBAL"] = os.devnull
+        env["GIT_CONFIG_SYSTEM"] = os.devnull
     return env
 
 
-def _git_run(root, args, text):
+# [B37] 禁读 global/system 会连带吞掉用户在这两级声明的 `safe.directory` ⇒ 属主不是当前账号
+# 的仓（多账号共用目录）被 git 判 dubious ownership，全部 git 调用返回空、写锚与 gate 双双失效。
+# 透传口径：**只取 safe.directory 一个键、只认 system/global 两级**，以 `-c` 注入（命令行级
+# 属 git 的受保护配置，safe.directory 在此生效）。其余 config 仍整片禁读，上文加固意图不变。
+# 仓库级（local/worktree）值 MUST 丢弃：git 自己不认它（防仓库给自己开后门），透传它就等于
+# 把 `.git/config` 提升成命令行级、替仓库开了这个后门。信不信任某个仓仍由用户自己的配置决定。
+_SAFE_DIRECTORY_SCOPES = ("system", "global")
+
+
+@functools.lru_cache(maxsize=None)
+def _user_safe_directories():
+    r = _git_run(Path.cwd(), ("config", "--show-scope", "--get-all", "safe.directory"),
+                 text=True, user_config=True)
+    if r.returncode != 0:   # 1 = 未声明该键
+        return ()
+    values = []
+    for line in r.stdout.splitlines():
+        scope, _, value = line.partition("\t")
+        if scope in _SAFE_DIRECTORY_SCOPES:
+            values.append(value)
+    return tuple(values)
+
+
+def _git_run(root, args, text, user_config=False):
     """三个 helper 唯一的 subprocess 出口：统一 timeout + env 清理 + 环境级失败映射。
 
     [harden-gate-git-layer Task2 · tasks 3.1/3.2/3.3] 单出口而非三处复制——三份拷贝必然漂移
@@ -406,8 +434,11 @@ def _git_run(root, args, text):
     对 `/sdflow-ship` 链序而言是**契约外**取值 ⇒ 无处置路径。二者各自 category 不同，
     因为补救动作完全不同（装 git vs 查磁盘），MUST NOT 合并成一句「git 调用失败」。
     """
-    cmd = ["git", "-C", str(root), *_GIT_HARDEN, *args]
-    kwargs = {"capture_output": True, "timeout": GIT_TIMEOUT_SECONDS, "env": _git_env()}
+    safe = () if user_config else tuple(
+        x for d in _user_safe_directories() for x in ("-c", f"safe.directory={d}"))
+    cmd = ["git", "-C", str(root), *safe, *_GIT_HARDEN, *args]
+    kwargs = {"capture_output": True, "timeout": GIT_TIMEOUT_SECONDS,
+              "env": _git_env(user_config=user_config)}
     if text:
         kwargs["text"] = True
         kwargs["encoding"] = "utf-8"
