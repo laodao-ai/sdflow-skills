@@ -351,6 +351,7 @@
           </div>
           <div class="stage-body">
             <div class="row-line"><span class="row-k">入口</span><span class="row-v"><b>唯一线性路径</b>：explore(条件) → <code>/sdflow-spec</code>（模型在人示意收敛时自动 invoke），澄清→拷问→生成一次连续跑。规则见 <code>generation-process.md</code></span></div>
+            <div class="row-line"><span class="row-k">确认</span><span class="row-v">问句回「是」即采纳该问推荐，但依赖链上「是」只等于拍链头，非「是」按原文处理、不推断采纳；仅引入新平台/语言/库/存储介质/分发方式时才确认「怎么造」归属归人拍板还是放权（未引入则不问；放权则选默认并在纪要写明所选与理由）</span></div>
             <div class="row-line"><span class="row-k">门禁</span><span class="row-v"><b>FF-0 三分支判定</b>：保护分支先 <code>git checkout -b feat/{change}</code>；已在 <code>feat/{本 change}</code> 跳过；在其它 feature 分支 halt 问人。按 <code>trigger-catalog</code> 判 TG 命中激活生成约束</span></div>
             <div class="row-line"><span class="row-k">产物</span><span class="row-v art">proposal · design · specs/ · tasks.md（四件套）</span></div>
           </div>
@@ -393,6 +394,7 @@
             </div>
             <div class="stage-body">
               <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_PLAN · 0</span> plan 缺；出 3-6 张 tracer-bullet ticket，落盘即返回；每任务 commit 步须按 <code>TAG_RE</code> 显式写 checkpoint 命令（主锚契约）</span></div>
+              <div class="row-line"><span class="row-k">钉票</span><span class="row-v">出票含 Review Focus 钉票：把未覆盖的隐含输入或失败模式作为 <code>[Review Focus]</code> 验收复选框钉进拥有该代码路径的票</span></div>
               <div class="row-line"><span class="row-k">产物</span><span class="row-v art">tickets.md（### Task N: 段）</span></div>
             </div>
           </div>
@@ -406,6 +408,7 @@
             <div class="stage-body">
               <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">CONTINUE_IMPL · 0</span> plan 号集 ⊄ 完成集；<code>done_tasks</code> 已完成号勿重派</span></div>
               <div class="row-line"><span class="row-k">判据</span><span class="row-v">完成 = checkpoint 标签集 ∪ 复选框集（集合归属）；每 ticket 双轴审（Standards+Spec）即时修复闭环</span></div>
+              <div class="row-line"><span class="row-k">seam</span><span class="row-v">implementer 的 TDD seam 在票报告附一行「能抓住什么、漏掉什么」，漏掉的部分注明由哪层测试或哪张票承担</span></div>
               <div class="row-line"><span class="row-k">产物</span><span class="row-v art">checkpoint(&#123;change&#125;:task&lt;N&gt;-…) 提交</span></div>
             </div>
           </div>
@@ -419,6 +422,7 @@
             <div class="stage-body">
               <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_CODE_REVIEW · 0</span> · blocked → <span class="code-chip c-blocked">BLOCKED_UPSTREAM · 4</span></span></div>
               <div class="row-line"><span class="row-k">机制</span><span class="row-v">Step1 scope-drift → 多镜（领域/对抗×2-3/<b>历史×1</b>，无接地）→ 置信过滤 &lt;80 + 对抗裁决 → 自动修/T10自动裁/defer</span></div>
+              <div class="row-line"><span class="row-k">口径</span><span class="row-v">仅 Step2 镜适用：镜按「合理用户预期」判严重度（spec 未提但用户可感知的行为不因此降为 Minor），并回传 <code>dismissed</code> 拒判清单，由 Step3 主审逐条裁决；自动修复后的复审上限为首轮之外最多 2 轮复审（连首轮共 3 轮审）</span></div>
               <div class="row-line"><span class="row-k">脚本门</span><span class="row-v"><code>anchor_lint --layer code-review</code> ✅#2 · <code>trivial_shape.py</code>（EXEMPT 免 fan-out）· <code>outside-voice</code></span></div>
               <div class="row-line"><span class="row-k">产物</span><span class="row-v"><span class="art">code-review-report.md</span> → <code>ship-gate.code_review: pass|blocked</code>；defer→buglist/todolist</span></div>
             </div>
@@ -433,6 +437,7 @@
             <div class="stage-body">
               <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_VERIFY · 0</span> · verify=FAIL → <span class="code-chip c-fail">VERIFY_FAIL · 5</span> · 陈旧 → <span class="code-chip c-ok">RERUN_STALE · 0</span></span></div>
               <div class="row-line"><span class="row-k">机制</span><span class="row-v">verify（强档·唯一终门·每 ✅ 须机验锚点·Do-Not-Trust 冷启）→ issues sweep → hand-off → archive（delta 对码核验）→ commit → merge（缺省 ff）</span></div>
+              <div class="row-line"><span class="row-k">用例数</span><span class="row-v">verify 核收尾票证据的用例数列：实跑层通过行用例数为 <code>0</code>（零用例）判核心缺口，<code>未知</code> 照录，旧 4 列格式整票放行；同一票 4 列与 5 列混用判证据不齐</span></div>
               <div class="row-line"><span class="row-k">产物</span><span class="row-v"><span class="art">verify-report.md</span> → <code>ship-gate.verify: PASS|FAIL</code> + <span class="art">hand-off.md</span></span></div>
             </div>
           </div>

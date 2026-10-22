@@ -195,12 +195,12 @@ A 澄清──共识初成──▶ B 拷问（起手即建分支 + change 目�
 ### 0.1 openspec CLI 预检（唯一 fail-closed 面）
 
 ```bash
-openspec --version                 # 记下实际版本号，降级/失败报告里要写它
-openspec context                   # 项目上下文（本项目栈/约定/规则集入口），进相位 A 前读一遍
+openspec --version                 # 记下版本号供报告引用
+openspec context                   # 项目上下文，进相位 A 前读
 openspec list                      # 已有 change，供 0.3 重入探测比对
 ```
 
-命令不存在或非零退出 ⇒ **fail-closed 中止**，按三要素报告：problem（起手 CLI 预检失败）+
+命令不存在或非零退出 ⇒ **fail-closed 中止**，按三要素报告：problem（CLI 预检失败）+
 cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/openspec-upgrade`，或
 `npm i -g @fission-ai/openspec`）。**MUST NOT 手工创建 change 目录结构顶替。**
 
@@ -216,7 +216,7 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
 - **(d) eval 后校验**：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空；host≠unknown 时
   三个 `$SDFLOW_TIER_*` MUST 非空。**空值 = resolver 根本没跑成，MUST NOT 回落当 `unknown` 处置。**
 
-四步一步不能少的假绿场景与 impl-review-fix FIX-3 引用见
+假绿场景见
 [`references/execution-protocol-details.md`](references/execution-protocol-details.md)。
 
 **`$SDFLOW_HOST="codex"`** ⇒ 默认仍由主 session 亲查、亲写。Codex 当前只观察到用户显式触发已被接受，
@@ -228,14 +228,14 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
 ⇒ 对该 change **无条件**读 `openspec status --change <name> --json` 的 `isComplete`，按
 [`references/execution-protocol-details.md`](references/execution-protocol-details.md) 的
 isComplete 三态判定表分治（未命中 → 正常进入相位 A）。「继续还是新开」**必须问人**：两种意图导致
-**实质不同的产物**；**MUST NOT 只探 `isComplete=false`**，也 **MUST NOT 拿「有没有 `decision-memo.md`」当探测前提**（细节见同一 reference）。
+**实质不同的产物**；**MUST NOT 只探 `isComplete=false`**，也 **MUST NOT 拿「有没有 `decision-memo.md`」当探测前提**。
 
 ### 0.4 相位状态机
 
 `absent ──B起手①②③④──▶ B-draft ──收敛⑤⑥──▶ B-finalized ──生成──▶ C-partial ──全产物过 validate──▶ complete`
 
-回边：删分支即净 ⇒ `absent`；纪要身份不符 ⇒ 退回 `B-draft`。`B-draft` 起于 B.1 ④（草稿纪要
-一落盘，change 目录内 git 可见 ⇒ **可探测**）。**`complete` 态 SHALL 拒绝重生成**，判定见 0.3 第三行。
+回边：删分支 ⇒ `absent`；纪要身份不符 ⇒ `B-draft`。`B-draft` 起于 B.1 ④（草稿纪要
+一落盘，目录内 git 可见 ⇒ **可探测**）。**`complete` 态 SHALL 拒绝重生成**，判定见 0.3 第三行。
 
 ---
 
@@ -247,7 +247,11 @@ isComplete 三态判定表分治（未命中 → 正常进入相位 A）。「�
 - 依赖链问题 SHALL 整链呈现（链结构+每环推荐+整链路径），人 MAY 拍整链或链头。改判⇒下游按
   新前提重提；只拍链头⇒下游仍待逐项拍板（含同意推荐）——**MUST NOT 把沉默当授权**；组合
   爆炸时 MAY 呈现链头+预告下游影响。
-- **能自查的事实不问人**——先查后给结论。三分判据见顶部通则①②。
+- **能自查的事实不问人**——先查后给结论（判据见通则①②）。
+- **问句形状**：「推荐 X（依据…）——同意回『是』」；回「是」即采纳该问推荐并记为明确确认；链上「是」
+  只等于拍链头；非「是」按原文处理，MUST NOT 推断采纳。
+- **「怎么造」触发式检查**：仅当引入新的平台/语言/库/存储介质/分发方式选择时，确认归人拍板还是放权；
+  放权则选默认并在锚点纪要写明所选与理由；未引入不问。
 
 ### A.2 提前收束的**禁止清单**（命中任一 ⇒ MUST NOT 收束进相位 B）
 
@@ -255,13 +259,13 @@ isComplete 三态判定表分治（未命中 → 正常进入相位 A）。「�
 2. **出现 ≥2 方案但未给推荐** —— 甩开放题给人 = 把调研的活布置给了人。
 3. **目标态一句话尚写不出** —— 写不出这句就定不了 change 名，B 起手第③步会卡住。
 
-三条都不命中 ⇒ 可以收束（哪怕只问了一轮，甚至用户带着已深思的方案来）。
+三条都不命中 ⇒ 可收束（哪怕只问一轮）。
 **收束进的是 B，不是 C。**
 
 ### A.3 外派状态（阶段一：**不外派**）
 
-阶段一的检索、判断与生成**均由主 session 亲做**；未启用的外派资产不进入默认执行。
-仅在人明确要求重新评估或启用外派时，读取
+阶段一的检索、判断与生成**均由主 session 亲做**；未启用的外派资产不进默认执行。
+仅人明确要求重评或启用外派时，读取
 [`references/delegation-protocol.md`](references/delegation-protocol.md)，按其中协议执行；**MUST NOT 自行启用**。
 
 ---
@@ -323,10 +327,10 @@ change 名此时即可定（A.2 禁止清单已保证目标态一句话可写出
 
 ### B.2 锚点纪要（对话内，不落盘）
 
-起手四步跑完，**主 session 亲笔**把 A 的共识压缩成一份**锚点纪要**，在对话内呈现给人。
-它的唯一作用是**当拷问的文本靶**——有形状才攻得动。
+起手四步跑完，**主 session 亲笔**把 A 的共识压成一份**锚点纪要**，对话内呈现给人。
+唯一作用是**当拷问的文本靶**。
 
-> 锚点纪要 ≠ 决策纪要。前者是**待推翻的靶**（对话内、不落盘）；后者是**拷问后的存活残余 + 拷问产出**（落盘、承重件）。二者非同一物，见 `references/decision-memo-schema.md`。
+> 锚点纪要 ≠ 决策纪要。前者是**待推翻的靶**（对话内、不落盘）；后者是**拷问后的存活残余 + 拷问产出**（落盘、承重件）。见 `references/decision-memo-schema.md`。
 
 ### B.3 拷问技法
 
@@ -344,21 +348,21 @@ change 名此时即可定（A.2 禁止清单已保证目标态一句话可写出
 [`references/decision-memo-schema.md`](./references/decision-memo-schema.md)。
 
 理由：B 的轮数**无上界**（停止条件不是「问完 N 轮」），一次性落盘会让「B 收敛前中断」等于**全损**。
-增量落盘把全损窗口收窄到「两次保存之间」——**这部分损失是已知的，报告里如实标注，MUST NOT 声称零损失。**
+增量落盘把全损窗口收窄到「两次保存之间」——**该损失已知，报告须标注，MUST NOT 声称零损失。**
 
-拷问**多轮进行中 MUST NOT 提交**（只写文件，不 checkpoint）。
+拷问**多轮中 MUST NOT 提交**（只写文件）。
 
 ### B.5 停止信号（**最小充分条件**，MUST NOT 用形容词）
 
 **停止 = 人机共识达成 ∧ 承重约束清单逐条站稳。**
 
 - **「站稳」的定义**：该约束有**可核验的证据锚** —— file:line / 命令输出 / 人的明确确认记录。
-  只有主 session 的判断、没有锚 ⇒ **MUST NOT 计入已站稳**，B 不得据此收敛。
+  只有主 session 判断、无锚 ⇒ **MUST NOT 计入已站稳**，B 不得据此收敛。
 - **MUST NOT 以「预设问题问完」「问了 N 轮」当停止条件。**
 
 ### B.6 ADR / 术语惰性提议钩子
 
-拷问中命中 ADR 三条件 ⇒ **提议**落 `openspec/adr/`（人确认后经 `sdflow-adr` 的 `adr.py new` 分配编号
+拷问命中 ADR 三条件 ⇒ **提议**落 `openspec/adr/`（人确认后经 `sdflow-adr` 的 `adr.py new` 分配编号
 与骨架，格式以 `sdflow-adr/references/format.md` 为准，补写正文后 `adr.py lint` 全绿）；发现术语冲突
 或模糊语言 ⇒ **提议**更新 `openspec/CONTEXT.md`。🔴 **两者未经人确认 MUST NOT 自动写入。** 三条件
 判据与落盘流程见 [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
@@ -371,10 +375,10 @@ change 名此时即可定（A.2 禁止清单已保证目标态一句话可写出
 2. **术语冲突判据**（同 B.6）：该决策引入/使用的术语与 `openspec/CONTEXT.md` 已有定义是否冲突或模糊 ⇒ 需更新 CONTEXT.md。
 3. scope 内聚检查：MUST 读 `references/scope-cohesion-check.md` 判据；发现偏离 MUST 呈现给人拍板，MUST NOT 静默调整范围。
 
-🔴 同 B.6：item 1/2 未经人确认 MUST NOT 自动写入，判据与落盘流程同引 B.6 所示文件。
+🔴 同 B.6：item 1/2 未经人确认 MUST NOT 自动写入，判据同引 B.6 所示文件。
 
-**与 B.6 的区别**：B.6 是拷问过程中的惰性钩子（命中就提议）；本步是**收敛前逐条回扫**——B.6 漏掉的、
-或在后续拷问中语义发生变化的决策，在此兜底捕获。
+**与 B.6 的区别**：B.6 是拷问中的惰性钩子（命中就提议）；本步是**收敛前逐条回扫**——兜底捕获 B.6 漏掉的、
+或后续语义变化的决策。
 
 ### B.8 收敛两步（⑤⑥）
 

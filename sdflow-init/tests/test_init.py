@@ -104,8 +104,25 @@ class TestBundleGuideAndSchemaOnly:
         assert not (wf / "code-checklists").exists()
         assert not (wf / "prompts").exists()
 
+    def test_overwrite_guide_without_metadata_permission(self, tmp_path, monkeypatch):
+        """回归锚（B38）：多用户共享目录下旧 GUIDE 属主是他人时，ACL 允许写内容，但
+        utime / chmod 只有属主能做。覆盖 GUIDE MUST 只写内容、不复制元数据。"""
+        wf = tmp_path / "openspec" / "workflow"
+        wf.mkdir(parents=True)
+        (wf / "WORKFLOW-GUIDE.md").write_text("stale", encoding="utf-8")
+
+        def deny(*args, **kwargs):
+            raise PermissionError(13, "Permission denied")
+        monkeypatch.setattr(shutil, "copystat", deny)
+        monkeypatch.setattr(os, "utime", deny)
+        monkeypatch.setattr(os, "chmod", deny)
+
+        copy_bundle(str(tmp_path), include_schema=False)
+        src = Path(init_mod.BUNDLE_SRC) / "WORKFLOW-GUIDE.md"
+        assert (wf / "WORKFLOW-GUIDE.md").read_bytes() == src.read_bytes()
+
     def test_fresh_init_does_not_raise(self, tmp_path):
-        """回归锚（F15）：GUIDE `copy2` 前若无 `os.makedirs(dst, exist_ok=True)`，fresh init
+        """回归锚（F15）：GUIDE 拷贝前若无 `os.makedirs(dst, exist_ok=True)`，fresh init
         （裸 tmp_path，无任何既有 openspec/workflow/ 目录——此前由 tools/ 的 copytree 隐式创建）
         会在此处抛 FileNotFoundError（ensure_dirs 的 CORE_DIRS 只有 changes/specs）。"""
         dst, n = copy_bundle(str(tmp_path), include_schema=False)   # 不应抛异常

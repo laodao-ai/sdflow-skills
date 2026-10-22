@@ -438,11 +438,22 @@ fail-closed 罢工分支——每个罢工分支都是一类项目被拒之门�
    **MUST NOT fail-closed 罢工**——本 skill 的承诺是「不管什么项目都能跑完实现管线」，每个罢工
    分支都在背叛这个承诺。
 5. **证据 schema（确定性，可机验）**：票报告 MUST 含每层一行：
-   `<层> | <命令原文> | <退出码> | <测试时 git rev-parse HEAD>`；未覆盖层写
+   `<层> | <命令原文> | <退出码> | <用例数> | <测试时 git rev-parse HEAD>`；未覆盖层写
    `<层> | — | 未覆盖 | <判定依据>`；**本 change 未命中域的层写
    `<层> | — | 不在本 change 命中域 | <归域依据>`**（归域依据取自 `suite-scope` 输出的
    `mapping`/`skipped_layers`——路径→域摘要；与「未覆盖」并列但语义不同：仓有此层，只是本
-   change 按分域判定不跑）。
+   change 按分域判定不跑）。这两种非运行行态保持原形状（没跑命令，无用例数可言）。
+   命令原文含 `|`（管道、`||`）时写作 `\|`，保证列数可数〔impl-review-fix〕。
+   **`<用例数>` 三态**（零用例判失败，ZERO-RUN）：runner 汇总行报告的**实际执行**用例数 N
+   （不含 skipped / deselected）；runner 报 0（全部跳过 / 未收集到 / 空目录）写 `0`；runner 不
+   打印汇总写 `未知`。一行命令内含多个 runner（make 包装器、`a && b`）时逐个列出（如
+   `pytest 12 + jest 0`），**任一 runner 为 0 即按 `0` 判**，未知者写 `未知`。
+   - `0` ⇒ 该层判**失败**（即使退出码为 0）：修到 N>0，或确认该层本 change 确无测试而改记
+     「未覆盖」并写依据——**依据须说明该层为何无测试可跑（如仓内无该层 runner 配置），MUST NOT
+     以「用例数为 0」本身作依据**。
+   - `未知` ⇒ 不阻塞，但须在旁注写明依据：「用例数不可得：runner 无汇总行，未机械核验；verify
+     可对照该层 runner 原始输出抽查」。
+   - 诚实边界：用例数是 implementer 读 runner 输出自报，无机械核验。
 6. **四类失败分诊**（退出码非 0 时）：本 change 引入的回归 → 进 fix 循环；仓内既有红测（用 base
    SHA 复跑该命令确认改动前即红）→ 记录并放行，不阻塞；flaky（同命令复跑一次即绿）→ 记录并放行；
    环境故障（依赖缺失 / 网络）→ halt envelope 停并上抛。
@@ -548,13 +559,21 @@ impl-pipeline: tickets
 按「聚合套件发现契约」运行本 change **命中域的全部层**并全部通过；报告头 SHALL 以管道直贴（MUST NOT 手工转录）
 `suite-scope` 输出的 JSON（`base`/`head`/`domains_configured`/`hit_domains`/`layers`/
 `skipped_layers`/`mapping`），证据落 `impl-reports/task<N>-<slug>.md`（每层一行
-`<层>|<命令原文>|<退出码>|<SHA>`）。
+`<层>|<命令原文>|<退出码>|<用例数>|<SHA>`；非运行两行态形状不变，`<用例数>` 三态取值与零用例判失败见「聚合套件发现契约」证据 schema 条）。
 
 - [ ] 命中域各层证据齐全并通过（或记未覆盖 / 不在命中域）
 ```
 
 **无 quiz-the-user**：不做人工粒度确认这一步（matt 原版 to-tickets 有此人类步，本 skill 删除——
 阶段三无人类门；粒度争议走 `T10-choice`（无客观判据档派 **strong 档**对抗镜复核），不问用户）。
+
+### Review Focus（写完功能票之后、预算校验之前）
+
+写完全部功能票后、跑预算校验前，编排层列出至多 5 条「spec 隐含、但没有任何票的验收标准去测」的
+输入或失败模式（无则 0 条，不凑数）。每条作为一条以 `[Review Focus]` 为前缀的验收复选框，写进
+**拥有该代码路径**的功能票，写明要测的输入或失败模式与期望行为（例：`- [ ] [Review Focus] 空输入时命令报错
+并给出用法提示`）。归属跨多票者，钉进 `Blocked-by` 链最下游、真正组合这些行为的那张票。**不**新增
+`tickets.md` 顶层节，**不**写进「实现验证」收尾票。
 
 ### 落盘 → checkpoint → 返回（显式三步序列，B1 完成窗口锚）〔impl-review-fix〕
 
@@ -692,6 +711,7 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
   链上模块的集成测试**〔D3，Q3 拍板：保留中间档，非绝对禁令〕——**MUST NOT** 跑**与本票无依赖
   关系**的集成/e2e 套件；聚合回归由「实现验证」收尾 ticket 承担（见上「出 ticket 模式」节），
   不再要求每票结束前付全套件成本；
+  **每个 seam 在票报告里附一行「能抓住什么、漏掉什么」**，漏掉的部分注明由哪层测试或哪张票承担；
 
   > 🔴 **MUST 原文携带进 implementer dispatch prompt**（附录 A 有出处说明）：
   >

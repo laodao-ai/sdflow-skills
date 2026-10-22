@@ -217,7 +217,7 @@ def copy_bundle(root, include_schema=True):
     toolkit 源仓 dogfood 同样走全局 canonical，无需本地 instance。
 
     dst 目录须显式 `os.makedirs`——此前由 `tools/` 的 `copytree` 隐式创建；删掉 tools/ 部署后
-    若无此行，fresh init 会在 `shutil.copy2(guide_src, ...)` 处抛 `FileNotFoundError`
+    若无此行，fresh init 会在 GUIDE 拷贝处抛 `FileNotFoundError`
     （`ensure_dirs` 的 `CORE_DIRS` 只有 `changes`/`specs`，不含 `workflow/`）。
     """
     schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
@@ -233,7 +233,9 @@ def copy_bundle(root, include_schema=True):
     # 单一源仍是 prompts/ + workflow.md —— 拷过来的是产物，不是新的真相源。
     guide_src = os.path.join(BUNDLE_SRC, "WORKFLOW-GUIDE.md")
     if os.path.isfile(guide_src):
-        shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
+        # 只写内容、不复制元数据（B38）：多用户共享目录下旧文件属主可能是他人，ACL 允许写内容，
+        # 但 utime / chmod 只有属主能做。覆盖时沿用原 inode 的属主与 ACL，新建时继承父目录 ACL。
+        shutil.copyfile(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
 
     if include_schema:
         schemas_dst = os.path.join(root, "openspec", "schemas")
