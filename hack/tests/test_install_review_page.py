@@ -82,6 +82,16 @@ def test_assets_are_copied_and_page_generates_from_install_location(installed_on
     assert "marked v18.1.1" in page  # 页面含内联渲染库
 
 
+def test_record_review_disposition_script_is_installed_with_its_siblings(installed_once):
+    """处置记录脚本按 importlib 加载同目录的 check-notes-path.py 与 render-review-page.py，三者须同装。"""
+    fake_home, r = installed_once
+    assert r.returncode == 0, r.stdout + r.stderr
+    hack = fake_home / ".sdflow" / "hack"
+    src = REPO / "sdflow-init" / "assets" / "hack"
+    for name in ("record-review-disposition.py", "check-notes-path.py", "render-review-page.py"):
+        assert (hack / name).read_bytes() == (src / name).read_bytes(), name
+
+
 def test_reinstall_removes_stale_files(fake_home):
     assert _run_setup(fake_home).returncode == 0
     stale = _installed(fake_home) / "stale-from-old-version.js"

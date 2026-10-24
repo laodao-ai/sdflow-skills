@@ -183,6 +183,9 @@ def validate_lane(lane):
                 if k not in ev:
                     errs.append(f"verified MUST 有 evidence.{k}")
             _enum(errs, ev.get("attested_by"), ATTESTORS, "evidence.attested_by")
+            # dirty 是可选键（不在 EVIDENCE_KEYS 必填集里）：旧证据没有它，无 git 时不写。
+            if "dirty" in ev and not isinstance(ev["dirty"], bool):
+                errs.append(f"evidence.dirty 须为 bool，实际是 {type(ev['dirty']).__name__}")
 
     deps = lane.get("deps")
     if deps is None:
@@ -225,6 +228,20 @@ def validate(data):
     for lane in lanes:
         prefix = lane.get("id") if isinstance(lane, dict) else "?"
         errs += [f"[lane {prefix}] {e}" for e in validate_lane(lane)]
+
+    # 辅助键：round（本轮起点）与 review（评审页配置）。缺省合法；给了就要对类型。
+    rnd = data.get("round")
+    if rnd is not None and not isinstance(rnd, dict):
+        errs.append(f"round 须为 object，实际是 {type(rnd).__name__}")
+    rev = data.get("review")
+    if rev is not None:
+        if not isinstance(rev, dict):
+            errs.append(f"review 须为 object，实际是 {type(rev).__name__}")
+        else:
+            docs = rev.get("extra_docs")
+            if docs is not None and not (
+                    isinstance(docs, list) and all(isinstance(d, str) for d in docs)):
+                errs.append("review.extra_docs 须为字符串数组")
 
     layers = data.get("layers")
     if layers is None:

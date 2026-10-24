@@ -54,7 +54,9 @@ a { color: var(--accent); }
 #toc .lvl-3 { padding-left: 1.6rem; color: var(--muted); }
 
 main { padding: 1.5rem 2rem 4rem; max-width: 56rem; min-width: 0; }
-.page-title { margin: 0 0 1.5rem; font-size: 1.6rem; line-height: 1.3; }
+.page-title { margin: 0 0 .4rem; font-size: 1.6rem; line-height: 1.3; }
+.page-meta { margin: 0 0 1.5rem; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+.page-meta:empty { display: none; }
 .doc { margin: 0 0 3rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
 .doc-head {
   display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: baseline;
@@ -84,6 +86,12 @@ main { padding: 1.5rem 2rem 4rem; max-width: 56rem; min-width: 0; }
 .doc-body th { background: var(--bg-soft); }
 .doc-body img { max-width: 100%; }
 .doc-body hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
+.doc-meta { margin: 0 0 1rem; font-size: .85rem; color: var(--muted); }
+.doc-meta summary { cursor: pointer; }
+.doc-meta pre {
+  margin: .4rem 0 0; padding: .5rem .8rem; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 4px;
+  overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg);
+}
 .doc-error {
   background: var(--err-bg); color: var(--err-fg); padding: .6rem 1rem; border-radius: 4px; margin-bottom: .75rem;
 }
@@ -112,7 +120,12 @@ mark.sdflow-hl {
 mark.sdflow-hl.flash { background: #ffc94d; }
 mark.sdflow-saved-hl {
   background: #e6f4f1; color: inherit; border: 2px dashed var(--accent); border-radius: 2px; padding: 0 1px;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
+/* 跨节点意见按段绘制：左边框只在首段、右边框只在末段，段间不出现竖线。 */
+mark.sdflow-saved-hl[data-seg="first"] { border-right-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 0; }
+mark.sdflow-saved-hl[data-seg="mid"] { border-left-width: 0; border-right-width: 0; border-radius: 0; padding-left: 0; padding-right: 0; }
+mark.sdflow-saved-hl[data-seg="last"] { border-left-width: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; padding-left: 0; }
 mark.sdflow-saved-hl.flash { background: #b8e0d8; }
 #sdflow-annotate {
   position: fixed; z-index: 15; font: inherit; font-size: .9rem;
@@ -162,7 +175,15 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
 .note-badge { display: inline-block; margin-left: .4rem; padding: 0 .4rem; border-radius: 3px; background: var(--bg-soft); border: 1px solid var(--line); color: var(--muted); font-size: .75rem; }
 .note-quote { margin: .3rem 0; padding-left: .6rem; border-left: 3px solid #ffe58a; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; max-height: 5rem; overflow: auto; }
 .note-comment { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-disposition { margin-top: .3rem; color: var(--muted); font-size: .8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .note-actions { display: flex; gap: .4rem; margin-top: .4rem; }
+.review-section { margin: 0 0 3rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+.review-section h2 { margin: 0 0 .75rem; font-size: 1.25rem; line-height: 1.3; scroll-margin-top: 1rem; }
+.review-section h3 { margin: 1.25rem 0 .5rem; font-size: 1.05rem; }
+.review-section .notes-list .note-item { font-size: .9rem; }
+.rev-item div { overflow-wrap: anywhere; }
+.rev-item div:first-child { font-weight: 600; }
+.sdflow-empty { color: var(--muted); margin: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (max-width: 899px) {
@@ -188,11 +209,14 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
 </nav>
 <main id="main">
 <h1 class="page-title">{{TITLE}}</h1>
+<p class="page-meta" id="sdflow-gen-meta"></p>
 <div id="docs"></div>
 </main>
 <aside id="sdflow-notes" aria-label="意见" hidden></aside>
 <script type="application/json" id="sdflow-docs">{{DOCS_JSON}}</script>
 <script type="application/json" id="sdflow-saved-notes">{{SAVED_NOTES_JSON}}</script>
+<script type="application/json" id="sdflow-dispositions">{{DISPOSITIONS_JSON}}</script>
+<script type="application/json" id="sdflow-revisions">{{REVISIONS_JSON}}</script>
 <script id="sdflow-marked">{{MARKED}}</script>
 <script id="sdflow-app">
 (function () {
@@ -484,6 +508,79 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     });
     return out;
   }
+
+  // 文档开头的 frontmatter 判定（RVP-21）：先去 BOM，比较行内容时忽略行尾 \r。
+  // 首行为 ---、第二行形如「键:」（字母开头）、其后某行恰为 --- 时，两行之间是元数据，其余是正文。
+  // 任一条件不满足：meta 为 null，body 是去掉 BOM 的整篇原文。语法面有界（两行字面量加一个键行），不做 YAML 解析。
+  // 已知边界：文档以 --- 加「键:」开头、正文后另有分隔线 --- 时，中间整段会被当成元数据。
+  // 这是有界启发式的取舍，不再补语法分支。
+  function splitFrontmatter(text) {
+    var src = String(text);
+    if (src.charCodeAt(0) === 0xFEFF) src = src.slice(1);
+    var lines = src.split('\n');
+    function bare(l) { return l.charAt(l.length - 1) === '\r' ? l.slice(0, -1) : l; }
+    if (lines.length < 3 || bare(lines[0]) !== '---' || !/^[A-Za-z][A-Za-z0-9_.\-]*:/.test(bare(lines[1]))) {
+      return { meta: null, body: src };
+    }
+    for (var i = 2; i < lines.length; i++) {
+      if (bare(lines[i]) === '---') return { meta: lines.slice(1, i).map(bare).join('\n'), body: lines.slice(i + 1).join('\n') };
+    }
+    return { meta: null, body: src };
+  }
+
+  // 修改日志数据块（sdflow-revisions）。返回 {ok, revisions}；非法 JSON、顶层不是对象、
+  // revisions 不是数组、条目不是对象时 ok=false。条目只取显示用的字段，缺的补默认值。
+  function parseRevisions(text) {
+    var bad = { ok: false, revisions: [] };
+    var data;
+    try { data = JSON.parse(text); } catch (e) { return bad; }
+    if (!data || typeof data !== 'object' || !Array.isArray(data.revisions)) return bad;
+    var out = [];
+    for (var i = 0; i < data.revisions.length; i++) {
+      var r = data.revisions[i];
+      if (!r || typeof r !== 'object' || Array.isArray(r)) return bad;
+      out.push({
+        n: typeof r.n === 'number' ? r.n : 0,
+        at: typeof r.at === 'string' ? r.at : '',
+        event: typeof r.event === 'string' ? r.event : '',
+        changed: Array.isArray(r.changed) ? r.changed.filter(function (x) { return typeof x === 'string'; }) : [],
+        notes: typeof r.notes === 'number' ? r.notes : 0,
+        dispositions: typeof r.dispositions === 'number' ? r.dispositions : 0,
+      });
+    }
+    return { ok: true, revisions: out };
+  }
+
+  // 页头文字：生成时间和版本号都取最后一条日志（版本号是它的 n，不是条数）。没有日志返回空串。
+  function headerText(revisions) {
+    if (!revisions.length) return '';
+    return '生成于 ' + revisions[revisions.length - 1].at + ' · 第 ' + revisions[revisions.length - 1].n + ' 版';
+  }
+
+  // 处置数据块（sdflow-dispositions）：{意见 id: {action, detail, issue}}。
+  // 返回 {ok, map}；顶层不是对象时 ok=false。map 无原型，id 为 __proto__ 一类的键也只是普通键。
+  function parseDispositions(text) {
+    var data;
+    try { data = JSON.parse(text); } catch (e) { return { ok: false, map: Object.create(null) }; }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, map: Object.create(null) };
+    var map = Object.create(null);
+    Object.keys(data).forEach(function (id) {
+      var d = data[id];
+      if (!d || typeof d !== 'object' || typeof d.action !== 'string' || !d.action) return;
+      map[id] = {
+        action: d.action,
+        detail: typeof d.detail === 'string' ? d.detail : '',
+        issue: typeof d.issue === 'string' ? d.issue : '',
+      };
+    });
+    return { ok: true, map: map };
+  }
+
+  // 一条处置的显示文字：类别 [+ 编号] [：说明]；没有处置显示「未记录处理」。
+  function dispositionText(d) {
+    if (!d) return '未记录处理';
+    return d.action + (d.issue ? ' ' + d.issue : '') + (d.detail ? '：' + d.detail : '');
+  }
   // @@PURE-END
 
   var md = new marked.Marked({ gfm: true });
@@ -548,8 +645,9 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     var body = document.createElement('div');
     body.className = 'doc-body';
     currentDoc = doc;
+    var parts = splitFrontmatter(doc.text);
     try {
-      body.innerHTML = md.parse(doc.text);
+      body.innerHTML = md.parse(parts.body);
     } catch (err) {
       body.innerHTML = '';
       var box = document.createElement('div');
@@ -566,6 +664,18 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     currentDoc = null;
 
     section.appendChild(head);
+    if (parts.meta !== null) {
+      // 元数据放在 .doc-body 之外：不进目录、不参与划选与定位；一律纯文本。
+      var meta = document.createElement('details');
+      meta.className = 'doc-meta';
+      var metaSummary = document.createElement('summary');
+      metaSummary.textContent = '元数据';
+      var metaPre = document.createElement('pre');
+      metaPre.textContent = parts.meta;
+      meta.appendChild(metaSummary);
+      meta.appendChild(metaPre);
+      section.appendChild(meta);
+    }
     section.appendChild(body);
     docsRoot.appendChild(section);
 
@@ -611,6 +721,15 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
   }
 
   docs.forEach(renderDoc);
+
+  // ── 页头：生成时间与版本（修改日志数据块）。数据块损坏只影响页头与页尾两节，文档照常渲染。
+  function blockText(id) {
+    var el = document.getElementById(id);
+    return el ? el.textContent : '';
+  }
+  var revisionsParsed = parseRevisions(blockText('sdflow-revisions'));
+  var dispositionsParsed = parseDispositions(blockText('sdflow-dispositions'));
+  document.getElementById('sdflow-gen-meta').textContent = revisionsParsed.ok ? headerText(revisionsParsed.revisions) : '修改日志无法读取';
 
   // 页内 #片段 与跨文档 x.md#片段：所有文档的标题 id 都就绪后再判定。
   // 命中改写为真实标题 id；同文档未命中降为纯文字；跨文档未命中跳到该文档开头。
@@ -721,6 +840,87 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     savedNotes = parsed.notes;
     savedUnreadable = !parsed.ok;
   })();
+  // 页尾两节：意见与处理记录、修改日志。不用 section.doc / .doc-body：划选只认 .doc-body，所以两节不可划选写意见。
+  // 全部内容以 textContent 写入。记录一节只取处置，与意见能否在正文定位无关。
+  function addFooterSection(id, title) {
+    var sec = document.createElement('section');
+    sec.className = 'review-section';
+    sec.id = id;
+    var h = document.createElement('h2');
+    h.textContent = title;
+    sec.appendChild(h);
+    docsRoot.parentNode.appendChild(sec);
+    var li = document.createElement('li');
+    var a = document.createElement('a');
+    a.className = 'doc-link';
+    a.href = '#' + id;
+    a.textContent = title;
+    li.appendChild(a);
+    tocList.appendChild(li);
+    return sec;
+  }
+
+  function emptyLine(parent, text) {
+    var p = document.createElement('p');
+    p.className = 'sdflow-empty';
+    p.textContent = text;
+    parent.appendChild(p);
+  }
+
+  function drawRecordsSection() {
+    var sec = addFooterSection('review-records', '意见与处理记录');
+    if (savedUnreadable) { emptyLine(sec, '已落盘意见无法读取'); return; }
+    if (!savedNotes.length) { emptyLine(sec, '暂无已落盘意见'); return; }
+    // 分组顺序：先按页面文档顺序，再是对不上任何文档的标签（按出现顺序）。
+    var groups = Object.create(null), order = [];
+    docs.forEach(function (d) { groups[d.label] = []; });
+    savedNotes.forEach(function (sn) {
+      var label = sn.doc || '（未记录文档）';
+      if (!(label in groups)) { groups[label] = []; order.push(label); }
+      groups[label].push(sn);
+    });
+    docs.map(function (d) { return d.label; }).concat(order).forEach(function (label) {
+      if (!groups[label].length) return;
+      var h = document.createElement('h3');
+      h.textContent = label;
+      var list = document.createElement('ol');
+      list.className = 'notes-list';
+      groups[label].forEach(function (sn) {
+        var where = sn.path ? '（' + sn.path + (sn.line ? ':' + sn.line : '') + '）' : '';
+        list.appendChild(buildNoteItem({
+          className: 'note-item record-item', kind: 'record', key: sn.key,
+          head: (sn.doc || '（未记录文档）') + where + (sn.heading ? ' › ' + sn.heading : ''),
+          badges: [], quote: sn.quote, comment: sn.comment, disposition: dispositionLine(sn), buttons: [],
+        }));
+      });
+      sec.appendChild(h);
+      sec.appendChild(list);
+    });
+  }
+
+  function drawRevisionsSection() {
+    var sec = addFooterSection('review-revisions', '修改日志');
+    if (!revisionsParsed.ok) { emptyLine(sec, '无法读取'); return; }
+    if (!revisionsParsed.revisions.length) { emptyLine(sec, '暂无记录'); return; }
+    var list = document.createElement('ol');
+    list.className = 'notes-list';
+    revisionsParsed.revisions.slice().reverse().forEach(function (rev) {
+      var li = document.createElement('li');
+      li.className = 'note-item rev-item';
+      [
+        '第 ' + rev.n + ' 版 · ' + rev.at + ' · ' + rev.event,
+        '变化的文档：' + (rev.changed.length ? rev.changed.join('、') : '无'),
+        '意见 ' + rev.notes + ' 条 · 处置 ' + rev.dispositions + ' 条',
+      ].forEach(function (text) {
+        var line = document.createElement('div');
+        line.textContent = text;
+        li.appendChild(line);
+      });
+      list.appendChild(li);
+    });
+    sec.appendChild(list);
+  }
+
   // 意见栏当前显示的暂存意见（mergeNotes 的结果，[{note, modified}]）。只在 refreshView 里重算。
   var view = [];
   var pending = null;        // 当前暂存的选区：{range, docLabel, heading, quote, before, after}
@@ -794,7 +994,7 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     return null;
   }
 
-  // ── 高亮：只在选区落在同一个文本节点内时包 <mark>，跨元素只记录 ─────────────────
+  // ── 高亮：按文本节点分段包 <mark>，跨粗体、跨列表项的选区每段各包一个 ─────────────
   function docBodyByLabel(label) {
     var sections = document.querySelectorAll('section.doc');
     for (var i = 0; i < sections.length; i++) {
@@ -820,23 +1020,59 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     return node && (node.nodeType === 1 ? node : node.parentElement);
   }
 
-  // kind: 'note'（暂存意见，data-note）| 'saved'（已落盘意见，data-saved）；key 一律是 id（或无 id 时的序位键）。
-  function wrapRange(range, key, kind) {
-    // 图内（SVG 的 <text> 或 foreignObject 里的 HTML）与 mermaid 源码块内不插 <mark>：
-    // SVG 文字里插入 HTML 元素会让文字消失，源码块在图渲染后整块被替换。
-    var startEl = elementOf(range.startContainer);
-    if (startEl && (startEl.closest('svg') || startEl.closest('pre > code.language-mermaid'))) return false;
-    if (range.startContainer !== range.endContainer || range.startContainer.nodeType !== 3) return false;
-    var mark = document.createElement('mark');
-    if (kind === 'saved') {
-      mark.className = 'sdflow-saved-hl';
-      mark.dataset.saved = key;
-    } else {
-      mark.className = 'sdflow-hl';
-      mark.dataset.note = key;
+  // 图内（SVG 的 <text> 或 foreignObject 里的 HTML）与 mermaid 源码块内不插 <mark>：
+  // SVG 文字里插入 HTML 元素会让文字消失，源码块在图渲染后整块被替换。
+  function inUnmarkable(node) {
+    var el = elementOf(node);
+    return !!(el && (el.closest('svg') || el.closest('pre > code.language-mermaid')));
+  }
+
+  // 收集 Range 覆盖的文本分段 [{node, start, end}]（只读，不改 DOM）。
+  // 端点落在元素上时由 intersectsNode 归到文本节点：终点在下一个块元素偏移 0 时，那个块里的文字不相交。
+  // 跳过纯空白分段（块与块之间的换行节点）与不可插 <mark> 的节点。
+  function textSegments(range) {
+    var root = range.commonAncestorContainer;
+    if (root.nodeType === 3) root = root.parentNode;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    var out = [], node;
+    while ((node = walker.nextNode())) {
+      if (!range.intersectsNode(node)) continue;
+      var start = node === range.startContainer ? range.startOffset : 0;
+      var end = node === range.endContainer ? range.endOffset : node.data.length;
+      if (end <= start || !/\S/.test(node.data.slice(start, end)) || inUnmarkable(node)) continue;
+      out.push({ node: node, start: start, end: end });
     }
-    try { range.surroundContents(mark); } catch (e) { return false; }
-    return true;
+    return out;
+  }
+
+  // kind: 'note'（暂存意见，data-note）| 'saved'（已落盘意见，data-saved）；key 一律是 id（或无 id 时的序位键）。
+  // 同一条意见的每个分段各包一个 <mark>，共用 key。至少包上一段即返回 true。
+  function wrapRange(range, key, kind) {
+    var segs = textSegments(range);   // 先收集清单，再统一改写 DOM
+    var marks = [];
+    segs.forEach(function (seg) {
+      var target = seg.node;
+      // 同一文本节点内：先按止点切分，再按起点切分
+      if (seg.end < target.data.length) target.splitText(seg.end);
+      if (seg.start > 0) target = target.splitText(seg.start);
+      var mark = document.createElement('mark');
+      if (kind === 'saved') {
+        mark.className = 'sdflow-saved-hl';
+        mark.dataset.saved = key;
+      } else {
+        mark.className = 'sdflow-hl';
+        mark.dataset.note = key;
+      }
+      target.parentNode.insertBefore(mark, target);
+      mark.appendChild(target);
+      marks.push(mark);
+    });
+    if (kind === 'saved' && marks.length > 1) {
+      marks.forEach(function (m, i) {
+        m.dataset.seg = i === 0 ? 'first' : i === marks.length - 1 ? 'last' : 'mid';
+      });
+    }
+    return marks.length > 0;
   }
 
   // 以 dataset 比对取 mark，不把 id 拼进选择器。
@@ -898,13 +1134,31 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
     var r = sel.getRangeAt(0);
     var body = bodyOf(r.startContainer);
-    if (!body || body !== bodyOf(r.endContainer)) return null;
+    if (!body) return null;
+    var endBody = bodyOf(r.endContainer);
+    if (!endBody) {
+      // 终点在正文之外时，只接受三击末段的形态：终点紧接本正文之后（两者之间只有空白），
+      // 此时收到本正文末尾。其余（拖到侧栏、页尾两节、其他文档标题，或途经其他 .doc-body）一律拒绝。
+      var tail = document.createRange();
+      tail.setStart(body, body.childNodes.length);
+      tail.setEnd(r.endContainer, r.endOffset);
+      // 「写意见」按钮可能停靠在正文之后，它的文字不算选区跨过的内容。
+      var gap = tail.cloneContents();
+      var dock = gap.querySelector ? gap.querySelector('#sdflow-annotate') : null;
+      if (dock) dock.parentNode.removeChild(dock);
+      if (/\S/.test(gap.textContent)) return null;
+      r = r.cloneRange();
+      r.setEnd(body, body.childNodes.length);
+    } else if (endBody !== body) {
+      return null;
+    }
     var full = r.toString();
     if (!/\S/.test(full)) return null;
     var pre = document.createRange();
     pre.selectNodeContents(body);
     pre.setEnd(r.startContainer, r.startOffset);
-    var ctx = selectionContext(body.textContent, pre.toString().length, full.length);
+    var start = pre.toString().length;
+    var ctx = selectionContext(body.textContent, start, full.length);
     var heading = '';
     Array.prototype.forEach.call(body.querySelectorAll('h1, h2, h3, h4, h5, h6'), function (h) {
       if (r.comparePoint(h, 0) === -1) heading = h.textContent.replace(/\s+/g, ' ').trim();
@@ -912,6 +1166,9 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     var startEl = elementOf(r.startContainer);
     return {
       range: r.cloneRange(),
+      body: body,
+      start: start,
+      truncated: ctx.quote.length < full.length,
       section: body.parentNode,
       inFigure: !!(startEl && startEl.closest('svg')),
       docLabel: body.parentNode.getAttribute('data-label'),
@@ -1125,7 +1382,9 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
       before: pending.before, after: pending.after, comment: comment, copied: false, inFigure: !!pending.inFigure,
     };
     window.getSelection().removeAllRanges();
-    note.status = wrapRange(pending.range, note.id, 'note') ? 'hl' : 'unmarked';
+    // 引用被截断时按截断后的引用重算范围，与重新加载后按引用定位的范围一致。
+    var saveRange = pending.truncated ? rangeAt(pending.body, pending.start, pending.quote.length) : null;
+    note.status = wrapRange(saveRange || pending.range, note.id, 'note') ? 'hl' : 'unmarked';
     state.notes.push(note);
     saveState();
     renderNotes();
@@ -1204,7 +1463,13 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     state.notes.forEach(function (n) { if (!shown[n.id]) unwrapMarks(n.id); });
   }
 
-  // 意见栏的一条。o = {className, kind, key, head, badges, quote, comment, buttons}；
+  // 已落盘意见的处理行：取该意见 id 对应的处置；处置块读不出来显示「无法读取」。
+  function dispositionLine(sn) {
+    if (!dispositionsParsed.ok) return '处理：无法读取';
+    return '处理：' + dispositionText(sn.id ? dispositionsParsed.map[sn.id] : null);
+  }
+
+  // 意见栏的一条。o = {className, kind, key, head, badges, quote, comment, disposition?, buttons}；
   // kind 即 dataset 名（'note' → data-note，'saved' → data-saved）。内容一律 textContent，没有按钮时不建按钮行。
   function buildNoteItem(o) {
     var li = document.createElement('li');
@@ -1221,6 +1486,12 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     comment.className = 'note-comment';
     comment.textContent = o.comment;
     [head, quote, comment].forEach(function (el) { li.appendChild(el); });
+    if (o.disposition) {
+      var disposition = document.createElement('div');
+      disposition.className = 'note-disposition';
+      disposition.textContent = o.disposition;
+      li.appendChild(disposition);
+    }
     if (o.buttons.length) {
       var actions = document.createElement('div');
       actions.className = 'note-actions';
@@ -1300,7 +1571,7 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
         className: 'note-item saved-item', kind: 'saved', key: sn.key,
         head: '已落盘 ' + (k + 1) + ' ' + where + (sn.heading ? ' › ' + sn.heading : ''),
         badges: SAVED_STATUS_TEXT[sn.status] ? [SAVED_STATUS_TEXT[sn.status]] : [],
-        quote: sn.quote, comment: sn.comment,
+        quote: sn.quote, comment: sn.comment, disposition: dispositionLine(sn),
         buttons: jumpButtons('saved', sn.key, sn.status),
       }));
     });
@@ -1312,12 +1583,12 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
   }
 
   function jumpTo(kind, key) {
-    var mark = marksOf(kind, key)[0];
-    if (mark) {
+    var marks = marksOf(kind, key);
+    if (marks.length) {
       jumpHint.textContent = '';
-      mark.scrollIntoView({ block: 'center' });
-      mark.classList.add('flash');
-      setTimeout(function () { mark.classList.remove('flash'); }, 1200);
+      marks[0].scrollIntoView({ block: 'center' });
+      marks.forEach(function (m) { m.classList.add('flash'); });
+      setTimeout(function () { marks.forEach(function (m) { m.classList.remove('flash'); }); }, 1200);
       return;
     }
     // 没有高亮可去（图内划选、原文出现多处，或高亮已被拿掉）：滚到所在文档并提示。
@@ -1462,6 +1733,9 @@ mark.sdflow-saved-hl.flash { background: #b8e0d8; }
     markBtn.hidden = true;
     copyStatus.textContent = '已标记为已复制。';
   });
+
+  drawRecordsSection();
+  drawRevisionsSection();
 
   loadState();
   refreshView();

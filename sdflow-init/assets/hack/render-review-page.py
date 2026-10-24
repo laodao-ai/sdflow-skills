@@ -2,14 +2,20 @@
 """render-review-page.py — 把一组 Markdown 生成一页自包含的评审 HTML（RVP-01/02/03）。
 
 用法：
-  render-review-page.py --out <页面.html> --title "<标题>" --doc "<标签>=<md 路径>" [--doc ...] [--no-open]
-  render-review-page.py --preset design-gate|shipped|roadmap-review|code-review --dir <目录> [--out ...] [--title ...] [--no-open]
+  render-review-page.py --out <页面.html> --title "<标题>" --doc "<标签>=<md 路径>" [--doc ...] [--event "<说明>"] [--no-open]
+  render-review-page.py --preset design-gate|shipped|roadmap-review|code-review --dir <目录> [--out ...] [--title ...] [--event ...] [--no-open]
 
-只做机械活：读 md 原文、读页面同目录 review-notes.md 里本页自产的意见块、套模板、算 CSP 哈希、
-写出文件。Markdown 由页面里内联的 marked 渲染，本脚本不解析 Markdown。
-输出不含时间戳，同样输入逐字节相同。
+只做机械活：读 md 原文、读页面同目录 review-notes.md 里本页自产的意见块与处置块、维护页面旁的
+修改日志 <页名>.revisions.json、套模板、算 CSP 哈希、写出文件。Markdown 由页面里内联的 marked 渲染，
+本脚本不解析 Markdown。
+
+时间只出现在修改日志里：内容（各文档原文、已嵌入意见、已嵌入处置）有变化才追加一条，该条时间取
+SOURCE_DATE_EPOCH（未设或非法时取当前时间），带本地时区偏移；页面显示最后一条的时间。
+内容无变化时不追加，同样输入（同一时区）重复生成逐字节相同，不依赖 SOURCE_DATE_EPOCH。
+先写日志、再写页面，均原子替换；日志写入失败时页面不动。
 
 退出码：0 成功 | 2 原文/模板/渲染库缺失或写入失败 | 64 用法错误。
+
 stderr 每条一行，两种前缀：
   render-review-page: ✗ problem=… cause=… fix=…   失败，随非 0 退出码
   render-review-page: ⚠ problem=… cause=… fix=…   告警（可选原文已跳过、意见块被跳过、
@@ -23,6 +29,7 @@ for _s in (sys.stdout, sys.stderr):
 
 import argparse
 import base64
+from datetime import datetime, timezone
 import hashlib
 import html
 import json
@@ -54,8 +61,9 @@ class Failure(Exception):
         self.code, self.problem, self.cause, self.fix = code, problem, cause, fix
 
 
-def emit(problem, cause, fix):
-    print("%s: ✗ problem=%s cause=%s fix=%s" % (PROG, problem, cause, fix), file=sys.stderr)
+def emit(problem, cause, fix, prog=None):
+    """prog 供 record-review-disposition.py 复用本函数，失败行前缀用它自己的程序名。"""
+    print("%s: ✗ problem=%s cause=%s fix=%s" % (prog or PROG, problem, cause, fix), file=sys.stderr)
 
 
 def warn(problem, cause, fix):
@@ -92,6 +100,7 @@ def build_parser():
                    help="文档，可重复；以第一个 = 切分标签与路径")
     p.add_argument("--preset", choices=sorted(PRESETS), help="按节点预设确定文档清单与顺序")
     p.add_argument("--dir", help="--preset 用的 change 或 roadmap 目录")
+    p.add_argument("--event", help="本次生成写进修改日志的事件说明；缺省首条为「首次生成」，其后为「重新生成」")
     p.add_argument("--no-open", action="store_true", help="不尝试打开浏览器（测试用）")
     return p
 
@@ -150,8 +159,8 @@ def repo_root_or_none():
     return Path(top) if r.returncode == 0 and top else None
 
 
-def display_path(path, root, out_dir):
-    """页面里显示的路径：优先仓库相对；不在仓内则相对 --out 所在目录。"""
+def repo_relative(path, root):
+    """仓库相对路径（POSIX 写法）；不在仓内或不在仓库里时返回 None。"""
     absolute = Path(os.path.abspath(path))
     # 仓根取真实路径与原样各试一次：原文路径可能经符号链接给出，也可能不经。
     bases = [] if root is None else [Path(os.path.realpath(root)), Path(root)]
@@ -160,6 +169,15 @@ def display_path(path, root, out_dir):
             return absolute.relative_to(base).as_posix()
         except ValueError:
             continue
+    return None
+
+
+def display_path(path, root, out_dir):
+    """页面里显示的路径：优先仓库相对；不在仓内则相对 --out 所在目录。"""
+    inside = repo_relative(path, root)
+    if inside is not None:
+        return inside
+    absolute = Path(os.path.abspath(path))
     try:
         return Path(os.path.relpath(absolute, out_dir)).as_posix()
     except ValueError:  # Windows 跨盘符
@@ -238,27 +256,56 @@ def note_key(note):
     return ("text", note["doc"], note["quote"], note["comment"])
 
 
-def read_saved_notes(notes_path, page_name):
-    """读 review-notes.md，返回本页（page 文件名等于 page_name）自产的意见列表。
+ACTIONS = ("采纳", "部分采纳", "不采纳", "转 issue")
+TRANSFER = ACTIONS[3]  # 「转 issue」：record-review-disposition.py 复用，不得另写一份
+
+
+def clean_disposition(raw, at):
+    """校验并规整一条处置；不合格返回 None。detail、issue 缺省按空处理，在场则须为字符串。
+
+    严格校验（detail 非空、拒未知字段）在 record-review-disposition.py。
+    这里是读取侧，故意宽松：只丢弃无法使用的条目。
+    """
+    if not isinstance(raw, dict):
+        return None
+    ident, action = raw.get("id"), raw.get("action")
+    if not isinstance(ident, str) or not ID_RE.fullmatch(ident):
+        return None
+    if not isinstance(action, str) or action not in ACTIONS:
+        return None
+    out = {"id": ident, "action": action, "at": at}
+    for key in ("detail", "issue"):
+        value = raw.get(key, "")
+        if not isinstance(value, str):
+            return None
+        out[key] = clean_text(value)
+    return out
+
+
+def read_saved_blocks(notes_path, page_name):
+    """读 review-notes.md，返回 (意见列表, 处置表)，都只含本页（page 文件名等于 page_name）的内容。
 
     只认三行形态的块：开围栏（3 个以上反引号加 json）、一行以 { 开头的 JSON、同长闭围栏；
-    其余行当普通文本。同 id 取最后一次，位置按首次出现。不合格的块或意见跳过并在 stderr 汇总一行。
-    文件不存在返回空；读失败告警并返回空。
+    其余行当普通文本。含 notes 列表的块是意见块；kind 为 disposition 且含 dispositions 列表的块是处置块。
+    意见同 id 取最后一次，位置按首次出现。处置按意见 id 关联、同 id 取最后一次，处置表按意见顺序
+    给出 {id: {action, detail, issue, at}}；对不上任何已落盘意见的处置忽略并在 stderr 汇总条数。
+    不合格的块或条目跳过并在 stderr 汇总一行。文件不存在返回空；读失败告警并返回空。
     """
     try:
         # utf-8-sig：去掉文件开头的 BOM，否则第一个块的开围栏行带 BOM 而匹配不上
         text = Path(notes_path).read_bytes().decode("utf-8-sig")
     except FileNotFoundError:
-        return []
+        return [], {}
     except (OSError, UnicodeDecodeError) as exc:
         warn("无法读取 %s" % notes_path,
              "%s: %s" % (type(exc).__name__, one_line(exc)),
              "检查文件权限与编码（应为 UTF-8）；本次页面不含已落盘意见")
-        return []
+        return [], {}
 
     lines = [ln[:-1] if ln.endswith("\r") else ln for ln in text.split("\n")]
     notes = {}          # 保持首次出现顺序；同键后写覆盖值但不换位置
-    skipped = set()     # 无法解析的块（整块或其中有意见被跳过）开围栏的 1 基行号
+    dispositions = {}   # 意见 id → 最后一次处置
+    skipped = set()     # 无法解析的块（整块或其中有条目被跳过）开围栏的 1 基行号
     i = 0
     while i < len(lines):
         m = FENCE_OPEN_RE.fullmatch(lines[i])
@@ -273,27 +320,58 @@ def read_saved_notes(notes_path, page_name):
         except (ValueError, RecursionError):
             skipped.add(block_line)
             continue
-        if not (isinstance(data, dict) and isinstance(data.get("page"), str)
-                and isinstance(data.get("notes"), list)):
+        if not (isinstance(data, dict) and isinstance(data.get("page"), str)):
+            skipped.add(block_line)
+            continue
+        is_notes = isinstance(data.get("notes"), list)
+        is_dispositions = (not is_notes and data.get("kind") == "disposition"
+                           and isinstance(data.get("dispositions"), list))
+        if not (is_notes or is_dispositions):
             skipped.add(block_line)
             continue
         if clean_text(data["page"]).rsplit("/", 1)[-1] != page_name:
             continue
-        copied_at = data.get("copied_at", "")
-        copied_at = clean_text(copied_at) if isinstance(copied_at, str) else ""
-        for raw in data["notes"]:
-            note = clean_note(raw, copied_at)
-            if note is None:
-                skipped.add(block_line)
-                continue
-            notes[note_key(note)] = note
+        stamp_key = "copied_at" if is_notes else "at"
+        stamp = data.get(stamp_key, "")
+        stamp = clean_text(stamp) if isinstance(stamp, str) else ""
+        if is_notes:
+            for raw in data["notes"]:
+                note = clean_note(raw, stamp)
+                if note is None:
+                    skipped.add(block_line)
+                    continue
+                notes[note_key(note)] = note
+        else:
+            for raw in data["dispositions"]:
+                item = clean_disposition(raw, stamp)
+                if item is None:
+                    skipped.add(block_line)
+                    continue
+                dispositions[item["id"]] = item
 
     if skipped:
         where = "、".join(str(n) for n in sorted(skipped))
         warn("已跳过 %d 个无法解析的意见块（第 %s 行）" % (len(skipped), where),
              "review-notes.md 中的 json 块被改写或不是评审页产出的格式",
              "对照评审页「复制意见」的原文修正该块，或忽略（不影响生成）")
-    return list(notes.values())
+
+    note_list = list(notes.values())
+    matched = {}
+    for note in note_list:
+        item = dispositions.get(note["id"]) if note["id"] else None
+        if item is not None:
+            matched[note["id"]] = {k: item[k] for k in ("action", "detail", "issue", "at")}
+    unmatched = len(dispositions) - len(matched)
+    if unmatched:
+        warn("已忽略 %d 条对不上已落盘意见的处置" % unmatched,
+             "处置的意见 ID 不属于本页已落盘的意见（意见被删，或处置记在了别的页）",
+             "确认 review-notes.md 中该处置块的 page 与 id；不影响生成")
+    return note_list, matched
+
+
+def read_saved_notes(notes_path, page_name):
+    """本页已落盘意见列表；处置块的读取与告警同 read_saved_blocks。"""
+    return read_saved_blocks(notes_path, page_name)[0]
 
 
 def locate_line(note, docs):
@@ -324,6 +402,117 @@ def locate_line(note, docs):
     if idx >= 0 and text.find(quote, idx + 1) < 0:
         return text.count("\n", 0, idx) + 1
     return None
+
+
+# ── 生成时间与修改日志 ───────────────────────────────────────────────────────
+
+EPOCH_RE = re.compile(r"[0-9]+")  # [0-9] 只匹配 ASCII 数字；int() 自己还接受全角数字、下划线与空白
+REVISIONS_V = 1
+
+
+def revision_time():
+    """一条新日志的时间：SOURCE_DATE_EPOCH 合法时取它，否则取当前时间；带本地时区偏移的 ISO-8601。"""
+    raw = os.environ.get("SOURCE_DATE_EPOCH")
+    if raw is not None:
+        if EPOCH_RE.fullmatch(raw):
+            try:
+                stamp = datetime.fromtimestamp(int(raw), timezone.utc).astimezone()
+                return stamp.isoformat(timespec="seconds")
+            except (OverflowError, OSError, ValueError):
+                pass
+        warn("SOURCE_DATE_EPOCH 不合法：%s" % one_line(raw)[:40],
+             "须为纯 ASCII 十进制整数秒，且在可表示的日期范围内",
+             "改正或取消该环境变量；本次改用当前时间")
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def revisions_path(out):
+    """页面 review/<页名>.html 对应的修改日志 review/<页名>.revisions.json。"""
+    return out.with_name(out.stem + ".revisions.json")
+
+
+def empty_revisions(page_name):
+    return {"v": REVISIONS_V, "page": page_name, "revisions": []}
+
+
+def valid_revisions(data, page_name):
+    if not (isinstance(data, dict) and data.get("v") == REVISIONS_V and data.get("page") == page_name
+            and isinstance(data.get("revisions"), list)):
+        return False
+    for rev in data["revisions"]:
+        if not (isinstance(rev, dict) and isinstance(rev.get("n"), int) and isinstance(rev.get("at"), str)
+                and isinstance(rev.get("event"), str) and isinstance(rev.get("docs"), dict)):
+            return False
+    return True
+
+
+def load_revisions(path, page_name):
+    """读修改日志，返回 (日志, 损坏时的原始字节或 None)。不存在返回空日志；
+    损坏（非 JSON、形状不对、page 不是本页）按空日志重建，并把原字节交给调用方，
+    由调用方在新日志写成功前留 .bak。读不了（权限等）按写入失败处理。"""
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return empty_revisions(page_name), None
+    except OSError as exc:
+        raise Failure(EXIT_FAIL, "无法读取修改日志 %s" % path, one_line(exc), "检查文件权限后重跑")
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (ValueError, RecursionError):
+        data = None
+    if valid_revisions(data, page_name):
+        return data, None
+    return empty_revisions(page_name), raw
+
+
+def doc_records(docs, entries, root):
+    """{标签: {path, sha256}}：path 是仓库相对路径（仓外为 None），sha256 对文件原始字节计算。
+
+    docs 的 text 由 UTF-8 严格解码得来，编码回去与原始字节逐字节相同（BOM、换行都保留）。
+    """
+    paths = {label: path for label, path, _ in entries}
+    return {d["label"]: {"path": repo_relative(paths[d["label"]], root),
+                         "sha256": hashlib.sha256(d["text"].encode("utf-8")).hexdigest()}
+            for d in docs}
+
+
+def fingerprint(records, saved_notes, dispositions):
+    """内容指纹：各文档原文哈希 + 已嵌入意见 + 已嵌入处置。事件说明、时间、版本号都不进。"""
+    payload = {"docs": {label: rec["sha256"] for label, rec in records.items()},
+               "notes": saved_notes, "dispositions": dispositions}
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("ascii")).hexdigest()
+
+
+def changed_labels(records, previous):
+    """相对上一条日志：哈希不同或新增的文档（按本次顺序），其后是消失的文档。"""
+    before = previous.get("docs") if isinstance(previous, dict) else None
+    if not isinstance(before, dict):
+        before = {}
+
+    def sha_of(rec):
+        return rec.get("sha256") if isinstance(rec, dict) else None
+
+    changed = [label for label, rec in records.items()
+               if label not in before or sha_of(before[label]) != rec["sha256"]]
+    changed += [label for label in before if label not in records]
+    return changed
+
+
+def next_revisions(log, records, saved_notes, dispositions, event):
+    """返回 (新日志, 是否追加)。指纹与最后一条相同则原样返回。"""
+    revs = log["revisions"]
+    fp = fingerprint(records, saved_notes, dispositions)
+    if revs and revs[-1].get("fp") == fp:
+        return log, False
+    first = not revs
+    entry = {"n": len(revs) + 1, "at": revision_time(),
+             "event": event or ("首次生成" if first else "重新生成"),
+             "docs": records, "notes": len(saved_notes), "dispositions": len(dispositions),
+             "changed": [] if first else changed_labels(records, revs[-1]),
+             # fp 是生成器判「内容是否变化」的内部字段，模板不读它。
+             "fp": fp}
+    return dict(log, revisions=revs + [entry]), True
 
 
 # ── 模板 ────────────────────────────────────────────────────────────────────
@@ -357,7 +546,7 @@ APP_SCRIPT_RE = re.compile(r'<script id="sdflow-app">(.*?)</script>', re.S)
 PLACEHOLDER_RE = re.compile(r"\{\{([A-Z_]+)\}\}")
 
 
-def render(template, marked, title, docs, saved_notes):
+def render(template, marked, title, docs, saved_notes, dispositions, revisions):
     m = APP_SCRIPT_RE.search(template)
     if not m:
         raise Failure(EXIT_FAIL, "评审页资产缺失：模板缺少 sdflow-app 脚本块", "模板文件损坏或版本不匹配",
@@ -366,6 +555,8 @@ def render(template, marked, title, docs, saved_notes):
         "TITLE": html.escape(title, quote=True),
         "DOCS_JSON": json_for_script(docs),
         "SAVED_NOTES_JSON": json_for_script(saved_notes),
+        "DISPOSITIONS_JSON": json_for_script(dispositions),
+        "REVISIONS_JSON": json_for_script(revisions),
         "MARKED": marked,
         "HASH_MARKED": sha256_b64(marked),
         "HASH_APP": sha256_b64(m.group(1)),
@@ -444,7 +635,9 @@ def run(argv):
         title = args.title
 
     out = Path(os.path.abspath(out))
-    docs, failures = read_docs(entries, repo_root_or_none(), out.parent)
+    # git 子进程只起一次，结果同时给 read_docs 与 doc_records。
+    root = repo_root_or_none()
+    docs, failures = read_docs(entries, root, out.parent)
     if failures:
         for f in failures:
             emit(f.problem, f.cause, f.fix)
@@ -452,22 +645,46 @@ def run(argv):
     if not docs:
         raise usage_failure("--doc", "没有任何可用文档")
 
-    saved_notes = read_saved_notes(out.parent / NOTES_FILENAME, out.name)
+    saved_notes, dispositions = read_saved_blocks(out.parent / NOTES_FILENAME, out.name)
     for item in saved_notes:
         item["line"] = locate_line(item, docs)
 
+    log_file = revisions_path(out)
+    log, corrupt_raw = load_revisions(log_file, out.name)
+    revisions, appended = next_revisions(log,
+                                         doc_records(docs, entries, root),
+                                         saved_notes, dispositions, args.event)
     template, marked = load_assets()
     try:
-        page = render(template, marked, title, docs, saved_notes).encode("utf-8")
+        page = render(template, marked, title, docs, saved_notes, dispositions,
+                      revisions).encode("utf-8")
+        log_bytes = (json.dumps(revisions, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     except UnicodeEncodeError as exc:
         raise Failure(EXIT_FAIL, "页面无法编码为 UTF-8", one_line(exc),
                       "检查 --title 或原文里是否含无法编码的字符后重跑")
+    # 先日志后页面：日志写失败时页面不动；页面写失败时日志已含本次条目，重跑指纹相同、只重写页面。
+    if appended:
+        if corrupt_raw is not None:
+            # 损坏日志先复制为 .bak 再写新日志：任一步失败，原日志文件都不被改名或删除。
+            bak = log_file.with_name(log_file.name + ".bak")
+            write_atomic(bak, corrupt_raw)
+            warn("修改日志损坏，已重建：%s" % log_file.name,
+                 "文件不是合法的修改日志，或记的页面不是 %s" % out.name,
+                 "原内容保留为 %s；需要旧记录时从中取回" % bak.name)
+        write_atomic(log_file, log_bytes)
     write_atomic(out, page)
 
     print("评审页：%s" % out)
+    if appended:
+        print("已追加修改日志：第 %d 版（%s）" % (revisions["revisions"][-1]["n"],
+                                           revisions["revisions"][-1]["event"]))
+    else:
+        print("内容无变化，未追加修改日志")
     if saved_notes:
         missing = sum(1 for item in saved_notes if item["line"] is None)
         print("已嵌入 %d 条已落盘意见（%d 条未找到行号）" % (len(saved_notes), missing))
+    if dispositions:
+        print("已嵌入 %d 条处置" % len(dispositions))
     if not args.no_open:
         if try_open(out):
             print("已尝试在浏览器打开")

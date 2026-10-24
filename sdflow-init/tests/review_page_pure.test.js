@@ -12,7 +12,8 @@ const NAMES = [
   'squash', 'classifyLink', 'classifyImage',
   'pagePathFromPathname', 'notesPathFromPathname', 'buildCopyText', 'formatLocalTime',
   'truncateQuote', 'locateNote', 'headCodepoints', 'tailCodepoints', 'isNoteId', 'idFromBytes',
-  'parseSavedNotes', 'mergeNotes', 'githubSlugs', 'selectionContext',
+  'parseSavedNotes', 'mergeNotes', 'githubSlugs', 'selectionContext', 'splitFrontmatter',
+  'parseRevisions', 'parseDispositions', 'headerText', 'dispositionText',
 ];
 
 function loadPure() {
@@ -428,4 +429,88 @@ test('mergeNotes: 已落盘无 id → doc+quote+comment 相同的暂存意见视
 });
 test('mergeNotes: 无已落盘意见时全部原样返回', () => {
   assert.deepEqual(ids(P.mergeNotes([st(), st({ id: ID2 })], [])), [ID1, ID2]);
+});
+
+// ── frontmatter 判定（RVP-21）────────────────────────────────────────────────
+const SHA = 'a'.repeat(64);
+test('splitFrontmatter: 批准锚（ship-gate / design_approved / reviewed_sha）整块进 meta，其余是正文', () => {
+  const text = '---\nship-gate:\ndesign_approved: true\nreviewed_sha: ' + SHA + '\n---\n# 标题\n正文\n';
+  assert.deepEqual(P.splitFrontmatter(text), {
+    meta: 'ship-gate:\ndesign_approved: true\nreviewed_sha: ' + SHA,
+    body: '# 标题\n正文\n',
+  });
+});
+test('splitFrontmatter: 没有闭合的 --- 行：整篇按原文', () => {
+  const text = '---\nkey: v\n正文\n';
+  assert.deepEqual(P.splitFrontmatter(text), { meta: null, body: text });
+});
+test('splitFrontmatter: BOM + CRLF 的批准锚：去 BOM、忽略行尾 \\r', () => {
+  const text = '\uFEFF---\r\nship-gate:\r\ndesign_approved: true\r\n---\r\n# 标题\r\n';
+  assert.deepEqual(P.splitFrontmatter(text), { meta: 'ship-gate:\ndesign_approved: true', body: '# 标题\r\n' });
+});
+test('splitFrontmatter: 以分隔线开头的正文（第二行不是「键:」）：整篇按原文', () => {
+  const text = '---\n这是普通段落\n\n---\n后文\n';
+  assert.deepEqual(P.splitFrontmatter(text), { meta: null, body: text });
+});
+test('splitFrontmatter: 第二行以非字母开头、或紧跟闭合行：不算 frontmatter', () => {
+  assert.equal(P.splitFrontmatter('---\n123: x\n---\n正文').meta, null);
+  assert.equal(P.splitFrontmatter('---\n---\n正文').meta, null);
+  assert.equal(P.splitFrontmatter('---\n').meta, null);
+});
+test('splitFrontmatter: 没有 frontmatter 时也去掉开头的 BOM', () => {
+  assert.deepEqual(P.splitFrontmatter('\uFEFF# 标题\n'), { meta: null, body: '# 标题\n' });
+});
+
+// ── 修改日志 / 处置数据块解析与显示文字（RVP-22 / RVP-25）──────────────────────
+const REV = (over) => Object.assign({ n: 1, at: '2023-11-14T22:13:20+00:00', event: '首次生成', docs: {}, notes: 0, dispositions: 0, changed: ['设计'], fp: 'x' }, over);
+test('parseRevisions: 合法日志按原样取出，缺字段补默认值', () => {
+  const r = P.parseRevisions(JSON.stringify({ v: 1, page: 'p.html', revisions: [REV({ n: 1 }), REV({ n: 2, event: '重新生成', changed: [], notes: 3, dispositions: 2 })] }));
+  assert.equal(r.ok, true);
+  assert.equal(r.revisions.length, 2);
+  assert.deepEqual(r.revisions[1], { n: 2, at: '2023-11-14T22:13:20+00:00', event: '重新生成', changed: [], notes: 3, dispositions: 2 });
+  assert.equal(P.parseRevisions(JSON.stringify({ revisions: [{}] })).revisions[0].event, '');
+});
+test('parseRevisions: 非法 JSON、顶层不是对象、revisions 不是数组、条目不是对象：ok=false', () => {
+  assert.equal(P.parseRevisions('{broken').ok, false);
+  assert.equal(P.parseRevisions('[]').ok, false);
+  assert.equal(P.parseRevisions('null').ok, false);
+  assert.equal(P.parseRevisions('{"revisions":{}}').ok, false);
+  assert.equal(P.parseRevisions('{"revisions":[5]}').ok, false);
+});
+test('headerText: 取最后一条的时间和 n', () => {
+  const revs = [REV({ n: 1, at: 'T1' }), REV({ n: 2, at: 'T2' })];
+  assert.equal(P.headerText(revs), '生成于 T2 · 第 2 版');
+  assert.equal(P.headerText([]), '');
+});
+test('headerText: 日志条目 n 不连续时，版本号取最后一条的 n，不是条数', () => {
+  const revs = [REV({ n: 1, at: 'T1' }), REV({ n: 3, at: 'T3' })];
+  assert.equal(P.headerText(revs), '生成于 T3 · 第 3 版');
+});
+test('parseDispositions: 取 action / detail / issue，坏条目跳过；顶层不是对象则 ok=false', () => {
+  const r = P.parseDispositions(JSON.stringify({
+    aaaaaaaaaaaaaaaa: { action: '采纳', detail: '已改', issue: '', at: 't' },
+    bbbbbbbbbbbbbbbb: { action: '转 issue', detail: '另起', issue: 'T410', at: 't' },
+    cccccccccccccccc: 5,
+    dddddddddddddddd: { detail: '没有类别' },
+  }));
+  assert.equal(r.ok, true);
+  assert.deepEqual(Object.keys(r.map).sort(), ['aaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbb']);
+  assert.deepEqual(r.map.bbbbbbbbbbbbbbbb, { action: '转 issue', detail: '另起', issue: 'T410' });
+  assert.deepEqual(P.parseDispositions('{}'), { ok: true, map: Object.create(null) });
+  assert.equal(P.parseDispositions('[]').ok, false);
+  assert.equal(P.parseDispositions('{x').ok, false);
+});
+test('parseDispositions: __proto__ 一类的键只是普通键，不污染原型', () => {
+  const r = P.parseDispositions('{"__proto__": {"action": "采纳", "detail": "x", "issue": ""}}');
+  assert.equal(r.ok, true);
+  assert.equal(Object.getPrototypeOf(r.map), null);
+  assert.equal(Object.keys(r.map).length, 1);
+  assert.equal(({}).action, undefined);
+});
+test('dispositionText: 类别、编号、说明；无处置显示「未记录处理」', () => {
+  assert.equal(P.dispositionText({ action: '采纳', detail: '已改 design', issue: '' }), '采纳：已改 design');
+  assert.equal(P.dispositionText({ action: '转 issue', detail: '另起', issue: 'T410' }), '转 issue T410：另起');
+  assert.equal(P.dispositionText({ action: '不采纳', detail: '', issue: '' }), '不采纳');
+  assert.equal(P.dispositionText(null), '未记录处理');
+  assert.equal(P.dispositionText(undefined), '未记录处理');
 });

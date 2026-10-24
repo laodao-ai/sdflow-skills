@@ -112,7 +112,9 @@ function renderPage(root, docs = DOCS) {
   const changeDir = path.join(root, 'openspec', 'changes', 'x');
   const args = [RENDER_SCRIPT, '--out', path.join(changeDir, 'review', 'page.html'), '--title', '回归测试页', '--no-open'];
   for (const [label, file] of docs) args.push('--doc', `${label}=${path.join(changeDir, file)}`);
-  return execFileSync(PYTHON, args, { cwd: root, encoding: 'utf-8' });
+  // 固定 epoch 与时区：修改日志的时间取自这两项，重复生成的页面才逐字节相同。
+  const env = { ...process.env, SOURCE_DATE_EPOCH: '1700000000', TZ: 'UTC' };
+  return execFileSync(PYTHON, args, { cwd: root, encoding: 'utf-8', env });
 }
 
 // 建一个临时 git 仓：写好 DOCS 并渲染一次；返回仓根与页面的 file URL / pathname。
@@ -184,6 +186,20 @@ async function withPage(opts, fn) {
   try { await fn(h); } finally { await h.close(); }
 }
 
+// 注入的 <img onerror> 没有执行：window.__pwn 未被置位，也没有弹窗。
+async function expectNoScriptRan(page, dialogs) {
+  assert.equal(await page.evaluate(() => window.__pwn), undefined);
+  assert.deepEqual(dialogs, []);
+}
+
+function rm(r) { fs.rmSync(r.root, { recursive: true, force: true }); }
+
+// 建一个临时仓，跑完（含失败）一定删掉。make 返回 makeRepo 形态的对象。
+async function withRepo(make, fn) {
+  const r = make();
+  try { await fn(r); } finally { rm(r); }
+}
+
 // 在某份文档的单个文本节点内划选 needle（跨节点的选区不会被高亮）。
 async function selectText(page, docLabel, needle) {
   await page.evaluate(({ docLabel, needle }) => {
@@ -206,9 +222,62 @@ async function selectText(page, docLabel, needle) {
   await page.locator('#sdflow-annotate').waitFor({ state: 'visible' });
 }
 
-// 正文里全部暂存高亮：{意见 id: 高亮文字}，用来断言每个 mark 归属到哪条意见。
+// 正文里全部暂存高亮：{意见 id: [各分段文字（按文档顺序）]}，用来断言每个 mark 归属到哪条意见。
 function stagedMarks(page) {
-  return page.locator('mark.sdflow-hl').evaluateAll((els) => Object.fromEntries(els.map((m) => [m.dataset.note, m.textContent])));
+  return page.locator('mark.sdflow-hl').evaluateAll((els) => {
+    const out = {};
+    for (const m of els) (out[m.dataset.note] = out[m.dataset.note] || []).push(m.textContent);
+    return out;
+  });
+}
+
+// 从 fromNeedle 所在文本节点的起点划选到 toNeedle 的末尾，可跨粗体、列表项等元素。
+async function selectAcross(page, docLabel, fromNeedle, toNeedle) {
+  await page.evaluate(({ docLabel, fromNeedle, toNeedle }) => {
+    const body = document.querySelector(`section.doc[data-label="${docLabel}"] .doc-body`);
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    let node, startNode = null, startAt = 0;
+    const range = document.createRange();
+    while ((node = walker.nextNode())) {
+      if (!startNode) {
+        const i = node.data.indexOf(fromNeedle);
+        if (i < 0) continue;
+        startNode = node; startAt = i;
+        range.setStart(node, i);
+      }
+      const j = node.data.indexOf(toNeedle, node === startNode ? startAt : 0);
+      if (j >= 0) {
+        range.setEnd(node, j + toNeedle.length);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        return;
+      }
+    }
+    throw new Error('找不到要划选的范围：' + fromNeedle + ' … ' + toNeedle);
+  }, { docLabel, fromNeedle, toNeedle });
+  await page.locator('#sdflow-annotate').waitFor({ state: 'visible' });
+}
+
+async function saveNote(page, comment) {
+  await page.locator('#sdflow-annotate').click();
+  await page.locator('#sdflow-note-text').fill(comment);
+  await page.locator('#sdflow-note-dialog .sdflow-btn.primary').click();
+  await page.locator('#sdflow-note-dialog').waitFor({ state: 'hidden' });
+}
+
+async function addNoteAcross(page, docLabel, fromNeedle, toNeedle, comment) {
+  await selectAcross(page, docLabel, fromNeedle, toNeedle);
+  await saveNote(page, comment);
+}
+
+// 已落盘高亮：{意见 id: [各分段文字]}
+function savedMarksOf(page) {
+  return page.locator('mark.sdflow-saved-hl').evaluateAll((els) => {
+    const out = {};
+    for (const m of els) (out[m.dataset.saved] = out[m.dataset.saved] || []).push(m.textContent);
+    return out;
+  });
 }
 
 async function addNote(page, docLabel, needle, comment) {
@@ -217,6 +286,21 @@ async function addNote(page, docLabel, needle, comment) {
   await page.locator('#sdflow-note-text').fill(comment);
   await page.locator('#sdflow-note-dialog .sdflow-btn.primary').click();
   await page.locator('#sdflow-note-dialog').waitFor({ state: 'hidden' });
+}
+
+// 把复制文本按 RVP-06 追加到 review-notes.md：先用 check-notes-path.py 校验第一行的路径（以退出码为准），通过才追加。
+function appendPasted(r, text) {
+  const first = text.split('\n')[0];
+  const p = /`([^`]+)`/.exec(first)[1];
+  const abs = execFileSync(PYTHON, [CHECK_NOTES_PATH, p], { cwd: r.root, encoding: 'utf-8' }).trim();
+  assert.equal(abs, r.notesFile);
+  fs.appendFileSync(abs, text, 'utf-8');
+}
+
+async function copyOnce(page) {
+  await page.locator('#sdflow-copy-new').click();
+  await page.waitForFunction(() => document.getElementById('sdflow-copy-status').textContent.startsWith('已复制'));
+  return (await page.evaluate(() => window.__clip)).pop();
 }
 
 // 剪贴板桩：writeText 记账并成功，或按 mode 拒绝。桩替换的是浏览器 API，页面逻辑照常走。
@@ -470,7 +554,7 @@ describe('选区与暂存', () => {
       await addNote(page, '设计', 'alpha beta', '第一条意见');
       const item = page.locator('#sdflow-notes .note-item');
       assert.equal(await item.count(), 1);
-      assert.deepEqual(await stagedMarks(page), { [await item.getAttribute('data-note')]: 'alpha beta' });
+      assert.deepEqual(await stagedMarks(page), { [await item.getAttribute('data-note')]: ['alpha beta'] });
       assert.match(await item.locator('.note-head').textContent(), /^#1 设计 › 重名节/);
       assert.equal(await item.locator('.note-quote').textContent(), 'alpha beta');
       assert.equal(await item.locator('.note-comment').textContent(), '第一条意见');
@@ -487,12 +571,12 @@ describe('选区与暂存', () => {
       assert.equal(await items.count(), 1);
       assert.equal(await page.locator('#sdflow-notes .note-comment').textContent(), '刷新前写的');
       const first = await items.nth(0).getAttribute('data-note');
-      assert.deepEqual(await stagedMarks(page), { [first]: 'zeta eta' });
+      assert.deepEqual(await stagedMarks(page), { [first]: ['zeta eta'] });
       // 暂存里的序号接着往下排；两条意见的高亮各归各的 id
       await addNote(page, '设计', 'iota kappa', '刷新后写的');
       assert.equal(await items.nth(1).locator('.note-head').textContent().then((t) => t.slice(0, 2)), '#2');
       const second = await items.nth(1).getAttribute('data-note');
-      assert.deepEqual(await stagedMarks(page), { [first]: 'zeta eta', [second]: 'iota kappa' });
+      assert.deepEqual(await stagedMarks(page), { [first]: ['zeta eta'], [second]: ['iota kappa'] });
     });
   });
 
@@ -775,7 +859,6 @@ const savedItems = (page) => page.locator('#sdflow-notes .saved-group .note-item
 const stagedItems = (page) => page.locator('#sdflow-notes .notes-list').first().locator('.note-item');
 
 describe('已落盘意见显示', () => {
-  const rm = (r) => fs.rmSync(r.root, { recursive: true, force: true });
 
   test('没有已落盘意见时不显示该分组', async () => {
     await withPage({}, async ({ page }) => {
@@ -784,8 +867,7 @@ describe('已落盘意见显示', () => {
   });
 
   test('显示路径加行号、上级标题、引用与正文；正文虚线高亮；只读；不进复制文本', async () => {
-    const r = makeRepoWithNotes([{ id: SAVED_ID, comment: '已落盘的意见' }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: SAVED_ID, comment: '已落盘的意见' }]), async (r) => {
       await withPage({ url: r.url, initScripts: [clipboardStub('ok')] }, async ({ page, errors }) => {
         assert.equal(await page.locator('#sdflow-notes .saved-group h3').textContent(), '已落盘意见（1）');
         const item = savedItems(page);
@@ -812,28 +894,25 @@ describe('已落盘意见显示', () => {
         assert.ok(!clip.includes('已落盘的意见'));
         assert.deepEqual(errors, []);
       });
-    } finally { rm(r); }
+    });
   });
 
   test('意见正文含 <img onerror> 时只作文字显示，不执行', async () => {
     const payload = '<img src=x onerror="window.__pwn=9">';
-    const r = makeRepoWithNotes([{ id: SAVED_ID, comment: payload, heading: '<b>标题</b>' }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: SAVED_ID, comment: payload, heading: '<b>标题</b>' }]), async (r) => {
       await withPage({ url: r.url }, async ({ page, dialogs }) => {
         assert.equal(await savedItems(page).locator('.note-comment').textContent(), payload);
         assert.equal(await savedItems(page).locator('img, b').count(), 0);
-        assert.equal(await page.evaluate(() => window.__pwn), undefined);
-        assert.deepEqual(dialogs, []);
+        await expectNoScriptRan(page, dialogs);
       });
-    } finally { rm(r); }
+    });
   });
 
   test('原文找不到标「原文已变」且不高亮；出现多处无法区分标「未在正文高亮」', async () => {
-    const r = makeRepoWithNotes([
+    await withRepo(() => makeRepoWithNotes([
       { id: SAVED_ID, quote: '这段话已经被改掉了', comment: '孤儿' },
       { id: 'bbbbbbbbbbbbbbbb', quote: '重名节', before: 'zz', after: 'yy', comment: '多处' },
-    ]);
-    try {
+    ]), async (r) => {
       await withPage({ url: r.url }, async ({ page }) => {
         const items = savedItems(page);
         assert.equal(await items.count(), 2);
@@ -844,12 +923,11 @@ describe('已落盘意见显示', () => {
         assert.equal(await items.nth(0).locator('.note-actions').count(), 0);
         assert.equal(await items.nth(1).locator('.note-actions .sdflow-btn').textContent(), '定位');
       });
-    } finally { rm(r); }
+    });
   });
 
   test('数据块被改成非法 JSON：文档照常渲染，意见栏提示无法读取', async () => {
-    const r = makeRepoWithNotes([{ id: SAVED_ID, comment: 'x' }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: SAVED_ID, comment: 'x' }]), async (r) => {
       const file = new URL(r.url);
       const html = fs.readFileSync(file, 'utf-8');
       const broken = html.replace(/(<script type="application\/json" id="sdflow-saved-notes">)[\s\S]*?(<\/script>)/, '$1{broken$2');
@@ -861,12 +939,11 @@ describe('已落盘意见显示', () => {
         assert.equal(await page.locator('#sdflow-notes .saved-group').isHidden(), true);
         assert.deepEqual(errors, []);
       });
-    } finally { rm(r); }
+    });
   });
 
   test('暂存与已落盘都是 1 号：删除暂存意见不影响已落盘高亮', async () => {
-    const r = makeRepoWithNotes([{ id: SAVED_ID, n: 1, comment: '已落盘 1 号' }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: SAVED_ID, n: 1, comment: '已落盘 1 号' }]), async (r) => {
       await withPage({ url: r.url }, async ({ page }) => {
         await addNote(page, '设计', 'zeta eta', '暂存 1 号');
         assert.match(await stagedItems(page).locator('.note-head').textContent(), /^#1 /);
@@ -876,12 +953,11 @@ describe('已落盘意见显示', () => {
         assert.equal(await page.locator(`mark.sdflow-saved-hl[data-saved="${SAVED_ID}"]`).textContent(), 'alpha beta');
         assert.equal(await savedItems(page).count(), 1);
       });
-    } finally { rm(r); }
+    });
   });
 
   test('合并：同 id 已复制只显示一次；未复制且正文改过则两条都显示并进入复制集合', async () => {
-    const r = makeRepoWithNotes([{ id: SAVED_ID, comment: '落盘版' }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: SAVED_ID, comment: '落盘版' }]), async (r) => {
       const key = 'sdflow-review:' + r.pathname;
       const base = { n: 1, id: SAVED_ID, doc: '设计', heading: '重名节', quote: 'alpha beta', before: '', after: '' };
       await withPage({ url: r.url, initScripts: [clipboardStub('ok')] }, async ({ page }) => {
@@ -905,19 +981,18 @@ describe('已落盘意见显示', () => {
         assert.equal(await page.locator('mark.sdflow-hl').count(), 0);
         assert.equal(await page.locator(`mark.sdflow-saved-hl[data-saved="${SAVED_ID}"]`).textContent(), 'alpha beta');
       });
-    } finally { rm(r); }
+    });
   });
 
   test('「已修改，未落盘」的暂存意见编辑回与已落盘版相同：从列表消失，正文不留它的高亮', async () => {
-    const r = makeRepoWithNotes([{ id: SAVED_ID, comment: '落盘版' }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: SAVED_ID, comment: '落盘版' }]), async (r) => {
       await withPage({ url: r.url }, async ({ page }) => {
         await seedNotes(page, [
           { n: 1, id: SAVED_ID, doc: '设计', heading: '重名节', quote: 'alpha beta', before: '', after: '', comment: '改过', copied: false },
         ], { key: 'sdflow-review:' + r.pathname });
         await page.reload();
         assert.match(await stagedItems(page).locator('.note-badge').first().textContent(), /已修改，未落盘/);
-        assert.deepEqual(await stagedMarks(page), { [SAVED_ID]: 'alpha beta' });
+        assert.deepEqual(await stagedMarks(page), { [SAVED_ID]: ['alpha beta'] });
         await stagedItems(page).locator('.edit-btn').click();
         await page.locator('#sdflow-note-text').fill('落盘版');
         await page.keyboard.press('Control+Enter');
@@ -927,23 +1002,21 @@ describe('已落盘意见显示', () => {
         // 「编辑」按钮随这条一起消失：焦点落到正文区域
         assert.equal(await activeId(page), 'main');
       });
-    } finally { rm(r); }
+    });
   });
 
   test('图内划选的已落盘意见（inFigure）：新 context 打开，原文在正文唯一出现也不高亮，标「未在正文高亮」', async () => {
-    const r = makeRepoWithNotes([{ id: SAVED_ID, comment: '图内', inFigure: true }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: SAVED_ID, comment: '图内', inFigure: true }]), async (r) => {
       await withPage({ url: r.url }, async ({ page }) => {
         assert.equal(await savedItems(page).locator('.note-badge').textContent(), '未在正文高亮');
         assert.equal(await page.locator('mark.sdflow-saved-hl').count(), 0);
         assert.equal(await savedItems(page).locator('.jump-btn').count(), 1);
       });
-    } finally { rm(r); }
+    });
   });
 
   test('记着已高亮、mark 却丢了：点「定位」改标「未在正文高亮」，提示并把焦点放回这条的「定位」', async () => {
-    const r = makeRepoWithNotes([{ id: SAVED_ID, comment: '已落盘' }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: SAVED_ID, comment: '已落盘' }]), async (r) => {
       await withPage({ url: r.url }, async ({ page }) => {
         await addNote(page, '设计', 'zeta eta', '暂存');
         const unwrap = (sel) => page.evaluate((s) => {
@@ -959,12 +1032,11 @@ describe('已落盘意见显示', () => {
           assert.equal(await items.locator('.jump-btn').evaluate((b) => b === document.activeElement), true);
         }
       });
-    } finally { rm(r); }
+    });
   });
 
   test('合并：已落盘无 id 时，doc+原文+正文相同的暂存意见视为同一条', async () => {
-    const r = makeRepoWithNotes([{ id: '', comment: '旧格式意见' }]);
-    try {
+    await withRepo(() => makeRepoWithNotes([{ id: '', comment: '旧格式意见' }]), async (r) => {
       const key = 'sdflow-review:' + r.pathname;
       await withPage({ url: r.url }, async ({ page }) => {
         await seedNotes(page, [
@@ -976,30 +1048,14 @@ describe('已落盘意见显示', () => {
         assert.equal(await stagedItems(page).locator('.note-comment').textContent(), '另一条');
         assert.equal(await savedItems(page).count(), 1);
       });
-    } finally { rm(r); }
+    });
   });
 });
 
 // ── 4.3 回显端到端 ──────────────────────────────────────────────────────────
 describe('回显端到端', () => {
-  // 把复制文本按 RVP-06 追加到 review-notes.md：先用 check-notes-path.py 校验第一行的路径（以退出码为准），通过才追加。
-  function appendPasted(r, text) {
-    const first = text.split('\n')[0];
-    const p = /`([^`]+)`/.exec(first)[1];
-    const abs = execFileSync(PYTHON, [CHECK_NOTES_PATH, p], { cwd: r.root, encoding: 'utf-8' }).trim();
-    assert.equal(abs, r.notesFile);
-    fs.appendFileSync(abs, text, 'utf-8');
-  }
-
-  async function copyOnce(page) {
-    await page.locator('#sdflow-copy-new').click();
-    await page.waitForFunction(() => document.getElementById('sdflow-copy-status').textContent.startsWith('已复制'));
-    return (await page.evaluate(() => window.__clip)).pop();
-  }
-
   test('context A 写意见并复制 → 追加 review-notes.md → 重新生成 → 新 context B 看到并定位；A 重开只显示一次', async () => {
-    const r = makeRepo();
-    try {
+    await withRepo(() => makeRepo(), async (r) => {
       const a = await openPage({ url: r.url, initScripts: [clipboardStub('ok')] });
       try {
         await addNote(a.page, '设计', 'alpha beta', '端到端意见');
@@ -1028,12 +1084,11 @@ describe('回显端到端', () => {
           }), true);
         });
       } finally { await a.close(); }
-    } finally { fs.rmSync(r.root, { recursive: true, force: true }); }
+    });
   });
 
   test('图内划选的意见复制落盘后 inFigure 随块带出：新 context 里标「未在正文高亮」', async () => {
-    const r = makeRepo();
-    try {
+    await withRepo(() => makeRepo(), async (r) => {
       const a = await openPage({ url: r.url, initScripts: [clipboardStub('ok')] });
       try {
         await a.page.locator('section.doc[data-label="图"] .mermaid-fig svg').waitFor();
@@ -1049,12 +1104,11 @@ describe('回显端到端', () => {
         assert.equal(await savedItems(page).locator('.note-badge').textContent(), '未在正文高亮');
         assert.equal(await page.locator('mark.sdflow-saved-hl').count(), 0);
       });
-    } finally { fs.rmSync(r.root, { recursive: true, force: true }); }
+    });
   });
 
   test('粘回后改掉原文再重新生成：新 context 里标「原文已变」', async () => {
-    const r = makeRepo();
-    try {
+    await withRepo(() => makeRepo(), async (r) => {
       const a = await openPage({ url: r.url, initScripts: [clipboardStub('ok')] });
       try {
         await addNote(a.page, '设计', 'alpha beta', '会失效的意见');
@@ -1069,7 +1123,7 @@ describe('回显端到端', () => {
         assert.match(await item.locator('.note-badge').textContent(), /^原文已变$/);
         assert.equal(await page.locator('mark.sdflow-saved-hl').count(), 0);
       });
-    } finally { fs.rmSync(r.root, { recursive: true, force: true }); }
+    });
   });
 });
 
@@ -1437,7 +1491,7 @@ describe('mermaid 图内划选', () => {
         }, label);
         assert.deepEqual(errors, []);
       });
-      } finally { if (r) fs.rmSync(r.root, { recursive: true, force: true }); }
+      } finally { if (r) rm(r); }
     });
   }
 
@@ -1539,4 +1593,519 @@ describe('空意见错误的 aria 语义', () => {
       assert.equal(await page.locator('#sdflow-note-text').getAttribute('aria-invalid'), null);
     });
   });
+});
+
+// ── 3.1 跨节点划选：按文本节点分段高亮（RVP-20）────────────────────────────────
+const RICH_DOCS = [
+  ['富文本', 'rich.md', [
+    '# 富文本',
+    '',
+    '普通甲 **粗体乙** 普通丙。',
+    '',
+    '- 列表项一文字',
+    '- 列表项二文字',
+    '',
+    '末段结尾。',
+    '',
+  ].join('\n')],
+];
+
+describe('跨节点划选高亮（RVP-20）', () => {
+  const docBodyText = (page, label) =>
+    page.evaluate((lab) => document.querySelector(`section.doc[data-label="${lab}"] .doc-body`).textContent, label);
+
+  test('跨粗体：三段文字都高亮，意见不标「未在正文高亮」', async () => {
+    await withRepo(() => makeRepo(RICH_DOCS), async (r) => {
+      await withPage({ url: r.url }, async ({ page, errors }) => {
+        await addNoteAcross(page, '富文本', '普通甲', '普通丙', '跨粗体');
+        const id = await page.locator('#sdflow-notes .note-item').getAttribute('data-note');
+        assert.deepEqual(await stagedMarks(page), { [id]: ['普通甲 ', '粗体乙', ' 普通丙'] });
+        assert.equal(await page.locator('#sdflow-notes .note-item .note-badge').count(), 0);
+        // 刷新后同样恢复三段
+        await page.reload();
+        assert.deepEqual(await stagedMarks(page), { [id]: ['普通甲 ', '粗体乙', ' 普通丙'] });
+        assert.deepEqual(errors, []);
+      });
+    });
+  });
+
+  test('跨列表项落盘后重新生成：两个列表项都以已落盘样式高亮，「定位」跳到第一段，闪烁全部分段，段间无竖线', async () => {
+    await withRepo(() => makeRepo(RICH_DOCS), async (r) => {
+      const a = await openPage({ url: r.url, initScripts: [clipboardStub('ok')] });
+      try {
+        await addNoteAcross(a.page, '富文本', '列表项一', '列表项二文字', '跨列表项');
+        appendPasted(r, await copyOnce(a.page));
+      } finally { await a.close(); }
+      renderPage(r.root, RICH_DOCS);
+      await withPage({ url: r.url }, async ({ page, errors }) => {
+        const item = savedItems(page);
+        assert.equal(await item.count(), 1);
+        const sid = await item.getAttribute('data-saved');
+        assert.deepEqual(await savedMarksOf(page), { [sid]: ['列表项一文字', '列表项二文字'] });
+        assert.equal(await item.locator('.note-badge').count(), 0);
+        // 按段绘制：首段无右边框、末段无左边框，上下边框仍是虚线
+        const edges = await page.locator('mark.sdflow-saved-hl').evaluateAll((els) => els.map((m) => {
+          const cs = getComputedStyle(m);
+          return { l: cs.borderLeftWidth, r: cs.borderRightWidth, t: cs.borderTopStyle };
+        }));
+        assert.deepEqual(edges, [{ l: '2px', r: '0px', t: 'dashed' }, { l: '0px', r: '2px', t: 'dashed' }]);
+        // 定位：滚到第一段，闪烁全部分段
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await item.locator('.sdflow-btn', { hasText: '定位' }).click();
+        assert.equal(await page.locator('mark.sdflow-saved-hl.flash').count(), 2);
+        // 页面是平滑滚动：等第一段进入视口（页尾两节让页面够长，滚动确实发生）
+        await page.waitForFunction(() => {
+          const b = document.querySelector('mark.sdflow-saved-hl').getBoundingClientRect();
+          return b.top >= 0 && b.bottom <= window.innerHeight;
+        });
+        assert.deepEqual(errors, []);
+      });
+    });
+  });
+
+  test('删除跨三段高亮的暂存意见：三段全部移除，正文文字不变', async () => {
+    await withRepo(() => makeRepo(RICH_DOCS), async (r) => {
+      await withPage({ url: r.url }, async ({ page }) => {
+        const before = await docBodyText(page, '富文本');
+        await addNoteAcross(page, '富文本', '普通甲', '普通丙', '要删的');
+        assert.equal(await page.locator('mark.sdflow-hl').count(), 3);
+        assert.equal(await docBodyText(page, '富文本'), before);
+        await page.locator('#sdflow-notes .del-btn').click();
+        assert.equal(await page.locator('mark').count(), 0);
+        assert.equal(await docBodyText(page, '富文本'), before);
+      });
+    });
+  });
+
+  test('端点落在元素上（三击选段，终点在下一个块元素偏移 0）：该段高亮，不标「未在正文高亮」', async () => {
+    await withPage({}, async ({ page }) => {
+      await page.locator('section.doc[data-label="设计"] .doc-body p', { hasText: '第一处正文' }).click({ clickCount: 3 });
+      await page.locator('#sdflow-annotate').waitFor({ state: 'visible' });
+      // 前置：终点确实落在元素上（不是文本节点），否则这条用例没测到目标场景
+      assert.equal(await page.evaluate(() => window.getSelection().getRangeAt(0).endContainer.nodeType), 1);
+      await saveNote(page, '三击选段');
+      const id = await page.locator('#sdflow-notes .note-item').getAttribute('data-note');
+      assert.deepEqual(await stagedMarks(page), { [id]: ['第一处正文 alpha beta gamma delta epsilon。'] });
+      assert.equal(await page.locator('#sdflow-notes .note-item .note-badge').count(), 0);
+    });
+  });
+
+  test('文档最后一段三击：选区终点落在正文之外，仍出现「写意见」，该段高亮，不标「未在正文高亮」', async () => {
+    await withRepo(() => makeRepo(RICH_DOCS), async (r) => {
+      await withPage({ url: r.url }, async ({ page }) => {
+        await page.locator('section.doc[data-label="富文本"] .doc-body p', { hasText: '末段结尾' }).click({ clickCount: 3 });
+        // 前置：终点确实落在该文档正文之外，否则没测到目标场景
+        assert.equal(await page.evaluate(() => {
+          const r = window.getSelection().getRangeAt(0);
+          const el = r.endContainer.nodeType === 1 ? r.endContainer : r.endContainer.parentElement;
+          return !!el.closest('.doc-body');
+        }), false);
+        await page.locator('#sdflow-annotate').waitFor({ state: 'visible' });
+        await saveNote(page, '末段三击');
+        const id = await page.locator('#sdflow-notes .note-item').getAttribute('data-note');
+        assert.deepEqual(await stagedMarks(page), { [id]: ['末段结尾。'] });
+        assert.equal(await page.locator('#sdflow-notes .note-item .note-badge').count(), 0);
+      });
+    });
+  });
+
+  // 终点落在正文之外、且不是三击末段形态时，划选必须被拒绝（不出现「写意见」）。
+  // 起点取 fromLabel 正文里 needle 的开头，终点取 endSelector 元素首个文本节点的偏移 2（标题文字中间）。
+  for (const c of [
+    { name: '从文档 A 正文拖到文档 B 标题', from: '设计', needle: '第一处正文', end: 'section.doc[data-label="另一份"] > :first-child' },
+    { name: '从最后一份文档正文拖到页尾「修改日志」节', from: '锚点', needle: '数据模型正文', end: '#review-revisions h2' },
+  ]) {
+    test(`拖选越界：${c.name}，不产生划选`, async () => {
+      await withPage({}, async ({ page }) => {
+        await page.evaluate(({ from, needle, end }) => {
+          const body = document.querySelector(`section.doc[data-label="${from}"] .doc-body`);
+          const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+          let node;
+          while ((node = walker.nextNode()) && node.data.indexOf(needle) < 0);
+          if (!node) throw new Error('找不到起点文字：' + needle);
+          const tw = document.createTreeWalker(document.querySelector(end), NodeFilter.SHOW_TEXT);
+          const endNode = tw.nextNode();
+          window.getSelection().setBaseAndExtent(node, node.data.indexOf(needle), endNode, 2);
+        }, { from: c.from, needle: c.needle, end: c.end });
+        // selectionchange 异步触发；等一拍再断言按钮没出现
+        await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 150)));
+        assert.equal(await page.locator('#sdflow-annotate').isHidden(), true);
+        assert.equal(await page.locator('#sdflow-notes .note-item').count(), 0);
+      });
+    });
+  }
+
+  test('超过 500 码点的跨段选区：保存时与落盘重新生成后高亮的文字相同', async () => {
+    await withRepo(() => makeRepo(), async (r) => {
+      let staged;
+      const a = await openPage({ url: r.url, initScripts: [clipboardStub('ok')] });
+      try {
+        await addNoteAcross(a.page, '设计', '填充段落第 1 行', '填充段落第 40 行', '超长');
+        const id = await a.page.locator('#sdflow-notes .note-item').getAttribute('data-note');
+        staged = (await stagedMarks(a.page))[id];
+        assert.ok(staged.length > 3, '应跨多段');
+        // 引用被截断到 500 码点：高亮文字总长 = 引用去掉段间换行后的长度，且没有铺到第 40 行
+        const quote = await a.page.locator('#sdflow-notes .note-quote').textContent();
+        assert.equal(Array.from(quote).length, 500);
+        assert.equal(staged.join(''), quote.replace(/\n/g, ''));
+        assert.ok(!staged.join('').includes('第 40 行'));
+        // 刷新后暂存意见仍只高亮截断后的范围
+        await a.page.reload();
+        assert.deepEqual((await stagedMarks(a.page))[id], staged);
+        appendPasted(r, await copyOnce(a.page));
+      } finally { await a.close(); }
+      renderPage(r.root);
+      await withPage({ url: r.url }, async ({ page }) => {
+        const saved = Object.values(await savedMarksOf(page));
+        assert.equal(saved.length, 1);
+        assert.deepEqual(saved[0], staged);
+        assert.equal(await savedItems(page).locator('.note-badge').count(), 0);
+      });
+    });
+  });
+});
+
+// ── 3.2 frontmatter 显示为元数据框（RVP-21）──────────────────────────────────
+describe('frontmatter 元数据框（RVP-21）', () => {
+  const SHA = 'b'.repeat(64);
+  const GATE = ['ship-gate:', 'design_approved: true', `reviewed_sha: ${SHA}`];
+  const tocText = (page) => page.locator('#toc').textContent();
+  const metaBox = (page) => page.locator('section.doc[data-label="报告"] > details.doc-meta');
+
+  function repoWith(text) {
+    return makeRepo([['报告', 'report.md', text]]);
+  }
+
+  test('批准锚不进目录：「元数据」框含三行原文，在 .doc-body 之外，默认折叠，正文照常渲染', async () => {
+    await withRepo(() => repoWith(['---', ...GATE, '---', '# 评审报告', '', '## 结论', '', '正文一句。', ''].join('\n')), async (r) => {
+      await withPage({ url: r.url }, async ({ page, errors }) => {
+        const toc = await tocText(page);
+        assert.ok(!toc.includes('ship-gate'));
+        assert.ok(!toc.includes(SHA));
+        assert.match(toc, /评审报告/);
+        const box = metaBox(page);
+        assert.equal(await box.count(), 1);
+        assert.equal(await box.locator('summary').textContent(), '元数据');
+        assert.equal(await box.evaluate((el) => el.open), false);
+        assert.equal(await box.locator('pre').textContent(), GATE.join('\n'));
+        // 元数据框在文档标题区之后、.doc-body 之外；正文里没有 ship-gate
+        assert.equal(await page.locator('section.doc[data-label="报告"] .doc-body details').count(), 0);
+        assert.ok(!(await page.locator('section.doc[data-label="报告"] .doc-body').textContent()).includes('ship-gate'));
+        assert.equal(await page.locator('section.doc[data-label="报告"] .doc-body h1').textContent(), '评审报告');
+        assert.deepEqual(errors, []);
+      });
+    });
+  });
+
+  test('元数据框内的文字不能划选写意见', async () => {
+    await withRepo(() => repoWith(['---', ...GATE, '---', '# 评审报告', '', '正文。', ''].join('\n')), async (r) => {
+      await withPage({ url: r.url }, async ({ page }) => {
+        await metaBox(page).locator('summary').click();
+        await page.evaluate(() => {
+          const pre = document.querySelector('details.doc-meta pre');
+          const range = document.createRange();
+          range.selectNodeContents(pre);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        });
+        await page.waitForTimeout(150);
+        assert.equal(await page.locator('#sdflow-annotate').isHidden(), true);
+      });
+    });
+  });
+
+  test('没有闭合行：整篇按原文渲染，不显示「元数据」框', async () => {
+    await withRepo(() => repoWith(['---', 'ship-gate:', 'design_approved: true', '', '# 评审报告', '', '正文。', ''].join('\n')), async (r) => {
+      await withPage({ url: r.url }, async ({ page }) => {
+        assert.equal(await metaBox(page).count(), 0);
+        assert.match(await page.locator('section.doc[data-label="报告"] .doc-body').textContent(), /design_approved: true/);
+      });
+    });
+  });
+
+  test('带 BOM、CRLF 换行的批准锚：目录不含 ship-gate，「元数据」框显示该块', async () => {
+    await withRepo(() => repoWith('\uFEFF' + ['---', ...GATE, '---', '# 评审报告', '', '正文。', ''].join('\r\n')), async (r) => {
+      await withPage({ url: r.url }, async ({ page }) => {
+        assert.ok(!(await tocText(page)).includes('ship-gate'));
+        assert.equal(await metaBox(page).locator('pre').textContent(), GATE.join('\n'));
+        assert.equal(await page.locator('section.doc[data-label="报告"] .doc-body h1').textContent(), '评审报告');
+      });
+    });
+  });
+
+  test('以分隔线开头的正文（第二行是普通段落）：整篇按原文渲染，不显示「元数据」框', async () => {
+    await withRepo(() => repoWith(['---', '这是普通段落文字', '', '---', '后文。', ''].join('\n')), async (r) => {
+      await withPage({ url: r.url }, async ({ page }) => {
+        assert.equal(await metaBox(page).count(), 0);
+        const body = page.locator('section.doc[data-label="报告"] .doc-body');
+        assert.match(await body.textContent(), /这是普通段落文字/);
+        assert.ok((await body.locator('hr').count()) >= 1);
+      });
+    });
+  });
+
+  test('元数据按纯文本显示：含 <img onerror> 时不执行', async () => {
+    await withRepo(() => repoWith(['---', 'title: <img src=x onerror="window.__pwn=7">', '---', '# 报告', ''].join('\n')), async (r) => {
+      await withPage({ url: r.url }, async ({ page, dialogs }) => {
+        assert.equal(await metaBox(page).locator('img').count(), 0);
+        assert.match(await metaBox(page).locator('pre').textContent(), /<img src=x onerror=/);
+        await expectNoScriptRan(page, dialogs);
+      });
+    });
+  });
+});
+
+// ── 3.3 页头版本、意见栏处理标记、数据块损坏（RVP-22 / RVP-25）────────────────────
+const RECORD_SCRIPT = path.resolve(__dirname, '..', '..', 'assets', 'hack', 'record-review-disposition.py');
+const ID_B = 'bbbbbbbbbbbbbbbb';
+const ID_C = 'cccccccccccccccc';
+
+// 用处置记录脚本把处置追加进 review-notes.md（与真实流程同一入口），再重新生成页面。
+function recordDispositions(r, items) {
+  const rel = path.relative(r.root, r.notesFile).split(path.sep).join('/');
+  const payload = rel + '\n' + JSON.stringify({ page: 'page.html', dispositions: items });
+  execFileSync(PYTHON, [RECORD_SCRIPT, '--stdin'], { cwd: r.root, input: payload, encoding: 'utf-8' });
+  renderPage(r.root);
+}
+
+// 三条已落盘意见：A（alpha beta）、B（zeta eta）、C（iota kappa）。
+function makeRepoWithThreeNotes() {
+  return makeRepoWithNotes([
+    { id: SAVED_ID, quote: 'alpha beta', comment: '意见甲' },
+    { id: ID_B, quote: 'zeta eta', comment: '意见乙' },
+    { id: ID_C, quote: 'iota kappa', comment: '意见丙' },
+  ]);
+}
+
+const records = (page) => page.locator('#review-records');
+const revisions = (page) => page.locator('#review-revisions');
+
+// 三条意见 + 两条处置：修改日志共三版（首次生成、写入意见后重新生成、记处置后重新生成）。
+function makeRecordedRepo() {
+  const r = makeRepoWithThreeNotes();
+  recordDispositions(r, [
+    { id: SAVED_ID, action: '采纳', detail: '已改 design' },
+    { id: ID_B, action: '转 issue', detail: '另起一张', issue: 'T410' },
+  ]);
+  return r;
+}
+
+// 把页面里某个 JSON 数据块换成给定文本。
+function replaceDataBlock(url, id, text) {
+  const file = new URL(url);
+  const html = fs.readFileSync(file, 'utf-8');
+  const re = new RegExp('(<script type="application/json" id="' + id + '">)[\\s\\S]*?(</script>)');
+  const out = html.replace(re, (m, a, b) => a + text + b);
+  assert.notEqual(out, html);
+  fs.writeFileSync(file, out, 'utf-8');
+}
+
+describe('页头版本与意见栏处理标记（RVP-22 / RVP-25）', () => {
+  const headerOf = (page) => page.locator('#sdflow-gen-meta');
+
+  test('页头显示「生成于 X · 第 N 版」：指定 epoch 的首版', async () => {
+    await withPage({}, async ({ page }) => {
+      assert.equal(await headerOf(page).textContent(), '生成于 2023-11-14T22:13:20+00:00 · 第 1 版');
+      // 页头在标题之后、第一份文档之前
+      assert.equal(await page.evaluate(() => {
+        const h = document.getElementById('sdflow-gen-meta');
+        return h.previousElementSibling.className + '|' + h.nextElementSibling.id;
+      }), 'page-title|docs');
+    });
+  });
+
+  test('文档改动后重新生成：第 2 版', async () => {
+    await withRepo(() => makeRepo(), async (r) => {
+      fs.appendFileSync(path.join(r.changeDir, 'other.md'), '\n新增一段。\n', 'utf-8');
+      renderPage(r.root);
+      await withPage({ url: r.url }, async ({ page }) => {
+        assert.match(await headerOf(page).textContent(), / · 第 2 版$/);
+      });
+    });
+  });
+
+  test('已落盘意见显示处理类别、编号与说明；无处置显示「未记录处理」', async () => {
+    await withRepo(() => makeRepoWithThreeNotes(), async (r) => {
+      recordDispositions(r, [
+        { id: SAVED_ID, action: '采纳', detail: '已改 design' },
+        { id: ID_B, action: '转 issue', detail: '另起一张', issue: 'T410' },
+      ]);
+      await withPage({ url: r.url }, async ({ page, errors }) => {
+        const lines = await savedItems(page).locator('.note-disposition').allTextContents();
+        assert.deepEqual(lines, ['处理：采纳：已改 design', '处理：转 issue T410：另起一张', '处理：未记录处理']);
+        assert.deepEqual(errors, []);
+      });
+    });
+  });
+
+  test('处置说明含 <img onerror>：意见栏与处理记录里都只作文字显示，不执行', async () => {
+    const payload = '<img src=x onerror="window.__pwn=8">';
+    await withRepo(() => makeRepoWithThreeNotes(), async (r) => {
+      recordDispositions(r, [{ id: SAVED_ID, action: '不采纳', detail: payload }]);
+      await withPage({ url: r.url }, async ({ page, dialogs }) => {
+        const where = [
+          { name: '意见栏', line: savedItems(page).first().locator('.note-disposition'), root: page.locator('#sdflow-notes') },
+          { name: '处理记录', line: records(page).locator('.note-disposition').first(), root: records(page) },
+        ];
+        for (const w of where) {
+          assert.equal(await w.line.textContent(), '处理：不采纳：' + payload, w.name);
+          assert.equal(await w.root.locator('img').count(), 0, w.name);
+        }
+        await expectNoScriptRan(page, dialogs);
+      });
+    });
+  });
+
+  test('后记的处置覆盖先记的：意见栏只显示「采纳」', async () => {
+    await withRepo(() => makeRepoWithThreeNotes(), async (r) => {
+      recordDispositions(r, [{ id: SAVED_ID, action: '不采纳', detail: '先不改' }]);
+      recordDispositions(r, [{ id: SAVED_ID, action: '采纳', detail: '想通了' }]);
+      await withPage({ url: r.url }, async ({ page }) => {
+        assert.equal(await savedItems(page).first().locator('.note-disposition').textContent(), '处理：采纳：想通了');
+      });
+    });
+  });
+});
+
+// ── 3.4 页尾两节：意见与处理记录、修改日志（RVP-23 / RVP-25）───────────────────────
+describe('页尾「意见与处理记录」「修改日志」（RVP-23 / RVP-25）', () => {
+  test('两节在全部文档之后、先记录后日志；目录最后两项指向它们；两节不是 section.doc', async () => {
+    await withRepo(() => makeRecordedRepo(), async (r) => {
+      await withPage({ url: r.url }, async ({ page, errors }) => {
+        const order = await page.evaluate(() => Array.from(document.getElementById('main').children).map((el) => el.id || el.tagName));
+        assert.deepEqual(order.slice(-3), ['docs', 'review-records', 'review-revisions']);
+        assert.equal(await page.locator('section.doc').count(), DOCS.length);
+        assert.equal(await page.locator('#review-records.doc, #review-revisions.doc, #review-records .doc-body, #review-revisions .doc-body').count(), 0);
+        const links = await page.locator('#toc > ul > li > a.doc-link').evaluateAll((els) => els.map((a) => [a.textContent, a.getAttribute('href')]));
+        assert.deepEqual(links.slice(-2), [['意见与处理记录', '#review-records'], ['修改日志', '#review-revisions']]);
+        assert.equal(links.length, DOCS.length + 2);
+        // 点目录项滚到对应节
+        await page.locator('#toc a[href="#review-revisions"]').click();
+        await page.waitForFunction(() => {
+          const b = document.getElementById('review-revisions').getBoundingClientRect();
+          return b.top < window.innerHeight && b.bottom > 0;
+        });
+        assert.deepEqual(errors, []);
+      });
+    });
+  });
+
+  test('意见与处理记录：按文档分组列出全部已落盘意见，各显示文档、引用、意见、处理类别与说明；无处置显示「未记录处理」', async () => {
+    await withRepo(() => makeRecordedRepo(), async (r) => {
+      await withPage({ url: r.url }, async ({ page }) => {
+        assert.equal(await records(page).locator('h2').textContent(), '意见与处理记录');
+        assert.deepEqual(await records(page).locator('h3').allTextContents(), ['设计']);
+        const items = records(page).locator('.note-item');
+        assert.equal(await items.count(), 3);
+        assert.deepEqual(await items.locator('.note-quote').allTextContents(), ['alpha beta', 'zeta eta', 'iota kappa']);
+        assert.deepEqual(await items.locator('.note-comment').allTextContents(), ['意见甲', '意见乙', '意见丙']);
+        assert.deepEqual(await items.locator('.note-disposition').allTextContents(),
+          ['处理：采纳：已改 design', '处理：转 issue T410：另起一张', '处理：未记录处理']);
+        assert.match(await items.first().locator('.note-head').textContent(), /^设计.*design\.md:\d+.* › 重名节$/);
+      });
+    });
+  });
+
+  test('没有已落盘意见时显示「暂无已落盘意见」', async () => {
+    await withPage({}, async ({ page }) => {
+      assert.equal(await records(page).locator('.note-item').count(), 0);
+      assert.match(await records(page).textContent(), /暂无已落盘意见/);
+    });
+  });
+
+  test('修改日志：倒序列出每版的版本号、时间、事件、变化的文档、意见数与处置数', async () => {
+    await withRepo(() => makeRecordedRepo(), async (r) => {
+      // 第 4 版：改一份文档（「另一份」）
+      fs.appendFileSync(path.join(r.changeDir, 'other.md'), '\n新增一段。\n', 'utf-8');
+      renderPage(r.root);
+      await withPage({ url: r.url }, async ({ page }) => {
+        assert.equal(await revisions(page).locator('h2').textContent(), '修改日志');
+        const items = revisions(page).locator('li.rev-item');
+        assert.equal(await items.count(), 4);
+        const at = '2023-11-14T22:13:20+00:00';
+        assert.deepEqual(await items.nth(0).locator('div').allTextContents(),
+          [`第 4 版 · ${at} · 重新生成`, '变化的文档：另一份', '意见 3 条 · 处置 2 条']);
+        assert.deepEqual(await items.nth(1).locator('div').allTextContents(),
+          [`第 3 版 · ${at} · 重新生成`, '变化的文档：无', '意见 3 条 · 处置 2 条']);
+        assert.deepEqual(await items.nth(2).locator('div').allTextContents(),
+          [`第 2 版 · ${at} · 重新生成`, '变化的文档：无', '意见 3 条 · 处置 0 条']);
+        assert.deepEqual(await items.nth(3).locator('div').allTextContents(),
+          [`第 1 版 · ${at} · 首次生成`, '变化的文档：无', '意见 0 条 · 处置 0 条']);
+      });
+    });
+  });
+
+  test('两节内的文字不能划选写意见', async () => {
+    await withRepo(() => makeRecordedRepo(), async (r) => {
+      await withPage({ url: r.url }, async ({ page }) => {
+        for (const sel of ['#review-records .note-comment', '#review-revisions .rev-item']) {
+          await page.evaluate((s) => {
+            const range = document.createRange();
+            range.selectNodeContents(document.querySelector(s));
+            const win = window.getSelection();
+            win.removeAllRanges();
+            win.addRange(range);
+          }, sel);
+          await page.waitForTimeout(150);
+          assert.equal(await page.locator('#sdflow-annotate').isHidden(), true, sel);
+        }
+      });
+    });
+  });
+
+  test('已采纳意见的原文在重新生成前被改掉：意见栏标「原文已变」，处理记录仍显示「采纳」', async () => {
+    await withRepo(() => makeRepoWithThreeNotes(), async (r) => {
+      recordDispositions(r, [{ id: SAVED_ID, action: '采纳', detail: '已改 design' }]);
+      const designFile = path.join(r.changeDir, 'design.md');
+      fs.writeFileSync(designFile, fs.readFileSync(designFile, 'utf-8').replace('alpha beta', 'ALPHA-REWRITTEN'), 'utf-8');
+      renderPage(r.root);
+      await withPage({ url: r.url }, async ({ page }) => {
+        assert.match(await savedItems(page).first().locator('.note-badge').textContent(), /^原文已变$/);
+        const first = records(page).locator('.note-item').first();
+        assert.equal(await first.locator('.note-quote').textContent(), 'alpha beta');
+        assert.equal(await first.locator('.note-disposition').textContent(), '处理：采纳：已改 design');
+      });
+    });
+  });
+
+  // 数据块损坏只影响用到它的位置，文档照常渲染。每条用例在同一个页面里同时检查意见栏、页头与页尾两节。
+  const BROKEN_BLOCK_CASES = [
+    {
+      name: '修改日志块损坏：页头与「修改日志」一节显示「无法读取」，意见栏与记录一节照常',
+      block: 'sdflow-revisions',
+      async check(page) {
+        assert.match(await page.locator('#sdflow-gen-meta').textContent(), /无法读取/);
+        assert.match(await revisions(page).textContent(), /无法读取/);
+        assert.equal(await revisions(page).locator('li').count(), 0);
+        assert.equal(await savedItems(page).count(), 3);
+        assert.equal(await records(page).locator('.note-item').count(), 3);
+      },
+    },
+    {
+      name: '处置块损坏：意见栏与记录一节仍列出全部意见，处理一栏显示「无法读取」，页头与修改日志不受影响',
+      block: 'sdflow-dispositions',
+      async check(page) {
+        const broken = ['处理：无法读取', '处理：无法读取', '处理：无法读取'];
+        assert.deepEqual(await savedItems(page).locator('.note-disposition').allTextContents(), broken);
+        assert.deepEqual(await records(page).locator('.note-disposition').allTextContents(), broken);
+        assert.equal(await records(page).locator('.note-item').count(), 3);
+        // 修改日志块没坏：页头与日志仍按三版显示
+        assert.equal(await page.locator('#sdflow-gen-meta').textContent(), '生成于 2023-11-14T22:13:20+00:00 · 第 3 版');
+        assert.equal(await revisions(page).locator('li.rev-item').count(), 3);
+      },
+    },
+  ];
+  for (const c of BROKEN_BLOCK_CASES) {
+    test(c.name, async () => {
+      await withRepo(() => makeRecordedRepo(), async (r) => {
+        replaceDataBlock(r.url, c.block, '{broken');
+        await withPage({ url: r.url }, async ({ page, errors }) => {
+          assert.equal(await page.locator('section.doc').count(), DOCS.length);
+          await c.check(page);
+          assert.deepEqual(errors, []);
+        });
+      });
+    });
+  }
 });

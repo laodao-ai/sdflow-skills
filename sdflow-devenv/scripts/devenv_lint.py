@@ -26,15 +26,20 @@
      ——【这个才拦】。它拦的是「人看不见的」（坏 JSON 渲染不出来，用户只看到空白）。
 """
 import argparse
+import hashlib
+import json
+import os
+import shlex
 import sys
 
 for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import devenv_schema as S  # noqa: E402
+from devenv_paths import PathEscape, contain, git_toplevel_problem  # noqa: E402
 
 # blocked_by 写成这些 == 没写。人看得见，但值得当场点出来。
 LAZY = {"", "-", "—", "todo", "TODO", "tbd", "TBD", "待定", "待修复",
@@ -163,6 +168,63 @@ def env_pending(root):
     return p.read_text(encoding="utf-8").count(S.PENDING)
 
 
+# 评审页收录的 .outside-voice/<run>/lens-*.md 被 git 忽略、只在本机；
+# 修改日志随提交带到别的机器后这些文件不存在，不能因此报「已消失」。
+LOCAL_ONLY_DIR = ".outside-voice"
+REVISIONS_REL = "openspec/architecture/review/devenv-review.revisions.json"
+SCAFFOLD_PY = Path(__file__).resolve().parent / "devenv_scaffold.py"
+
+
+def review_page_lines(root):
+    """评审页的修改日志存在时，比对最后一条记录的各文档哈希与当前文件。→ 报告行（可能为空）。
+
+    只报不拦。记录里的路径先过 containment，不读仓外文件；路径为空或越界 ⇒ 「无法比对」。
+    哈希对文件原始字节算（与生成器记录的口径一致）。
+    """
+    log_path = Path(root) / REVISIONS_REL
+    if not log_path.is_file():
+        return []
+    try:
+        docs = json.loads(log_path.read_text(encoding="utf-8"))["revisions"][-1]["docs"]
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        return ["⚠️ 评审页修改日志无法读取，无法判断评审页是否过期", ""]
+    if not isinstance(docs, dict):
+        return ["⚠️ 评审页修改日志无法读取，无法判断评审页是否过期", ""]
+
+    abs_root = Path(os.path.abspath(root))
+    stale, unknown = [], []
+    for label, rec in docs.items():
+        rec = rec if isinstance(rec, dict) else {}
+        rel = rec.get("path")
+        if not isinstance(rel, str):
+            unknown.append(label)
+            continue
+        try:
+            target = contain(abs_root.resolve(), rel)
+        except PathEscape:
+            unknown.append(label)
+            continue
+        if not target.is_file():
+            if LOCAL_ONLY_DIR not in PurePosixPath(rel.replace(os.sep, "/")).parts:
+                stale.append(f"{label}：已消失")
+            continue        # 本机独有文件缺失：无从比对，不报
+        try:
+            current = hashlib.sha256(target.read_bytes()).hexdigest()
+        except OSError:
+            unknown.append(label)
+            continue
+        if current != rec.get("sha256"):
+            stale.append(f"{label}：已修改")
+
+    lines = []
+    if stale:
+        cmd = f"python3 {shlex.quote(str(SCAFFOLD_PY))} review-page --root {shlex.quote(str(abs_root))} --no-open --event \"收尾\""
+        lines += [f"⚠️ 评审页已过期（{'；'.join(stale)}），重跑 {cmd}", ""]
+    if unknown:
+        lines += [f"⚠️ 评审页无法比对：{'、'.join(unknown)}（记录的路径为空、越界或无法读取）", ""]
+    return lines
+
+
 def report(data, sad=(), root=None):
     """人读报告。返回字符串。【永远不 raise，永远不拦】。"""
     lines = []
@@ -182,6 +244,7 @@ def report(data, sad=(), root=None):
                       "模型答不出来，只能问人，所以最容易被静默略过）", ""]
         elif n == 0:
             lines += ["✅ environments.md 十槽已答满。", ""]
+        lines += review_page_lines(root)
 
     lanes = data.get("lanes") or []
     if lanes:
@@ -256,6 +319,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="devenv lint —— 只报不拦")
     ap.add_argument("--root", required=True)
     args = ap.parse_args(argv)
+
+    problem = git_toplevel_problem(args.root)
+    if problem:
+        print(f"[devenv_lint] FAIL: {problem}", file=sys.stderr)
+        return 2
 
     ok, text = render(args.root)
     if not ok:

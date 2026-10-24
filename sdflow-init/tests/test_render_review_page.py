@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -28,10 +29,24 @@ DOCS_BLOCK_RE = re.compile(r'<script type="application/json" id="sdflow-docs">(.
 SAVED_BLOCK_RE = re.compile(r'<script type="application/json" id="sdflow-saved-notes">(.*?)</script>', re.S)
 
 
-def run_cli(*args, cwd=None, script=SCRIPT):
+# 固定 epoch 与时区：同一页第二次生成才能与第一次逐字节相同（修改日志的时间取自这两项）。
+FIXED_ENV = {"SOURCE_DATE_EPOCH": "1700000000", "TZ": "UTC"}
+FIXED_TIME = "2023-11-14T22:13:20+00:00"
+needs_tz = pytest.mark.skipif(os.name == "nt", reason="Windows 的 TZ 环境变量对本地时区不生效，偏移断言无意义")
+
+
+def run_cli(*args, cwd=None, script=SCRIPT, env=None):
+    """env：在 FIXED_ENV 之上的覆盖；值为 None 表示删掉该变量。"""
+    full_env = dict(os.environ)
+    full_env.update(FIXED_ENV)
+    for key, value in (env or {}).items():
+        if value is None:
+            full_env.pop(key, None)
+        else:
+            full_env[key] = value
     return subprocess.run(
         [sys.executable, "-I", str(script), *map(str, args)],
-        cwd=str(cwd) if cwd else None,
+        cwd=str(cwd) if cwd else None, env=full_env,
         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
     )
 
@@ -47,13 +62,20 @@ def md_a(tmp_path):
     return write_md(tmp_path / "a.md", "# A 文档\n\n正文 A\n")
 
 
-def gen(tmp_path, *docs, out=None, extra=()):
+def require_git():
+    """git 是本仓必需依赖：缺失时报红而不是跳过。"""
+    if shutil.which("git") is None:
+        pytest.fail("需要 git：未找到 git。请先安装（macOS: xcode-select --install；"
+                    "Debian/Ubuntu: apt install git）后重跑")
+
+
+def gen(tmp_path, *docs, out=None, extra=(), env=None):
     out = out or tmp_path / "review" / "page.html"
     args = ["--out", out, "--title", "测试页", "--no-open"]
     for d in docs:
         args += ["--doc", d]
     args += list(extra)
-    return run_cli(*args, cwd=tmp_path), out
+    return run_cli(*args, cwd=tmp_path, env=env), out
 
 
 def html_of(out):
@@ -82,6 +104,232 @@ def test_output_is_byte_identical_across_runs(tmp_path, md_a):
     r2, _ = gen(tmp_path, f"甲={md_a}")
     assert r1.returncode == r2.returncode == 0
     assert out.read_bytes() == first
+
+
+# ── 生成时间（RVP-22 · RVP-03，tasks 1.1）──────────────────────────────────────
+
+def revisions_of(out):
+    """页面旁的修改日志：review/<页名去 .html>.revisions.json。"""
+    out = Path(out)
+    return json.loads(out.with_name(out.stem + ".revisions.json").read_text(encoding="utf-8"))
+
+
+@needs_tz
+def test_epoch_sets_revision_time_with_utc_offset(tmp_path, md_a):
+    r, out = gen(tmp_path, f"甲={md_a}")
+    assert r.returncode == 0, r.stderr
+    assert revisions_of(out)["revisions"][0]["at"] == FIXED_TIME
+
+
+@needs_tz
+def test_epoch_time_uses_local_timezone_offset(tmp_path, md_a):
+    r, out = gen(tmp_path, f"甲={md_a}", env={"TZ": "Asia/Shanghai"})
+    assert r.returncode == 0, r.stderr
+    assert revisions_of(out)["revisions"][0]["at"] == "2023-11-15T06:13:20+08:00"
+
+
+@pytest.mark.parametrize("bad", ["abc", "99999999999999", "-5", "１２３", "1_000", " 12", ""])
+def test_invalid_epoch_warns_and_uses_current_time(tmp_path, md_a, bad):
+    r, out = gen(tmp_path, f"甲={md_a}", env={"SOURCE_DATE_EPOCH": bad})
+    assert r.returncode == 0, r.stderr
+    assert "SOURCE_DATE_EPOCH" in r.stderr and "⚠" in r.stderr
+    at = revisions_of(out)["revisions"][0]["at"]
+    assert at != FIXED_TIME
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d", at)
+
+
+def test_unset_epoch_uses_current_time_without_warning(tmp_path, md_a):
+    r, out = gen(tmp_path, f"甲={md_a}", env={"SOURCE_DATE_EPOCH": None})
+    assert r.returncode == 0, r.stderr
+    assert r.stderr == ""
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d",
+                        revisions_of(out)["revisions"][0]["at"])
+
+
+def test_unchanged_content_is_byte_identical_without_epoch(tmp_path, md_a):
+    r1, out = gen(tmp_path, f"甲={md_a}", env={"SOURCE_DATE_EPOCH": None})
+    first = out.read_bytes()
+    log_first = out.with_name("page.revisions.json").read_bytes()
+    time.sleep(1.1)  # 跨过一秒：若时间被重新取值，页头或日志必然不同
+    r2, _ = gen(tmp_path, f"甲={md_a}", env={"SOURCE_DATE_EPOCH": None})
+    assert r1.returncode == r2.returncode == 0
+    assert out.read_bytes() == first
+    assert out.with_name("page.revisions.json").read_bytes() == log_first
+
+
+# ── 修改日志（RVP-23，tasks 1.2）────────────────────────────────────────────────
+
+def log_file(out):
+    out = Path(out)
+    return out.with_name(out.stem + ".revisions.json")
+
+
+def test_unchanged_content_does_not_append(tmp_path, md_a):
+    r1, out = gen(tmp_path, f"甲={md_a}")
+    r2, _ = gen(tmp_path, f"甲={md_a}", extra=["--event", "再看一遍"], out=out)
+    assert r1.returncode == r2.returncode == 0
+    assert len(revisions_of(out)["revisions"]) == 1
+    assert "内容无变化，未追加修改日志" in r2.stdout
+    assert "内容无变化" not in r1.stdout
+
+
+def test_first_entry_shape_and_default_events(tmp_path, md_a):
+    r, out = gen(tmp_path, f"甲={md_a}")
+    assert r.returncode == 0, r.stderr
+    log = revisions_of(out)
+    assert (log["v"], log["page"]) == (1, "page.html")
+    first = log["revisions"][0]
+    assert (first["n"], first["event"], first["changed"], first["notes"], first["dispositions"]) == (
+        1, "首次生成", [], 0, 0)
+    # 与独立算出的原始字节哈希比对，不用脚本自己的函数
+    assert first["docs"]["甲"]["sha256"] == hashlib.sha256(md_a.read_bytes()).hexdigest()
+    md_a.write_bytes(md_a.read_bytes() + b"more\n")
+    r2, _ = gen(tmp_path, f"甲={md_a}", out=out)
+    assert revisions_of(out)["revisions"][1]["event"] == "重新生成"
+
+
+def test_revision_after_edit_appends_with_event_and_changed_label(tmp_path):
+    a = write_md(tmp_path / "a.md", "# A\n")
+    b = write_md(tmp_path / "b.md", "# B\n")
+    r1, out = gen(tmp_path, f"甲={a}", f"乙={b}")
+    write_md(b, "# B 改了\n")
+    r2, _ = gen(tmp_path, f"甲={a}", f"乙={b}", out=out, extra=["--event", "处理第 1 轮意见"],
+                env={"SOURCE_DATE_EPOCH": "1700003600"})
+    assert r1.returncode == r2.returncode == 0
+    revs = revisions_of(out)["revisions"]
+    assert [x["n"] for x in revs] == [1, 2]
+    assert revs[1]["event"] == "处理第 1 轮意见" and revs[1]["changed"] == ["乙"]
+    assert revs[1]["at"] != revs[0]["at"]
+    assert "已追加修改日志：第 2 版（处理第 1 轮意见）" in r2.stdout
+
+
+def test_removed_and_added_docs_count_as_changed(tmp_path):
+    a = write_md(tmp_path / "a.md", "# A\n")
+    b = write_md(tmp_path / "b.md", "# B\n")
+    c = write_md(tmp_path / "c.md", "# C\n")
+    _, out = gen(tmp_path, f"甲={a}", f"乙={b}")
+    gen(tmp_path, f"甲={a}", f"丙={c}", out=out)
+    assert revisions_of(out)["revisions"][1]["changed"] == ["丙", "乙"]
+
+
+def test_new_note_changes_fingerprint_even_when_docs_are_same(tmp_path):
+    require_git()
+    repo, base = repo_with_change(tmp_path)
+    r1, out = gen_page(repo, base)
+    write_notes(base / "review" / "review-notes.md", notes_block(PAGE_PATH, [note(id=HEX_A)]))
+    r2, _ = gen_page(repo, base)
+    assert r1.returncode == r2.returncode == 0
+    revs = revisions_of(out)["revisions"]
+    assert [(x["notes"], x["changed"]) for x in revs] == [(0, []), (1, [])]
+
+
+def test_docs_path_is_repo_relative_and_null_outside_repo(tmp_path):
+    require_git()
+    repo, base = repo_with_change(tmp_path)
+    outside = write_md(tmp_path / "outside.md", "# 仓外\n")
+    out = base / "review" / "design-gate.html"
+    r = run_cli("--out", out, "--title", "t", "--doc", f"design={base / 'design.md'}",
+                "--doc", f"外={outside}", "--no-open", cwd=repo)
+    assert r.returncode == 0, r.stderr
+    docs = revisions_of(out)["revisions"][0]["docs"]
+    assert docs["design"]["path"] == "openspec/changes/x/design.md"
+    assert docs["外"]["path"] is None
+    assert len(docs["外"]["sha256"]) == 64
+
+
+def test_corrupt_log_is_rebuilt_and_old_copy_kept_as_bak(tmp_path, md_a):
+    _, out = gen(tmp_path, f"甲={md_a}")
+    log_file(out).write_bytes(b"{not json")
+    r, _ = gen(tmp_path, f"甲={md_a}", out=out)
+    assert r.returncode == 0, r.stderr
+    assert "⚠" in r.stderr and "page.revisions.json" in r.stderr
+    assert log_file(out).with_name("page.revisions.json.bak").read_bytes() == b"{not json"
+    revs = revisions_of(out)["revisions"]
+    assert [x["n"] for x in revs] == [1] and revs[0]["event"] == "首次生成"
+
+
+@pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                    reason="目录只读权限在 Windows 与 root 下不生效")
+def test_corrupt_log_with_failing_log_write_keeps_original_file(tmp_path, md_a):
+    _, out = gen(tmp_path, f"甲={md_a}")
+    log_file(out).write_bytes(b"{not json")
+    out.parent.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        r, _ = gen(tmp_path, f"甲={md_a}", out=out)
+    finally:
+        out.parent.chmod(stat.S_IRWXU)
+    assert r.returncode == 2
+    assert log_file(out).read_bytes() == b"{not json"
+    assert not log_file(out).with_name("page.revisions.json.bak").exists()
+
+
+def test_log_of_another_page_counts_as_corrupt(tmp_path, md_a):
+    _, out = gen(tmp_path, f"甲={md_a}")
+    log = revisions_of(out)
+    log["page"] = "other.html"
+    log_file(out).write_text(json.dumps(log), encoding="utf-8")
+    r, _ = gen(tmp_path, f"甲={md_a}", out=out)
+    assert r.returncode == 0 and "⚠" in r.stderr
+    assert revisions_of(out)["page"] == "page.html"
+    assert log_file(out).with_name("page.revisions.json.bak").is_file()
+
+
+def test_two_pages_in_one_dir_keep_separate_logs(tmp_path, md_a):
+    b = write_md(tmp_path / "b.md", "# B\n")
+    review = tmp_path / "review"
+    _, out_p = gen(tmp_path, f"甲={md_a}", out=review / "p.html")
+    _, out_q = gen(tmp_path, f"乙={b}", out=review / "q.html")
+    write_md(md_a, "# A 改\n")
+    gen(tmp_path, f"甲={md_a}", out=out_p)
+    assert len(revisions_of(out_p)["revisions"]) == 2
+    assert len(revisions_of(out_q)["revisions"]) == 1
+    assert revisions_of(out_q)["page"] == "q.html"
+    assert "⚠" not in run_cli("--out", out_q, "--title", "t", "--doc", f"乙={b}", "--no-open",
+                              cwd=tmp_path).stderr
+
+
+@pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                    reason="目录只读权限在 Windows 与 root 下不生效")
+def test_unwritable_log_dir_keeps_page_and_leaves_no_temp(tmp_path, md_a):
+    _, out = gen(tmp_path, f"甲={md_a}")
+    before = out.read_bytes()
+    write_md(md_a, "# A 改了\n")
+    out.parent.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        r, _ = gen(tmp_path, f"甲={md_a}", out=out)
+    finally:
+        out.parent.chmod(stat.S_IRWXU)
+    assert r.returncode == 2
+    assert_three_segments(r)
+    assert out.read_bytes() == before
+    assert sorted(p.name for p in out.parent.iterdir()) == ["page.html", "page.revisions.json"]
+    assert len(revisions_of(out)["revisions"]) == 1
+
+
+def test_log_path_is_a_directory_exit_2_and_page_untouched(tmp_path, md_a):
+    _, out = gen(tmp_path, f"甲={md_a}")
+    before = out.read_bytes()
+    log_file(out).unlink()
+    log_file(out).mkdir()
+    r, _ = gen(tmp_path, f"甲={md_a}", out=out)
+    assert r.returncode == 2
+    assert_three_segments(r)
+    assert out.read_bytes() == before
+    assert [p.name for p in out.parent.iterdir() if p.name.startswith(".")] == []
+
+
+def test_page_write_failure_leaves_log_and_rerun_only_rewrites_page(tmp_path, md_a):
+    _, out = gen(tmp_path, f"甲={md_a}")
+    out.unlink()
+    out.mkdir()  # 页面路径被目录占住：日志先写成功，页面写失败
+    r1, _ = gen(tmp_path, f"甲={md_a}", out=out)
+    assert r1.returncode == 2
+    assert len(revisions_of(out)["revisions"]) == 1
+    out.rmdir()
+    r2, _ = gen(tmp_path, f"甲={md_a}", out=out)
+    assert r2.returncode == 0, r2.stderr
+    assert out.is_file() and len(revisions_of(out)["revisions"]) == 1
+    assert "内容无变化" in r2.stdout
 
 
 def test_docs_keep_command_line_order(tmp_path):
@@ -339,9 +587,9 @@ def test_hostile_markdown_does_not_break_data_block(tmp_path):
     block = m.group(1)
     assert "<" not in block and ">" not in block and "&" not in block
     assert json.loads(block)[0]["text"] == HOSTILE
-    # 整页的脚本元素：两个数据块 + marked + app
-    assert len(re.findall(r"<script\b", page)) == 4
-    assert len(re.findall(r"</script>", page)) == 4
+    # 整页的脚本元素：四个数据块（docs、saved-notes、dispositions、revisions）+ marked + app
+    assert len(re.findall(r"<script\b", page)) == 6
+    assert len(re.findall(r"</script>", page)) == 6
 
 
 def test_json_escapes_line_separators(tmp_path):
@@ -826,6 +1074,92 @@ def test_skip_count_is_per_block_not_per_note(module, tmp_path, capsys):
     assert "已跳过 2 个无法解析的意见块（第 1、4 行）" in capsys.readouterr().err
 
 
+def disposition_block(page, items, at="2026-10-23T07:30:00-07:00", fence="```"):
+    payload = {"v": 1, "kind": "disposition", "page": page, "at": at, "dispositions": items}
+    return "%sjson\n%s\n%s\n" % (fence, json.dumps(payload, ensure_ascii=False), fence)
+
+
+def disp(ident=HEX_A, action="采纳", detail="已改 design", **kw):
+    item = {"id": ident, "action": action, "detail": detail}
+    item.update(kw)
+    return item
+
+
+def read_blocks(module, path, page="design-gate.html"):
+    return module.read_saved_blocks(Path(path), page)
+
+
+def test_disposition_block_is_not_counted_as_unparseable(module, tmp_path, capsys):
+    p = write_notes(tmp_path / "n.md", notes_block(PAGE_PATH, [note(id=HEX_A)]),
+                    disposition_block(PAGE_PATH, [disp()]))
+    notes, dispositions = read_blocks(module, p)
+    assert capsys.readouterr().err == ""
+    assert [n["id"] for n in notes] == [HEX_A]
+    assert dispositions == {HEX_A: {"action": "采纳", "detail": "已改 design", "issue": "",
+                                    "at": "2026-10-23T07:30:00-07:00"}}
+    assert [n["id"] for n in read_notes(module, p)] == [HEX_A]  # read_saved_notes 返回类型不变
+
+
+def test_later_disposition_overrides_earlier_one(module, tmp_path):
+    p = write_notes(tmp_path / "n.md", notes_block(PAGE_PATH, [note(id=HEX_A)]),
+                    disposition_block(PAGE_PATH, [disp(action="不采纳", detail="先记")], at="t1"),
+                    disposition_block(PAGE_PATH, [disp(action="采纳", detail="后记")], at="t2"))
+    _, dispositions = read_blocks(module, p)
+    assert dispositions[HEX_A]["action"] == "采纳" and dispositions[HEX_A]["detail"] == "后记"
+    assert dispositions[HEX_A]["at"] == "t2"
+
+
+def test_unmatched_disposition_is_ignored_with_counted_warning(module, tmp_path, capsys):
+    p = write_notes(tmp_path / "n.md", notes_block(PAGE_PATH, [note(id=HEX_A)]),
+                    disposition_block(PAGE_PATH, [disp(HEX_A), disp(HEX_B, action="不采纳")]))
+    _, dispositions = read_blocks(module, p)
+    err = capsys.readouterr().err
+    assert list(dispositions) == [HEX_A]
+    assert "⚠" in err and "已忽略 1 条对不上已落盘意见的处置" in err
+
+
+def test_disposition_may_precede_its_note_block(module, tmp_path, capsys):
+    p = write_notes(tmp_path / "n.md", disposition_block(PAGE_PATH, [disp()]),
+                    notes_block(PAGE_PATH, [note(id=HEX_A)]))
+    _, dispositions = read_blocks(module, p)
+    assert list(dispositions) == [HEX_A] and capsys.readouterr().err == ""
+
+
+def test_other_pages_dispositions_are_not_read(module, tmp_path, capsys):
+    p = write_notes(tmp_path / "n.md", notes_block(PAGE_PATH, [note(id=HEX_A)]),
+                    disposition_block("openspec/changes/x/review/shipped.html", [disp()]))
+    _, dispositions = read_blocks(module, p)
+    assert dispositions == {} and capsys.readouterr().err == ""
+
+
+def test_issue_field_is_kept_for_transfer_disposition(module, tmp_path):
+    p = write_notes(tmp_path / "n.md", notes_block(PAGE_PATH, [note(id=HEX_A)]),
+                    disposition_block(PAGE_PATH, [disp(action="转 issue", issue="T404")]))
+    _, dispositions = read_blocks(module, p)
+    assert (dispositions[HEX_A]["action"], dispositions[HEX_A]["issue"]) == ("转 issue", "T404")
+
+
+@pytest.mark.parametrize("bad", [
+    {"id": "nothex", "action": "采纳", "detail": "x"},
+    {"id": HEX_A, "action": "搁置", "detail": "x"},
+    {"id": HEX_A, "action": "采纳", "detail": 5},
+    "字符串",
+])
+def test_ill_formed_disposition_item_is_skipped_and_counted(module, tmp_path, capsys, bad):
+    p = write_notes(tmp_path / "n.md", notes_block(PAGE_PATH, [note(id=HEX_A)]),
+                    disposition_block(PAGE_PATH, [bad]))
+    _, dispositions = read_blocks(module, p)
+    assert dispositions == {}
+    assert "已跳过 1 个无法解析的意见块" in capsys.readouterr().err
+
+
+def test_block_with_neither_notes_nor_dispositions_is_still_unparseable(module, tmp_path, capsys):
+    payload = json.dumps({"v": 1, "kind": "other", "page": PAGE_PATH})
+    p = write_notes(tmp_path / "n.md", "```json\n%s\n```\n" % payload)
+    read_blocks(module, p)
+    assert "已跳过 1 个无法解析的意见块" in capsys.readouterr().err
+
+
 def test_in_figure_flag_is_kept_and_defaults_to_false(module, tmp_path):
     p = write_notes(tmp_path / "n.md", notes_block(PAGE_PATH, [
         note(id=HEX_A, inFigure=True), note(id=HEX_B, comment="旧块没有该字段")]))
@@ -1016,6 +1350,49 @@ def test_embedding_is_byte_identical_across_runs(tmp_path):
     assert out.read_bytes() == first
 
 
+REVISIONS_BLOCK_RE = re.compile(r'<script type="application/json" id="sdflow-revisions">(.*?)</script>', re.S)
+DISPOSITIONS_BLOCK_RE = re.compile(
+    r'<script type="application/json" id="sdflow-dispositions">(.*?)</script>', re.S)
+
+
+def test_page_embeds_revisions_and_dispositions_and_reports_count(tmp_path):
+    require_git()
+    repo, base = repo_with_change(tmp_path)
+    write_notes(base / "review" / "review-notes.md",
+                notes_block(PAGE_PATH, [note(id=HEX_A), note(id=HEX_B, comment="乙")]),
+                disposition_block(PAGE_PATH, [disp(HEX_B, action="转 issue", detail="拆出去", issue="T404")]))
+    r, out = gen_page(repo, base)
+    assert r.returncode == 0, r.stderr
+    page = html_of(out)
+    revisions = json.loads(REVISIONS_BLOCK_RE.search(page).group(1))
+    assert revisions == revisions_of(out)
+    assert revisions["revisions"][0]["notes"] == 2 and revisions["revisions"][0]["dispositions"] == 1
+    assert json.loads(DISPOSITIONS_BLOCK_RE.search(page).group(1)) == {
+        HEX_B: {"action": "转 issue", "detail": "拆出去", "issue": "T404", "at": "2026-10-23T07:30:00-07:00"}}
+    assert "已嵌入 1 条处置" in r.stdout
+
+
+def test_no_dispositions_embeds_empty_object_and_no_count_line(tmp_path):
+    require_git()
+    repo, base = repo_with_change(tmp_path)
+    r, out = gen_page(repo, base)
+    assert json.loads(DISPOSITIONS_BLOCK_RE.search(html_of(out)).group(1)) == {}
+    assert "条处置" not in r.stdout
+
+
+def test_same_epoch_gives_byte_identical_page_even_after_log_is_deleted(tmp_path):
+    require_git()
+    repo, base = repo_with_change(tmp_path)
+    write_notes(base / "review" / "review-notes.md", notes_block(PAGE_PATH, [note(id=HEX_A)]),
+                disposition_block(PAGE_PATH, [disp()]))
+    r1, out = gen_page(repo, base)
+    first = out.read_bytes()
+    log_file(out).unlink()  # 日志重建时用同一 epoch ⇒ 页面逐字节相同
+    r2, _ = gen_page(repo, base)
+    assert r1.returncode == r2.returncode == 0
+    assert out.read_bytes() == first
+
+
 @pytest.mark.skipif(not vcs_available(), reason="需要 git")
 def test_hostile_notes_do_not_close_the_data_block(tmp_path):
     repo, base = repo_with_change(tmp_path)
@@ -1029,7 +1406,8 @@ def test_hostile_notes_do_not_close_the_data_block(tmp_path):
     block = SAVED_BLOCK_RE.search(page).group(1)
     assert "<" not in block and ">" not in block and "&" not in block
     assert json.loads(block)[0]["comment"] == nasty
-    assert len(re.findall(r"<script\b", page)) == 4
+    # 整页的脚本元素：四个数据块（docs、saved-notes、dispositions、revisions）+ marked + app
+    assert len(re.findall(r"<script\b", page)) == 6
 
 
 @pytest.mark.skipif(not vcs_available(), reason="需要 git")

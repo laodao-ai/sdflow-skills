@@ -231,7 +231,7 @@ CLAUDE.md / AGENTS.md      ← 注入「OpenSpec 工作流」托管区块（强�
 review 机械层脚本（`tools/`）均**不进消费仓**——skill 运行时经 `resolve-workflow.sh` 两步链
 （全局 canonical → 显式降级）解析，改权威源即时对所有消费仓生效，无需逐仓 `update`。
 
-> **评审页（人审节点的静态 HTML）**：生成脚本 `render-review-page.py`、模板与固定版本渲染库 `review-page/` 由 `setup.sh` 装到 `~/.sdflow/hack/`，消费仓只多出各节点生成的 `review/*.html`（设计门 `design-gate.html`、收尾 `shipped.html`、roadmap `roadmap-review.html`、独立跑 `/sdflow-code-review` 时的 `code-review.html`）与人粘回后追加的 `review-notes.md`，不多出规则副本，无需 `sdflow-init update`。生成失败时节点报告「评审页未生成」，修复 = 在运行 checkout 跑 `bash setup.sh`。
+> **评审页（人审节点的静态 HTML）**：生成脚本 `render-review-page.py`、处置记录脚本 `record-review-disposition.py`（把每条意见的处置追加进 `review-notes.md`）、模板与固定版本渲染库 `review-page/` 由 `setup.sh` 装到 `~/.sdflow/hack/`，消费仓只多出各节点生成的 `review/*.html`（设计门 `design-gate.html`、收尾 `shipped.html`、roadmap `roadmap-review.html`、独立跑 `/sdflow-code-review` 时的 `code-review.html`、`/sdflow-devenv` 人门的 `devenv-review.html`，共五个节点）与人粘回后追加的 `review-notes.md`（含处置块），以及每页一个修改日志 `review/<页名>.revisions.json`（生成器按内容指纹追加，记各版文档哈希与时间），不多出规则副本，无需 `sdflow-init update`。生成失败时节点报告「评审页未生成」，修复 = 在运行 checkout 跑 `bash setup.sh`。
 
 > **FF-0 hook 是全局的**：装于 `~/.claude/hooks/ff0-branch-guard.py` + 注册进 `~/.claude/settings.json`（**不写项目 `.claude/`**），init/update 幂等确保、跨所有项目生效。
 

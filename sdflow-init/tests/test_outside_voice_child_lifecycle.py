@@ -179,13 +179,20 @@ def _await_pids(pidfile: Path, proc, limit=20.0):
     raise AssertionError("假 runner 未在时限内落盘 PID")
 
 
+def _reset_signal_dispositions():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGHUP, signal.SIG_DFL)
+
+
 def _run_until_killed(helper: Path, env, ctx: Path, sig: int, cwd: Path, pidfile: Path,
                       bash_bin: str):
     """起 helper → 等 runner 落盘 → 发 sig → 收尸。返回 (rc, stderr, runner_pid, grandchild_pid)。"""
     proc = subprocess.Popen(
         [bash_bin, str(helper), "exec", "--context-file", str(ctx), "--timeout", "300"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=str(cwd),
-
+        # 经 nohup 或非交互 shell 的 & 启动时，pytest 继承了被忽略的 INT/HUP，
+        # 子进程会一并继承，INT/HUP 用例就收不到信号。起子进程时显式还原为默认。
+        preexec_fn=_reset_signal_dispositions if os.name != "nt" else None,
         encoding="utf-8",
         errors="replace",)
     try:

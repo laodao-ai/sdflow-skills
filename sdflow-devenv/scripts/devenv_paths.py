@@ -13,6 +13,7 @@
 于是 `link/loot.txt`（父目录是指向仓外的 symlink）畅通无阻。
 """
 import os
+import subprocess
 from pathlib import Path, PurePosixPath
 
 
@@ -82,3 +83,26 @@ def contain(root, rel):
         raise PathEscape(f"路径解析后落在消费仓之外: {rel} -> {final}")
 
     return cur.resolve()
+
+
+def git_toplevel_problem(root):
+    """--root 在 git 仓内却不是仓顶层 → 返回三段式错误文本；其余情况 → None。
+
+    为什么要求顶层：git 输出的路径相对仓顶层，评审页修改日志记录的也是相对仓顶层的路径，
+    而脚本按 --root 解析；root 是子目录时两边的基准不一致，会误报或漏报。
+    不在 git 仓内（或没有 git）时不检查，行为不变。
+    """
+    try:
+        r = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+                           capture_output=True, text=True, timeout=10,
+                           encoding="utf-8", errors="replace")
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    top = Path(r.stdout.strip()).resolve()
+    if top == Path(root).resolve():
+        return None
+    return (f"问题：--root 不是 git 仓顶层（{Path(root).resolve()}）\n"
+            f"  原因：它位于仓 {top} 之内，git 输出与脚本的路径基准会不一致\n"
+            f"  修复：把 --root 改为仓顶层 {top}")

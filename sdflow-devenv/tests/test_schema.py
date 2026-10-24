@@ -429,3 +429,34 @@ def test_only_layer_is_a_closed_enum():
         assert not hasattr(S, dead), (
             f"{dead} 已废除（A24）—— 封闭枚举 = 未列举的形态当场罢工 = 一类项目被拒之门外"
         )
+
+
+# ---------- 辅助键 round / review / evidence.dirty（tasks 5.2 / 5.3）----------
+
+def test_schema_accepts_round_review_and_dirty_without_changing_required_set():
+    assert S.EVIDENCE_KEYS == ("at_commit", "at_time", "exit", "attested_by")
+    d = _data(round={"base_commit": "a" * 40, "started_at": "2026-10-23T00:00:00Z"},
+              review={"extra_docs": ["docs/command-testing.md"]},
+              lanes=[_lane(verification={
+                  "method": "true", "executor": "script",
+                  "evidence": _evidence(dirty=True)})])
+    assert S.validate(d) == []
+
+
+def test_schema_rejects_extra_docs_wrong_type():
+    errs = S.validate(_data(review={"extra_docs": "docs/a.md"}))
+    assert any("extra_docs" in e for e in errs)
+    errs = S.validate(_data(review={"extra_docs": [1]}))
+    assert any("extra_docs" in e for e in errs)
+
+
+def test_schema_rejects_round_not_object():
+    errs = S.validate(_data(round="abc"))
+    assert any("round" in e for e in errs)
+
+
+def test_schema_rejects_non_bool_dirty():
+    errs = S.validate(_data(lanes=[_lane(verification={
+        "method": "true", "executor": "script",
+        "evidence": _evidence(dirty="yes")})]))
+    assert any("dirty" in e for e in errs)

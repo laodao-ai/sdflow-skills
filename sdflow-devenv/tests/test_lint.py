@@ -7,6 +7,7 @@
 它拦的唯一东西是【坏 JSON】（人看不见：渲染不出来，用户只看到空白文档）。
 「六槽留白」人一眼看得见 ⇒ 报，不拦（adr/0021：代价可见 > 机械拦截）。
 """
+import subprocess
 import sys
 from pathlib import Path
 
@@ -305,3 +306,95 @@ def test_missing_sad_degrades_loudly_in_the_CLI_report(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "泳道覆盖对账失效" in out
     assert "可能漏掉边界" in out
+
+
+# ---------- 评审页过期提示（tasks 6.3）----------
+
+import json  # noqa: E402
+
+# "hello\n" 的 sha256（独立算出的字面量，不在测试里复算）
+HELLO_SHA = "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+REVISIONS = "openspec/architecture/review/devenv-review.revisions.json"
+
+
+def _page_log(root, docs):
+    p = root / REVISIONS
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"v": 1, "page": "devenv-review.html", "revisions": [
+        {"n": 1, "at": "2026-10-23T07:10:00-07:00", "event": "首次生成",
+         "docs": {"old": {"path": "x.md", "sha256": "0" * 64}}, "notes": 0,
+         "dispositions": 0, "changed": []},
+        {"n": 2, "at": "2026-10-23T08:10:00-07:00", "event": "重新生成",
+         "docs": docs, "notes": 0, "dispositions": 0, "changed": []}]}), encoding="utf-8")
+
+
+def _lint_text(root, capsys):
+    S.save(root, _full())
+    assert L.main(["--root", str(root)]) == 0                   # 只报不拦
+    return capsys.readouterr().out
+
+
+def test_stale_page_reports_modified_doc_with_rerun_command(tmp_path, capsys):
+    (tmp_path / "environments.md").write_text("changed\n", encoding="utf-8")
+    _page_log(tmp_path, {"environments": {"path": "environments.md", "sha256": HELLO_SHA}})
+    out = _lint_text(tmp_path, capsys)
+    assert "评审页已过期（environments：已修改）" in out
+    assert "review-page --root" in out and str(tmp_path) in out
+    assert '--no-open --event "收尾"' in out
+    assert "devenv_scaffold.py" in out
+
+
+def test_stale_page_reports_vanished_doc(tmp_path, capsys):
+    _page_log(tmp_path, {"environments": {"path": "environments.md", "sha256": HELLO_SHA}})
+    assert "评审页已过期（environments：已消失）" in _lint_text(tmp_path, capsys)
+
+
+def test_stale_page_ignores_missing_outside_voice_file(tmp_path, capsys):
+    """.outside-voice/ 下的镜报告只在本机：缺失无从比对，不报「已消失」。"""
+    lens = ".outside-voice/run1/lens-a.md"
+    _page_log(tmp_path, {"lens-a": {"path": f"openspec/architecture/{lens}", "sha256": HELLO_SHA}})
+    assert "评审页" not in _lint_text(tmp_path, capsys)
+
+
+def test_stale_page_still_reports_modified_outside_voice_file(tmp_path, capsys):
+    f = tmp_path / "openspec/architecture/.outside-voice/run1/lens-a.md"
+    f.parent.mkdir(parents=True)
+    f.write_text("changed\n", encoding="utf-8")
+    _page_log(tmp_path, {"lens-a": {"path": "openspec/architecture/.outside-voice/run1/lens-a.md",
+                                    "sha256": HELLO_SHA}})
+    assert "lens-a：已修改" in _lint_text(tmp_path, capsys)
+
+
+def test_lint_rejects_root_in_git_subdirectory(tmp_path, capsys):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, capture_output=True,
+                   text=True, encoding="utf-8", errors="replace")
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    S.save(sub, _full())
+    assert L.main(["--root", str(sub)]) == 2
+    err = capsys.readouterr().err
+    assert f"把 --root 改为仓顶层 {tmp_path.resolve()}" in err
+
+
+def test_lint_accepts_git_toplevel_root(tmp_path, capsys):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, capture_output=True,
+                   text=True, encoding="utf-8", errors="replace")
+    S.save(tmp_path, _full())
+    assert L.main(["--root", str(tmp_path)]) == 0
+
+
+def test_fresh_page_reports_nothing(tmp_path, capsys):
+    (tmp_path / "environments.md").write_text("hello\n", encoding="utf-8")
+    _page_log(tmp_path, {"environments": {"path": "environments.md", "sha256": HELLO_SHA}})
+    assert "评审页" not in _lint_text(tmp_path, capsys)
+
+
+def test_page_log_path_escape_is_not_read(tmp_path, capsys):
+    root = tmp_path / "repo"
+    root.mkdir()
+    (tmp_path / "outside.md").write_text("changed\n", encoding="utf-8")   # 仓外文件，哈希与记录不同
+    _page_log(root, {"evil": {"path": "../outside.md", "sha256": HELLO_SHA},
+                     "nopath": {"path": None, "sha256": HELLO_SHA}})
+    out = _lint_text(root, capsys)
+    assert "无法比对" in out and "evil" in out and "nopath" in out
+    assert "已修改" not in out                                  # 越界路径没有被打开比对
