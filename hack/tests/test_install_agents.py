@@ -59,6 +59,7 @@ def _run_setup(home):
     env = dict(os.environ)
     env["HOME"] = str(home)
     env.pop("SDFLOW_HOME", None)          # 否则 install_sdflow 会写到真实 ~/.sdflow
+    env.pop("CLAUDE_CONFIG_DIR", None)    # 否则 retire-hooks 会按它落到真实 claude 配置目录
     return subprocess.run([bash_executable(), bash_path(SETUP)], cwd=str(REPO), env=env,
                           capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
 
@@ -425,6 +426,24 @@ def test_rerun_is_idempotent(fake_home):
     assert after == before
     assert "agents/" not in _skipped_section(second.stdout), "幂等重跑不该有 agents 被跳过"
     assert "agents/" not in _cleaned_section(second.stdout), "幂等重跑不该清掉自己刚铺的链"
+
+
+def test_setup_does_not_install_or_register_the_two_global_guards(fake_home):
+    """hook 安装侧不进 setup.sh：两个全局 guard 只由 `sdflow-init init/update` 装与注册。
+    setup.sh 会调 retire-hooks（只摘退役项），所以 settings.json 可能存在，但不得含二者。"""
+    result = _run_setup(fake_home)
+    assert result.returncode == 0, result.stdout + result.stderr
+    names = ("ff0-branch-guard.py", "subagent-permission-guard.py")
+    # 假 HOME 下任何位置都不得出现这两个文件名（不只 .claude/hooks/）。
+    found = [p for name in names for p in fake_home.rglob(name)]
+    assert found == [], f"setup.sh 不该安装 guard：{found}"
+    settings = fake_home / ".claude" / "settings.json"
+    if settings.is_file():
+        text = settings.read_text(encoding="utf-8")
+        for name in names:
+            assert name not in text, f"settings.json 不该注册 {name}"
+    else:
+        assert not settings.exists()
 
 
 EFFORT_VALUES = ("low", "medium", "high", "xhigh", "max")

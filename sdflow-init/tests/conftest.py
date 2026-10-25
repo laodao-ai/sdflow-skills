@@ -36,6 +36,18 @@ def _skip_if_workspace_untrusted():
         subprocess.run([claude, "rm", match.group(1)], capture_output=True, timeout=60, cwd=REPO)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_claude_config_dir(request, monkeypatch, tmp_path_factory):
+    """init.run() 无条件调 ensure_global_hooks()，未设 CLAUDE_CONFIG_DIR 时落到真实 ~/.claude。
+
+    默认把它指向每用例独立的临时目录；用例自己 setenv/delenv 可覆盖。
+    用 real_cli_repo 的用例不重定向：真 CLI 要读真实配置里的工作区信任，且这些用例不调 init.run。
+    """
+    if "real_cli_repo" in request.fixturenames:
+        return
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path_factory.mktemp("claude-config")))
+
+
 @pytest.fixture
 def real_cli_repo():
     """固定工作区满足 CLI 信任前置，每轮新建目录避免并行或重复运行互相覆盖。"""

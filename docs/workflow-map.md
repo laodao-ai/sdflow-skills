@@ -70,16 +70,24 @@
 | # | 阶段 | 编排 skill | 脚本门 / 门禁 | ship_gate verdict（exit） | 产物 + frontmatter 字段 | anchor-lint |
 |---|------|-----------|--------------|--------------------------|----------------------|-------------|
 | 0 | explore | `/opsx:explore`〔条件：问题模糊/方向未定〕 | 无门 | —（不覆盖） | 探索笔记 | — |
-| 1 | propose | **`/sdflow-spec`**（唯一入口；人可直接触发，模型在人示意收敛时自动 invoke；问句回「是」即采纳该问推荐，但依赖链上「是」只等于拍链头，非「是」按原文处理、不推断采纳；仅引入新平台/语言/库/存储介质/分发方式时才确认「怎么造」归属归人拍板还是放权（未引入则不问；放权则选默认并在纪要写明所选与理由）） | FF-0 三分支判定 + TG 判定 | — | proposal/design/specs/tasks + decision-memo.md | — |
+| 1 | propose | **`/sdflow-spec`**（唯一入口；人可直接触发，模型在人示意收敛时自动 invoke；规则见表下注 ①） | FF-0 三分支判定 + TG 判定 | — | proposal/design/specs/tasks + decision-memo.md | — |
 | — | **人类门①** 拷问 | （`/sdflow-spec` 相位 B 内） | 人类拍板 | ship 不跨（adr/0004） | 拷问记录进 decision-memo.md | — |
 | 2 | **spec-review 设计审** | `sdflow-spec-review` | `anchor_lint --layer spec-review` ✅#1 · outside-voice · HR-TG | 未过 → **REFUSE_START(3)** | `spec-review-report.md` → `design_approved: true` + lens-metric 锚 | ✅ #1 |
 | — | **人类门②** 设计 HARD-GATE | `sdflow-spec-review` 收敛口 | `design_approved: true`（机判锚） | REFUSE_START(3) 若未过 | 拍板后 prepend 头部 frontmatter | — |
-| 3a | ship·出票 | `sdflow-implement`（mode=tickets-plan） | `TAG_RE` checkpoint 契约 | **RUN_PLAN(0)** | `tickets.md`（3-6 张 tracer-bullet ticket，落盘即返回，唯一管线；出票含 Review Focus 钉票：把未覆盖的隐含输入或失败模式作为 `[Review Focus]` 验收复选框钉进拥有该代码路径的票） | — |
-| 3b | ship·实现 | `sdflow-implement`（mode=tickets-exec） | 完成集 = checkpoint ∪ 复选框（集合归属） | **CONTINUE_IMPL(0)** | `checkpoint({change}:task<N>-…)` 提交；implementer 的 TDD seam 在票报告附一行「能抓住什么、漏掉什么」，漏掉的部分注明由哪层测试或哪张票承担 | — |
-| 3c | ship·代码审 | `sdflow-code-review` | `anchor_lint --layer code-review` ✅#2 · `trivial_shape` · outside-voice | **RUN_CODE_REVIEW(0)**；blocked → **BLOCKED_UPSTREAM(4)** | `code-review-report.md` → `code_review: pass\|blocked`；仅 Step2 镜适用：镜按「合理用户预期」判严重度（spec 未提但用户可感知的行为不因此降为 Minor），并回传 `dismissed` 拒判清单，由 Step3 主审逐条裁决；自动修复后的复审上限为首轮之外最多 2 轮复审（连首轮共 3 轮审） | ✅ #2 |
-| 3d | ship·收尾 | `sdflow-done` | verify=唯一终门（每 ✅ 须机验锚点）· `issues.py sweep` · `openspec archive` · merge 前 untracked 硬检查 | **RUN_VERIFY(0)**；FAIL → **VERIFY_FAIL(5)**；陈旧 → **RERUN_STALE(0)** | `verify-report.md` → `verify: PASS\|FAIL` + `hand-off.md`；verify 核收尾票证据的用例数列：实跑层通过行用例数为 `0`（零用例）判核心缺口，`未知` 照录，旧 4 列格式整票放行；同一票 4 列与 5 列混用判证据不齐 | — |
+| 3a | ship·出票 | `sdflow-implement`（mode=tickets-plan） | `TAG_RE` checkpoint 契约 | **RUN_PLAN(0)** | `tickets.md`（3-6 张 tracer-bullet ticket，落盘即返回，唯一管线；规则见表下注 ②） | — |
+| 3b | ship·实现 | `sdflow-implement`（mode=tickets-exec） | 完成集 = checkpoint ∪ 复选框（集合归属） | **CONTINUE_IMPL(0)** | `checkpoint({change}:task<N>-…)` 提交（规则见表下注 ③） | — |
+| 3c | ship·代码审 | `sdflow-code-review` | `anchor_lint --layer code-review` ✅#2 · `trivial_shape` · outside-voice | **RUN_CODE_REVIEW(0)**；blocked → **BLOCKED_UPSTREAM(4)** | `code-review-report.md` → `code_review: pass\|blocked`（规则见表下注 ④） | ✅ #2 |
+| 3d | ship·收尾 | `sdflow-done` | verify=唯一终门（每 ✅ 须机验锚点）· `issues.py sweep` · `openspec archive` · merge 前 untracked 硬检查 | **RUN_VERIFY(0)**；FAIL → **VERIFY_FAIL(5)**；陈旧 → **RERUN_STALE(0)** | `verify-report.md` → `verify: PASS\|FAIL` + `hand-off.md`（规则见表下注 ⑤） | — |
 | 4 | archive + merge | `sdflow-done`（内部） | `openspec archive` + ff-only | active 缺席+base可达+PASS → **SHIPPED(0)**；异常 → **UNKNOWN(6)** | `archive/{date}-{change}/` | — |
 | 5 | retro 复盘 | `sdflow-retro`（只读） | `retro_report.py` / `lens_metric_aggregate.py` | 不受 ship_gate 管 | `openspec/retro/report.md`（D12 待复评区块） | — |
+
+表下注（阶段表的规则描述，原先塞在单元格里）：
+
+1. 阶段 1 问句：回「是」即采纳该问推荐，但依赖链上「是」只等于拍链头，非「是」按原文处理、不推断采纳。仅引入新平台/语言/库/存储介质/分发方式时才确认「怎么造」归属归人拍板还是放权；未引入则不问，放权则选默认并在纪要写明所选与理由。
+2. 阶段 3a 出票含 Review Focus 钉票：把未覆盖的隐含输入或失败模式作为 `[Review Focus]` 验收复选框钉进拥有该代码路径的票。
+3. 阶段 3b：implementer 的 TDD seam 在票报告附一行「能抓住什么、漏掉什么」，漏掉的部分注明由哪层测试或哪张票承担。
+4. 阶段 3c：「合理用户预期」口径仅 `sdflow-code-review` Step2 镜适用，`sdflow-implement` Standards 轴不适用。镜按该口径判严重度（spec 未提但用户可感知的行为不因此降为 Minor），并回传 `dismissed` 拒判清单，由 Step3 主审逐条裁决。自动修复后的复审上限为首轮之外最多 2 轮复审（连首轮共 3 轮审）。
+5. 阶段 3d：verify 核收尾票证据的用例数列。实跑层通过行用例数为 `0`（零用例）判核心缺口，`未知` 照录，旧 4 列格式整票放行；同一票 4 列与 5 列混用判证据不齐。
 
 **两个人类门**：① 拷问（`/sdflow-spec` 相位 B，前提确认，ship 不跨，adr/0004 红线）；② 设计 HARD-GATE（`design_approved: true`，`/sdflow-ship` pre-flight 唯一机判锚）。**阶段三过设计门后无人类门（P3e）**——能修当场修、≥2 方案按 T10 三级协议自动选、拿不准 defer；`sdflow-done` verify 是去人类门后的唯一终门（强档 + Do-Not-Trust 冷启堵假 ✅）。
 

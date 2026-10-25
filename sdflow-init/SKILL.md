@@ -235,6 +235,16 @@ review 机械层脚本（`tools/`）均**不进消费仓**——skill 运行时�
 
 > **FF-0 hook 是全局的**：装于 `~/.claude/hooks/ff0-branch-guard.py` + 注册进 `~/.claude/settings.json`（**不写项目 `.claude/`**），init/update 幂等确保、跨所有项目生效。
 
+> **子代理权限确认守卫（全局）**：另一个全局 hook 是 `subagent-permission-guard.py`。init/update 把它装进 `~/.claude/hooks/`，并注册到 `settings.json` 的 `PermissionRequest`（matcher `*`）。无人值守的 sdflow 子代理要权限确认时，它直接拒绝。子代理继续运行，不再挂起到超时。
+> - **判定**：hook 输入里 `agent_id` 是非空字符串，且 `agent_type` 以 `sdflow-` 开头。不看权限模式，不解析命令。
+> - **只拦 sdflow 子代理**：主 session、第三方子代理、非法输入、hook 内部异常，一律不表态。权限流程照常。
+> - **不区分是否有人在场**：判定只看 `agent_type` 前缀。交互会话里手动派发的 `sdflow-*` 子代理同样会被拒，含 `sdflow-spec-writer` 等非 effort 定义。
+> - **只拒不放**：hook 从不放行任何调用。
+> - **让某类命令在 default 模式下不再被拒**：在 `settings.json` 的 `permissions.allow` 加规则，例如 `"Bash(rm -rf ./build/*)"`。allow 放行的命令不弹确认，也不会走到本 hook。
+> - **持久关闭**：把 `subagent-permission-guard.py` 加进 `init.py` 的 `RETIRED_HOOKS`，再跑 `sdflow-init update`。注册被摘，脚本被删。只手动删脚本或摘注册不够，下次 `update` 会装回。
+> - **已运行的会话**：安装后先按需要重启处理，新开会话才可靠。依据：`--settings` 近似实测中，注册改动未被热加载。真实 `settings.json` 的热加载未实测。
+> - 两个全局 hook 的注册命令都写成 `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/<name>`，与落盘目录一致。存量的 FF-0 注册不改写。
+
 ## 托管区块（幂等、勿手改区块内）
 
 脚本用 HTML 注释标记包裹注入内容，重跑只替换标记间、不动其余：
@@ -249,7 +259,7 @@ review 机械层脚本（`tools/`）均**不进消费仓**——skill 运行时�
   别在某个项目里直接改 `openspec/workflow/` 然后忘了回灌（会被下次 update 覆盖）。
 - **不覆盖用户内容**：config.yaml 的本项目段、CLAUDE.md/AGENTS.md 标记区块外的内容，脚本一律不动。
 - **`openspec/rules/` 不在本 bundle**（destructive-commands、task-completion 等是独立通用规则，按需自行加）。
-- **FF-0 硬强制（全局）**：hook 脚本源在本 skill 的 `assets/hooks/ff0-branch-guard.py`，由 `init`/`update` **全局安装**到 `~/.claude/hooks/` + 注册进 `~/.claude/settings.json` 的 PreToolUse.Bash（幂等、跨所有项目，**不写项目 `.claude/`**）。使得在 `master`/`main` 上跑 `openspec new change`（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard`、`/sdflow-spec`（分支 A，相位 B ③）共用此 CLI 入口，**两条分支都拦得住**）被直接拦下，逼先开 feature 分支。想卸载：删 `~/.claude/hooks/ff0-branch-guard.py` + 移除 `~/.claude/settings.json` 中对应 PreToolUse entry。权威定义见 `workflow/ff-generation-constraints.md` FF-0。
+- **FF-0 硬强制（全局）**：hook 脚本源在本 skill 的 `assets/hooks/ff0-branch-guard.py`，由 `init`/`update` **全局安装**到 `~/.claude/hooks/` + 注册进 `~/.claude/settings.json` 的 PreToolUse.Bash（幂等、跨所有项目，**不写项目 `.claude/`**）。使得在 `master`/`main` 上跑 `openspec new change`（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard`、`/sdflow-spec`（分支 A，相位 B ③）共用此 CLI 入口，**两条分支都拦得住**）被直接拦下，逼先开 feature 分支。想卸载：删 `~/.claude/hooks/ff0-branch-guard.py` + 移除 `~/.claude/settings.json` 中对应 PreToolUse entry（下次 `update` 会装回，持久卸载走 `RETIRED_HOOKS`）。子代理权限确认守卫见上文同名说明，脚本源在 `assets/hooks/subagent-permission-guard.py`。权威定义见 `workflow/ff-generation-constraints.md` FF-0。
 - **退役 hook 反注册（自愈）**：`init`/`update` 每次跑时按 `RETIRED_HOOKS` 名单把已退役的全局 hook
   从 `~/.claude/settings.json` 摘除注册 + 删 `~/.claude/hooks/` 里的脚本（外科式、保留他项、fresh 安装 no-op）。
   当前名单含 `change-review-stub.py`（每目录 review.html stub 生产者，已废弃）。

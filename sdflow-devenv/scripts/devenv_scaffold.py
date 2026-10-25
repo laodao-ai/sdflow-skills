@@ -9,7 +9,8 @@
   set-review-docs 配置评审页额外收录的 .md 文档（review.extra_docs，覆盖写）
   render       .devenv.json → testing-strategy.md + devenv-review.md（八节审阅汇总）
   review-page  组装文档清单，调共享评审页生成器（失败只提示，不阻塞）
-  inject       opsx-devenv 托管块 → CLAUDE / AGENTS / README / INDEX
+  log          往 devenv-log 追加一行带 UTC 时间的记录（不改 .devenv.json）
+  inject       opsx-devenv 托管块 → CLAUDE / AGENTS / README / openspec/INDEX.md（存在才写；链接相对目标所在目录）
 
 【MUST NOT】（07 附录 A21 · A23 · A24 · A26 · adr/0022）
   ❌ 解析 Makefile / shell / 任何语言的语法 —— 无界语法面禁手搓。
@@ -17,6 +18,10 @@
   ❌ 猜用户文件里原来有什么 —— 要知道就问人。
   ❌ 删除用户的任何文件 —— 爆炸半径不受控（引用可能在仓外）。
   ❌ 时效 digest / 文件锁 / CAS。
+
+【例外：展示用的拆词】verify-lane 执行前的 _method_file_hints 用 shlex 把 method 拆词，
+  只为给人一条「文件未跟踪 / 无执行位」的提示（基准 5 降级判据：给人看的展示允许 best-effort）。
+  结果 MUST NOT 进入任何判定：不改 status / evidence / blocked_by，不影响退出码。
 """
 import argparse
 import json
@@ -30,7 +35,7 @@ for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import devenv_schema as S  # noqa: E402
@@ -52,6 +57,7 @@ OUTSIDE_VOICE_DIR = f"{ARCH_DIR}/.outside-voice"
 INVALIDATED_MARK = "> ⚠️ 已失效"
 
 RUNS_DIR = f"{ARCH_DIR}/.devenv-runs"
+DEFAULT_BLOCKED_BY = "未执行（等待 ③-pre 人门）"
 LOG_TAIL_LINES = 80
 LOG_LINE_MAX = 2000
 LOG_TRUNC_MARK = "…（已截断）"
@@ -227,7 +233,13 @@ def _new_round(root):
     return {"base_commit": _head(root), "started_at": _now()}
 
 
+def _fold_ws(text):
+    """折叠 \r \n 与连续空白为单个空格，保证 devenv-log 一条记录一行。"""
+    return " ".join(str(text).split())
+
+
 def _log(root, line):
+    line = _fold_ws(line)
     p = Path(root) / LOG_MD
     p.parent.mkdir(parents=True, exist_ok=True)
     if not p.exists():
@@ -410,10 +422,55 @@ def cmd_init(args):
 
 # ---------- set-layer / set-lane ----------
 
+def _read_slots_file(src):
+    """读 --from-file 的 JSON。返回 (slots dict, None) 或 (None, 报错文案)。
+
+    任何问题都整份拒绝；调用方在返回错误时不得写盘。
+    """
+    keys_hint = "/".join(S.CONTENT_SLOTS)
+    try:
+        if src == "-":
+            raw = sys.stdin.buffer.read()
+        else:
+            with open(src, "rb") as fh:
+                raw = fh.read()
+        # utf-8-sig：容忍 Windows 编辑器写入的 BOM；不依赖 locale
+        text = raw.decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError) as e:
+        return None, f"--from-file {src} 读取失败：{e} —— 整份未写入"
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError as e:
+        return None, (f"--from-file {src} 不是合法 JSON"
+                      f"（第 {e.lineno} 行第 {e.colno} 列：{e.msg}）—— 整份未写入")
+    if not isinstance(obj, dict):
+        return None, "--from-file 顶层须是 JSON 对象 —— 整份未写入"
+    unknown = [k for k in obj if k not in S.CONTENT_SLOTS]
+    if unknown:
+        return None, (f"--from-file 含未知键: {' '.join(unknown)}"
+                      f"（允许: {keys_hint}）—— 整份未写入")
+    # 空值等于待定：写进去不会清掉待定，所以拒绝
+    bad = [k for k, v in obj.items() if not isinstance(v, str) or v.strip() == ""]
+    if bad:
+        return None, f"--from-file 的值须是非空字符串: {' '.join(bad)} —— 整份未写入"
+    return obj, None
+
+
 def cmd_set_layer(args):
     root = Path(args.root).resolve()
     data = S.load(root)
     layers = data.setdefault("layers", {})
+
+    file_slots = {}
+    if args.from_file is not None:
+        if args.not_applicable:
+            print("[devenv] --from-file 与 --not-applicable 不能同时给 —— "
+                  "不适用层只写 --reason / --consequence", file=sys.stderr)
+            return 1
+        file_slots, err = _read_slots_file(args.from_file)
+        if err:
+            print(f"[devenv] {err}", file=sys.stderr)
+            return 1
 
     if args.not_applicable:
         if not (args.reason and args.consequence):
@@ -424,11 +481,26 @@ def cmd_set_layer(args):
                               "reason": args.reason,
                               "consequence": args.consequence}
     else:
-        L = layers.setdefault(args.layer, {s: S.PENDING for s in S.CONTENT_SLOTS})
+        cur = layers.get(args.layer)
+        if isinstance(cur, dict) and cur.get("status") == S.NOT_APPLICABLE:
+            given = any(getattr(args, s) is not None or s in file_slots
+                        for s in S.CONTENT_SLOTS)
+            if not given:
+                # 没给任何内容槽就不重置，免得丢掉人拍下的 reason / consequence
+                print(f"[devenv] {args.layer} 层是 `不适用`，且没给任何内容槽 —— 未改动",
+                      file=sys.stderr)
+                return 1
+            # 不适用层只有 reason / consequence；先重置为待定骨架，免得残留
+            cur = None
+        L = layers[args.layer] = cur if isinstance(cur, dict) else \
+            {s: S.PENDING for s in S.CONTENT_SLOTS}
         L.pop("status", None)          # 层状态是投影，不手写（A25）
         L.setdefault("lane_ids", [])
         for slot in S.CONTENT_SLOTS:
+            # 文件槽先合并，命令行显式给的槽后覆盖
             v = getattr(args, slot)
+            if v is None:
+                v = file_slots.get(slot)
             if v is not None:
                 L[slot] = v
 
@@ -472,6 +544,8 @@ def cmd_set_lane(args):
         lane["covers"] = args.covers
 
     v = lane.setdefault("verification", {})
+    # 旧 blocked_by 描述的是旧 method 的结果，method 换了它就不再成立
+    method_changed = bool(args.method) and args.method != v.get("method")
     if args.method:
         v["method"] = args.method
     v.setdefault("executor", args.executor or "script")
@@ -484,12 +558,17 @@ def cmd_set_lane(args):
     if args.human_steps:
         v["human_steps"] = args.human_steps
 
+    note = ""
     if args.status == "scaffolded":
-        if not args.blocked_by:
-            print("[devenv] scaffolded MUST 带 --blocked-by（含可辨认的修复指引）—— "
-                  "「跑不绿」是合法状态，「跑不绿却不说为什么」不是", file=sys.stderr)
-            return 1
-        lane["blocked_by"] = args.blocked_by
+        if (args.blocked_by or "").strip():
+            lane["blocked_by"] = args.blocked_by
+        elif (lane.get("blocked_by") or "").strip() and not method_changed:
+            pass   # 已有原因（如 verify-lane 跑红写下的报错摘要）且 method 未变 ⇒ 保留，不覆盖
+        else:
+            # 不变量「scaffolded 必有 blocked_by」由缺省值保住，lint / render 不用改
+            lane["blocked_by"] = DEFAULT_BLOCKED_BY
+            note = (f"（未给 --blocked-by，已写缺省「{DEFAULT_BLOCKED_BY}」；"
+                    f"跑 verify-lane 会覆盖，或用 --blocked-by 写具体原因）")
     else:
         lane.pop("blocked_by", None)
 
@@ -502,11 +581,62 @@ def cmd_set_lane(args):
 
     S.save(root, data)
     _log(root, f"set-lane {args.id} → {args.status}")
-    print(f"✓ {args.id} → {args.status}")
+    print(f"✓ {args.id} → {args.status}{note}")
     return 0
 
 
 # ---------- ⭐ verify-lane：真 fork 执行 ----------
+
+def _method_file_hints(root, method):
+    """verify-lane 执行前的 best-effort 提示：method 引用的仓内文件未被 git 跟踪 / 无执行位。
+
+    只给人看（基准 5 降级判据）：拆词失败、无 git、越界路径一律返回 []，不报错。
+    固定 2 次 git 子进程，不随 token 数增长；候选为空时不调 git。
+    """
+    try:
+        tokens = shlex.split(str(method))
+    except ValueError:
+        return []
+    root = Path(root).resolve()
+    first_rel = None
+    rels = []
+    for i, tok in enumerate(tokens):
+        if tok.startswith("-"):
+            continue
+        try:
+            abs_p = contain(root, tok)
+        except PathEscape:
+            continue
+        if not abs_p.is_file():
+            continue
+        rel = abs_p.relative_to(root).as_posix()
+        if i == 0:
+            first_rel = rel
+        if rel not in rels:
+            rels.append(rel)
+    if not rels:
+        return []
+    rc1, staged = _git_run(root, "--literal-pathspecs", "ls-files", "-s", "-z", "--", *rels)
+    rc2, untracked = _git_run(root, "--literal-pathspecs", "ls-files", "-o", "-z",
+                              "--exclude-standard", "--", *rels)
+    if rc1 != 0 or rc2 != 0:
+        return []
+    modes = {}
+    for rec in staged.split("\0"):
+        meta, _, path = rec.partition("\t")
+        if path and meta.split():
+            modes[path] = meta.split()[0]
+    untracked_set = {r for r in untracked.split("\0") if r}
+    hints = []
+    for rel in rels:
+        if rel in untracked_set:
+            hints.append(f"⚠️ [devenv] {rel} 未被 git 跟踪，别人 clone 后没有这个文件 —— "
+                         f"git add {shlex.quote(rel)} 并提交后再重跑 verify-lane")
+        elif rel == first_rel and rel in modes and modes[rel] != "100755":
+            hints.append(f"⚠️ [devenv] {rel} 在 git 里没有执行位，别人 clone 后无法直接执行 —— "
+                         f"git update-index --chmod=+x {shlex.quote(rel)} 并提交")
+    return hints
+
 
 def cmd_verify_lane(args):
     """脚本【亲自】fork 执行 verification.method，捕获真实 exit code。
@@ -535,6 +665,9 @@ def cmd_verify_lane(args):
         return 1
 
     dirty_ev = _dirty_evidence(root)      # 命令执行之前取
+    for hint in _method_file_hints(root, method):     # 只展示，不进任何判定
+        print(hint, file=sys.stderr)
+        _log(root, f"verify-lane {args.id}: {hint}")
     print(f"$ {method}")
     try:
         command = method
@@ -607,6 +740,21 @@ def cmd_verify_lane(args):
     print("   （skill 的职责是「建 + 验」，不是「调通」——"
           "修好后跑 /sdflow-devenv continue）", file=sys.stderr)
     return 0        # ← 跑红【不是 skill 的失败】。跑不绿是合法状态。
+
+
+def cmd_log(args):
+    """追加一行 devenv-log。先 load：.devenv.json 不存在就按既有失败路径退出，
+    避免 --root 写错时日志落进错误目录。"""
+    root = Path(args.root).resolve()
+    S.load(root)
+    text = _fold_ws(args.msg)
+    if not text:
+        print('[devenv] log --msg 为空 —— 写一句要留痕的内容，如 "人拍：e2e 层不适用"',
+              file=sys.stderr)
+        return 1
+    _log(root, text)
+    print("✓ log")
+    return 0
 
 
 def cmd_confirm_lane(args):
@@ -1163,27 +1311,55 @@ def cmd_review_page(args):
 # ---------- inject ----------
 
 def inject_block(text, content):
-    """幂等整块替换。注释语法【有界】（`<!-- -->` 数得完）⇒ 可手写（基准 5）。"""
+    """幂等整块替换。注释语法【有界】（`<!-- -->` 数得完）⇒ 可手写（基准 5）。
+
+    marker 只认【整行】（行尾空白容忍）；start 行须在 end 行之前。
+    只有其一 / 顺序颠倒 ⇒ 返回 None（调用方不改文件、报一行）。
+    两个都没有 ⇒ 追加到文末。
+    """
     block = f"{MARK_START}\n{content}\n{MARK_END}"
-    if MARK_START in text and MARK_END in text:
-        pre = text.split(MARK_START)[0]
-        post = text.split(MARK_END, 1)[1]
-        return pre + block + post
+    lines = text.splitlines(keepends=True)
+    s_idx = next((i for i, l in enumerate(lines) if l.rstrip() == MARK_START), None)
+    e_idx = next((i for i, l in enumerate(lines) if l.rstrip() == MARK_END), None)
+    if s_idx is not None and e_idx is not None and s_idx < e_idx:
+        post = "".join(lines[e_idx + 1:])
+        pre = "".join(lines[:s_idx])
+        # end 行自带的换行属于块尾，保持块后原有内容不变
+        tail = lines[e_idx][len(lines[e_idx].rstrip()):]
+        return pre + block + tail + post
+    if s_idx is not None or e_idx is not None:
+        return None
     sep = "" if text.endswith("\n\n") or not text else ("\n" if text.endswith("\n") else "\n\n")
     return text + sep + block + "\n"
 
 
 def cmd_inject(args):
     root = Path(args.root).resolve()
-    content = (f"## 开发/测试环境\n\n"
-               f"- 测试策略（三层框架）→ [`{STRATEGY_MD}`](./{STRATEGY_MD})\n"
-               f"- 环境搭建 / 部署 → [`{ENV_MD}`](./{ENV_MD})\n"
-               f"- 推进一格 → `/sdflow-devenv continue`\n")
-    for rel in ("CLAUDE.md", "AGENTS.md", "README.md"):
+
+    def content_for(link_base):
+        # 链接目标相对目标文件所在目录：根级文件 ./openspec/architecture/…，INDEX.md ./architecture/…
+        strategy_name = PurePosixPath(STRATEGY_MD).name
+        env_name = PurePosixPath(ENV_MD).name
+        return (f"## 开发/测试环境\n\n"
+                f"- 测试策略（三层框架）→ [`{STRATEGY_MD}`](./{link_base}{strategy_name})\n"
+                f"- 环境搭建 / 部署 → [`{ENV_MD}`](./{link_base}{env_name})\n"
+                f"- 推进一格 → `/sdflow-devenv continue`\n")
+
+    root_base = f"{ARCH_DIR}/"
+    targets = [(rel, root_base) for rel in ("CLAUDE.md", "AGENTS.md", "README.md")]
+    targets.append(("openspec/INDEX.md",
+                    f"{PurePosixPath(ARCH_DIR).relative_to('openspec')}/"))
+    for rel, link_base in targets:
         p = root / rel
         if not p.exists():
             continue
-        p.write_text(inject_block(p.read_text(encoding="utf-8"), content), encoding="utf-8")
+        content = content_for(link_base)
+        new = inject_block(p.read_text(encoding="utf-8"), content)
+        if new is None:
+            print(f"[devenv] {rel} 的 opsx-devenv marker 不成对或顺序颠倒，未改动 —— "
+                  f"手工修好 marker 后重跑 inject", file=sys.stderr)
+            continue
+        p.write_text(new, encoding="utf-8")
         print(f"✓ {rel}")
     _log(root, "inject 入口托管块")
     return 0
@@ -1205,6 +1381,10 @@ def build_parser():
         p.add_argument(f"--{slot.replace('_','-')}", dest=slot)
     p.add_argument("--not-applicable", action="store_true")
     p.add_argument("--reason"); p.add_argument("--consequence")
+    p.add_argument("--from-file", metavar="PATH",
+                   help=f"从 JSON 对象文件读内容槽（键：{'/'.join(S.CONTENT_SLOTS)}，"
+                        "值为非空字符串）；PATH 为 - 时读 stdin；"
+                        "命令行显式给的槽优先；任何问题整份拒绝、不写")
     p.set_defaults(fn=cmd_set_layer)
 
     p = sub.add_parser("set-lane"); p.add_argument("--root", required=True)
@@ -1240,7 +1420,14 @@ def build_parser():
     p.add_argument("--event"); p.add_argument("--no-open", action="store_true")
     p.set_defaults(fn=cmd_review_page)
 
-    p = sub.add_parser("inject"); p.add_argument("--root", required=True)
+    p = sub.add_parser("log"); p.add_argument("--root", required=True)
+    p.add_argument("--msg", required=True)
+    p.set_defaults(fn=cmd_log)
+
+    p = sub.add_parser(
+        "inject", help="把「开发/测试环境」入口块写进 CLAUDE.md / AGENTS.md / README.md / "
+                       "openspec/INDEX.md；不存在的文件跳过")
+    p.add_argument("--root", required=True)
     p.set_defaults(fn=cmd_inject)
     return ap
 

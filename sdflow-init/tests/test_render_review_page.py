@@ -1506,3 +1506,21 @@ def test_usage_failure_puts_detail_in_problem_and_keeps_fixed_cause(module):
     f = module.usage_failure("--doc", "没有任何可用文档")
     assert (f.code, f.problem, f.cause, f.fix) == (
         64, "未知参数或参数不合法「--doc」：没有任何可用文档", FIXED_USAGE_CAUSE, FIXED_USAGE_FIX)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_write_atomic_keeps_existing_output_mode(tmp_path):
+    # T403：覆盖已有输出页时沿用原 mode，不被 umask 改写
+    spec = importlib.util.spec_from_file_location("render_review_page_mode_test", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    out = tmp_path / "page.html"
+    out.write_bytes(b"old")
+    out.chmod(0o664)
+    old = os.umask(0o022)
+    try:
+        mod.write_atomic(out, b"new")
+    finally:
+        os.umask(old)
+    assert out.read_bytes() == b"new"
+    assert stat.S_IMODE(out.stat().st_mode) == 0o664

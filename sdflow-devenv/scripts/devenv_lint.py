@@ -233,17 +233,17 @@ def report(data, sad=(), root=None):
     if b:
         lines += [b, ""]
     else:
-        lines += ["✅ 三层框架六槽已答满（含「不适用 + 后果」）。", ""]
+        lines += ["✅ 三层框架十五格已答满（含「不适用 + 后果」）。", ""]
 
     if root is not None:
         n = env_pending(root)
         if n:
-            lines += [f"⚠️ environments.md 还有 {n}/10 槽待定 —— "
+            lines += [f"⚠️ environments.md 还有 {n} 处 ⚠️ 待定 —— "
                       f"按 references/environments-template.md 逐槽问出来。",
                       "   （最贵的三槽：常见坑 · 回滚 · 构建副产物 —— "
                       "模型答不出来，只能问人，所以最容易被静默略过）", ""]
         elif n == 0:
-            lines += ["✅ environments.md 十槽已答满。", ""]
+            lines += ["✅ environments.md 已无 ⚠️ 待定。", ""]
         lines += review_page_lines(root)
 
     lanes = data.get("lanes") or []

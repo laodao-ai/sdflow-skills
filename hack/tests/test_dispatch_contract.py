@@ -662,3 +662,45 @@ def test_review_barrier_summary_claude_side_mentions_alarm_fallback():
         assert "outside-voice 的后台 Bash 不起" in claude_side, skill
         assert "outside-voice 站点不起闹钟" not in claude_side, skill
         assert "「Claude 结果收集」节" in claude_side, skill
+
+
+# HAE-27：被拒处理说明只写在契约一处。特征短语取说明的主语加谓语，足够独特，不会出现在其他 SKILL.md。
+DENIAL_PHRASE = "权限确认可能被全局 hook 直接拒绝"
+DENIAL_POINTS = ("跳过", "报告", "未完成")
+
+
+def _denial_paragraph(text):
+    """返回含特征短语的那一行（说明写成单行段落）；没有则返回空串。"""
+    for line in text.splitlines():
+        if DENIAL_PHRASE in line:
+            return line
+    return ""
+
+
+def _skills_containing_denial_phrase(skill_texts):
+    return sorted(name for name, text in skill_texts.items() if DENIAL_PHRASE in text)
+
+
+def _top_level_skill_texts():
+    return {
+        p.parent.name: p.read_text(encoding="utf-8")
+        for p in sorted(ROOT.glob("*/SKILL.md"))
+    }
+
+
+def test_contract_states_permission_denial_handling():
+    paragraph = _denial_paragraph(CONTRACT.read_text(encoding="utf-8"))
+    assert paragraph, "契约缺少被拒处理说明（说明须写成单行，_denial_paragraph 按行匹配）"
+    for point in DENIAL_POINTS:
+        assert point in paragraph, point
+
+
+def test_top_level_skills_do_not_repeat_permission_denial_note():
+    texts = _top_level_skill_texts()
+    assert texts, "未发现任何顶层 SKILL.md"
+    assert _skills_containing_denial_phrase(texts) == []
+
+
+def test_denial_phrase_scanner_detects_injected_phrase():
+    # 扫描器自检：注入特征短语后能被发现
+    assert _skills_containing_denial_phrase({"x": "前文\n" + DENIAL_PHRASE + "\n"}) == ["x"]

@@ -68,15 +68,35 @@ def test_exit_zero_when_complete(tmp_path, capsys):
     assert "✅" in capsys.readouterr().out
 
 
-def test_exit_zero_with_lazy_blockers(tmp_path, capsys):
-    """敷衍的 blocked_by → 报出来，但【不拦】。"""
+def _scaffolded_data(blocked_by):
+    """一条 scaffolded 泳道（无 evidence）+ 其余答满的数据；lazy 用例共用。"""
     d = _full()
-    d["lanes"] = [_lane(id="x", status="scaffolded", blocked_by="TODO")]
+    d["lanes"] = [_lane(id="x", status="scaffolded", blocked_by=blocked_by)]
     d["layers"]["unit"]["lane_ids"] = ["x"]
     del d["lanes"][0]["verification"]["evidence"]
-    S.save(tmp_path, d)
+    return d
+
+
+def test_exit_zero_with_lazy_blockers(tmp_path, capsys):
+    """敷衍的 blocked_by → 报出来，但【不拦】。"""
+    S.save(tmp_path, _scaffolded_data("TODO"))
     assert L.main(["--root", str(tmp_path)]) == 0
     assert "没告诉任何人下一步该干嘛" in capsys.readouterr().out
+
+
+def _lazy_for(blocked_by):
+    return L.lazy_blockers(_scaffolded_data(blocked_by))
+
+
+def test_default_blocked_by_is_not_lazy():
+    """set-lane 缺省值写进去后，lint 不能把它当敷衍报。"""
+    assert _lazy_for("未执行（等待 ③-pre 人门）") == []
+
+
+def test_real_hardware_blocked_by_is_not_lazy():
+    """真硬件泳道的 blocked_by 固定句，长度必须过敷衍阈值。"""
+    assert _lazy_for("需真机（按 SOP 人工执行后 confirm-lane）") == []
+    assert _lazy_for("需真机") != []          # 对照：三个字会被判敷衍
 
 
 # ---------- 唯一 fail-closed：坏数据（人看不见）----------
@@ -184,7 +204,7 @@ def test_env_pending_counted_but_not_blocking(tmp_path, capsys):
     assert L.env_pending(tmp_path) == 10
     assert L.main(["--root", str(tmp_path)]) == 0        # ← 不拦
     out = capsys.readouterr().out
-    assert "environments.md 还有 10/10 槽待定" in out
+    assert "environments.md 还有 10 处 ⚠️ 待定" in out
     assert "常见坑 · 回滚 · 构建副产物" in out             # 点名最贵的三槽
 
 
@@ -398,3 +418,31 @@ def test_page_log_path_escape_is_not_read(tmp_path, capsys):
     out = _lint_text(root, capsys)
     assert "无法比对" in out and "evil" in out and "nopath" in out
     assert "已修改" not in out                                  # 越界路径没有被打开比对
+
+
+# ---------- 计数文案（按标记个数说「处」，不再说「N/10 槽」）----------
+
+def _env_with_pending_marks(tmp_path, n):
+    p = tmp_path / L.ENV_MD
+    p.parent.mkdir(parents=True)
+    p.write_text("\n".join(f"槽 {i}：{S.PENDING}" for i in range(n)), encoding="utf-8")
+
+
+def test_eleven_marks_reports_chu_not_slash_ten(tmp_path):
+    _env_with_pending_marks(tmp_path, 11)
+    out = L.report(_full(), root=tmp_path)
+    assert "还有 11 处 ⚠️ 待定" in out
+    assert "/10 槽" not in out and "十槽" not in out
+
+
+def test_all_layers_answered_says_fifteen_cells():
+    out = L.report(_full())
+    # 整行相等：旧版「N/10 槽」文案若回来，首行就对不上
+    assert out.splitlines()[0] == "✅ 三层框架十五格已答满（含「不适用 + 后果」）。"
+
+
+def test_env_without_marks_says_no_pending(tmp_path):
+    _env_with_pending_marks(tmp_path, 0)
+    out = L.report(_full(), root=tmp_path)
+    assert "已无 ⚠️ 待定" in out
+    assert "十槽" not in out and "/10 槽" not in out

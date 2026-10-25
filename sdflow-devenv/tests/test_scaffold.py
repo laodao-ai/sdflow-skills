@@ -122,6 +122,130 @@ def test_set_layer_never_writes_layer_status(repo):
     assert "status" not in S.load(repo)["layers"]["unit"]
 
 
+# ---------- set-layer --from-file（P2-3）----------
+
+def _write_json(path, obj, encoding="utf-8"):
+    path.write_text(json.dumps(obj, ensure_ascii=False), encoding=encoding)
+    return path
+
+
+def test_set_layer_from_file_writes_only_given_slots(repo, tmp_path):
+    run("init", "--root", repo)
+    f = _write_json(tmp_path / "s.json", {"how": "go test", "blind_spots": "不证明 TCP"})
+    assert run("set-layer", "--root", repo, "--layer", "unit", "--from-file", f) == 0
+    L = S.load(repo)["layers"]["unit"]
+    assert L["how"] == "go test" and L["blind_spots"] == "不证明 TCP"
+    assert L["convention"] == S.PENDING and L["tooling"] == S.PENDING
+
+
+def test_set_layer_from_file_reads_stdin(repo, monkeypatch):
+    import io
+    run("init", "--root", repo)
+    payload = json.dumps({"process": "先跑再提交"}, ensure_ascii=False).encode("utf-8")
+
+    class _In:
+        buffer = io.BytesIO(payload)
+
+    monkeypatch.setattr(sys, "stdin", _In())
+    assert run("set-layer", "--root", repo, "--layer", "unit", "--from-file", "-") == 0
+    assert S.load(repo)["layers"]["unit"]["process"] == "先跑再提交"
+
+
+def test_set_layer_from_file_command_line_wins(repo, tmp_path):
+    run("init", "--root", repo)
+    f = _write_json(tmp_path / "s.json", {"how": "文件值", "tooling": "文件工具"})
+    assert run("set-layer", "--root", repo, "--layer", "unit",
+               "--from-file", f, "--how", "命令行值") == 0
+    L = S.load(repo)["layers"]["unit"]
+    assert L["how"] == "命令行值" and L["tooling"] == "文件工具"
+
+
+def test_set_layer_from_file_conflicts_with_not_applicable(repo, tmp_path, capsys):
+    run("init", "--root", repo)
+    before = (repo / S.DEVENV_REL).read_bytes()
+    f = _write_json(tmp_path / "s.json", {"how": "x"})
+    capsys.readouterr()
+    assert run("set-layer", "--root", repo, "--layer", "e2e", "--from-file", f,
+               "--not-applicable", "--reason", "r", "--consequence", "c") == 1
+    assert "不能同时给" in capsys.readouterr().err
+    assert (repo / S.DEVENV_REL).read_bytes() == before
+
+
+def test_set_layer_from_file_accepts_utf8_bom(repo, tmp_path):
+    run("init", "--root", repo)
+    f = tmp_path / "bom.json"
+    f.write_bytes(b"\xef\xbb\xbf" + json.dumps({"how": "带 BOM"}, ensure_ascii=False).encode("utf-8"))
+    assert run("set-layer", "--root", repo, "--layer", "unit", "--from-file", f) == 0
+    assert S.load(repo)["layers"]["unit"]["how"] == "带 BOM"
+
+
+# 七类拒绝：整份不写（.devenv.json 字节不变）+ 退出码 1 + 报错含这些片段
+REJECT_CASES = {
+    "unknown_key": (
+        json.dumps({"how": "ok", "bogus": "x", "blind-spots": "y"}).encode("utf-8"),
+        ["未知键", "bogus", "blind-spots", "整份未写入"]),
+    "blank_value": (
+        json.dumps({"how": "ok", "process": "   "}).encode("utf-8"),
+        ["非空字符串", "process", "整份未写入"]),
+    "non_string_value": (
+        json.dumps({"how": 3}).encode("utf-8"),
+        ["非空字符串", "整份未写入"]),
+    "top_level_not_object": (
+        json.dumps(["how"]).encode("utf-8"),
+        ["顶层须是 JSON 对象", "整份未写入"]),
+    "invalid_json": (
+        b'{\n  "how": "x",\n  oops\n}',
+        ["不是合法 JSON", "第 3 行第 3 列", "整份未写入"]),
+    "missing_file": (None, ["读取失败", "整份未写入"]),
+    "non_utf8": ('{"how": "中文"}'.encode("gbk"), ["读取失败", "整份未写入"]),
+}
+
+
+@pytest.mark.parametrize("case", sorted(REJECT_CASES))
+def test_set_layer_from_file_rejects_whole_file_and_keeps_devenv_json(
+        repo, tmp_path, capsys, case):
+    payload, expected = REJECT_CASES[case]
+    run("init", "--root", repo)
+    before = (repo / S.DEVENV_REL).read_bytes()
+    f = tmp_path / "s.json"
+    if payload is not None:
+        f.write_bytes(payload)
+    capsys.readouterr()
+    assert run("set-layer", "--root", repo, "--layer", "unit", "--from-file", f) == 1
+    err = capsys.readouterr().err
+    for fragment in expected:
+        assert fragment in err, (case, fragment)
+    assert (repo / S.DEVENV_REL).read_bytes() == before
+
+
+@pytest.mark.parametrize("via_file", [True, False])
+def test_set_layer_on_not_applicable_layer_resets_skeleton(repo, tmp_path, via_file):
+    run("init", "--root", repo)
+    run("set-layer", "--root", repo, "--layer", "e2e", "--not-applicable",
+        "--reason", "r", "--consequence", "c")
+    if via_file:
+        f = _write_json(tmp_path / "s.json", {"how": "改回来"})
+        assert run("set-layer", "--root", repo, "--layer", "e2e", "--from-file", f) == 0
+    else:
+        assert run("set-layer", "--root", repo, "--layer", "e2e", "--how", "改回来") == 0
+    L = S.load(repo)["layers"]["e2e"]
+    assert "reason" not in L and "consequence" not in L and "status" not in L
+    assert L["how"] == "改回来"
+    assert all(L[s] == S.PENDING for s in S.CONTENT_SLOTS if s != "how")
+
+
+def test_set_layer_without_slots_keeps_not_applicable_layer(repo, capsys):
+    """[impl-review-fix] 没给任何内容槽时不重置，人拍下的 reason / consequence 不能丢。"""
+    run("init", "--root", repo)
+    run("set-layer", "--root", repo, "--layer", "e2e", "--not-applicable",
+        "--reason", "r", "--consequence", "c")
+    capsys.readouterr()
+    assert run("set-layer", "--root", repo, "--layer", "e2e") == 1
+    assert "未改动" in capsys.readouterr().err
+    L = S.load(repo)["layers"]["e2e"]
+    assert L == {"status": S.NOT_APPLICABLE, "reason": "r", "consequence": "c"}
+
+
 # ---------- set-lane ----------
 
 def test_set_lane_planned(repo):
@@ -142,12 +266,74 @@ def test_set_lane_rejects_verified(repo, capsys):
     assert "verify-lane" in capsys.readouterr().err
 
 
-def test_scaffolded_requires_blocked_by(repo, capsys):
-    """「跑不绿」是合法状态，「跑不绿却不说为什么」不是。"""
+def _lane_of(repo, lane_id):
+    return next(l for l in S.load(repo)["lanes"] if l["id"] == lane_id)
+
+
+def test_scaffolded_without_blocked_by_writes_default(repo, capsys):
+    """scaffolded 不带 --blocked-by：写缺省值、退出码 0、stdout 提示。"""
     run("init", "--root", repo)
     assert run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
-               "--status", "scaffolded", "--method", "go test") == 1
-    assert "blocked-by" in capsys.readouterr().err
+               "--status", "scaffolded", "--method", "go test") == 0
+    assert _lane_of(repo, "x")["blocked_by"] == "未执行（等待 ③-pre 人门）"
+    out = capsys.readouterr().out
+    assert "未给 --blocked-by，已写缺省" in out
+    assert out.count("✓") == 1      # [impl-review-fix] 提示并进成功行，不打两行 ✓
+
+
+def test_scaffolded_with_blocked_by_is_written_verbatim(repo, capsys):
+    run("init", "--root", repo)
+    assert run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
+               "--status", "scaffolded", "--method", "go test",
+               "--blocked-by", "mosquitto 没装：brew install mosquitto") == 0
+    assert _lane_of(repo, "x")["blocked_by"] == "mosquitto 没装：brew install mosquitto"
+    assert "已写缺省" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("blank", ["   ", "\t\n"])
+def test_scaffolded_blank_blocked_by_is_treated_as_not_given(repo, blank):
+    """纯空白的 --blocked-by 视同未给：无旧值写缺省，有旧值保留。"""
+    run("init", "--root", repo)
+    assert run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
+               "--status", "scaffolded", "--method", "go test",
+               "--blocked-by", blank) == 0
+    assert _lane_of(repo, "x")["blocked_by"] == F.DEFAULT_BLOCKED_BY
+    assert run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
+               "--status", "scaffolded", "--method", "go test",
+               "--blocked-by", "mosquitto 没装") == 0
+    assert run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
+               "--status", "scaffolded", "--method", "go test",
+               "--blocked-by", blank) == 0
+    assert _lane_of(repo, "x")["blocked_by"] == "mosquitto 没装"
+
+
+def test_scaffolded_keeps_existing_blocked_by_after_red_verify(repo, capsys):
+    """verify-lane 跑红写下的报错摘要，不被后续不带 --blocked-by 的 set-lane 覆盖。"""
+    run("init", "--root", repo)
+    run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
+        "--status", "planned", "--method", "echo boom-marker >&2; exit 3")
+    run("verify-lane", "--root", repo, "--id", "x")
+    before = _lane_of(repo, "x")["blocked_by"]
+    assert "boom-marker" in before
+    capsys.readouterr()
+    assert run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
+               "--status", "scaffolded", "--method", "echo boom-marker >&2; exit 3") == 0
+    assert _lane_of(repo, "x")["blocked_by"] == before
+    assert "已写缺省" not in capsys.readouterr().out
+
+
+def test_scaffolded_method_change_drops_stale_blocked_by(repo, capsys):
+    """method 换了，旧 method 跑红的报错摘要不再成立 ⇒ 改写缺省值（T460）。"""
+    run("init", "--root", repo)
+    run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
+        "--status", "planned", "--method", "echo boom-marker >&2; exit 3")
+    run("verify-lane", "--root", repo, "--id", "x")
+    assert "boom-marker" in _lane_of(repo, "x")["blocked_by"]
+    capsys.readouterr()
+    assert run("set-lane", "--root", repo, "--id", "x", "--layer", "unit",
+               "--status", "scaffolded", "--method", "go test ./...") == 0
+    assert _lane_of(repo, "x")["blocked_by"] == F.DEFAULT_BLOCKED_BY
+    assert "已写缺省" in capsys.readouterr().out
 
 
 def test_set_lane_rejects_path_escape(repo, capsys):
@@ -334,6 +520,84 @@ def test_inject_replaces_block_in_place():
     assert "尾部" in got
 
 
+OLD_INIT_BLOCK = "<!-- opsx-init:start -->\n初始化块\n<!-- opsx-init:end -->"
+
+
+def _write_index(repo, body):
+    p = repo / "openspec" / "INDEX.md"
+    p.write_text(body, encoding="utf-8")
+    return p
+
+
+def test_inject_index_coexists_with_init_block_and_uses_relative_links(repo):
+    idx = _write_index(repo, f"# 索引\n\n{OLD_INIT_BLOCK}\n")
+    assert run("inject", "--root", repo) == 0
+    text = idx.read_text(encoding="utf-8")
+    assert OLD_INIT_BLOCK in text
+    assert text.count(F.MARK_START) == 1
+    assert "(./architecture/testing-strategy.md)" in text
+    assert "(./architecture/environments.md)" in text
+    assert "./openspec/architecture/" not in text
+
+
+def test_inject_does_not_create_index_when_missing(repo):
+    assert run("inject", "--root", repo) == 0
+    assert not (repo / "openspec" / "INDEX.md").exists()
+
+
+def test_inject_index_twice_is_idempotent(repo):
+    idx = _write_index(repo, f"# 索引\n\n{OLD_INIT_BLOCK}\n")
+    run("inject", "--root", repo)
+    once = idx.read_text(encoding="utf-8")
+    run("inject", "--root", repo)
+    assert idx.read_text(encoding="utf-8") == once
+
+
+def test_inject_index_replaces_old_prefix_block_whole(repo):
+    old = (f"{F.MARK_START}\n- [x](./openspec/architecture/testing-strategy.md)\n{F.MARK_END}")
+    idx = _write_index(repo, f"# 索引\n\n{OLD_INIT_BLOCK}\n\n{old}\n")
+    run("inject", "--root", repo)
+    text = idx.read_text(encoding="utf-8")
+    assert text.count(F.MARK_START) == 1
+    assert "./openspec/architecture/" not in text
+    assert "(./architecture/testing-strategy.md)" in text
+    assert OLD_INIT_BLOCK in text
+
+
+def test_inject_root_files_keep_openspec_prefix(repo):
+    (repo / "CLAUDE.md").write_text("# 项目\n", encoding="utf-8")
+    run("inject", "--root", repo)
+    assert "(./openspec/architecture/testing-strategy.md)" in (
+        repo / "CLAUDE.md").read_text(encoding="utf-8")
+
+
+def test_inject_start_only_leaves_file_unchanged_and_other_targets_proceed(repo, capsys):
+    body = f"# 索引\n\n{F.MARK_START}\n只有开头\n"
+    idx = _write_index(repo, body)
+    (repo / "CLAUDE.md").write_text("# 项目\n", encoding="utf-8")
+    capsys.readouterr()
+    assert run("inject", "--root", repo) == 0
+    assert idx.read_text(encoding="utf-8") == body
+    assert "INDEX.md" in capsys.readouterr().err
+    assert F.MARK_START in (repo / "CLAUDE.md").read_text(encoding="utf-8")
+
+
+def test_inject_end_before_start_leaves_file_unchanged(repo, capsys):
+    body = f"# 索引\n\n{F.MARK_END}\n中间\n{F.MARK_START}\n"
+    idx = _write_index(repo, body)
+    capsys.readouterr()
+    assert run("inject", "--root", repo) == 0
+    assert idx.read_text(encoding="utf-8") == body
+    assert "INDEX.md" in capsys.readouterr().err
+
+
+def test_inject_marker_mentioned_inline_is_not_a_marker():
+    """行内提到 marker（如文档里的反引号说明）不算 marker：只认整行。"""
+    text = f"说明：`{F.MARK_START}` 与 `{F.MARK_END}` 是托管标记\n"
+    got = F.inject_block(text, "新")
+    assert got.startswith(text) and got.count(f"\n{F.MARK_START}\n") == 1
+
+
 # ---------- 🔴 红线：skill 没有删除能力（adr/0022）----------
 
 def test_scaffold_has_no_delete_capability():
@@ -423,6 +687,210 @@ def test_render_never_touches_environments(repo):
                                  encoding="utf-8")
     run("render", "--root", repo)
     assert "AirPlay" in (repo / F.ENV_MD).read_text(encoding="utf-8")
+
+
+# ---------- verify-lane：证据文件跟踪 / 执行位提示（P1-6，只给人看）----------
+
+def _git_init(repo):
+    _git(repo, "init", "-q")
+    _git(repo, "config", "core.filemode", "false")
+
+
+def _hint_lane(repo, method):
+    run("init", "--root", repo)
+    _lane(repo, "h", method)
+
+
+def _log_text(repo):
+    p = repo / "openspec/architecture/devenv-log.md"
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+def _assert_no_hint(repo, err):
+    """负向断言：stderr 与 devenv-log 都没有 verify-lane 提示。"""
+    assert "未被 git 跟踪" not in err and "执行位" not in err
+    assert "⚠️ [devenv]" not in _log_text(repo)
+
+
+def test_verify_lane_hints_missing_exec_bit_but_stays_verified(repo, capsys):
+    _git_init(repo)
+    sh = repo / "run.sh"
+    sh.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    sh.chmod(0o755)
+    _git(repo, "add", "run.sh")          # filemode=false -> index 记 100644
+    _hint_lane(repo, "./run.sh")
+    capsys.readouterr()
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    err = capsys.readouterr().err
+    assert "run.sh 在 git 里没有执行位" in err
+    assert "git update-index --chmod=+x run.sh" in err
+    assert S.load(repo)["lanes"][0]["status"] == "verified"
+    assert "run.sh 在 git 里没有执行位" in _log_text(repo)
+
+
+def test_verify_lane_hints_untracked_script_behind_interpreter(repo, capsys):
+    _git_init(repo)
+    (repo / "test").mkdir()
+    (repo / "test/run.sh").write_text("exit 0\n", encoding="utf-8")
+    _hint_lane(repo, "bash test/run.sh")
+    capsys.readouterr()
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    err = capsys.readouterr().err
+    assert "test/run.sh 未被 git 跟踪" in err
+    assert "git add test/run.sh" in err
+    assert "没有执行位" not in err        # 第一个词是 bash，不是脚本
+    assert "test/run.sh 未被 git 跟踪" in _log_text(repo)
+
+
+def test_verify_lane_unbalanced_quote_no_hint_still_runs(repo, capsys):
+    _git_init(repo)
+    (repo / "x.sh").write_text("exit 0\n", encoding="utf-8")   # 仓内未跟踪文件：split 退化时会被提示
+    _hint_lane(repo, "bash x.sh 'unclosed")
+    capsys.readouterr()
+    run("verify-lane", "--root", repo, "--id", "h")
+    _assert_no_hint(repo, capsys.readouterr().err)
+    assert S.load(repo)["lanes"][0]["status"] == "scaffolded"   # shell 报错，照常执行并记红
+
+
+def test_verify_lane_gitignored_file_no_hint(repo, capsys):
+    _git_init(repo)
+    (repo / ".gitignore").write_text(".venv/\n", encoding="utf-8")
+    (repo / ".venv/bin").mkdir(parents=True)
+    (repo / ".venv/bin/activate").write_text("true\n", encoding="utf-8")
+    _git(repo, "add", ".gitignore")
+    _hint_lane(repo, ". .venv/bin/activate")
+    capsys.readouterr()
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    _assert_no_hint(repo, capsys.readouterr().err)
+
+
+@pytest.mark.parametrize("rc_s,rc_o", [(0, 1), (0, None), (1, 0), (None, 0)])
+def test_verify_lane_hints_skipped_when_git_query_fails(repo, capsys, monkeypatch, rc_s, rc_o):
+    """任一 git 查询失败（rc 非 0 / None）就整体不提示，即使另一查询给出了「未跟踪」结果。"""
+    (repo / "x.sh").write_text("exit 0\n", encoding="utf-8")
+    _hint_lane(repo, "bash x.sh")
+    capsys.readouterr()
+    real = F._git_run
+
+    def fake(root, *a, **k):
+        if a and a[0] == "--literal-pathspecs":
+            if "-o" in a:
+                return rc_o, "x.sh\0"
+            if "-s" in a:
+                return rc_s, ""
+        return real(root, *a, **k)
+
+    monkeypatch.setattr(F, "_git_run", fake)
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    _assert_no_hint(repo, capsys.readouterr().err)
+
+
+def test_verify_lane_hints_skipped_without_git(repo, capsys):
+    """真没有 git 仓：不提示、不报错，verify-lane 照常执行并转 verified。"""
+    assert not (repo / ".git").exists()
+    (repo / "x.sh").write_text("exit 0\n", encoding="utf-8")
+    _hint_lane(repo, "bash x.sh")
+    capsys.readouterr()
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    cap = capsys.readouterr()
+    assert "$ bash x.sh" in cap.out                      # 命令真的执行了
+    _assert_no_hint(repo, cap.err)
+    assert S.load(repo)["lanes"][0]["status"] == "verified"
+    assert "verify-lane h → verified" in _log_text(repo)
+
+
+def test_verify_lane_hint_quotes_path_with_space(repo, capsys):
+    """提示里的路径用 shlex.quote，含空格的路径可直接复制执行。"""
+    _git_init(repo)
+    (repo / "my dir").mkdir()
+    (repo / "my dir/run.sh").write_text("exit 0\n", encoding="utf-8")
+    _hint_lane(repo, "bash 'my dir/run.sh'")
+    capsys.readouterr()
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    err = capsys.readouterr().err
+    assert "git add 'my dir/run.sh' 并提交" in err
+
+
+def test_verify_lane_hint_appends_exactly_one_log_line(repo, capsys):
+    """提示打到 stderr 的同时，devenv-log 恰好多一行同文案记录。"""
+    _git_init(repo)
+    (repo / "x.sh").write_text("exit 0\n", encoding="utf-8")
+    _hint_lane(repo, "bash x.sh")
+    capsys.readouterr()
+    before = _log_text(repo).splitlines()
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    err = capsys.readouterr().err
+    added = _log_text(repo).splitlines()[len(before):]
+    hint_lines = [ln for ln in added if "verify-lane h: ⚠️ [devenv]" in ln]
+    assert len(hint_lines) == 1
+    err_hints = [ln for ln in err.splitlines() if "[devenv] x.sh 未被 git 跟踪" in ln]
+    assert len(err_hints) == 1 and hint_lines[0].endswith(err_hints[0])
+    assert len(added) == 2                               # 提示一行 + verified 一行
+
+
+def test_verify_lane_hint_with_newline_in_filename_logs_one_line(repo, capsys):
+    """文件名含换行时，日志里这条提示仍只占一行。"""
+    _git_init(repo)
+    name = "a\nb.sh"
+    try:
+        (repo / name).write_text("exit 0\n", encoding="utf-8")
+    except OSError:
+        pytest.skip("本机文件系统不允许文件名含换行")
+    _hint_lane(repo, f'bash "{name}"')
+    capsys.readouterr()
+    before = _log_text(repo).count("\n")
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    assert _log_text(repo).count("\n") == before + 2    # 提示一行 + verified 一行
+
+
+def test_log_helper_folds_whitespace_into_one_line(repo):
+    run("init", "--root", repo)
+    before = _log_text(repo).count("\n")
+    F._log(repo, "第一行\r\n第二行\n\n  第三行")
+    assert _log_text(repo).count("\n") == before + 1
+    assert _log_text(repo).splitlines()[-1].endswith("` 第一行 第二行 第三行")
+
+
+def test_verify_lane_outside_root_path_no_hint_no_error(repo, capsys):
+    _git_init(repo)
+    outside = repo.parent / "x.sh"        # 仓外真实存在的文件，contain 不拦就会被提示
+    outside.write_text("exit 0\n", encoding="utf-8")
+    try:
+        _hint_lane(repo, "true ../x.sh")
+        capsys.readouterr()
+        assert run("verify-lane", "--root", repo, "--id", "h") == 0
+        err = capsys.readouterr().err
+    finally:
+        outside.unlink()
+    _assert_no_hint(repo, err)
+    assert S.load(repo)["lanes"][0]["status"] == "verified"
+
+
+def test_verify_lane_tracked_script_with_exec_bit_no_hint(repo, capsys):
+    _git_init(repo)
+    sh = repo / "run.sh"
+    sh.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    sh.chmod(0o755)
+    _git(repo, "add", "run.sh")
+    _git(repo, "update-index", "--chmod=+x", "run.sh")      # index 记 100755
+    _hint_lane(repo, "./run.sh")
+    capsys.readouterr()
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    _assert_no_hint(repo, capsys.readouterr().err)
+    assert S.load(repo)["lanes"][0]["status"] == "verified"
+
+
+def test_verify_lane_tracked_script_behind_interpreter_no_exec_hint(repo, capsys):
+    """已跟踪、index 100644 的脚本在解释器后面：执行位提示只针对第一个词，这里不得出现。"""
+    _git_init(repo)
+    (repo / "test").mkdir()
+    (repo / "test/run.sh").write_text("exit 0\n", encoding="utf-8")
+    _git(repo, "add", "test/run.sh")                        # filemode=false -> 100644
+    assert _git(repo, "ls-files", "-s", "test/run.sh").startswith("100644")
+    _hint_lane(repo, "bash test/run.sh")
+    capsys.readouterr()
+    assert run("verify-lane", "--root", repo, "--id", "h") == 0
+    _assert_no_hint(repo, capsys.readouterr().err)
 
 
 # ---------- verify-lane 失败日志落盘（tasks 5.1）----------
@@ -1060,3 +1528,40 @@ def test_review_page_skips_extra_doc_that_no_longer_qualifies(tmp_path, sdflow_h
     cap = capsys.readouterr()
     assert "docs/gone.md" in cap.err                           # 告警并跳过
     assert "gone" not in _page_docs(repo)
+
+
+# ---------- log：往 devenv-log 追加一行 ----------
+
+def test_log_appends_one_line_with_utc_time_and_text(repo, capsys):
+    run("init", "--root", repo)
+    assert run("log", "--root", repo, "--msg", "人拍：e2e 层不适用") == 0
+    assert capsys.readouterr().out.strip().endswith("✓ log")
+    last = (repo / F.LOG_MD).read_text(encoding="utf-8").splitlines()[-1]
+    assert last.startswith("- `") and last.endswith("` 人拍：e2e 层不适用")
+    stamp = last[3:last.index("`", 3)]
+    datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_log_multiline_text_collapses_to_one_line(repo):
+    run("init", "--root", repo)
+    before = (repo / F.LOG_MD).read_text(encoding="utf-8").count("\n")
+    assert run("log", "--root", repo, "--msg", "第一行\r\n第二行\n\n  第三行") == 0
+    text = (repo / F.LOG_MD).read_text(encoding="utf-8")
+    assert text.count("\n") == before + 1
+    assert text.splitlines()[-1].endswith("` 第一行 第二行 第三行")
+
+
+def test_log_empty_text_exits_1_and_does_not_write(repo, capsys):
+    run("init", "--root", repo)
+    p = repo / F.LOG_MD
+    before = p.read_bytes()          # init 已写过日志，文件必存在
+    capsys.readouterr()
+    assert run("log", "--root", repo, "--msg", " \n\t ") == 1
+    assert "log --msg 为空" in capsys.readouterr().err
+    assert p.read_bytes() == before
+
+
+def test_log_without_devenv_json_fails_and_creates_no_log(tmp_path):
+    (tmp_path / "openspec").mkdir()
+    assert run("log", "--root", tmp_path, "--msg", "x") != 0
+    assert not (tmp_path / F.LOG_MD).exists()

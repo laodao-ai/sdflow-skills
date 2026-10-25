@@ -109,6 +109,12 @@ def atomic_write(path, text):
         # newline=""：不做换行转换，text 里的 \r\n / \n 原样落盘
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
             f.write(text)
+        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读写得了。
+        try:
+            mode = os.stat(str(path)).st_mode & 0o777
+        except FileNotFoundError:
+            mode = 0o644
+        os.chmod(tmpname, mode)
         os.replace(tmpname, str(path))
     except OSError:
         with contextlib.suppress(OSError):

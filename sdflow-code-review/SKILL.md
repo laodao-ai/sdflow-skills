@@ -204,7 +204,7 @@ Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一�
   第一遍: subagent-dev 终审 + 注入点B        第二遍: 本 skill（事后 sdflow-code-review）
   ────────────────────────────────────────────────────────────────
   时机   生成循环内                          全部实现完成后
-  机制   命中即派 fix 子代理修 + re-review 闭环  出报告 → 编排器修 → 存在复审循环，硬上限 2 轮（首轮之外最多 2 轮复审，只审修复 diff）
+  机制   命中即派 fix 子代理修 + re-review 闭环  出报告 → 编排器修 → 存在复审循环（轮数上限见 Step4「自动修复后的复审边界」，只审修复 diff）
   独立性 reviewer 冷,controller 热(在循环内)   完全冷独立(脱 controller)
   职责   即时修复确认(shift-left,便宜早修)    独立兜底网(实测能抓真问题)
 ```
@@ -223,7 +223,7 @@ Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一�
   - 锚回写时脏树守卫 fail-loud 拒写，按第 1 步的洁净检查先行处置。
 
   其余情况一律继续到完成产物；阶段三无人类门，不 AskUserQuestion。检查通过就继续，不做未要求的改进。
-- **循环上限**：读文件分支的镜回执不符的重派上限见契约「读文件指令与回执」，最终仍不符按故障矩阵处置；自动修复后的复审硬上限 2 轮（首轮之外最多 2 轮复审，连首轮共 3 轮审），第 2 轮复审仍报 Critical/Important 也不再进下一轮。
+- **循环上限**：读文件分支的镜回执不符的重派上限见契约「读文件指令与回执」，最终仍不符按故障矩阵处置；自动修复后的复审硬上限 2 轮，口径定义见 Step4「自动修复后的复审边界」。
 
 ## 第零步：确认对象 + diff base + 读规则
 
@@ -413,7 +413,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 1. 汇总 Step1（自持 scope 审计）+ 各镜 findings，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，
    折叠到 canonical lens 后供 Step5 落锚时导出各镜 `独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
    **拒判清单（`dismissed`）逐条裁决**：Step2 各镜在 findings 之外回传的 `dismissed` 清单（`{file, line, reason}`，
-   至多 5 条）由主 session **逐条**过目，不批量放行：
+   条数上限见 `code-checklists/code-review-base.md`「拒判清单」）由主 session **逐条**过目，不批量放行：
    - **同意**（该位置确实不构成问题）→ 记入报告「已裁掉」区并标 `[dismissed]`（与机械裁掉的 `[ref-check]` 来源可辨）。
    - **不同意**（主审判其构成问题）→ 主审**亲读**该 `file:line`，补齐 `quote`（或 `evidence_pack`）并定级，转为 finding，
      随后与普通 finding 同走下方机械引用核与二元裁决。
@@ -539,15 +539,15 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
    自锁。
    `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审自动修复"`。
    **无自动修复时跳过本步**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，同样自洽）。
-4. **复审（硬上限 2 轮：首轮之外最多 2 轮复审，仅当上一步产生了修复提交时触发）**〔curb-rework-loop-cost · adr/0035〕：
+4. **复审（轮数上限见 Step4「自动修复后的复审边界」，仅当上一步产生了修复提交时触发）**〔curb-rework-loop-cost · adr/0035〕：
    派复审，输入 diff 范围**限定为上一步 checkpoint 提交本身**（本轮修复 diff），MUST NOT 重新
    打包整个分支 diff 重审。
    - 复审干净（无 Critical/Important）⇒ 结束，进入第 5 步。
    - 复审仍报出 Critical/Important 且这是**第 1 轮**复审 ⇒ 回到第 2 步修复该轮复审揭出的问题
      （标 `[impl-review-fix]`），重复第 3 步（checkpoint，仅源码）与本步（复审，范围限定为这一
      轮的修复 diff）。
-   - 复审仍报出 Critical/Important 且这已是**第 2 轮**复审 ⇒ **MUST NOT 自发进入第 3 轮复审**，全部
-     defer 进 buglist，第 5 步写报告时显式标注「复审上限已达（2 轮），N 项残差已 defer」。
+   - 复审仍报出 Critical/Important 且这已是**第 2 轮**复审 ⇒ 按 Step4「自动修复后的复审边界」处置
+     （不进第 3 轮，残差 defer 进 buglist，第 5 步写报告时标注「复审上限已达」）。
    **上一步因无自动修复而跳过时，本步同样跳过**（详见 Step4「自动修复后的复审边界」）。
 5. **写报告初稿（无锚）** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings（已采纳） + 已裁掉区
    + 裁决 + 修复/defer 台账〔机读表，含专用 id 列，见 Step4〕）——先只写正文，**不写 frontmatter**。

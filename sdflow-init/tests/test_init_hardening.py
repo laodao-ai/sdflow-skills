@@ -230,3 +230,38 @@ class TestEnsureGlobalHookHardening:
         data = json.loads((home / "settings.json").read_text(encoding="utf-8"))   # 合法=未撕裂
         assert "myhook.py" in json.dumps(data)
         assert list(home.glob("*.tmp")) == []
+
+
+# 原子写权限（T403）：mkstemp 建 0600，写回后须沿用原 mode，无原文件取 0644 ------------
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_keeps_existing_mode(tmp_path):
+    p = tmp_path / "config.yaml"
+    p.write_bytes(b"old")
+    p.chmod(0o664)
+    init_mod._atomic_write(str(p), b"new", ".config.")
+    assert p.read_bytes() == b"new"
+    assert (p.stat().st_mode & 0o777) == 0o664
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_new_file_is_0644(tmp_path):
+    p = tmp_path / "config.yaml"
+    init_mod._atomic_write(str(p), b"new", ".config.")
+    assert (p.stat().st_mode & 0o777) == 0o644
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_settings_keeps_existing_mode(tmp_path):
+    p = tmp_path / "settings.json"
+    p.write_text("{}", encoding="utf-8")
+    p.chmod(0o664)
+    assert init_mod._atomic_write_settings(str(p), {"a": 1}) is True
+    assert (p.stat().st_mode & 0o777) == 0o664
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_settings_new_file_is_0644(tmp_path):
+    p = tmp_path / "settings.json"
+    assert init_mod._atomic_write_settings(str(p), {"a": 1}) is True
+    assert (p.stat().st_mode & 0o777) == 0o644

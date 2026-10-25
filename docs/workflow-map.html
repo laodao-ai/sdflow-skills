@@ -408,7 +408,7 @@
             <div class="stage-body">
               <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">CONTINUE_IMPL · 0</span> plan 号集 ⊄ 完成集；<code>done_tasks</code> 已完成号勿重派</span></div>
               <div class="row-line"><span class="row-k">判据</span><span class="row-v">完成 = checkpoint 标签集 ∪ 复选框集（集合归属）；每 ticket 双轴审（Standards+Spec）即时修复闭环</span></div>
-              <div class="row-line"><span class="row-k">seam</span><span class="row-v">implementer 的 TDD seam 在票报告附一行「能抓住什么、漏掉什么」，漏掉的部分注明由哪层测试或哪张票承担</span></div>
+              <div class="row-line"><span class="row-k">覆盖</span><span class="row-v">implementer 的 TDD seam 在票报告附一行「能抓住什么、漏掉什么」，漏掉的部分注明由哪层测试或哪张票承担</span></div>
               <div class="row-line"><span class="row-k">产物</span><span class="row-v art">checkpoint(&#123;change&#125;:task&lt;N&gt;-…) 提交</span></div>
             </div>
           </div>
@@ -422,7 +422,7 @@
             <div class="stage-body">
               <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_CODE_REVIEW · 0</span> · blocked → <span class="code-chip c-blocked">BLOCKED_UPSTREAM · 4</span></span></div>
               <div class="row-line"><span class="row-k">机制</span><span class="row-v">Step1 scope-drift → 多镜（领域/对抗×2-3/<b>历史×1</b>，无接地）→ 置信过滤 &lt;80 + 对抗裁决 → 自动修/T10自动裁/defer</span></div>
-              <div class="row-line"><span class="row-k">口径</span><span class="row-v">仅 Step2 镜适用：镜按「合理用户预期」判严重度（spec 未提但用户可感知的行为不因此降为 Minor），并回传 <code>dismissed</code> 拒判清单，由 Step3 主审逐条裁决；自动修复后的复审上限为首轮之外最多 2 轮复审（连首轮共 3 轮审）</span></div>
+              <div class="row-line"><span class="row-k">口径</span><span class="row-v">仅 Step2 镜适用，<code>sdflow-implement</code> Standards 轴不适用：镜按「合理用户预期」判严重度（spec 未提但用户可感知的行为不因此降为 Minor），并回传 <code>dismissed</code> 拒判清单，由 Step3 主审逐条裁决；自动修复后的复审上限为首轮之外最多 2 轮复审（连首轮共 3 轮审）</span></div>
               <div class="row-line"><span class="row-k">脚本门</span><span class="row-v"><code>anchor_lint --layer code-review</code> ✅#2 · <code>trivial_shape.py</code>（EXEMPT 免 fan-out）· <code>outside-voice</code></span></div>
               <div class="row-line"><span class="row-k">产物</span><span class="row-v"><span class="art">code-review-report.md</span> → <code>ship-gate.code_review: pass|blocked</code>；defer→buglist/todolist</span></div>
             </div>

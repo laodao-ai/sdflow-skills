@@ -75,8 +75,13 @@ def atomic_write(path, text):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
+        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644（chmod 跨平台尽力而为）。
         try:
-            os.chmod(tmpname, 0o644)   # mkstemp 默认 0600，回到常规可读（跨平台尽力而为）
+            mode = os.stat(str(path)).st_mode & 0o777
+        except FileNotFoundError:
+            mode = 0o644
+        try:
+            os.chmod(tmpname, mode)
         except OSError:
             pass
         os.replace(tmpname, str(path))

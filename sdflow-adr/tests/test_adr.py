@@ -736,3 +736,24 @@ def test_refs_git_failure_exits_2(tmp_path):
     r = refs_run(root, ["--base", "nonexistent-ref-xyz"])
     assert r.returncode == 2
     assert "git" in r.stderr
+
+
+# 原子写权限（T403）：mkstemp 建 0600，写回后须沿用原 mode，无原文件取 0644 ------------
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_keeps_existing_mode(tmp_path):
+    mod = _load_adr_module()
+    p = tmp_path / "0001-x.md"
+    p.write_text("old", encoding="utf-8")
+    p.chmod(0o664)
+    mod.atomic_write(p, "new")
+    assert p.read_text(encoding="utf-8") == "new"
+    assert (p.stat().st_mode & 0o777) == 0o664
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_new_file_is_0644(tmp_path):
+    mod = _load_adr_module()
+    p = tmp_path / "0001-x.md"
+    mod.atomic_write(p, "new")
+    assert (p.stat().st_mode & 0o777) == 0o644

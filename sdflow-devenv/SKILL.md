@@ -203,10 +203,11 @@ description: 把项目的开发/测试环境真正建起来——定测试策略
 
 ## 起手：preflight + 模式分流
 
-`$REPO` 须为 git 仓顶层目录（`--root` 同），脚本对子目录会报错。
+`$REPO` 须为 git 仓顶层目录（`--root` 同），脚本对子目录会报错。下面的命令示例可直接复制执行，先定义 `REPO`。脚本路径 `~/.claude/skills/sdflow-devenv/` 由 `setup.sh` 建立，Claude 与 Codex 宿主都可用；路径不存在时，在运行 checkout 跑 `bash setup.sh`。
 
 ```bash
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" init --root "$REPO"
+REPO="$(git rev-parse --show-toplevel)"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py init --root "$REPO"
 ```
 
 | exit | 含义 | 怎么办 |
@@ -269,6 +270,16 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" init --root "$REPO"
 
 **`environments.md` 铺完就归人 own —— skill 不会覆盖它**（它是纯人写，零机械渲染）。
 
+#### 工具链缺失与中途追加的需求
+
+- 前置工具链缺失：按红线 5 只给命令，不替人装。
+- 人明确授权在本会话内安装 / 升级 / 迁移：用 `log` 记一行「人拍」。代码迁移单独提交，不与测试脚手架混提。
+- 安装 / 迁移完成后，重采 `environments.md` 槽 1.1 与 3.1。
+
+```bash
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py log --root "$REPO" --msg "人拍：本会话内安装 mosquitto，integration 层真 broker 可跑"
+```
+
 ### ①' 素材盘点 + 判归属（**仅归位模式**）
 
 按 [`references/boundary-rules.md`](./references/boundary-rules.md) 把每节判去一个格：`testing-strategy` / `environments` / roadmap / SAD / 入口 / **已失效**。
@@ -325,9 +336,18 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" init --root "$REPO"
 **② -2 写进 JSON**：
 
 ```bash
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" set-layer --layer integration --how "…" --blind-spots "…"
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" set-lane  --id mqtt-real --layer integration --status planned --method "…"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py set-layer --root "$REPO" --layer integration --how "…" --blind-spots "…"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py set-lane  --root "$REPO" --id mqtt-real --layer integration --status planned --method "…"
 ```
+
+**② -3 留痕**：每层人拍板后，以及某层判 `不适用` 时，用 `log` 往 `devenv-log.md` 追加一行（带 UTC 时间）：
+
+```bash
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py log --root "$REPO" --msg "人拍：integration 层用真 broker，blind_spots 已记"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py log --root "$REPO" --msg "人拍：e2e 层不适用，后果：看不见端到端时序"
+```
+
+文本以 `-` 开头时用 `--msg=…` 形式。日志是版本化文件，不写凭证。
 
 ---
 
@@ -349,10 +369,18 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" set-lane  --id mqtt-real --layer
 > **给人看「跑什么命令」是不够的**——`make integration` 这一行对「里面到底跑什么」提供**零信息量**。
 > **MUST 给人看 smoke 与 harness 的 diff。真正危险的内容在那里。**
 
-**然后按 `executor` 分流**（**`script` 是默认首选，你亲自 fork 执行，不问「你跑过吗」**）：
+③-pre 人门通过后，留一行痕迹：
 
 ```bash
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" verify-lane --id mqtt-real
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py log --root "$REPO" --msg "人拍：③-pre 通过，smoke 与 harness diff 已过目"
+```
+
+**然后按 `executor` 分流**（**`script` 是默认首选，你亲自 fork 执行，不问「你跑过吗」**）：
+
+首跑前先用 `sh -c '<环境入口>'` 试一次：`verify-lane` 走非交互 shell，nvm、conda、ESP-IDF、venv 的激活脚本在交互 shell 里能用，不代表在这里能用。
+
+```bash
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py verify-lane --root "$REPO" --id mqtt-real
 ```
 
 | 结果 | 状态 |
@@ -374,7 +402,7 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" verify-lane --id mqtt-real
    > 「`dial tcp 127.0.0.1:1883: connection refused` —— 看起来 mosquitto 没起。`brew services start mosquitto` 后 `/sdflow-devenv continue`。」
 
    **你的职责是「建 + 验」，不是「调通」。** 一旦开始 debug，你会在一条泳道上耗光整个 session。**跑不绿本来就是合法状态。**
-4. **真硬件泳道天然不跑**（要烧板）→ 直接 `scaffolded`（`executor: human`），`blocked_by` 写明「需真机」，由操作者手动执行；**不替操作者写烧录 / 上板步骤**。
+4. **真硬件泳道天然不跑**（要烧板）→ SOP / harness 已落地 → `scaffolded`（`executor: human`），`blocked_by` 写「需真机（按 SOP 人工执行后 confirm-lane）」，由操作者手动执行；未落地 → `planned`；**不替操作者写烧录 / 上板步骤**。
 
 ---
 
@@ -407,20 +435,25 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" verify-lane --id mqtt-real
 
 > 通则缺席的后果很具体：一个冷镜子看到「e2e 层只有 planned 泳道」，会说「这个项目本来也没在跑 e2e，先这样吧」——**那正是通则 ③ 要杀的话。**
 
-按 [`references/review-lenses.md`](./references/review-lenses.md) 取镜。**①vacuous 镜 与 ②盲区镜 是心脏，永远取；其余按需。**
+按 [`references/review-lenses.md`](./references/review-lenses.md) 取镜。**①vacuous 镜 与 ②盲区镜 是心脏，永远取；其余按需。** 派发 prompt 按 [`references/review-dispatch-template.md`](./references/review-dispatch-template.md) 填，必交材料不得缺项。
 
 **冷审结果落盘（收回冷审结果后、进人门之前，MUST）**：
 
 - 每面镜的返回原文（剥掉回执行，不改写）写入本轮 run 目录的 `lens-<镜名>.md`（统称 `lens-*.md`，评审页会收录它们）。
 - 再写同目录的 `disposition.md`，逐条一行：`发现 / 处置（采纳|驳回|转 issues） / 理由或 issue 编号`。
-- 在 `openspec/architecture/devenv-log.md` 末尾追加一行，指向本轮 run 目录的 `disposition.md`（格式 ``- `<UTC 时间>` 冷审：<run 目录名> 处置见 <run 目录>/disposition.md``）。
+- 用 `log` 子命令往 `openspec/architecture/devenv-log.md` 末尾追加一行，指向本轮 run 目录的 `disposition.md`（落成 ``- `<UTC 时间>` 冷审：<run 目录名> 处置见 <run 目录>/disposition.md``）：
+
+```bash
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py log --root "$REPO" --msg "冷审：<run 目录名> 处置见 <run 目录>/disposition.md"
+```
+
 - 这是指令层约束，文件是否写出没有机械保证；缺失时汇总第 7 节显示「本轮无冷审处置记录」，缺口对人可见。
 
 **生成汇总与评审页（冷审处置落盘之后，人门之前）**：
 
 ```bash
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" render --root "$REPO"
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" review-page --root "$REPO" --event "冷审处置完成"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py render --root "$REPO"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py review-page --root "$REPO" --event "冷审处置完成"
 ```
 
 - `render` 在写 `testing-strategy.md` 的同时写 `devenv-review.md`（八节：结论、需要人拍板的事项、三层框架、泳道与证据、环境文档、落地物清单、冷审处置、本轮新增 issues；落地物与 issues 由 git 相对本轮起点回答）。
@@ -435,8 +468,8 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" review-page --root "$REPO" --eve
 **人门通过后**：先 `render`，再以「人门通过」为事件重新生成评审页（内容无变化时脚本提示「内容无变化，未追加修改日志」，属正常）：
 
 ```bash
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" render --root "$REPO"
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" review-page --root "$REPO" --no-open --event "人门通过"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py render --root "$REPO"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py review-page --root "$REPO" --no-open --event "人门通过"
 ```
 
 **人门固定议程**（按 `devenv-review.md` 的节序）：
@@ -453,9 +486,9 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" review-page --root "$REPO" --no-
 > **⚠️ 这一步是「渲染」，不是「产出」。** 三层框架已在 ② 拍板了；⑤ 只是把它变成文档。
 
 ```bash
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" render --root "$REPO"
-python3 "$SKILL_DIR/scripts/devenv_scaffold.py" inject --root "$REPO"
-python3 "$SKILL_DIR/scripts/devenv_lint.py"     --root "$REPO"    # 只报不拦
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py render --root "$REPO"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py inject --root "$REPO"
+python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_lint.py --root "$REPO"    # 只报不拦
 ```
 
 - **`testing-strategy.md`** ← 从 `.devenv.json` **机械渲染**（三层框架 + 泳道表 + 命令表，带 `DO NOT EDIT` banner）

@@ -515,3 +515,35 @@ def test_b13_transition_skeleton_requires_walkthrough_log(tmp_path):
     r2 = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
               "--slice-file", str(slice_f)], tmp_path)
     assert r2.returncode == 0
+
+
+# 原子写权限（T403）：写回须沿用原 mode，无原文件取 0644 ------------------------------
+
+def _load_scaffold():
+    import importlib.util
+    scripts = str(SCRIPT.parent)
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    spec = importlib.util.spec_from_file_location("sad_scaffold_mode_test", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_keeps_existing_mode(tmp_path):
+    mod = _load_scaffold()
+    p = tmp_path / "sad.md"
+    p.write_text("old", encoding="utf-8")
+    p.chmod(0o664)
+    mod.atomic_write(p, "new")
+    assert p.read_text(encoding="utf-8") == "new"
+    assert (p.stat().st_mode & 0o777) == 0o664
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_new_file_is_0644(tmp_path):
+    mod = _load_scaffold()
+    p = tmp_path / "sad.md"
+    mod.atomic_write(p, "new")
+    assert (p.stat().st_mode & 0o777) == 0o644

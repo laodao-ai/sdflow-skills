@@ -5,6 +5,7 @@ Run with: python3 -m pytest sdflow-init/tests/test_init.py -v
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -683,6 +684,129 @@ class TestEnsureGlobalHooks:
         assert len(data["hooks"]["PreToolUse"]) == 1  # not duplicated
 
 
+class TestSubagentPermissionGuardInstall:
+    """add-subagent-permission-guard Task 3：新 hook 经 `init` 入口装进全局 hook 目录并注册，
+    两个全局 hook 的注册命令在 CLAUDE_CONFIG_DIR 下都指向脚本实际落盘路径，退役走 RETIRED_HOOKS。
+    期望值取自 spec 字面（hook 名集合、事件、matcher），不从 HOOKS 推导。"""
+
+    GUARD = "subagent-permission-guard.py"
+    FF0 = "ff0-branch-guard.py"
+
+    @pytest.fixture(autouse=True)
+    def _real_claude_untouched(self):
+        """真实 ~/.claude 的 settings.json 字节与 hooks/ 清单在用例前后不变。"""
+        real = Path(os.path.expanduser("~")) / ".claude"
+
+        def snap():
+            settings = real / "settings.json"
+            hooks = real / "hooks"
+            return (
+                settings.read_bytes() if settings.is_file() else None,
+                sorted(p.name for p in hooks.iterdir()) if hooks.is_dir() else None,
+            )
+
+        before = snap()
+        yield
+        assert snap() == before, "真实 ~/.claude 被测试改动了"
+
+    def _init_twice(self, tmp_path, monkeypatch, seed_settings=None, second_mode="init"):
+        """seed_settings：init 前写入 settings.json 的内容（dict），None 则不写。"""
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        if seed_settings is not None:
+            (home / "settings.json").write_text(json.dumps(seed_settings), encoding="utf-8")
+        root = tmp_path / "proj"
+        root.mkdir()
+        init_mod.run(str(root), "init")
+        init_mod.run(str(root), second_mode)
+        return home, root
+
+    def _settings(self, home):
+        return json.loads((home / "settings.json").read_text(encoding="utf-8"))
+
+    def test_hook_name_set_is_exactly_the_two_global_guards(self):
+        assert {h["name"] for h in init_mod.HOOKS} == {self.FF0, self.GUARD}
+        guard = next(h for h in init_mod.HOOKS if h["name"] == self.GUARD)
+        assert guard["event"] == "PermissionRequest"
+        assert guard["matcher"] == "*"
+        assert os.path.isfile(guard["src"])
+
+    def test_init_twice_installs_script_and_one_permission_request_registration(
+            self, tmp_path, monkeypatch, capsys):
+        home, _ = self._init_twice(tmp_path, monkeypatch)
+        capsys.readouterr()
+        assert (home / "hooks" / self.GUARD).is_file()
+        assert (home / "hooks" / self.FF0).is_file()
+        data = self._settings(home)
+        perm = data["hooks"]["PermissionRequest"]
+        assert len(perm) == 1
+        assert perm[0]["matcher"] == "*"
+        assert self.GUARD in perm[0]["hooks"][0]["command"]
+        assert len(data["hooks"]["PreToolUse"]) == 1
+
+    def test_registered_commands_expand_to_the_script_landing_path(
+            self, tmp_path, monkeypatch, capsys):
+        home, _ = self._init_twice(tmp_path, monkeypatch)
+        capsys.readouterr()
+        data = self._settings(home)
+        commands = {
+            self.FF0: data["hooks"]["PreToolUse"][0]["hooks"][0]["command"],
+            self.GUARD: data["hooks"]["PermissionRequest"][0]["hooks"][0]["command"],
+        }
+        env = dict(os.environ)
+        env["CLAUDE_CONFIG_DIR"] = str(home)
+        env["HOME"] = str(tmp_path / "some-other-home")  # 与 CLAUDE_CONFIG_DIR 不同，防巧合相等
+        for name, cmd in commands.items():
+            # 只展开路径、不执行脚本：把解释器 python3 换成 printf
+            assert cmd.startswith("python3 ")
+            probe = "printf %s " + cmd[len("python3 "):]
+            out = subprocess.run(["sh", "-c", probe], env=env, capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace",
+                                 check=True).stdout
+            assert out == str(home / "hooks" / name)
+            assert os.path.isfile(out)
+
+    def test_user_permission_request_entry_survives_install_and_retire(
+            self, tmp_path, monkeypatch, capsys):
+        user_entry = {"matcher": "Bash", "hooks": [{"type": "command", "command": "/opt/my-perm-hook.sh"}]}
+        home, _ = self._init_twice(
+            tmp_path, monkeypatch,
+            seed_settings={"hooks": {"PermissionRequest": [user_entry]}})
+        capsys.readouterr()
+        perm = self._settings(home)["hooks"]["PermissionRequest"]
+        assert user_entry in perm
+        assert len([e for e in perm if self.GUARD in json.dumps(e)]) == 1
+        assert len(perm) == 2
+
+        monkeypatch.setattr(init_mod, "RETIRED_HOOKS", [self.GUARD])
+        init_mod.retire_hooks()
+        assert self._settings(home)["hooks"]["PermissionRequest"] == [user_entry]
+
+    def test_retiring_the_guard_removes_registration_and_script(
+            self, tmp_path, monkeypatch, capsys):
+        home, _ = self._init_twice(tmp_path, monkeypatch)
+        capsys.readouterr()
+        monkeypatch.setattr(init_mod, "RETIRED_HOOKS", [self.GUARD])
+        init_mod.retire_hooks()
+        data = self._settings(home)
+        assert data["hooks"]["PermissionRequest"] == []
+        assert not (home / "hooks" / self.GUARD).exists()
+        # 无关的 FF-0 保留
+        assert (home / "hooks" / self.FF0).is_file()
+        assert len(data["hooks"]["PreToolUse"]) == 1
+
+    def test_existing_legacy_ff0_registration_is_kept_unchanged_on_rerun(
+            self, tmp_path, monkeypatch, capsys):
+        legacy_cmd = 'python3 "$HOME/.claude/hooks/ff0-branch-guard.py"'
+        legacy_entry = {"matcher": "Bash", "hooks": [{"type": "command", "command": legacy_cmd}]}
+        home, _ = self._init_twice(
+            tmp_path, monkeypatch,
+            seed_settings={"hooks": {"PreToolUse": [legacy_entry]}}, second_mode="update")
+        capsys.readouterr()
+        assert self._settings(home)["hooks"]["PreToolUse"] == [legacy_entry]
+
+
 class TestDevTombstone:
     """fix-probe-scan-precision：`--dev` 退役，toolkit-仓根守卫随之删除；`run()` 不再接受
     `dev` 关键字参数（TypeError 是生产契约，非测试疏漏）。CLI 层保留一版 tombstone——
@@ -1049,12 +1173,17 @@ class TestEnsureGlobalHooksCodexWarning:
         codex_home = tmp_path / ".codex"
         codex_home.mkdir()
         monkeypatch.setattr(os.path, "expanduser", lambda p: str(codex_home) if p == "~/.codex" else os.path.expanduser.__wrapped__(p) if hasattr(os.path.expanduser, '__wrapped__') else str(tmp_path / p.replace("~/", "")))
-        monkeypatch.setattr(os.path, "isdir", lambda p: True if p == str(codex_home) else os.path.isdir.__wrapped__(p) if hasattr(os.path.isdir, '__wrapped__') else os.path.isdir(p))
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        # 先取真 isdir 再打补丁：原写法在 lambda 里再调被替换后的 os.path.isdir，会无限递归；
+        # 只装一个 hook 时 makedirs 不走 isdir 分支所以没暴露，两个 hook 时第二次 makedirs 触发。
+        real_isdir = os.path.isdir
+        monkeypatch.setattr(os.path, "isdir", lambda p: True if p == str(codex_home) else real_isdir(p))
         output = init_mod.ensure_global_hooks()
         assert "⚠" in output
         assert "Codex" in output
 
     def test_codex_dir_absent_no_warning(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
         monkeypatch.setattr(os.path, "expanduser", lambda p: str(tmp_path / "nonexistent") if p == "~/.codex" else str(tmp_path / p.replace("~/", "")))
         output = init_mod.ensure_global_hooks()
         assert "⚠" not in output

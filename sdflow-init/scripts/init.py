@@ -80,13 +80,26 @@ def _find_marker_line(text, token):
 CORE_DIRS = ["changes", "specs"]  # openspec 核心；buglists/todolists 由各自 recorder skill 首用时建
 
 # 全局 hooks：通用功能，全局安装一次（~/.claude/），跨所有项目生效，不随 per-project bundle 铺设。
+# 两个 hook：
+#   · ff0-branch-guard.py        PreToolUse / Bash        在保护分支上拦 `openspec new change`
+#   · subagent-permission-guard.py  PermissionRequest / *  无人值守的 sdflow 子代理要权限确认时直接拒绝
+# cmd 里的脚本路径写成 `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`，与 ensure_global_hook 的落盘目录
+# （CLAUDE_CONFIG_DIR 优先，缺省 ~/.claude）一致；写死 `$HOME/.claude` 会让设置了
+# CLAUDE_CONFIG_DIR 的用户注册指向一个没有脚本的位置。存量 FF-0 注册不改写（幂等判据按 hook 名）。
 HOOKS = [
     {
         "name": "ff0-branch-guard.py",
         "src": os.path.join(ASSETS, "hooks", "ff0-branch-guard.py"),
         "event": "PreToolUse",
         "matcher": "Bash",
-        "cmd": 'python3 "$HOME/.claude/hooks/ff0-branch-guard.py"',
+        "cmd": 'python3 "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/ff0-branch-guard.py"',
+    },
+    {
+        "name": "subagent-permission-guard.py",
+        "src": os.path.join(ASSETS, "hooks", "subagent-permission-guard.py"),
+        "event": "PermissionRequest",
+        "matcher": "*",
+        "cmd": 'python3 "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/subagent-permission-guard.py"',
     },
 ]
 
@@ -550,6 +563,12 @@ def _atomic_write(path, content, prefix):
             out.write(content)
             out.flush()
             os.fsync(out.fileno())
+        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读写得了。
+        try:
+            mode = os.stat(path).st_mode & 0o777
+        except FileNotFoundError:
+            mode = 0o644
+        os.chmod(tmp, mode)
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):
@@ -1045,6 +1064,12 @@ def _atomic_write_settings(settings, data):
                 f.write("\n")
                 f.flush()
                 os.fsync(f.fileno())
+            # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读写得了。
+            try:
+                mode = os.stat(settings).st_mode & 0o777
+            except FileNotFoundError:
+                mode = 0o644
+            os.chmod(tmp, mode)
             os.replace(tmp, settings)
         except BaseException:
             try:

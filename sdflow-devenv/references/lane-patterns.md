@@ -137,7 +137,7 @@
 - **真板**：**时序 · 电气 · 真外设** —— 仿真给不了。
 
 **⚠️ 真硬件泳道天然 `executor: human`，且天然不自动跑**（要烧板）。
-⇒ **直接 `scaffolded`，`blocked_by` 写明「需真机」，由操作者手动执行；MUST NOT 替操作者写烧录 / 上板步骤。**
+⇒ **SOP / harness 已落地 → `scaffolded`（`executor: human`），`blocked_by` 写「需真机（按 SOP 人工执行后 confirm-lane）」，由操作者手动执行；未落地 → `planned`。MUST NOT 替操作者写烧录 / 上板步骤。**
 
 **代价**：仿真 = 配置成本高但一次性；真板 = 每次都要人。
 

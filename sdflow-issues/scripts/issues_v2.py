@@ -257,6 +257,12 @@ def atomic_write_text(path, text):
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
+        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读写得了。
+        try:
+            mode = os.stat(path).st_mode & 0o777
+        except FileNotFoundError:
+            mode = 0o644
+        os.chmod(tmp, mode)
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):

@@ -228,16 +228,16 @@ def test_devenv_step4_persists_cold_review_results():
     step4 = devenv_step("### ④ 冷审 + 人门", "### ⑤ 渲染")
     assert "`lens-*.md`" in step4
     assert "`disposition.md`" in step4
-    assert "devenv-log.md` 末尾追加一行，指向本轮 run 目录的 `disposition.md`" in step4
+    assert "用 `log` 子命令往 `openspec/architecture/devenv-log.md` 末尾追加一行，指向本轮 run 目录的 `disposition.md`" in step4
 
 
 def test_devenv_step4_generates_review_page_after_disposition():
     step4 = devenv_step("### ④ 冷审 + 人门", "### ⑤ 渲染")
-    render_cmd = 'python3 "$SKILL_DIR/scripts/devenv_scaffold.py" render --root "$REPO"'
-    page_cmd = 'python3 "$SKILL_DIR/scripts/devenv_scaffold.py" review-page --root "$REPO"'
+    render_cmd = 'python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py render --root "$REPO"'
+    page_cmd = 'python3 ~/.claude/skills/sdflow-devenv/scripts/devenv_scaffold.py review-page --root "$REPO"'
     assert render_cmd in step4 and page_cmd in step4
     # 冷审处置落盘在先，汇总与评审页在后；人门通过的重新生成再在其后
-    disposition = step4.index("devenv-log.md` 末尾追加一行")
+    disposition = step4.index("用 `log` 子命令往 `openspec/architecture/devenv-log.md` 末尾追加一行")
     first_gen = step4.index(page_cmd)
     assert disposition < step4.index(render_cmd) < first_gen
     assert '--no-open --event "人门通过"' in step4

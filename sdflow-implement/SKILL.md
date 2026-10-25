@@ -421,6 +421,10 @@ fail-closed 罢工分支——每个罢工分支都是一类项目被拒之门�
    `layers` 字段列出的层，implementer 不再自行判定层集合。`domains_configured=false`（`domains`
    键缺席）时 `mapping[]` 每项仍 SHALL 含 `path`/`domain`/`prefix` 三键，`domain`/`prefix` 恒为
    `null`——字段 MUST NOT 省略。
+   贴入的 JSON 下方 SHALL 紧跟两条说明：
+   - 一句「`head` 为运行 suite-scope 时的 HEAD，本报告在其后提交」。`head` 不得改成报告提交的 SHA：
+     `sdflow-done` verify 用它重跑比对。
+   - `layers` 为空时，一句原因（如「config 未配置 test-suites」或「命中域无层」），并注明依据本条（第 0 条）。
 1. **命令来源优先级**：① 第 0 条 `suite-scope` 输出 `layers` 中已给出命令的层（= `openspec/
    config.yaml` 的 `test-suites` 显式配置——`domains` 存在时取命中域各域的 `layers`，`domains`
    缺席时取顶层 `test-suites.{unit,integration,e2e}`）；② `layers` 中某层缺命令（配置未声明）时，
@@ -556,10 +560,12 @@ impl-pipeline: tickets
 **Blocked-by:** 1,2,...,N-1
 **R-ID:** all
 
-按「聚合套件发现契约」运行本 change **命中域的全部层**并全部通过；报告头 SHALL 以管道直贴（MUST NOT 手工转录）
-`suite-scope` 输出的 JSON（`base`/`head`/`domains_configured`/`hit_domains`/`layers`/
-`skipped_layers`/`mapping`），证据落 `impl-reports/task<N>-<slug>.md`（每层一行
-`<层>|<命令原文>|<退出码>|<用例数>|<SHA>`；非运行两行态形状不变，`<用例数>` 三态取值与零用例判失败见「聚合套件发现契约」证据 schema 条）。
+按「聚合套件发现契约」运行本 change **命中域的全部层**并全部通过。
+
+- 报告头 SHALL 以管道直贴（MUST NOT 手工转录）`suite-scope` 输出的 JSON，
+  字段：`base`/`head`/`domains_configured`/`hit_domains`/`layers`/`skipped_layers`/`mapping`。
+- 证据落 `impl-reports/task<N>-<slug>.md`。每层一行的列格式、非运行行态、`<用例数>` 三态与零用例判失败，
+  全部见本文件「聚合套件发现契约」的「证据 schema」条，此处不重复。
 
 - [ ] 命中域各层证据齐全并通过（或记未覆盖 / 不在命中域）
 ```

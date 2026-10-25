@@ -49,3 +49,12 @@ stacking deny 先于 cwd 未判定。
 
 CLI 1.5.0 的 `validate --strict` 只校验 `specs/*/spec.md` delta；其余三份（proposal / design /
 tasks）截断仍可能双绿，只能靠终审读回判定，MUST NOT 声称它能挡住半截 design.md。
+
+## B.1 ③ `change-start` 基线行
+
+`token_snapshot.py --step change-start` 落基线行（implement-optimize-codex-workflow-p2-pull
+spec-review-amendment R1）：Codex 宿主下 token-log.jsonl 首行以此为差分基底，取代旧分支已废弃的
+reflog + `usage_since_branch` 方案；helper 内部按宿主分流，Claude 宿主下写 v1 首行（首行全额口径
+不变，只是提前）。helper 自身不加任何 Git 调用。
+
+不改名的依据：openspec CLI 无 rename change 命令，实查仅 `new change` / `archive`。

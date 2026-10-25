@@ -1350,3 +1350,22 @@ def test_v1_split_frontmatter_returns_empty_items_for_pure_legacy_text():
     items, body = v2._v1_split_frontmatter("# just a heading\nno frontmatter here\n")
     assert items == {}
     assert body == "# just a heading\nno frontmatter here\n"
+
+
+# 原子写权限（T403）：mkstemp 建 0600，写回后须沿用原 mode，无原文件取 0644 ------------
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_text_keeps_existing_mode(tmp_path):
+    p = tmp_path / "a.md"
+    p.write_text("old", encoding="utf-8")
+    p.chmod(0o664)
+    v2.atomic_write_text(str(p), "new")
+    assert p.read_text(encoding="utf-8") == "new"
+    assert (p.stat().st_mode & 0o777) == 0o664
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_atomic_write_text_new_file_is_0644(tmp_path):
+    p = tmp_path / "a.md"
+    v2.atomic_write_text(str(p), "new")
+    assert (p.stat().st_mode & 0o777) == 0o644
