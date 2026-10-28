@@ -400,3 +400,51 @@ def test_defer_gate_ignores_description_column_old_ticket_reference(repo):
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "RUN_VERIFY"
+
+
+# ══════════════════════ 「既有问题」区形态（retest-review-fixes-and-record-preexisting） ══════════════════════
+# 代码评审报告新增「既有问题」区。带 id 列的表只放本 change 池项；
+# 「已存在：T123」「待人工补录」写在表下列表；无既有问题只写「无」。
+# 这些用例对 guard_defer_ledger 直接喂报告文本（不经 CLI），只验 B26 对新形态的放行/拦截。
+
+PREEXISTING_HEAD = "### 既有问题\n"
+PREEXISTING_TABLE = ("| id | 池 | 摘要 | 说明 |\n"
+                     "|---|---|---|---|\n"
+                     "| B90 | bug | 既有问题：parse_foo 空输入越界 | 不在改动行内 |\n")
+
+
+def _guard(repo, body):
+    report = repo / "code-review-report.md"
+    report.write_text("# code-review 报告\n" + body, encoding="utf-8")
+    return _sg.guard_defer_ledger(repo, "demo", report)
+
+
+def test_preexisting_section_table_row_plus_already_exists_passes(repo):
+    write_pool_file(repo, "bug", "B90", "demo")
+    body = PREEXISTING_HEAD + PREEXISTING_TABLE + "\n- 已存在：T123\n"
+    assert _guard(repo, body) is None
+
+
+def test_preexisting_section_none_only_passes(repo):
+    assert _guard(repo, PREEXISTING_HEAD + "无\n") is None
+
+
+def test_preexisting_section_pending_manual_record_below_table_passes(repo):
+    body = (PREEXISTING_HEAD + "\n- 待人工补录：既有问题：X；"
+            "补录命令：`issues_v2.py add --pool bug --json '{}'`\n")
+    assert _guard(repo, body) is None
+
+
+def test_preexisting_section_none_written_as_id_row_is_blocked(repo):
+    body = (PREEXISTING_HEAD + "| id | 池 | 摘要 | 说明 |\n"
+            "|---|---|---|---|\n"
+            "| 无 | — | — | — |\n")
+    reason = _guard(repo, body)
+    assert reason is not None and "id 列内容非法" in reason
+
+
+def test_preexisting_section_table_id_from_other_change_is_blocked(repo):
+    write_pool_file(repo, "bug", "B90", "some-other-change")
+    body = PREEXISTING_HEAD + PREEXISTING_TABLE
+    reason = _guard(repo, body)
+    assert reason is not None and "some-other-change" in reason

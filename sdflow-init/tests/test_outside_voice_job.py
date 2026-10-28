@@ -2691,6 +2691,13 @@ def test_cleanup_leaves_an_orphan_warning_and_skips_rm_when_the_subtree_survives
     assert payload["fallback_allowed"] is False, payload
     assert str(pid) in payload["orphan_warning"], payload
     assert _destructive(fake_claude) == [("stop", "75d34378")], _destructive(fake_claude)
+    # 〔T227〕stop 杀不到 timeout 自建的进程组，但 runner 到点自行退出：提示里给出上限时刻。
+    started_at = json.loads((run_dir / "design-voice.started.json").read_text())["started_at"]
+    bound = JOB.datetime.fromtimestamp(
+        JOB.parse_utc_iso(started_at) + 900 + JOB.AWAIT_GRACE_SECONDS,
+        JOB.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert "timeout -k 10 900" in payload["orphan_warning"], payload
+    assert bound in payload["orphan_warning"], payload
 
 
 def test_cleanup_leaves_an_orphan_warning_when_the_subtree_exit_cannot_be_proven(
@@ -2713,6 +2720,8 @@ def test_cleanup_leaves_an_orphan_warning_when_the_subtree_exit_cannot_be_proven
     assert payload["removed"] is False, payload
     assert payload["unknown_cost"] is True, payload
     assert _destructive(fake_claude) == [("stop", "75d34378")], _destructive(fake_claude)
+    # 没有 started_at 就算不出 runner 自退上限 ⇒ 不给提示，不编一个时刻。
+    assert "timeout -k 10" not in payload["orphan_warning"], payload
 
 
 def test_dispatch_stays_honest_when_reading_the_spawn_output_blows_up(monkeypatch, tmp_path):

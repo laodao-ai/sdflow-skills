@@ -335,8 +335,62 @@ python3 sdflow-implement/scripts/impl_route.py suite-scope \
    该需求判 ✅，锚 = 该 impl-report 文件路径 + 其内的 SHA（**不要求该票有 commit**——
    `checkpoint-commit.sh` 在干净树上直接成功退出、不建 commit，聚合套件一次绿时该票可能本来
    就无 commit）；**锚语义 MUST 写成「实现期结束时命中域内聚合套件通过」，MUST NOT 写成「最终
-   代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其自动修复循环之前，此证据时效
-   缺口是已知且接受的残余风险（design「收尾票的定位」节）。找不到 → 判**核心缺口**。
+   代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其自动修复循环之前，收尾票之后的
+   改动由下面的「修复后重跑」覆盖，MUST NOT 视为残余风险。找不到 → 判**核心缺口**。
+
+   **修复后重跑**〔retest-review-fixes-and-record-preexisting〕：放在上面 SHA 一致性核验**通过
+   之后**（核验不通过已判核心缺口，不再重跑）。重跑属于 verify 的职责。
+   - **A 的取法**：A = 收尾票各通过行共同锚定的 SHA；收尾票没有通过行时，A 取收尾票报告头的 `head`。
+   - **范围由 suite-scope 回答**（不手写路径或依赖解析）：
+
+```bash
+python3 sdflow-implement/scripts/impl_route.py suite-scope \
+  --root <repo> --base <A> --head HEAD
+```
+
+     这次调用与上面「重跑分域判定并比对报告头」那次调用**相互独立**：那次用报告头的 base/head
+     核验收尾票的求值，本次覆盖收尾票之后的改动。退出非 0（含 A 已被 rebase 改写、无法解析）
+     ⇒ 按环境故障 halt：problem + cause + fix，MUST NOT 判 PASS。
+   - **是否重跑**：`mapping` 为空 ⇒ 不重跑，verify-report 写「无代码改动，未触发重跑」；
+     `mapping` 非空而 `layers` 为空 ⇒ 不重跑，写「命中域无自动测试层，未触发重跑」；两者都不判缺口。
+   - **取档**：只跑 `layers` 中的层；层名 `unit` 取 `full`，其余层名一律取 `quick`（含 domains 模式下
+     的自定义层名；未分档的层两键同值）。**quick 取档只适用于本重跑**，MUST NOT 改变收尾票收口
+     取 full 的规则。需人执行的测试不进 `test-suites`，不在此处理。
+   - **`SDFLOW_DIFF_BASE` 注入**：`SDFLOW_DIFF_BASE=<报告头 base>`；旧契约报告的报告头
+     无 `base` 时注入 A。
+   - **证据**：沿用收尾票五列格式 `<层> | <命令原文> | <退出码> | <用例数> | <SHA>`，所有通过行锚
+     verify 时的同一个 HEAD；重跑组与收尾票组**各自**核验 SHA 一致性，两组不互相比对。
+   - **未配 `domains` 时缩小范围的办法**：未配 `test-suites.domains` 的项目，`layers` 恒为全部已配置层，
+     修复改了任何非 `openspec/` 文件都会全层重跑；配 `test-suites.domains`（如给 docs 域配空层）
+     可缩小范围。
+   - **时长上限**：触发重跑时，本入口的 verify 子代理时长上限 180 分钟（要跑测试）。
+   - **跑红分诊**：某层退出码非 0 时，对每个失败用例（标识取 runner 原生用例标识，取不到则以层名
+     代表整条层命令）按序判定，**层内全部失败用例**都放行，该层才算通过：
+     1. (层, 失败用例标识) 与收尾票 `## 既有红测` 小节某行的 (层, 失败用例标识) **联合逐字匹配**
+        ⇒ 放行，照录其 issue id。只匹配标识不够：同一 pytest node id 可在两层运行。名单行按
+        第一个与最后一个 `|` 切三列（口径见 `sdflow-implement` 的 `## 既有红测` 小节）。收尾票
+        报告没有该小节时按名单为空处理。
+     2. 同命令复跑一次即绿 ⇒ 放行并注明 flaky，贴两次运行的退出码与用例数。
+     3. 依赖缺失、网络或环境不可用、命令超时或被杀 ⇒ halt：problem（层与命令）、cause（原始错误
+        摘要）、fix（具体修复动作 + 「修复后重跑 `/sdflow-ship`」）。
+     4. 其余 ⇒ 在收尾票报告头 `base` 的临时 worktree 复跑同一命令。**该失败用例标识在 base 的
+        失败集里同样出现**才判既有，按下方「既有问题记录规则」入池后放行。该标识在 base 上通过、
+        不存在，或 base 命令因收集报错整体失败而拿不到该用例结果，一律判本 change 回归，记
+        **核心缺口**，MUST NOT 判 PASS。取不到用例级标识时以层名代表整条命令，按整条命令比。
+        报告头无 `base` 时，复跑点取 `git merge-base <默认分支> HEAD`（默认分支见第零步 0.2）。
+        - 临时 worktree 建在仓外的系统临时目录下：
+          `git worktree add --detach <路径> <base>`。无论成败都 `git worktree remove --force <路径>`。
+        - base 复跑自身遇依赖缺失、命令不存在、网络或环境不可用、超时被杀，或 `git worktree add`
+          失败 ⇒ 按第 3 步 halt，不判既有。
+     核心缺口条目 MUST 含：层、命令、退出码、失败用例标识、复跑结果、base 复跑结果（该用例在
+     base 上的结果）。
+     verify 只分诊、不修；修复由人提交后重跑 `/sdflow-ship`。
+   - **既有问题记录规则**（四处共用，与 `sdflow-code-review`、`sdflow-implement` 同口径）：先
+     `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --status OPEN --status PROPOSED`
+     按 module 与 summary 比对，确认是同一问题就复用其 id，拿不准就新增；新增走 `issues_v2.py add`，
+     `source_change` 显式传本 change 名，summary 以全角「既有问题：」开头；确认是缺陷进 bug 池，
+     改进或关注点进 todo 池。recorder 非零退出时，报告写「待人工补录」并附一条可直接执行的
+     `issues_v2.py add` 补录命令，MUST NOT 写假 id。
 5. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
 6. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
    - **报告头部 frontmatter（ship-gate 契约，模板写死二选一，勿改写字段名、勿两键并存）**：
@@ -469,6 +523,9 @@ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_
 
 1. **✅ 完成了什么**：引 verify-report 的 done 项。**P3h-c：不直接搬运 verify 的 ✅**——每条至少复核锚点存在性（测试名 / commit / 文件:行 真的在），再写进"完成"；无锚点的不写成完成。
 2. **⏳ 未完成 / 延后**：本 change 新增的 bug/todo（sdflow-code-review defer 的，已按下方 §2.1 scan 出的 ID 列表，各自见 `openspec/issues/open/{ID}.md`）+ 被延后的 ≥2 方案决策（附当时自动选了什么 / 为何拿不准）+ verify 的 Minor 缺口。
+   scan 结果**按 summary 前缀「既有问题：」（全角冒号）分两组**，组标题旁注明「按 summary 前缀『既有问题：』分组」；任一组为空写「无」：
+   - **本 change 延后项**：summary 不以「既有问题：」开头的项。ADR 同步登记的「未声明偏离」是本 change 产物，不适用既有问题记录规则，列在这一组。
+   - **发现的既有问题（非本 change 引入）**：summary 以「既有问题：」开头的项；另列本 change 发现但未新记的项——代码评审报告「既有问题」区的「已存在」与「待人工补录」条目、收尾票 `## 既有红测` 中复用或待补录的行、verify-report 中复用（他 change id）或「待人工补录」的既有问题、各票 impl-report 中「无关」票外发现的复用或待补录行。按 issue id 去重。
 3. **▶ 下一阶段建议**：建议开哪个清理 change、优先级；哪些 defer 项该一起清。
 
 **第 1.5 步同步结果单独一行**（不并入上面三段，紧跟三段之后）：`ADR 同步：候选 N / 修改 M / bug K`，

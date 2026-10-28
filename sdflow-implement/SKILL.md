@@ -458,9 +458,23 @@ fail-closed 罢工分支——每个罢工分支都是一类项目被拒之门�
    - `未知` ⇒ 不阻塞，但须在旁注写明依据：「用例数不可得：runner 无汇总行，未机械核验；verify
      可对照该层 runner 原始输出抽查」。
    - 诚实边界：用例数是 implementer 读 runner 输出自报，无机械核验。
+   - 除每层一行外，票报告另有固定小节 `## 既有红测`（行格式
+     `<层> | <失败用例标识> | <issue id>`，写法见下第 6 条）。
 6. **四类失败分诊**（退出码非 0 时）：本 change 引入的回归 → 进 fix 循环；仓内既有红测（用 base
-   SHA 复跑该命令确认改动前即红）→ 记录并放行，不阻塞；flaky（同命令复跑一次即绿）→ 记录并放行；
-   环境故障（依赖缺失 / 网络）→ halt envelope 停并上抛。
+   SHA 复跑该命令确认改动前即红）→ **先按下方「既有问题记录规则」入池，再写 `## 既有红测` 一行，
+   放行**，不阻塞；flaky（同命令复跑一次即绿）→ 记录并放行；环境故障（依赖缺失 / 网络）→ halt
+   envelope 停并上抛。
+   - **`## 既有红测` 小节**〔retest-review-fixes-and-record-preexisting〕：票报告固定小节，逐行
+     `<层> | <失败用例标识> | <issue id>`。失败用例标识取 runner 在失败输出里打印的原生标识
+     （如 pytest node id），逐字记录；取不到用例级标识时写层名，代表整条层命令。标识本身可能含 `|`：按第一个与最后一个 `|` 切三列，中间整段为标识，原样保留。recorder 非零
+     退出时 issue id 写「待人工补录」，该失败照样放行。无既有红测可省略该小节；`sdflow-done`
+     的 verify 重跑分诊只认这个小节，不读散文。
+   - **既有问题记录规则**（四处共用，与 `sdflow-code-review` 同口径）：先
+     `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --status OPEN --status PROPOSED`
+     按 module 与 summary 比对，确认是同一问题就复用其 id，拿不准就新增；新增走 `issues_v2.py add`，
+     `source_change` 显式传本 change 名，summary 以全角「既有问题：」开头；确认是缺陷进 bug 池，
+     改进或关注点进 todo 池。recorder 非零退出时，报告写「待人工补录」并附一条可直接执行的
+     `issues_v2.py add` 补录命令，MUST NOT 写假 id。
 7. 🔴 **中间 fix 轮与收口轮范围分离**〔curb-rework-loop-cost · adr/0035，扩展自
    [impl-review-fix FIX-4] 的单一盘面——该约束本身不受本次扩展弱化〕：
    - **中间 fix 轮**（产品代码修复之后、下一轮 re-review 之前——**「实现验证」收尾票的 fix 轮
@@ -502,10 +516,10 @@ fail-closed 罢工分支——每个罢工分支都是一类项目被拒之门�
 
 该票跑在 `sdflow-code-review` 及其自动修复循环**之前**——它回答的是「全部功能票实现完毕这一刻，
 聚合套件是否通过」，**不声称**「最终代码通过聚合套件」。既有 Requirement「verify 为收尾最终门，
-位于所有修复之后」未被触碰：verify 仍在 `sdflow-done`、仍在所有修复之后，本 change 不修改它，
+位于所有修复之后」未被触碰：verify 仍在 `sdflow-done`、仍在所有修复之后，
 收尾票不是 verify、不替代 verify、不前移 verify。code-review 之后的修复由其自身保障机制（双轴/
-领域镜 + 机械引用核 + 二元裁决 + fix 循环）覆盖；「收尾票锚点相对 code-review 修复而言不是最新」是
-**已知且接受**的残余风险，见 design「收尾票的定位」节与 `decision-memo.md`「接受的边角」。
+领域镜 + 机械引用核 + 二元裁决 + fix 循环）覆盖；「收尾票锚点相对 code-review 修复而言不是最新」这一空档
+由 `sdflow-done` 的 verify 在修复后按 `suite-scope` 输出重跑覆盖（见 `sdflow-done/SKILL.md`）。
 `sdflow-done` 的 verify 引用该票 impl-report 作为「**实现期**聚合覆盖」证据锚时，措辞 MUST 与此
 定位一致——**MUST NOT** 写成「最终全量回归通过」；该锚为**无条件要求**（详见 `sdflow-done/SKILL.md`）。
 
@@ -644,12 +658,25 @@ fix 子代理。容量只能改变批次，MUST NOT 删除任务、减少镜数�
 - **宿主分支**（`$SDFLOW_HOST` 第零步已 resolve）：
   - **`host=claude`**：`next_ready` 返回多个候选时 SHALL 并行派发 implementer 子代理，**每个
     implementer SHALL 使用 `isolation: "worktree"`**（Agent tool 原生参数，harness 自动创建独立
-    git worktree）。所有 implementer 返回后，编排层 SHALL **逐票按号序串行**执行：merge worktree
-    分支回主分支（`git merge --no-ff`）→ 双轴审 → fix 循环（如有）→ checkpoint commit。
+    git worktree）。所有 implementer 返回后，编排层 SHALL **逐票按号序串行**执行：起点核对（见下
+    「worktree 起点」）→ merge worktree 分支回主分支（`git merge --no-ff`；本节「主分支」均指编排层
+    所在的功能分支）→ 双轴审 → fix 循环（如有）→ checkpoint commit。
   - **`host=codex`**：`next_ready` 返回多个候选时 SHALL **按号序逐个派发**
     （退化为串行），行为与改动前完全一致。Codex 无原生 worktree 隔离且进程回收模型不兼容并行。
   - `next_ready` 返回单个候选时行为与串行模式一致（两宿主一致）。
 - **并行 dispatch 约束（Claude 宿主）**：
+  - **worktree 起点**〔T438〕：harness 默认从仓库默认分支（远端 `origin/HEAD`）建 worktree，
+    不从当前功能分支建，且只检出已提交的文件。因此三步都 SHALL 照做：
+    1. 派发前编排层先提交本批全部 brief 文件，再取 `BASE_SHA=$(git rev-parse HEAD)`，写进每个
+       implementer 的 dispatch prompt（给 SHA，不给分支名）。
+    2. implementer 动手前执行 `git reset --hard <BASE_SHA>`，再核对 `git rev-parse HEAD` 等于
+       `<BASE_SHA>`，不等即返回 `BLOCKED`。此时 worktree 还没有改动，reset 不丢工作。不用
+       `git merge --ff-only`：默认分支在功能分支切出后前进过时，worktree 起点不是 `BASE_SHA`
+       的祖先，ff 会失败。
+    3. merge 前编排层跑 `git merge-base --is-ancestor <BASE_SHA> <worktree 分支>`，非 0 ⇒
+       不 merge、丢弃该 worktree，按 halt envelope 停并上抛。这一步由 git 判定，不依赖
+       implementer 是否照做第 2 步。
+    用户在 settings 里设了 `worktree.baseRef: "head"` 时 worktree 已从当前 HEAD 起步，三步照做。
   - 每个 implementer 在独立 worktree 中工作，有独立 `.git/index` 和工作树——不存在 index 竞态。
   - implementer dispatch prompt MAY 建议按文件名 `git add <具体文件>`（最佳实践）——worktree
     隔离下通配暂存不会带入别人的改动。
@@ -690,6 +717,11 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
 - 上一步脚本产出的 brief 文件路径（implementer 自己 Read；**编排层 MUST NOT 手动复制该
   `### Task N:` 段落文本进 prompt**）；
 - plan 头部 `## Global Constraints` 节全文（逐字，implementer 与 reviewer 共享同一份注意力透镜）；
+- **🔴 代码审查清单**〔T461〕（必填槽，与下方 Standards 轴用同一份解析结果，**全文贴进 prompt**）：
+  `code-checklists/code-review-base.md` 的规则表（不含末节「严重度口径与拒判清单」，该节只给
+  `sdflow-code-review` 用）+ `domains/<命中栈>`。写的时候按清单约束，Standards 轴照样逐条审，
+  不因写时带过而放松。解析失败或命中栈无清单时，按 Standards 轴同一降级口径在 prompt 里写明
+  「领域清单未覆盖」及原因；
 - **🔴 四条通则由承载方提供**（见上「通则承载与 run 目录」）——子代理是 fresh context，**看不见本 SKILL.md，也看不见 CLAUDE.md**。
   `carried` 不带；`not-carried` 写读文件指令。通则缺席 ⇒ implementer 眼前只有现状代码，
   **必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。**双轴审的两个 reviewer 子代理与 fix 子代理同样适用。**
@@ -724,6 +756,9 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
   > - **Implementation-coupled** — mocks internal collaborators, tests private methods, or verifies through a side channel (querying the database instead of using the interface). The tell: the test breaks when you refactor but behavior hasn't changed.
   > - **Tautological** — the assertion recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`, a snapshot derived by hand the same way, a constant asserted equal to itself), so it passes by construction and can never disagree with the code. Expected values must come from an independent source of truth — a known-good literal, a worked example, the spec.
   > - **Horizontal slicing** — writing all tests first, then all implementation. Bulk tests verify _imagined_ behavior: you test the _shape_ of things rather than user-facing behavior, the tests go insensitive to real changes, and you commit to test structure before understanding the implementation. Work in **vertical slices** instead — one test → one implementation → repeat, each test a **tracer bullet** that responds to what the last cycle taught you.
+  > - **Mock at system boundaries only**〔T464〕 — external APIs (payment, email, etc.), databases (sometimes - prefer test DB), time/randomness, file system (sometimes). Don't mock your own classes/modules, internal collaborators, or anything you control.
+  >
+  > 好测试特征〔T464〕：tests behavior users/callers care about · uses public API only · survives internal refactors · describes WHAT, not HOW · one logical assertion per test.
   >
   > 循环规则：**Red before green**（先写失败测试，再写刚好够通过的代码，不预写未来测试/不加投机
   > 功能）；**One slice at a time**（一个 seam、一个测试、一次最小实现）；**Refactoring is not part
@@ -751,6 +786,10 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
   `## 票外发现`（无发现可省略该小节）；dispatch **返回值的一行摘要**须追加标注
   `[has-off-ticket-finding]`（无发现不标）——编排层据此确定性地知道要不要去读该小节全文；
   详见下方「票外发现的 fold/defer」的读取契约与处置流程。
+  **与本 change 无关**的真实缺陷或改进点同走此通道：在 `## 票外发现` 条目里标「无关」，同样
+  MUST NOT 顺手修、不改票外代码，返回摘要照常标 `[has-off-ticket-finding]`。
+  两条路径：**相关 → 编排层走 BASE-18 AND 门（fold/defer）；无关 → 编排层直接按「既有问题
+  记录规则」入池，不走 BASE-18**。
 
 implementer 状态词表四值处置：
 
@@ -799,6 +838,11 @@ implementer 上报「票外发现」（见上「每 ticket 派 fresh implementer
 - **defer**：经 recorder 落 issues 池（todolist），**MUST 显式带 `change` 字段**指向本 change
   （省略会误挂当前活跃 change、污染 sweep 圈选）。
 - 判定与去向 **SHALL 记一行入该票 impl-report**（fold/defer + 判据摘要）。
+
+**「无关」分支**：`## 票外发现` 条目标「无关」者，编排层**不走 BASE-18 AND 门**，直接按上文第 6 条
+「既有问题记录规则」入池（summary 以「既有问题：」开头，`source_change` 传本 change），并在该票
+impl-report 记一行处置与 issue id（recorder 失败则写「待人工补录」与补录命令）。标「相关」或未标者
+照上文 fold/defer 流程。
 
 ### 完成信号双写补打（双轴审通过后）
 
@@ -877,10 +921,17 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 本约束与 gate 侧的失鲜判据**各自独立成立**，任一方在场都不使另一方可省。
 
 - **Standards 轴**：仓内文档化标准 + 下方 Fowler smell 基线，**且**把
-  `code-checklists/domains/<命中栈>`（经 `~/.sdflow/hack/resolve-workflow.sh` 解析取得规则根）
-  作为标准源注入——这是 dispatch 模板的**必填槽**，不是可有可无的 prose 叮嘱。resolver 非 0 退出
+  `code-checklists/code-review-base.md` 的规则表（含 CR-09 测试质量、CR-12 测试被削弱；不含末节
+  「严重度口径与拒判清单」）与 `code-checklists/domains/<命中栈>`（经
+  `~/.sdflow/hack/resolve-workflow.sh` 解析取得规则根）作为标准源注入〔T464〕——这是 dispatch
+  模板的**必填槽**，不是可有可无的 prose 叮嘱。resolver 非 0 退出
   / 规则根不可达 / 命中栈在 `domains/` 下无对应清单时，Standards 轴 **MUST NOT 宣称通过**：显式
   停，或在报告中记「领域清单未覆盖」并附降级原因〔F13〕——不得悄悄退化成"看着过"。
+
+  **测试质量判据**〔T464〕：逐个查本票新增或修改的测试有无 Tautological、Implementation-coupled
+  （定义见上文 implementer 的三条反模式，同样原文带进本轴 prompt），以及 TDD 顺序——implementer
+  报告自述或提交顺序显示先写实现、后补测试 ⇒ 判 Important。TDD 顺序只能靠自述与提交顺序核，
+  是语义判断，不是机械门。收尾票按既有 red-before-green 豁免，不查 TDD 顺序。
 
   > 🔴 **MUST 原文携带进 Standards 轴 dispatch prompt**（附录 A 有出处说明）。三条治理规则：
   > **The repo overrides**（仓文档化标准优先，与基线冲突时基线让位）；**Always a judgement call**
@@ -993,6 +1044,7 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 
 - **Standards 轴 Fowler smell 12 条基线**：逐字摘自 matt `code-review` skill。
 - **implementer dispatch 的 TDD 三条反模式 + 循环规则**：逐字摘自 matt `tdd` skill。
+- **mock 边界与好测试特征**：逐字摘自 matt `tdd` skill 的 `mocking.md`、`tests.md`。
 
 两处都要求原文携带进各自的 dispatch prompt，而非只留指针或转述：dispatch 对象是 fresh context
 子代理，看不到这两个源文件，只能凭训练记忆判断，措辞与判定边界不受控。

@@ -28,6 +28,7 @@ for _s in (sys.stdout, sys.stderr):
 
 ADR_REL_DIR = "openspec/adr"
 LOCK_REL = "openspec/adr/.lock"
+FLOOR_REL = "openspec/adr/.number-floor"
 LOCK_RETRIES = 20
 LOCK_INTERVAL = 0.1
 LOCK_STALE_SEC = 120
@@ -179,6 +180,26 @@ def _scan_numbers_or_die(adr_dir):
     return numbers
 
 
+def _read_floor_or_die(adr_dir):
+    """读 `.number-floor`（可选，内容为一个正整数）。不存在返回 1；内容非法 fail-closed 退出 2。
+
+    用途：一个仓的 ADR 目录同时装着上游（如框架模板仓）下发的 ADR 与本仓自己的 ADR 时，
+    本仓从下限起编号，与上游此后的新编号永不相撞。下限以下的编号视为别人的，不参与取号。"""
+    p = adr_dir / ".number-floor"
+    if not p.exists():
+        return 1
+    text = p.read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"[1-9][0-9]{0,3}", text):
+        _die(2, f"adr: {FLOOR_REL} 须为 1–9999 的整数，得到 {text!r}")
+    return int(text)
+
+
+def _next_number(adr_dir, numbers):
+    floor = _read_floor_or_die(adr_dir)
+    own = [n for n in numbers if n >= floor]
+    return (max(own) + 1) if own else floor
+
+
 def _resolve_adr_dir(root):
     adr_dir = root / ADR_REL_DIR
     if not adr_dir.is_dir():
@@ -194,7 +215,7 @@ def cmd_next_id(args):
     root = Path(args.root).resolve()
     adr_dir = _resolve_adr_dir(root)
     numbers = _scan_numbers_or_die(adr_dir)
-    nxt = (max(numbers) + 1) if numbers else 1
+    nxt = _next_number(adr_dir, numbers)
     print(f"{nxt:04d}")
     return 0
 
@@ -339,7 +360,7 @@ def cmd_new(args):
     with _repo_lock(root):
         numbers = _scan_numbers_or_die(adr_dir)
 
-        nxt = (max(numbers) + 1) if numbers else 1
+        nxt = _next_number(adr_dir, numbers)
         nnnn = f"{nxt:04d}"
         new_path = adr_dir / f"{nnnn}-{args.slug}.md"
 

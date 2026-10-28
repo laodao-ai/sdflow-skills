@@ -626,6 +626,10 @@ def test_eight_entrypoints_reference_limit_and_claude_collection_sections():
 ALLOWED_LIMIT_SENTENCES = (
     "本入口的 implementer、fix 子代理时长上限 180 分钟（要跑测试），Standards 轴与 Spec 轴按契约表 60 分钟。",
 )
+# sdflow-done 触发 verify 重跑时需要跑测试，声明更长上限（retest-review-fixes-and-record-preexisting）
+ALLOWED_DONE_LIMIT_SENTENCES = (
+    "触发重跑时，本入口的 verify 子代理时长上限 180 分钟（要跑测试）。",
+)
 LIMIT_LITERAL = re.compile(r"\d+\s*分钟")
 
 
@@ -633,6 +637,9 @@ def _hardcoded_limits(text, skill="sdflow-implement"):
     # 整句允许清单只对 implement 入口生效；其他入口写了同句也算硬编码
     if skill == "sdflow-implement":
         for sentence in ALLOWED_LIMIT_SENTENCES:
+            text = text.replace(sentence, "")
+    if skill == "sdflow-done":
+        for sentence in ALLOWED_DONE_LIMIT_SENTENCES:
             text = text.replace(sentence, "")
     return LIMIT_LITERAL.findall(text)
 

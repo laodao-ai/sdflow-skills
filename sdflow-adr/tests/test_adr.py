@@ -89,6 +89,38 @@ def test_next_id_empty_dir_starts_at_0001(tmp_path):
     assert r.stdout.strip() == "0001"
 
 
+def test_next_id_floor_ignores_numbers_below_it(tmp_path):
+    root = mkroot(tmp_path)
+    (root / "openspec" / "adr" / ".number-floor").write_text("1000\n", encoding="utf-8")
+    for n in ("0001", "0065"):
+        write_adr(root, f"{n}-upstream.md", ACCEPTED_ADR)
+    r = run(["next-id", "--root", str(root)])
+    assert r.returncode == 0
+    assert r.stdout.strip() == "1000"
+    write_adr(root, "1000-own.md", ACCEPTED_ADR)
+    write_adr(root, "0066-upstream-later.md", ACCEPTED_ADR)
+    r = run(["next-id", "--root", str(root)])
+    assert r.stdout.strip() == "1001"
+
+
+@pytest.mark.parametrize("content", ["0", "abc", "10000", ""])
+def test_next_id_invalid_floor_exits_2(tmp_path, content):
+    root = mkroot(tmp_path)
+    (root / "openspec" / "adr" / ".number-floor").write_text(content, encoding="utf-8")
+    r = run(["next-id", "--root", str(root)])
+    assert r.returncode == 2
+    assert ".number-floor" in r.stderr
+
+
+def test_new_respects_floor(tmp_path):
+    root = mkroot(tmp_path)
+    (root / "openspec" / "adr" / ".number-floor").write_text("1000", encoding="utf-8")
+    write_adr(root, "0065-upstream.md", ACCEPTED_ADR)
+    r = run(["new", "--root", str(root), "--title", "决定用 Z", "--slug", "use-z", "--source", "demo-change"])
+    assert r.returncode == 0, r.stderr
+    assert (root / "openspec" / "adr" / "1000-use-z.md").exists()
+
+
 def test_next_id_unknown_filename_exits_2(tmp_path):
     root = mkroot(tmp_path)
     write_adr(root, "notes.md", "not an adr")

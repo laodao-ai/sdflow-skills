@@ -1885,6 +1885,26 @@ def claude_job_action(claude_bin, action, job_id):
     return (0, "")
 
 
+def _runner_self_exit_hint(status, job):
+    """给 orphan-warning 追加「runner 最迟何时自行退出」的提示〔T227〕。
+
+    runner 由 outside-voice.sh 经 `timeout -k 10 <timeout_seconds>` 拉起，timeout 自建进程组，
+    `claude stop` 杀不到它；但 timeout 自己仍在计时，到点会收掉 runner，孤儿计费有上限。
+    上限用 job.json 的 timeout_seconds（runner 实际用的值，不用 --timeout 覆盖值）；
+    started_at 早于 runner 启动，AWAIT_GRACE_SECONDS 盖住 `-k 10` 与启动前准备时间。
+    这是给人看的估计，不是闸门：不改 subtree 判定、不放行 fallback。started_at 不可得时返回空串。
+    """
+    started_epoch = parse_utc_iso(status.get("started_at"))
+    if started_epoch is None:
+        return ""
+    bound = datetime.fromtimestamp(
+        started_epoch + job["timeout_seconds"] + AWAIT_GRACE_SECONDS,
+        timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return ("。runner 受 `timeout -k 10 %d` 约束，预计最迟 %s 前自行退出"
+            "（started_at + timeout + %d 秒宽限），届时再跑一次 cleanup 复核子树"
+            % (job["timeout_seconds"], bound, AWAIT_GRACE_SECONDS))
+
+
 def _cleanup_payload(state, ok, detail, **extra):
     payload = {
         "ok": ok, "state": state, "detail": detail,
@@ -1957,7 +1977,8 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
                 orphan_warning="supervisor roster 已无 job id=%s，但 worker/runner 子树"
                                "仍未证退出（%s）；需人工核查并终止，其间 MUST NOT 自动 "
                                "fallback（会在一次可能仍在计费的 voice 上再叠一次）"
-                               % (job["job_id"], verdict_detail), **base)
+                               % (job["job_id"], verdict_detail)
+                               + _runner_self_exit_hint(status, job), **base)
         return _cleanup_payload(
             "identity-unverified", False,
             "identity 核验未通过（%s）—— 只告警，MUST NOT stop/rm 任何 job" % ident["detail"],
@@ -2033,7 +2054,8 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
             unknown_cost=True,
             orphan_warning="stop 之后仍无法证明 worker/inner child 子树已退出（%s）；"
                            "job id=%s 需人工核查并终止，其间 MUST NOT 自动 fallback"
-                           % (verdict_detail, job["job_id"]), **base)
+                           % (verdict_detail, job["job_id"])
+                           + _runner_self_exit_hint(status, job), **base)
 
     # stop 与核验之间 worker 可能刚好发布了 rc ⇒ 结果不能丢，先 collect 再来清。
     after = derive_status(run_dir, site, timeout_override=timeout_override,

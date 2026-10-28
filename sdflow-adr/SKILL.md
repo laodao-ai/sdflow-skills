@@ -220,7 +220,8 @@ sync 与 audit 派发的子代理，其 run 目录创建、忽略校验、前缀
 
    `--supersedes` 带 `--partial` 时只标记「部分取代」；不带则整体取代。目标 ADR 若已是
    `Superseded` / `Deprecated`（终态），脚本以退出码 2 拒绝，不创建新文件——先核对编号，
-   或改用 `--partial` 处理 `Partially superseded` 目标。
+   或改用 `--partial` 处理 `Partially superseded` 目标。编号由脚本取；`openspec/adr/.number-floor`
+   存在时从该下限起编号（上游模板仓下发 ADR 的下游仓用它避开上游编号段，见 `references/format.md`）。
 3. 打开脚本输出的新文件路径，把各节 `TODO(adr)` 占位替换成真实内容（背景段、Decision、
    Considered Options、Consequences）。
 4. 跑 `python3 <adr.py 路径> lint --root . <新文件路径>`，须退出码 0。有红项按提示改，

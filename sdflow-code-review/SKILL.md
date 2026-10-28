@@ -450,13 +450,18 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
      与 lens-metric 锚同为 ship_gate B25 锚存在门的机判对象（`require_ref_check=True`），**MUST NOT
      省略**、MUST NOT 只落段标题不落锚行——gate 检测的是这行结构化锚，不是「有没有 Findings 小节」。
 3. **二元裁决**〔取代旧数值置信滤 + 跨模型豁免矩阵条款〕：对每条通过机械前置（`pass`/`uncheckable`/整批
-   `degraded`）的 finding，主 session 判**采纳 / 裁掉 / defer** 三态之一 + 一句 **critique**（裁决理由，可
+   `degraded`）的 finding，主 session 判**采纳 / 裁掉 / defer / 既有** 四态之一 + 一句 **critique**（裁决理由，可
    审计）：
    - **采纳**：真实运行期问题或真实 scope/spec 偏离，进 Step4 修复/自动选/defer 台账。
-   - **裁掉**：判"不成立"——CI 能抓的 / 纯 nitpick / 未改动行既有问题 / 仅主观风格 / 已被注释显式抑制 /
+   - **裁掉**：判"不成立"——CI 能抓的 / 纯 nitpick / 仅主观风格 / 已被注释显式抑制 /
      阈值常量取值不强制求注释 / 无害冗余不标（Suppressions 既有口径不变）；理由落「已裁掉」区（不标
      `[ref-check]`，与机械裁掉来源可辨）。
    - **defer**：真实但拿不准优先级/方案 → 进 Step4 defer 台账（buglist/todolist）。
+   - **既有**：真实存在、但不是本 change 的问题。不修、不阻塞，入 issues 池并列进报告「既有问题」区，不进「已裁掉」区。三条前置条件须同时成立：
+     ① 过了机械引用核（`pass` 或 `uncheckable`），且判为真实问题；
+     ② 所在行不在本 change 的改动行内——机械核法：`git diff -U0 $DIFF_BASE..HEAD -- <file>` 的新侧行范围不含该行（必要条件，可机械核）。`evidence_pack` 类 finding：pack 内任一引文落在改动行内则②不成立；纯 absence 类（无引文行）不得裁「既有」；
+     ③ 不是本 change 的改动触发的：本 change 没有改动它的调用方、数据或配置契约（语义判断，主审把理由写进 critique）。本 change 触发的缺陷即使落在未改动行，也裁采纳或 defer，MUST NOT 裁「既有」。
+     「既有」条目的入池动作（记录规则，四处共用）：先 `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --status OPEN --status PROPOSED` 按 module 与 summary 比对，确认是同一问题就复用其 id，拿不准就新增；新增走 `issues_v2.py add`（同 Step4「recorder 调用」），`source_change` 显式传本 change 名，summary 以全角「既有问题：」开头；确认是缺陷进 bug 池，改进或关注点进 todo 池。recorder 非零退出时，报告如实记录失败与 stderr 摘要，标「待人工补录」并附一条可直接执行的 `issues_v2.py add` 补录命令，MUST NOT 写假 id。
    - **溯源三查（定性前）**：判「失鲜还是现行设计」、或要裁掉 / 定性一条涉及既有措辞的存疑 finding 前，MUST 做三查并把结论一句话写进该条：① 全仓 grep 该措辞的全部消费面（不带 `--include` 过滤）；② `git log -S '<措辞>'` 找出它出生的 change；③ 对读 `openspec/specs/` 里的权威措辞。
    **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**，无特殊通道（历史沿革见
    `references/evolution-notes.md` §2）；`host-adaptive-execution` 单一源矩阵继续供其余用途（如
@@ -481,8 +486,8 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 - **修不了 / genuinely 拿不准**：defer → **当场调用 recorder add**（`python3
   ~/.claude/skills/sdflow-issues/scripts/issues_v2.py add --pool bug|todo --json '{"module":...,
   "summary":...,"source_change":"{change_name}"}'`——`source_change` **MUST 显式传**当前 change 名，
-  MUST NOT 省略靠脚本自动探测〔recorder-add-auto-change-trap，多 change 并行会挂错〕；bug 池=本
-  change 引入的代码 bug，todo 池=改进/关注点）取得返回 JSON 的 `id`，**当场写入报告「修复 / defer
+  MUST NOT 省略靠脚本自动探测〔recorder-add-auto-change-trap，多 change 并行会挂错〕；bug 池=已确认缺陷，
+  todo 池=改进/关注点）取得返回 JSON 的 `id`，**当场写入报告「修复 / defer
   台账」对应表行**（见「报告格式」的机读台账表；行内 id 列单元格 = 该 id，仅此一项内容）——本
   change 不处理该发现，交 hand-off 引导另开清理 change 或异步再入口。
   **报告 MUST NOT 出现无 id 的 defer 声明**（「已入 / 待入 todolist」类散文承诺，不落台账表行）。
@@ -572,6 +577,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
      **exit 0 才**把 stdout（逐镜 `<!-- sdflow:lens-metric v1 … -->` 行）落进「报告格式」度量锚段；exit ≠0（fail-closed）→ 本段
      **不落**、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。**保留残余信任边界声明**：分类正确性 + roster 完备性 +
      findings JSON 誊写准确仍是主 session 信任边界，emitter 只保证「给定输入的确定性归约」。
+     **「既有」finding 的 verdict 记为 `defer`**：emitter 只收 `采纳 / 裁掉 / defer`，不认第四态；「既有」的 finding 构造进 findings 时 `verdict` 填 `defer`。因此锚中 `defer=` 计数含「既有」条目，不等于「修复 / defer 台账」行数。
    - **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调
      `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——
      退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚（Step1
@@ -856,6 +862,16 @@ ship-gate:
   **本表以外**的任何散文句（含上方聚合摘要行）**MUST NOT** 出现裸 `T\d+`/`B\d+` 形式的字符串独占一个
   表格单元格——聚合摘要行统计数字与"defer"一词**只作陈述，不构成台账行**（gate 只识别本表结构，不做
   全文子串搜索，但仍应避免歧义写法）。
+### 既有问题（Step3 裁「既有」的 finding；与「已裁掉」区分开）
+  | id | 池 | 摘要 | 说明 |
+  |---|---|---|---|
+  | B90 | bug | 既有问题：parse_foo 在空输入时越界 | 所在行不在 DIFF_BASE..HEAD 改动行内，本 change 未改其调用方 |
+
+  - 已存在：T123（复用他 change 已记的同一问题，不进上表）
+
+  ——**区内规则（ship_gate B26 会扫本区带 `id` 列的表）**：带 `id` 列的表只放 id 合法（整格恰为单个 `T\d+`/`B\d+`）且池文件 `source_change` 等于本 change 的项（含本 change 早先已记的）。
+  「已存在：T123」（他 change 的池项）与「待人工补录」（recorder 失败项，写失败摘要与可直接执行的 `issues_v2.py add` 补录命令）写在表下列表，MUST NOT 进表。
+  本轮无「既有」finding 时不出表，该区只写一行「无」；MUST NOT 把「无」写进 id 列。
 ### 度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落、不调 emitter，见第三步/第五步）
   domain / adversarial / history / outside-voice（同轮 site="code-voice" 与 site="hr-tg" 若均调用，各独立一行）/ broad（Step1 自持 scope 审计）
   各一行——本段内容 = Step5「度量锚落锚」调 `lens_metric_emit.py` 后 exit0 落进来的 stdout，MUST NOT 手拼：
