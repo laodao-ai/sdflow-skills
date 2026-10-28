@@ -1566,3 +1566,15 @@ class TestCodexStartFromChildThread:
         assert r.returncode == 0, r.stdout + r.stderr
         lines = _token_log_lines(repo, "demo-change")
         assert [(l["kind"], l["session"]) for l in lines] == [("child", CHILD_ID)]
+
+
+def test_append_line_new_log_follows_umask(tmp_path):
+    """新建 token-log.jsonl 取 0o666 & ~umask，不写死 0644（共享目录里同组账号要能追加）。"""
+    mod = _import_token_snapshot_module()
+    p = tmp_path / "token-log.jsonl"
+    old = os.umask(0o002)
+    try:
+        mod._append_line(p, {"a": 1})
+    finally:
+        os.umask(old)
+    assert (p.stat().st_mode & 0o777) == 0o664

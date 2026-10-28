@@ -1265,3 +1265,81 @@ class TestAdrMigrationCheck:
         monkeypatch.setattr(init_mod, "check_adr_migration", lambda root: called.append(root) or "x")
         init_mod.run(str(tmp_path / "proj"), "init")
         assert called == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+class TestSchemaSyncInPlace:
+    """copy_bundle 的 schema 就地同步：覆盖沿用原 inode/mode，新建取 umask 默认，
+    源里没有的旧条目删除，兄弟 schema 不动。"""
+
+    @pytest.fixture
+    def authority(self, tmp_path, monkeypatch):
+        # 自备最小 schema 源；_validate_schema_authority 只看 schema.yaml 与其引用的模板
+        src_schema = Path(init_mod.SCHEMAS_SRC) / init_mod.PROJECT_SCHEMA
+        auth = tmp_path / "schema-authority"
+        shutil.copytree(src_schema, auth / init_mod.PROJECT_SCHEMA)
+        monkeypatch.setattr(init_mod, "SCHEMAS_SRC", str(auth))
+        return auth / init_mod.PROJECT_SCHEMA
+
+    def _dst(self, root):
+        return root / "openspec" / "schemas" / init_mod.PROJECT_SCHEMA
+
+    def test_existing_file_overwritten_in_place_keeps_inode_and_mode(self, tmp_path, authority):
+        root = tmp_path / "project"
+        copy_bundle(str(root))
+        target = self._dst(root) / "schema.yaml"
+        target.chmod(0o660)
+        ino = target.stat().st_ino
+        # 源文件 mode 与目标不同，且内容变了
+        (authority / "schema.yaml").chmod(0o600)
+        with open(authority / "schema.yaml", "a", encoding="utf-8") as f:
+            f.write("\n# changed\n")
+
+        copy_bundle(str(root))
+
+        assert target.read_text(encoding="utf-8").endswith("# changed\n")
+        assert target.stat().st_ino == ino
+        assert (target.stat().st_mode & 0o777) == 0o660
+
+    def test_stale_file_and_dir_removed(self, tmp_path, authority):
+        root = tmp_path / "project"
+        dst = self._dst(root)
+        (dst / "old-dir").mkdir(parents=True)
+        (dst / "old-dir" / "x.md").write_text("x", encoding="utf-8")
+        (dst / "stale.txt").write_text("stale", encoding="utf-8")
+
+        copy_bundle(str(root))
+
+        assert not (dst / "stale.txt").exists()
+        assert not (dst / "old-dir").exists()
+        assert (dst / "schema.yaml").is_file()
+
+    def test_new_files_and_dirs_follow_umask_not_source_mode(self, tmp_path, authority):
+        root = tmp_path / "project"
+        (authority / "schema.yaml").chmod(0o600)
+        for d in authority.rglob("*"):
+            if d.is_dir():
+                d.chmod(0o700)
+        old = os.umask(0o002)
+        try:
+            copy_bundle(str(root))
+        finally:
+            os.umask(old)
+        dst = self._dst(root)
+        assert (dst / "schema.yaml").stat().st_mode & 0o777 == 0o664
+        subdirs = [d for d in dst.rglob("*") if d.is_dir()]
+        assert subdirs, "schema 源应含 templates/ 子目录"
+        assert all(d.stat().st_mode & 0o777 == 0o775 for d in subdirs)
+
+    def test_sibling_schema_untouched(self, tmp_path, authority):
+        root = tmp_path / "project"
+        sibling = root / "openspec" / "schemas" / "consumer-owned"
+        sibling.mkdir(parents=True)
+        f = sibling / "schema.yaml"
+        f.write_text("custom: true\n", encoding="utf-8")
+        ino = f.stat().st_ino
+
+        copy_bundle(str(root))
+
+        assert f.read_text(encoding="utf-8") == "custom: true\n"
+        assert f.stat().st_ino == ino

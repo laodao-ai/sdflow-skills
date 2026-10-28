@@ -291,6 +291,8 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id T7  
   stdout 仍是单行 JSON。reindex 自身失败时写操作已生效，按提示重跑 `reindex` 即自愈。
 - 已在 `closed/` 的终态 issue **不可经 `set-status` 再改 status**（拒绝并报非零退出码）；
   唯一受控逆转换见下方 `reopen`。
+- `add` / `set-status` / `reopen` 在 git 仓内默认暂存（`git add` / `git mv`）它们动过的文件，可能混进调用方已暂存的改动；
+  加 `--no-stage` 则不碰暂存区（文件移动照常，改用文件系统移动）。
 
 ### 重开已关闭项（`reopen`）
 

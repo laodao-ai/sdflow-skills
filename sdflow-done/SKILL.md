@@ -364,30 +364,45 @@ python3 sdflow-implement/scripts/impl_route.py suite-scope \
      修复改了任何非 `openspec/` 文件都会全层重跑；配 `test-suites.domains`（如给 docs 域配空层）
      可缩小范围。
    - **时长上限**：触发重跑时，本入口的 verify 子代理时长上限 180 分钟（要跑测试）。
-   - **跑红分诊**：某层退出码非 0 时，对每个失败用例（标识取 runner 原生用例标识，取不到则以层名
-     代表整条层命令）按序判定，**层内全部失败用例**都放行，该层才算通过：
+   - **跑红分诊**：某层退出码非 0 时，对每个失败用例按序判定。**层内全部失败用例**都放行，
+     该层才算通过。
+     - 失败用例标识取 runner 原生用例标识。取不到时以层名代表整条层命令，称层名级标识。
+     - 收尾票 `## 既有红测` 小节里标识列等于层名的行，称层名级条目。
+
      1. (层, 失败用例标识) 与收尾票 `## 既有红测` 小节某行的 (层, 失败用例标识) **联合逐字匹配**
-        ⇒ 放行，照录其 issue id。只匹配标识不够：同一 pytest node id 可在两层运行。名单行按
-        第一个与最后一个 `|` 切三列（口径见 `sdflow-implement` 的 `## 既有红测` 小节）。收尾票
-        报告没有该小节时按名单为空处理。
+        ⇒ 放行，照录其 issue id。
+        - 只匹配标识不够：同一 pytest node id 可在两层运行。
+        - 名单行按第一个与最后一个 `|` 切三列（口径见 `sdflow-implement` 的 `## 既有红测` 小节）。
+        - 收尾票报告没有该小节时按名单为空处理。
+        - **层名级条目不在本步放行**，命中它的失败转第 4 步。它只说明该层收尾时已红，
+          盖不住同层的新回归。
      2. 同命令复跑一次即绿 ⇒ 放行并注明 flaky，贴两次运行的退出码与用例数。
-     3. 依赖缺失、网络或环境不可用、命令超时或被杀 ⇒ halt：problem（层与命令）、cause（原始错误
-        摘要）、fix（具体修复动作 + 「修复后重跑 `/sdflow-ship`」）。
-     4. 其余 ⇒ 在收尾票报告头 `base` 的临时 worktree 复跑同一命令。**该失败用例标识在 base 的
-        失败集里同样出现**才判既有，按下方「既有问题记录规则」入池后放行。该标识在 base 上通过、
-        不存在，或 base 命令因收集报错整体失败而拿不到该用例结果，一律判本 change 回归，记
-        **核心缺口**，MUST NOT 判 PASS。取不到用例级标识时以层名代表整条命令，按整条命令比。
-        报告头无 `base` 时，复跑点取 `git merge-base <默认分支> HEAD`（默认分支见第零步 0.2）。
+     3. 依赖缺失、命令不存在、网络或环境不可用、命令超时或被杀 ⇒ halt：problem（层与命令）、
+        cause（原始错误摘要）、fix（具体修复动作 + 「修复后重跑 `/sdflow-ship`」）。
+     4. 其余 ⇒ 在 base 的临时 worktree 复跑同一命令，按失败用例比对。
+        - base 取收尾票报告头 `base`。报告头无 `base` 时取 `git merge-base <默认分支> HEAD`
+          （默认分支见第零步 0.2）。
         - 临时 worktree 建在仓外的系统临时目录下：
           `git worktree add --detach <路径> <base>`。无论成败都 `git worktree remove --force <路径>`。
-        - base 复跑自身遇依赖缺失、命令不存在、网络或环境不可用、超时被杀，或 `git worktree add`
-          失败 ⇒ 按第 3 步 halt，不判既有。
+        - **该失败用例标识在 base 的失败集里同样出现** ⇒ 判既有，放行。命中层名级条目的，
+          照录该行 issue id；其余按下方「既有问题记录规则」入池。
+        - 层名级标识按整条层命令比：base 上该命令同样失败即判既有。
+        - 该标识在 base 上通过或不存在 ⇒ 判本 change 回归。
+        - base 命令因收集报错整体失败、拿不到该用例结果 ⇒ 判本 change 回归。
+        - 例外：base 复跑遇依赖缺失、命令不存在、网络或环境不可用、超时被杀，或 `git worktree add`
+          失败 ⇒ 按第 3 步 halt，不判既有。这些是环境类原因，其余收集报错一律按上一条判回归。
+        - 判回归的记**核心缺口**，MUST NOT 判 PASS。
+
      核心缺口条目 MUST 含：层、命令、退出码、失败用例标识、复跑结果、base 复跑结果（该用例在
      base 上的结果）。
+     **放行记录位置**：verify-report 在重跑证据行之后列「重跑放行」小节，每个放行用例一行：
+     层、失败用例标识、依据（第 1 步名单 / flaky / 第 4 步 base 同样失败）、issue id。
+     该小节用列表，不用带 id 列的表格；没有放行用例时省略。
      verify 只分诊、不修；修复由人提交后重跑 `/sdflow-ship`。
-   - **既有问题记录规则**（四处共用，与 `sdflow-code-review`、`sdflow-implement` 同口径）：先
-     `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --status OPEN --status PROPOSED`
-     按 module 与 summary 比对，确认是同一问题就复用其 id，拿不准就新增；新增走 `issues_v2.py add`，
+   - **既有问题记录规则**（四处共用，与 `sdflow-code-review`、`sdflow-implement` 同口径）：
+     先 `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --all` 查全部状态（含已关闭），
+     按 module 与 summary 比对。确认是同一问题时：未关闭项复用其 id；已关闭项不新增、不重开，
+     报告写「已存在：<id>（已关闭）」。拿不准就新增；新增走 `issues_v2.py add`，
      `source_change` 显式传本 change 名，summary 以全角「既有问题：」开头；确认是缺陷进 bug 池，
      改进或关注点进 todo 池。recorder 非零退出时，报告写「待人工补录」并附一条可直接执行的
      `issues_v2.py add` 补录命令，MUST NOT 写假 id。
@@ -581,6 +596,26 @@ python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
 - `2`（change dir 缺）→ 异常，停下核对。
 
 **判断留人**：草稿只列 phase 候选行集 + 机械锚（archive/merge 占位），**勾哪几行 / 算不算满足验收标准 / 价值叙述 / 阶段状态 / deferred 由人在异步回填时判**——助手 MUST NOT 代判、MUST NOT 直接改 roadmap、MUST NOT 写 change 产物文件（避 C1）。
+
+### 2.3 关闭本 change 交付的来源 issue（§2.2 之后、写 hand-off 三段之前）
+
+本 change 为解决某些 issue 而开时，由主 session 在这里关单。关单改动随第四步提交，与归档在同一个 commit。
+
+1. 读 `{change_dir}/proposal.md` 的「来源 issue：」行，取其中的 issue id（如 `来源 issue：T462、T463。`）。
+   没有该行 ⇒ 跳过本步，hand-off 第 2 段记一行「proposal 无『来源 issue：』行，未自动关单」。
+2. 判是否交付：verify 结论 PASS，且 proposal 中该 id 对应的改动项在 verify-report 的核对行全为 ✅
+   （无 ❌、无 ⚠️）⇒ 已交付。
+3. 已交付的 id 逐个关单：
+
+```bash
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py --root . set-status --id <ID> --to <DONE|FIXED> --evidence "{change_name} 归档"
+```
+
+   - `T` 开头（todo 池）用 `--to DONE`；`B` 开头（bug 池）用 `--to FIXED`。
+   - 脚本报「已处于终态」⇒ 视为已关，跳过。重跑本步时会出现这种情况。
+   - 其他非零退出 ⇒ 不重试，hand-off 第 2 段记该 id 与 stderr 摘要。
+   - `set-status` 自己做 `git mv` 与 reindex，第四步的 `git add openspec/` 会一并提交，不另加 add。
+4. hand-off 第 1 段列已关闭的 id。未交付的 id 保持 OPEN，列进第 2 段并写明缺哪项。
 
 ---
 
@@ -797,6 +832,7 @@ sdflow-done 完成
 - **verify 防假✅（P3h）**：每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；强档 + Do-Not-Trust 冷启（阶段三去人类门后 verify 是唯一终门，禁降档）。见 design §7.3.1 / adr/0001。
 - **hand-off.md（P3g）**：verify 之后 / archive 之前产出（done/not-done + 延后项 + 下阶段建议），随归档留档，作异步人类再入口 + 下个 change 种子；**不直接搬运 verify 的 ✅**（复核锚点存在性）。
 - **issues scan 子步（§2.1）**：写 hand-off 正文前先跑 `issues_v2.py scan --json --source-change {本change} --status OPEN --status PROPOSED` 只读查询（v2 单文件模型已砍 batch/triage/sweep 机制，不再是写操作）；**显式传 `--source-change {本change}`**（不靠 `detect_change` 猜）；hand-off 直接列出命令返回的每个 ID（各即 `openspec/issues/open/{ID}.md`），不再建批次；只读、天然幂等、无需仓级锁；只圈 `源==本change` 的非终态项，孤儿（`source_change` 为空）不归本查询，交独立清理流程兜底。
+- **来源 issue 关单（§2.3）**：按 proposal 的「来源 issue：」行，把 verify 判交付的 id 用 `set-status` 关单，随第四步同一个 commit 提交；没有该行就跳过，未交付的留 OPEN 并列进 hand-off。
 - **roadmap 回填助手（§2.2，done-roadmap-writeback）**：verify 之后跑 `roadmap_writeback_draft.py` 生成 roadmap 回填草稿进 hand-off + 第六步摘要抬一行（merge 时点可见）；**与 §2.1 issues scan 同位不同性**——同为 done 收尾盘面消费，但 scan 机械只读、roadmap 回填**助人确认**（完成判定含判断，写入语义相反，不诱导复用 scan 自动落盘）。切分线：定位到 phase=机械（change 名前缀确定性信号）、勾哪几行=判断留人；archive/merge 预测值留占位不预填（P-1）；detection fence-aware 防自指（P-5）；非复选框格式 fail-loud（P-3）。**残差登记**：草稿产出即止、apply 由人异步、不保证（经 /sdflow-ship 全自动链人被支走时尤然）。
 - **ADR 同步（第 1.5 步，SW-ADR）**：verify 之后 / hand-off 之前用 `adr.py refs` 召回候选、mid 档子代理按 `sdflow-adr` 的 sync 规则核对，改动与本 change 收尾一起进同一个 commit；**非门禁**——`adr.py` 未安装、refs 失败、子代理任何非 `completed` 终态或 lint 红都只记 hand-off 一行 + issues todo 后继续，MUST NOT 阻塞 archive/commit/merge（与 verify 的「失败即中止」相反）。
 

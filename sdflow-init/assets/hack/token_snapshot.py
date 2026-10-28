@@ -289,7 +289,7 @@ def _build_line(step, session_id, anchor, reason, usage, host):
 def _append_line(path, obj):
     """整行 buffer 后单次 `O_APPEND` write（POSIX 本地文件系统单 write 原子）。"""
     payload = (json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
-    fd = os.open(str(path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644)
+    fd = os.open(str(path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o666)
     try:
         os.write(fd, payload)
     finally:

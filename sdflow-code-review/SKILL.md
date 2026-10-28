@@ -449,7 +449,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
      同款门控（见下方第 6 条「lens-metric 度量锚门控」）——缺省/`false` 时**不落**本锚；`true` 时本锚
      与 lens-metric 锚同为 ship_gate B25 锚存在门的机判对象（`require_ref_check=True`），**MUST NOT
      省略**、MUST NOT 只落段标题不落锚行——gate 检测的是这行结构化锚，不是「有没有 Findings 小节」。
-3. **二元裁决**〔取代旧数值置信滤 + 跨模型豁免矩阵条款〕：对每条通过机械前置（`pass`/`uncheckable`/整批
+3. **裁决（四态）**〔取代旧数值置信滤 + 跨模型豁免矩阵条款；本 SKILL 别处的「二元裁决」是旧名，沿用指本条〕：对每条通过机械前置（`pass`/`uncheckable`/整批
    `degraded`）的 finding，主 session 判**采纳 / 裁掉 / defer / 既有** 四态之一 + 一句 **critique**（裁决理由，可
    审计）：
    - **采纳**：真实运行期问题或真实 scope/spec 偏离，进 Step4 修复/自动选/defer 台账。
@@ -461,13 +461,13 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
      ① 过了机械引用核（`pass` 或 `uncheckable`），且判为真实问题；
      ② 所在行不在本 change 的改动行内——机械核法：`git diff -U0 $DIFF_BASE..HEAD -- <file>` 的新侧行范围不含该行（必要条件，可机械核）。`evidence_pack` 类 finding：pack 内任一引文落在改动行内则②不成立；纯 absence 类（无引文行）不得裁「既有」；
      ③ 不是本 change 的改动触发的：本 change 没有改动它的调用方、数据或配置契约（语义判断，主审把理由写进 critique）。本 change 触发的缺陷即使落在未改动行，也裁采纳或 defer，MUST NOT 裁「既有」。
-     「既有」条目的入池动作（记录规则，四处共用）：先 `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --status OPEN --status PROPOSED` 按 module 与 summary 比对，确认是同一问题就复用其 id，拿不准就新增；新增走 `issues_v2.py add`（同 Step4「recorder 调用」），`source_change` 显式传本 change 名，summary 以全角「既有问题：」开头；确认是缺陷进 bug 池，改进或关注点进 todo 池。recorder 非零退出时，报告如实记录失败与 stderr 摘要，标「待人工补录」并附一条可直接执行的 `issues_v2.py add` 补录命令，MUST NOT 写假 id。
+     「既有」条目的入池动作（记录规则，四处共用）：先 `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --all` 查全部状态（含已关闭），按 module 与 summary 比对。确认是同一问题时：未关闭项复用其 id；已关闭项不新增、不重开，报告写「已存在：<id>（已关闭）」。拿不准就新增；新增走 `issues_v2.py add`（同 Step4「recorder 调用」），`source_change` 显式传本 change 名，summary 以全角「既有问题：」开头；确认是缺陷进 bug 池，改进或关注点进 todo 池。recorder 非零退出时，报告如实记录失败与 stderr 摘要，标「待人工补录」并附一条可直接执行的 `issues_v2.py add` 补录命令，MUST NOT 写假 id。
    - **溯源三查（定性前）**：判「失鲜还是现行设计」、或要裁掉 / 定性一条涉及既有措辞的存疑 finding 前，MUST 做三查并把结论一句话写进该条：① 全仓 grep 该措辞的全部消费面（不带 `--include` 过滤）；② `git log -S '<措辞>'` 找出它出生的 change；③ 对读 `openspec/specs/` 里的权威措辞。
    **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**，无特殊通道（历史沿革见
    `references/evolution-notes.md` §2）；`host-adaptive-execution` 单一源矩阵继续供其余用途（如
    anchor 校验、declared-sites 完整性）引用，未被删除。
 4. **置信仅排序**：Step2 各镜自报置信（0–100）**只用于报告内 Findings 区展示排序**，**MUST NOT** 作为
-   采纳/裁掉/defer 的判据或任何数值门槛——门槛判断已收窄为上方机械三态 + 二元裁决两层。
+   采纳/裁掉/defer 的判据或任何数值门槛——门槛判断已收窄为上方机械三态 + 四态裁决两层。
 5. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
    判"裁掉"的连 critique 落入报告「已裁掉」区（机械裁掉标 `[ref-check]`，裁决裁掉不标，来源可辨）。
 6. **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、
@@ -870,7 +870,7 @@ ship-gate:
   - 已存在：T123（复用他 change 已记的同一问题，不进上表）
 
   ——**区内规则（ship_gate B26 会扫本区带 `id` 列的表）**：带 `id` 列的表只放 id 合法（整格恰为单个 `T\d+`/`B\d+`）且池文件 `source_change` 等于本 change 的项（含本 change 早先已记的）。
-  「已存在：T123」（他 change 的池项）与「待人工补录」（recorder 失败项，写失败摘要与可直接执行的 `issues_v2.py add` 补录命令）写在表下列表，MUST NOT 进表。
+  「已存在：T123」（他 change 的池项；已关闭项写「已存在：T123（已关闭）」）与「待人工补录」（recorder 失败项，写失败摘要与可直接执行的 `issues_v2.py add` 补录命令）写在表下列表，MUST NOT 进表。
   本轮无「既有」finding 时不出表，该区只写一行「无」；MUST NOT 把「无」写进 id 列。
 ### 度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落、不调 emitter，见第三步/第五步）
   domain / adversarial / history / outside-voice（同轮 site="code-voice" 与 site="hr-tg" 若均调用，各独立一行）/ broad（Step1 自持 scope 审计）

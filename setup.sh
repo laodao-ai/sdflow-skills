@@ -121,7 +121,7 @@ install_windows_skill() {  # $1=source directory $2=target $3=skill name
   fi
   if [ -d "$target" ] && ! mv -T "$target" "$transaction/backup"; then
     rm -rf -- "$transaction" || true
-    skipped+=("$name @ ${target%/*} — backup 失败，旧安装保留")
+    skipped+=("$name @ ${target%/*} — backup 失败，旧安装保留；目录可能被终端或编辑器占用：关闭占用它的程序后重跑 setup.sh")
     return 0
   fi
   if ! mv -T "$transaction/stage" "$target"; then
@@ -132,7 +132,7 @@ install_windows_skill() {  # $1=source directory $2=target $3=skill name
       fi
     fi
     rm -rf -- "$transaction" || true
-    skipped+=("$name @ ${target%/*} — swap 失败，旧安装已恢复")
+    skipped+=("$name @ ${target%/*} — swap 失败，旧安装已恢复；目录可能被终端或编辑器占用：关闭占用它的程序后重跑 setup.sh")
     return 0
   fi
   rm -rf -- "$transaction" || true

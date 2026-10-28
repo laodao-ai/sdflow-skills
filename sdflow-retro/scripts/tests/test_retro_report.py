@@ -1911,3 +1911,15 @@ def test_build_report_has_human_gate_columns(tmp_path):
     _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(spec-review)")
     md = R.build_report(str(root))
     assert "人类门(min)" in md and "扣除后总墙钟(min)" in md and "spec-rev Δ(扣除后)" in md
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows does not expose POSIX mode bits")
+def test_atomic_write_new_file_follows_umask(tmp_path):
+    target = tmp_path / "openspec/retro/report.md"
+    target.parent.mkdir(parents=True)
+    old = os.umask(0o002)
+    try:
+        R.atomic_write(str(target), "new")
+    finally:
+        os.umask(old)
+    assert (os.stat(str(target)).st_mode & 0o777) == 0o664

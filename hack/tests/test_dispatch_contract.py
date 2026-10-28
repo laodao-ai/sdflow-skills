@@ -622,25 +622,23 @@ def test_eight_entrypoints_reference_limit_and_claude_collection_sections():
         assert "subagent-dispatch-contract.md" in text, skill
 
 
-# 入口声明的时长上限整句允许清单：只有 implement 入口可以写数字，其余入口引用契约上限表。
-ALLOWED_LIMIT_SENTENCES = (
-    "本入口的 implementer、fix 子代理时长上限 180 分钟（要跑测试），Standards 轴与 Spec 轴按契约表 60 分钟。",
-)
-# sdflow-done 触发 verify 重跑时需要跑测试，声明更长上限（retest-review-fixes-and-record-preexisting）
-ALLOWED_DONE_LIMIT_SENTENCES = (
-    "触发重跑时，本入口的 verify 子代理时长上限 180 分钟（要跑测试）。",
-)
+# 入口声明的时长上限整句允许清单：只有清单里的入口可以写数字，其余入口引用契约上限表。
+# 整句只对所属入口生效；其他入口写了同句也算硬编码。
+ALLOWED_LIMIT_SENTENCES_BY_SKILL = {
+    "sdflow-implement": (
+        "本入口的 implementer、fix 子代理时长上限 180 分钟（要跑测试），Standards 轴与 Spec 轴按契约表 60 分钟。",
+    ),
+    # verify 重跑要跑测试，声明更长上限（retest-review-fixes-and-record-preexisting）
+    "sdflow-done": (
+        "触发重跑时，本入口的 verify 子代理时长上限 180 分钟（要跑测试）。",
+    ),
+}
 LIMIT_LITERAL = re.compile(r"\d+\s*分钟")
 
 
 def _hardcoded_limits(text, skill="sdflow-implement"):
-    # 整句允许清单只对 implement 入口生效；其他入口写了同句也算硬编码
-    if skill == "sdflow-implement":
-        for sentence in ALLOWED_LIMIT_SENTENCES:
-            text = text.replace(sentence, "")
-    if skill == "sdflow-done":
-        for sentence in ALLOWED_DONE_LIMIT_SENTENCES:
-            text = text.replace(sentence, "")
+    for sentence in ALLOWED_LIMIT_SENTENCES_BY_SKILL.get(skill, ()):
+        text = text.replace(sentence, "")
     return LIMIT_LITERAL.findall(text)
 
 
@@ -657,8 +655,12 @@ def test_hardcoded_limit_guard_rejects_injected_number_and_allows_implement_sent
     assert _hardcoded_limits(implement) == []
     assert _hardcoded_limits(implement + "\n子代理时长上限 60 分钟。\n") == ["60 分钟"]
     assert _hardcoded_limits("评审镜上限 90分钟") == ["90分钟"]
-    # 允许句只对 implement 入口豁免，其他入口出现同句仍判硬编码
-    assert _hardcoded_limits(ALLOWED_LIMIT_SENTENCES[0], "sdflow-done") != []
+    # 允许句只对所属入口豁免，其他入口出现同句仍判硬编码
+    implement_sentence = ALLOWED_LIMIT_SENTENCES_BY_SKILL["sdflow-implement"][0]
+    done_sentence = ALLOWED_LIMIT_SENTENCES_BY_SKILL["sdflow-done"][0]
+    assert _hardcoded_limits(implement_sentence, "sdflow-done") != []
+    assert _hardcoded_limits(done_sentence, "sdflow-implement") != []
+    assert _hardcoded_limits(done_sentence, "sdflow-done") == []
 
 
 def test_review_barrier_summary_claude_side_mentions_alarm_fallback():

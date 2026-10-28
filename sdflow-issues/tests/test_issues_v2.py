@@ -1365,7 +1365,96 @@ def test_atomic_write_text_keeps_existing_mode(tmp_path):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
-def test_atomic_write_text_new_file_is_0644(tmp_path):
+def test_atomic_write_text_new_file_follows_umask(tmp_path):
+    # umask 002 下期望 0664：与写死 0644 的实现区分开
     p = tmp_path / "a.md"
-    v2.atomic_write_text(str(p), "new")
-    assert (p.stat().st_mode & 0o777) == 0o644
+    old = os.umask(0o002)
+    try:
+        v2.atomic_write_text(str(p), "new")
+    finally:
+        os.umask(old)
+    assert (p.stat().st_mode & 0o777) == 0o664
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_cli_add_new_issue_file_follows_umask(tmp_path):
+    # 新 issue 文件走 os.open(..., 0o666)，内核套 umask；umask 002 下期望 0664
+    repo = _init_repo(tmp_path / "repo")
+    old = os.umask(0o002)
+    try:
+        proc = _run_cli(
+            repo, "add", "--pool", "bug",
+            "--json", json.dumps({"module": "m", "summary": "s", "priority": "P1"}),
+        )
+    finally:
+        os.umask(old)
+    assert proc.returncode == 0, proc.stderr
+    issue_id = json.loads(proc.stdout)["id"]
+    path = repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"
+    assert (path.stat().st_mode & 0o777) == 0o664
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# T445：open/ 词表外 status 告警；T451：--no-stage
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _set_open_status(repo, issue_id, status):
+    path = repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"
+    fm, body = v2.read_issue(str(path))
+    fm["status"] = status
+    v2.write_issue(str(path), fm, body, create=False)
+
+
+def test_scan_and_reindex_warn_on_open_out_of_vocabulary_status(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _set_open_status(repo, issue_id, "挂账")
+
+    scan = _run_cli(repo, "scan", "--json")
+    assert scan.returncode == 0, scan.stderr
+    assert "WARNING" in scan.stderr and issue_id in scan.stderr and "挂账" in scan.stderr
+    assert [it["id"] for it in json.loads(scan.stdout)] == [issue_id]  # 仍计入 open
+
+    reindex = _run_cli(repo, "reindex")
+    assert reindex.returncode == 0, reindex.stderr
+    assert "WARNING" in reindex.stderr and issue_id in reindex.stderr
+
+
+def test_scan_no_warning_for_in_vocabulary_open_status(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _add(repo, "bug", module="m", summary="s")
+    proc = _run_cli(repo, "scan", "--json")
+    assert proc.returncode == 0
+    assert "WARNING" not in proc.stderr
+
+
+def test_cli_add_no_stage_leaves_file_untracked(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    proc = _run_cli(repo, "add", "--pool", "bug", "--no-stage",
+                    "--json", json.dumps({"module": "m", "summary": "s"}))
+    assert proc.returncode == 0, proc.stderr
+    issue_id = json.loads(proc.stdout)["id"]
+    status = _git("status", "--porcelain", cwd=repo).stdout
+    assert f"?? openspec/issues/open/bug/{issue_id}.md" in status or "?? openspec/" in status
+    assert f"A  openspec/issues/open/bug/{issue_id}.md" not in status
+
+
+def test_cli_set_status_and_reopen_no_stage_move_without_staging(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "init", cwd=repo)
+    open_path = repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"
+    closed_path = repo / "openspec" / "issues" / "closed" / "bug" / f"{issue_id}.md"
+
+    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED",
+                    "--evidence", "c1", "--no-stage")
+    assert proc.returncode == 0, proc.stderr
+    assert closed_path.is_file() and not open_path.exists()
+    # 暂存区无变更：index 与 HEAD 一致
+    assert _git("diff", "--cached", "--name-only", cwd=repo).stdout.strip() == ""
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "r", "--no-stage")
+    assert proc.returncode == 0, proc.stderr
+    assert open_path.is_file() and not closed_path.exists()
+    assert _git("diff", "--cached", "--name-only", cwd=repo).stdout.strip() == ""

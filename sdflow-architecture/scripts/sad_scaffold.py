@@ -75,11 +75,14 @@ def atomic_write(path, text):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
-        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644（chmod 跨平台尽力而为）。
+        # mkstemp 建的文件是 0600；沿用原文件 mode；无原文件时按 umask 取默认（chmod 跨平台尽力而为）。
         try:
             mode = os.stat(str(path)).st_mode & 0o777
         except FileNotFoundError:
-            mode = 0o644
+            # 新文件与普通创建一致取 0o666 & ~umask，不写死 mode
+            um = os.umask(0)
+            os.umask(um)
+            mode = 0o666 & ~um
         try:
             os.chmod(tmpname, mode)
         except OSError:

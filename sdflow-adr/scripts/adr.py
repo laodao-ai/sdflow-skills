@@ -110,11 +110,14 @@ def atomic_write(path, text):
         # newline=""：不做换行转换，text 里的 \r\n / \n 原样落盘
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
             f.write(text)
-        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读写得了。
+        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件时按 umask 取默认，共享目录里别的账号才读写得了。
         try:
             mode = os.stat(str(path)).st_mode & 0o777
         except FileNotFoundError:
-            mode = 0o644
+            # 新文件与普通创建一致取 0o666 & ~umask，不写死 mode
+            um = os.umask(0)
+            os.umask(um)
+            mode = 0o666 & ~um
         os.chmod(tmpname, mode)
         os.replace(tmpname, str(path))
     except OSError:
@@ -376,7 +379,7 @@ def cmd_new(args):
 
         skeleton = _render_skeleton(args.title, args.source)
         try:
-            fd = os.open(str(new_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            fd = os.open(str(new_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
         except OSError:
             _die(2, f"adr: 编号 {nnnn} 已被 {new_path} 占用；"
                     f"扫号与创建之间有其他写入；重跑 new 即重新扫号")

@@ -1448,6 +1448,18 @@ def test_output_mode_follows_umask_022(tmp_path, md_a):
     assert stat.S_IMODE(out.stat().st_mode) == 0o644
 
 
+@pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
+def test_output_mode_follows_umask_002(tmp_path, md_a):
+    # umask 002 下期望 0664，区别于写死 0644
+    old = os.umask(0o002)
+    try:
+        r, out = gen(tmp_path, f"甲={md_a}")
+    finally:
+        os.umask(old)
+    assert r.returncode == 0, r.stderr
+    assert stat.S_IMODE(out.stat().st_mode) == 0o664
+
+
 def test_design_gate_without_specs_warns_once_and_exits_0(tmp_path):
     base = make_change(tmp_path / "chg")
     for spec in (base / "specs").glob("*/spec.md"):

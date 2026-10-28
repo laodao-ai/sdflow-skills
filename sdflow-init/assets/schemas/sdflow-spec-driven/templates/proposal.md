@@ -4,6 +4,9 @@
 
 <!-- Explain the motivation for this change. What problem does this solve? Why now? -->
 
+<!-- If this change resolves issues from openspec/issues/, keep the line below with their ids; sdflow-done closes them on ship. Otherwise delete it. -->
+来源 issue：<ID>、<ID>。
+
 ## What Changes
 
 <!-- Describe what will change. Be specific about new capabilities, modifications, or removals. -->

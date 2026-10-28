@@ -542,6 +542,25 @@ def release_reservation(run_dir, site):
         return False
 
 
+def _save_dispatch_stderr(run_dir, site, text):
+    """把 `claude --bg --exec` 的 stderr 尾部落到 0600 run-dir 文件，返回路径（无内容/写失败返回 None）。
+
+    为什么只给路径：OVBG-04 规定 stderr 留在 gitignored run dir，payload 只暴露字节数/行数，
+    不逐字进转录；操作者需要原因时自己 `tail` 该文件。尾部截断（20 行 / 2000 字符）限制磁盘占用。
+    """
+    if not text:
+        return None
+    tail = "\n".join(text.splitlines()[-20:])[-2000:]
+    path = os.path.join(str(run_dir), site + ".dispatch.stderr")
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(tail + "\n")
+    except OSError:
+        return None
+    return path
+
+
 def _reject(message, state="usage-error", reason_code="preflight-error",
             fallback_allowed=False, **extra):
     """失败 payload 的唯一构造口。
@@ -815,14 +834,16 @@ def cmd_dispatch(args):
                 state="unknown-cost", reason_code="exec-error", fallback_allowed=False,
                 site=site, run_dir=run_dir, attempt_nonce=nonce,
                 dispatch_duration_seconds=round(duration, 3),
-                stderr_bytes=len(stderr_text or ""))
+                stderr_bytes=len(stderr_text or ""),
+                stderr_path=_save_dispatch_stderr(run_dir, site, stderr_text))
         # 尚未产生外部 job ⇒ 清理 reserve，允许 5 秒级同族 fallback。
         release_reservation(run_dir, site)
         return 1, _reject("%s；未检出任何属于本次 attempt 的外部 job，已回收 reservation" % why,
                           state="exec-error", reason_code="exec-error", fallback_allowed=True,
                           site=site, run_dir=run_dir,
                           dispatch_duration_seconds=round(duration, 3),
-                          stderr_bytes=len(stderr_text or ""))
+                          stderr_bytes=len(stderr_text or ""),
+                          stderr_path=_save_dispatch_stderr(run_dir, site, stderr_text))
 
     # 唯一 fail-closed 判据 = 命中是否唯一（两条匹配通道并集之后仍须收敛到一个 job）。
     # stdout hint 只参与匹配、不再单独当「不一致」判死：它的格式属 research preview，

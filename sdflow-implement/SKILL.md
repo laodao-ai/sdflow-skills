@@ -461,17 +461,19 @@ fail-closed 罢工分支——每个罢工分支都是一类项目被拒之门�
    - 除每层一行外，票报告另有固定小节 `## 既有红测`（行格式
      `<层> | <失败用例标识> | <issue id>`，写法见下第 6 条）。
 6. **四类失败分诊**（退出码非 0 时）：本 change 引入的回归 → 进 fix 循环；仓内既有红测（用 base
-   SHA 复跑该命令确认改动前即红）→ **先按下方「既有问题记录规则」入池，再写 `## 既有红测` 一行，
-   放行**，不阻塞；flaky（同命令复跑一次即绿）→ 记录并放行；环境故障（依赖缺失 / 网络）→ halt
+   SHA 复跑该命令，该失败用例在 base 的失败集里同样出现；取不到用例级标识时按整条层命令比）→
+   **先按下方「既有问题记录规则」入池，再写 `## 既有红测` 一行，放行**，不阻塞；flaky（同命令复跑一次即绿）→ 记录并放行；环境故障（依赖缺失 / 网络）→ halt
    envelope 停并上抛。
    - **`## 既有红测` 小节**〔retest-review-fixes-and-record-preexisting〕：票报告固定小节，逐行
      `<层> | <失败用例标识> | <issue id>`。失败用例标识取 runner 在失败输出里打印的原生标识
-     （如 pytest node id），逐字记录；取不到用例级标识时写层名，代表整条层命令。标识本身可能含 `|`：按第一个与最后一个 `|` 切三列，中间整段为标识，原样保留。recorder 非零
+     （如 pytest node id），逐字记录；取不到用例级标识时写层名，代表整条层命令。层名行在 verify 重跑分诊中不直接放行，
+     要在 base 上复跑确认（见 `sdflow-done`）。标识本身可能含 `|`：按第一个与最后一个 `|` 切三列，中间整段为标识，原样保留。recorder 非零
      退出时 issue id 写「待人工补录」，该失败照样放行。无既有红测可省略该小节；`sdflow-done`
      的 verify 重跑分诊只认这个小节，不读散文。
-   - **既有问题记录规则**（四处共用，与 `sdflow-code-review` 同口径）：先
-     `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --status OPEN --status PROPOSED`
-     按 module 与 summary 比对，确认是同一问题就复用其 id，拿不准就新增；新增走 `issues_v2.py add`，
+   - **既有问题记录规则**（四处共用，与 `sdflow-code-review`、`sdflow-done` 同口径）：
+     先 `python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json --all` 查全部状态（含已关闭），
+     按 module 与 summary 比对。确认是同一问题时：未关闭项复用其 id；已关闭项不新增、不重开，
+     报告写「已存在：<id>（已关闭）」，`## 既有红测` 行的 issue id 列写该 id。拿不准就新增；新增走 `issues_v2.py add`，
      `source_change` 显式传本 change 名，summary 以全角「既有问题：」开头；确认是缺陷进 bug 池，
      改进或关注点进 todo 池。recorder 非零退出时，报告写「待人工补录」并附一条可直接执行的
      `issues_v2.py add` 补录命令，MUST NOT 写假 id。
@@ -839,8 +841,8 @@ implementer 上报「票外发现」（见上「每 ticket 派 fresh implementer
   （省略会误挂当前活跃 change、污染 sweep 圈选）。
 - 判定与去向 **SHALL 记一行入该票 impl-report**（fold/defer + 判据摘要）。
 
-**「无关」分支**：`## 票外发现` 条目标「无关」者，编排层**不走 BASE-18 AND 门**，直接按上文第 6 条
-「既有问题记录规则」入池（summary 以「既有问题：」开头，`source_change` 传本 change），并在该票
+**「无关」分支**：`## 票外发现` 条目标「无关」者，编排层**不走 BASE-18 AND 门**，直接按「既有问题记录规则」
+（见「聚合套件发现契约」的四类失败分诊）入池（summary 以「既有问题：」开头，`source_change` 传本 change），并在该票
 impl-report 记一行处置与 issue id（recorder 失败则写「待人工补录」与补录命令）。标「相关」或未标者
 照上文 fold/defer 流程。
 

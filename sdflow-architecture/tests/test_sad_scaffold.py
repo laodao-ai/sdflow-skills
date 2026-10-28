@@ -542,8 +542,13 @@ def test_atomic_write_keeps_existing_mode(tmp_path):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="需要 POSIX 权限语义")
-def test_atomic_write_new_file_is_0644(tmp_path):
+def test_atomic_write_new_file_follows_umask(tmp_path):
+    # umask 002 下期望 0664：与写死 0644 的实现区分开
     mod = _load_scaffold()
-    p = tmp_path / "sad.md"
-    mod.atomic_write(p, "new")
-    assert (p.stat().st_mode & 0o777) == 0o644
+    old = os.umask(0o002)
+    try:
+        p = tmp_path / "sad.md"
+        mod.atomic_write(p, "new")
+    finally:
+        os.umask(old)
+    assert (p.stat().st_mode & 0o777) == 0o664

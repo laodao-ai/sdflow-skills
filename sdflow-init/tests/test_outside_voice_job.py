@@ -590,6 +590,19 @@ def test_dispatch_duration_covers_nonce_verification_not_just_the_spawn(job_home
     assert elapsed < JOB.DISPATCH_DEADLINE_SECONDS + JOB.NONCE_LOOKUP_GRACE_SECONDS + 10, elapsed
 
 
+def test_dispatch_failure_saves_stderr_to_run_dir_and_reports_path_only(job_home, fake_claude, repo):
+    """T450：失败只报路径不报内容（OVBG-04），文件 0600，payload 不含 stderr 原文。"""
+    env = _env(fake_claude, {"FAKE_CLAUDE_BG_MODE": "fail", "FAKE_CLAUDE_AGENTS_MODE": "empty"})
+    proc = _run_job(job_home, _dispatch_args(repo, job_home), env, timeout=60)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    path = Path(payload["stderr_path"])
+    assert path.parent.resolve() == repo["run_dir"].resolve()
+    assert "dispatch refused" in path.read_text(encoding="utf-8")
+    assert (path.stat().st_mode & 0o777) == 0o600
+    assert "dispatch refused" not in json.dumps(payload)
+
+
 def test_dispatch_writes_job_metadata_atomically_with_required_fields(job_home, fake_claude, repo):
     env = _env(fake_claude, {"FAKE_CLAUDE_JOB_ID": "75d34378"})
     proc = _run_job(job_home, _dispatch_args(repo, job_home), env)

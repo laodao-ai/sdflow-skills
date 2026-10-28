@@ -257,11 +257,14 @@ def atomic_write_text(path, text):
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
-        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读写得了。
+        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件时按 umask 取默认，共享目录里别的账号才读写得了。
         try:
             mode = os.stat(path).st_mode & 0o777
         except FileNotFoundError:
-            mode = 0o644
+            # 新文件与普通创建一致取 0o666 & ~umask，不写死 mode
+            um = os.umask(0)
+            os.umask(um)
+            mode = 0o666 & ~um
         os.chmod(tmp, mode)
         os.replace(tmp, path)
     finally:
@@ -359,7 +362,7 @@ def write_issue(path, frontmatter, body, create=False):
     if create:
         d = os.path.dirname(path) or "."
         os.makedirs(d, exist_ok=True)
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
         try:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
                 f.write(text)
@@ -493,7 +496,8 @@ def cmd_add(args):
         except FileExistsError:
             continue
 
-    if _is_git_repo(root):
+    # --no-stage：调用方可能有自己的暂存区，不替它 git add
+    if _is_git_repo(root) and not getattr(args, "no_stage", False):
         rel = os.path.relpath(path, root)
         try:
             subprocess.run(
@@ -581,7 +585,8 @@ def cmd_set_status(args):
         os.makedirs(os.path.dirname(closed_path), exist_ok=True)
         rel_open = os.path.relpath(path, root)
         rel_closed = os.path.relpath(closed_path, root)
-        if _is_git_repo(root):
+        # --no-stage 时用纯文件系统移动，不碰暂存区
+        if _is_git_repo(root) and not getattr(args, "no_stage", False):
             tracked = subprocess.run(
                 ["git", "-C", root, "ls-files", "--error-unmatch", rel_open],
                 capture_output=True, timeout=30,
@@ -692,7 +697,8 @@ def cmd_reopen(args):
     os.makedirs(open_dir, exist_ok=True)
     rel_closed = os.path.relpath(path, root)
     rel_open = os.path.relpath(open_path, root)
-    if _is_git_repo(root):
+    # --no-stage 时用纯文件系统移动，不碰暂存区
+    if _is_git_repo(root) and not getattr(args, "no_stage", False):
         tracked = subprocess.run(
             ["git", "-C", root, "ls-files", "--error-unmatch", rel_closed],
             capture_output=True, timeout=30,
@@ -747,6 +753,15 @@ def _scan_dir(root, location):
             except (ValueError, OSError) as exc:
                 print(f"WARNING: 跳过不可解析文件 {path}: {exc}", file=sys.stderr)
                 continue
+            # open/ 里手写的词表外 status 不会被 set-status 拦下，这里只告警不改行为
+            vocab = STATUS_VALUES.get(frontmatter.get("pool"))
+            if location == "open" and vocab is not None and frontmatter.get("status") not in vocab:
+                print(
+                    f"WARNING: open/ 内文件状态不在词表内：id={frontmatter.get('id')} "
+                    f"pool={frontmatter.get('pool')} status={frontmatter.get('status')}"
+                    f"（合法值={sorted(vocab)}；仍按 open 计入）",
+                    file=sys.stderr,
+                )
             items.append(frontmatter)
     return items
 
@@ -1342,6 +1357,8 @@ def main():
     sa.add_argument("--pool", required=True, choices=["bug", "todo"])
     sa.add_argument("--json", required=True, help="JSON object：module/summary 必填，"
                      "priority(bug only)/type(todo only)/source_change 可选")
+    sa.add_argument("--no-stage", dest="no_stage", action="store_true",
+                    help="不执行 git add（默认会暂存新文件）")
     sa.set_defaults(func=cmd_add)
 
     ss = sub.add_parser("set-status", help="修改 issue 状态；终态自动 git mv 到 closed/")
@@ -1349,12 +1366,16 @@ def main():
     ss.add_argument("--to", required=True)
     ss.add_argument("--evidence", default=None, help="FIXED(bug)/DONE(todo) 必填")
     ss.add_argument("--reason", default=None, help="WONTFIX/WONTDO 必填")
+    ss.add_argument("--no-stage", dest="no_stage", action="store_true",
+                    help="不执行 git add / git mv，改用文件系统移动")
     ss.set_defaults(func=cmd_set_status)
 
     sp = sub.add_parser("reopen", help="终态唯一受控逆转换：closed/ 迁回 open/")
     sp.add_argument("--id", required=True)
     sp.add_argument("--reason", required=True, help="reopen 理由（必填）")
     sp.add_argument("--to", default="OPEN", help="非终态目标状态：OPEN（默认）或 PROPOSED")
+    sp.add_argument("--no-stage", dest="no_stage", action="store_true",
+                    help="不执行 git add / git mv，改用文件系统移动")
     sp.set_defaults(func=cmd_reopen)
 
     sc = sub.add_parser("scan", help="扫描 issue 列表")

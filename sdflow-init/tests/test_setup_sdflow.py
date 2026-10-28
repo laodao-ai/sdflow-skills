@@ -164,6 +164,20 @@ def test_shared_skills_migration_preserves_foreign_and_blocked_entries(tmp_path,
         assert (old / "foreign").is_symlink()
 
 
+def test_top_level_dir_without_skill_md_is_not_installed(tmp_path):
+    """T447：安装判据是「顶层目录含 SKILL.md」；hack/、docs/ 这类目录不得进全局 skills 目录。"""
+    farm = _farm_repo(tmp_path, {"not-a-skill": {"README.txt": b"x"}})
+    home = tmp_path / "home"
+    home.mkdir()
+    env = dict(os.environ, HOME=bash_path(home), SDFLOW_HOME=bash_path(home / ".sdflow"))
+    r = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], env=env,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    for dest in (home / ".claude" / "skills", home / ".agents" / "skills"):
+        assert (dest / "sdflow-init").exists()          # 对照：真 skill 照常安装
+        assert not os.path.lexists(dest / "not-a-skill")
+
+
 class TestCleanupOrphansNonSkillSource:
     """清理判据 MUST 与安装判据同源（「目录含 SKILL.md」）。
 

@@ -575,11 +575,14 @@ def write_atomic(out, data):
         fd, tmp = tempfile.mkstemp(dir=str(out_dir), prefix=".render-review-", suffix=".tmp")
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
-        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读得了。
+        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件时按 umask 取默认，共享目录里别的账号才读写得了。
         try:
             mode = os.stat(str(out)).st_mode & 0o777
         except FileNotFoundError:
-            mode = 0o644
+            # 新文件与普通创建一致取 0o666 & ~umask，不写死 mode
+            um = os.umask(0)
+            os.umask(um)
+            mode = 0o666 & ~um
         os.chmod(tmp, mode)
         os.replace(tmp, str(out))
         tmp = None

@@ -1617,7 +1617,10 @@ def atomic_write(path, text):
         try:
             mode = os.stat(path).st_mode & 0o777
         except FileNotFoundError:
-            mode = 0o644
+            # 新文件与普通创建一致取 0o666 & ~umask，不写死 mode
+            um = os.umask(0)
+            os.umask(um)
+            mode = 0o666 & ~um
         os.chmod(tmp, mode)
         os.replace(tmp, path)
     finally:

@@ -160,7 +160,10 @@ def merge_runtime_gitignore(root, snippet):
         try:
             mode = os.stat(path).st_mode & 0o777
         except FileNotFoundError:
-            mode = 0o644
+            # 新文件与普通创建一致取 0o666 & ~umask，不写死 mode
+            um = os.umask(0)
+            os.umask(um)
+            mode = 0o666 & ~um
         os.chmod(tmp, mode)
         os.replace(tmp, path)
     finally:
@@ -255,9 +258,11 @@ def copy_bundle(root, include_schema=True):
         schema_dst = os.path.join(schemas_dst, PROJECT_SCHEMA)
         # 只托管本工具的 fork。消费仓可在 schemas/ 下维护其它 project-local schema，
         # update 不得删除它们。
-        if os.path.isdir(schema_dst):
-            shutil.rmtree(schema_dst)
-        shutil.copytree(schema_src, schema_dst)
+        # 就地同步而非 rmtree + copytree（同 B38）：copytree 会把源文件/目录 mode 原样带过来（无视 umask），
+        # rmtree 重建全部文件会换属主，且别的账号对目录无写权时整个 update 失败。
+        # 逐文件 copyfile 覆盖沿用原 inode 的属主/mode/ACL，新建文件取 umask 默认；
+        # 源里已不存在的旧文件/目录仍删掉，托管 fork 与源保持一致。
+        _sync_schema_tree(schema_src, schema_dst)
         if not os.path.isfile(os.path.join(schema_dst, "schema.yaml")):
             raise RuntimeError("project-local schema 复制后缺少 schema.yaml")
     n = sum(len(fs) for _, _, fs in os.walk(dst))
@@ -265,6 +270,51 @@ def copy_bundle(root, include_schema=True):
     if include_schema and os.path.isdir(schemas_dst):
         n += sum(len(fs) for _, _, fs in os.walk(schemas_dst))
     return dst, n
+
+
+def _sync_schema_tree(src, dst):
+    """把 src 目录树就地同步到 dst：覆盖写文件内容、补建目录、删除 src 中不存在的条目。
+    只动 dst 之内，不复制 mode/mtime 等元数据。"""
+    src_files, src_dirs = set(), {""}
+    for cur, dirs, files in os.walk(src):
+        rel_cur = os.path.relpath(cur, src)
+        rel_cur = "" if rel_cur == "." else rel_cur
+        for d in dirs:
+            src_dirs.add(os.path.join(rel_cur, d))
+        for fn in files:
+            src_files.add(os.path.join(rel_cur, fn))
+
+    # dst 里类型与源不符的条目（源是目录、dst 是文件，或反之）先清掉，免得后面 makedirs/copyfile 撞上
+    if os.path.lexists(dst) and (os.path.islink(dst) or not os.path.isdir(dst)):
+        os.remove(dst)
+    os.makedirs(dst, exist_ok=True)
+    for rel in sorted(src_dirs):
+        p = os.path.join(dst, rel)
+        if os.path.lexists(p) and (os.path.islink(p) or not os.path.isdir(p)):
+            os.remove(p)
+        os.makedirs(p, exist_ok=True)
+    for rel in sorted(src_files):
+        p = os.path.join(dst, rel)
+        if os.path.islink(p):
+            os.remove(p)  # copyfile 会跟随软链写到 dst 之外
+        elif os.path.isdir(p):
+            shutil.rmtree(p)
+        shutil.copyfile(os.path.join(src, rel), p)
+
+    # 自底向上删 dst 中源里没有的文件与目录
+    for cur, dirs, files in os.walk(dst, topdown=False):
+        rel_cur = os.path.relpath(cur, dst)
+        rel_cur = "" if rel_cur == "." else rel_cur
+        for fn in files:
+            if os.path.join(rel_cur, fn) not in src_files:
+                os.remove(os.path.join(cur, fn))
+        for d in dirs:
+            rel = os.path.join(rel_cur, d)
+            p = os.path.join(cur, d)
+            if os.path.islink(p):
+                os.remove(p)  # os.walk 把指向目录的软链列在 dirs 里；链本身不在源中
+            elif rel not in src_dirs:
+                shutil.rmtree(p)
 
 
 def _validate_schema_authority(schema_src):
@@ -563,11 +613,14 @@ def _atomic_write(path, content, prefix):
             out.write(content)
             out.flush()
             os.fsync(out.fileno())
-        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读写得了。
+        # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件时按 umask 取默认，共享目录里别的账号才读写得了。
         try:
             mode = os.stat(path).st_mode & 0o777
         except FileNotFoundError:
-            mode = 0o644
+            # 新文件与普通创建一致取 0o666 & ~umask，不写死 mode
+            um = os.umask(0)
+            os.umask(um)
+            mode = 0o666 & ~um
         os.chmod(tmp, mode)
         os.replace(tmp, path)
     finally:
@@ -1064,11 +1117,14 @@ def _atomic_write_settings(settings, data):
                 f.write("\n")
                 f.flush()
                 os.fsync(f.fileno())
-            # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件取 0644，共享目录里别的账号才读写得了。
+            # mkstemp 建的文件是 0600；沿用原文件 mode，无原文件时按 umask 取默认，共享目录里别的账号才读写得了。
             try:
                 mode = os.stat(settings).st_mode & 0o777
             except FileNotFoundError:
-                mode = 0o644
+                # 新文件与普通创建一致取 0o666 & ~umask，不写死 mode
+                um = os.umask(0)
+                os.umask(um)
+                mode = 0o666 & ~um
             os.chmod(tmp, mode)
             os.replace(tmp, settings)
         except BaseException:

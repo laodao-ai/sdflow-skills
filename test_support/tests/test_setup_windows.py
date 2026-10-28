@@ -181,3 +181,50 @@ def test_setup_keeps_foreign_same_name_directory(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
     assert (foreign / "foreign.txt").read_text(encoding="utf-8") == "keep me"
     assert not (foreign / ".sdflow-skills").exists()
+
+
+# ── macOS/Linux 上模拟 Windows 路径 ─────────────────────────────
+# 伪造 uname 让 setup.sh 走 install_windows_skill；BSD mv 不认 -T，用函数垫片吞掉它。
+# 这只覆盖 setup.sh 的分支逻辑，不覆盖真实 Windows 文件锁行为。
+SIM_WINDOWS = (
+    'uname() { echo MINGW64_NT-10.0; }; export -f uname; '
+    'mv() { if [ "$1" = "-T" ]; then shift; fi; %s command mv "$@"; }; export -f mv; '
+)
+
+
+def sim_prefix(mv_rule=""):
+    return SIM_WINDOWS % mv_rule
+
+
+def test_backup_failure_message_states_cause_and_fix(farm):
+    repo, home, git, run = farm
+    run(sim_prefix())
+    target = home / ".agents/skills/alpha"
+    assert (target / ".sdflow-skills").is_file()
+    (repo / "alpha/SKILL.md").write_text("new\n")
+    # 备份是 target -> backup 的 mv；模拟目录被占用时该步失败
+    output = run(sim_prefix('case "$2" in */backup) return 1;; esac;'))
+    assert "backup 失败" in output
+    assert "被终端或编辑器占用" in output
+    assert "重跑 setup.sh" in output
+    assert (target / "SKILL.md").read_text() == "original\n"
+
+
+def test_empty_destination_dir_is_taken_over(farm):
+    repo, home, git, run = farm
+    target = home / ".agents/skills/alpha"
+    target.mkdir(parents=True)
+    run(sim_prefix())
+    assert (target / "SKILL.md").read_text() == "original\n"
+    assert (target / ".sdflow-skills").is_file()
+
+
+def test_nonempty_destination_without_marker_is_refused(farm):
+    repo, home, git, run = farm
+    target = home / ".agents/skills/alpha"
+    target.mkdir(parents=True)
+    (target / "foreign.txt").write_text("keep me")
+    output = run(sim_prefix())
+    assert "非自有目录或链接，未覆盖" in output
+    assert (target / "foreign.txt").read_text() == "keep me"
+    assert not (target / ".sdflow-skills").exists()
