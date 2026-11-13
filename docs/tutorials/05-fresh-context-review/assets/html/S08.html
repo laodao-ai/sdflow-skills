@@ -1,0 +1,214 @@
+<!doctype html>
+<!-- S08 · 第 10 轮（2026-11-08），口播 29–36。
+     保留围绕「全部改动」的五路角色位置，每一路随它回答的问题出现，连线同期出现，不预放编号空位。对照规格、领域、对抗、换模型、历史分别配短问题。人数与历史阈值仅作次要参数；历史为条件派发。最后展示本次派发摘要与 Codex 发现来源，不把五路等同五个 agent。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S08">
+<head>
+<meta charset="utf-8">
+<title>S08 · 代码评审分五路</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* ===== Agent 方块（S12a 同一套写法） ===== */
+  .tile { position: absolute; box-sizing: border-box; width: 180px; height: 130px; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 12px 12px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 72px; height: 72px; margin-top: -30px; }
+  .tile .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+          padding: 6px 20px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 36px; line-height: 1.1; }
+  .name.spec { background: var(--blue); }
+  .name.adv { background: var(--pink); }
+  .name.xm { background: var(--violet); }
+  /* 历史：按条件才派。灰底 + 淡墨虚线边，不带硬投影；六边形用墨色 */
+  .tile.cond { background: var(--cream-dim); border: 5px dashed rgba(22,22,22,.75); box-shadow: none; color: var(--ink); }
+
+  /* 五个位置（方块左上角） */
+  #a1, #p1 { left: 560px; top: 70px; }
+  #a3, #p3 { left: 1180px; top: 70px; }
+  #a2, #p2 { left: 460px; top: 340px; }
+  #a4, #p4 { left: 1280px; top: 340px; }
+  #a5, #p5 { left: 870px; top: 640px; }
+  /* 第 2 句的空位：「没讲到」样式 */
+  .slot { position: absolute; box-sizing: border-box; width: 180px; height: 130px; border-radius: 12px; border: 5px dashed rgba(22,22,22,.65);
+          display: flex; align-items: center; justify-content: center; }
+  .slot .num { background: transparent; border-color: rgba(22,22,22,.65); color: rgba(22,22,22,.65); }
+
+  /* ===== 中间：全部改动 ===== */
+  #all { left: 810px; top: 330px; width: 300px; height: 160px; padding: 26px 30px 0; }
+  #all .tab { background: var(--amber); font-size: 40px; }
+  #all .ln { display: flex; align-items: center; gap: 12px; height: 30px; margin-top: 4px; font-family: var(--mono); font-weight: 700; font-size: 28px; }
+  #all .ln i { display: block; height: 10px; border-radius: 5px; background: rgba(22,22,22,.4); }
+  #five { left: 810px; top: 104px; font-family: var(--display); font-weight: 800; font-size: 40px; padding: 8px 24px; }
+
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+
+  /* ===== 各路旁注 ===== */
+  #n1 { left: 170px; top: 52px; font-size: 32px; line-height: 1.45; white-space: normal; width: 360px; box-sizing: border-box; }
+  #n1 div { opacity: 0; }
+  #ck { left: 50px; top: 356px; width: 380px; height: 120px; padding: 10px 24px 0; display: flex; flex-direction: column; justify-content: center; }
+  #ck .tab { background: var(--blue-soft); font-size: 30px; padding: 2px 18px; top: -34px; }
+  #ck .en { font-family: var(--mono); font-weight: 700; font-size: 28px; white-space: nowrap; line-height: 1.3; }
+  #ck .zh { font-weight: 600; font-size: 32px; line-height: 1.3; }
+  .adv { position: absolute; left: 1430px; font-size: 32px; padding: 8px 22px; background: var(--pink-soft); }
+  #c1 { top: 52px; } #c2 { top: 120px; } #c3 { top: 188px; }
+  #n4 { left: 1528px; top: 356px; font-size: 32px; line-height: 1.4; white-space: normal; text-align: center; }
+  #r4 { left: 1200px; top: 540px; padding: 16px 24px 10px; font-size: 30px; font-weight: 600; white-space: nowrap; }
+  #r4 .tab, #rc .tab { font-size: 28px; padding: 2px 16px; top: -34px; }
+  #n5 { left: 300px; top: 652px; font-size: 32px; line-height: 1.45; white-space: normal; width: 520px; box-sizing: border-box; }
+
+  /* ===== 第 12–13 句：实录小卡 ===== */
+  #rc { left: 1110px; top: 714px; width: 590px; padding: 16px 28px 10px; }
+  #rc .l { font-size: 32px; font-weight: 600; line-height: 1.45; white-space: nowrap; }
+  #rc .l b { font-family: var(--display); font-weight: 800; }
+  #rc .hs { margin-left: 14px; font-size: 28px; font-weight: 600; color: rgba(22,22,22,.8); }
+  #rc .src, #r4 .src { display: block; margin-top: 4px; text-align: right; font-family: var(--mono); font-size: 26px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+#n4{font-size:27px;left:1500px}#n5{font-size:28px}#n4 small,#n5 small{font-size:23px}#ck .zh{font-size:29px}#ck .en{font-size:27px}</style>
+</head>
+<body>
+<div id="stage">
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-opacity=".8" stroke-width="6" stroke-linecap="round">
+      <path class="w" d="M850 330 C 830 260, 790 170, 752 140"/>
+      <path class="w" d="M1070 330 C 1090 260, 1130 170, 1168 140"/>
+      <path class="w" d="M810 405 C 740 405, 700 405, 652 405"/>
+      <path class="w" d="M1110 405 C 1180 405, 1220 405, 1268 405"/>
+      <path class="w" d="M960 490 C 960 540, 960 580, 960 628"/>
+    </g>
+  </svg>
+
+  <!-- 第 1 句：全部改动 -->
+  <div class="card" id="all" data-r="-1">
+    <div class="tab" data-r="-2">全部改动</div>
+    <div class="ln">+<i style="width:170px"></i></div>
+    <div class="ln">−<i style="width:110px"></i></div>
+    <div class="ln">+<i style="width:200px"></i></div>
+  </div>
+
+  <!-- 第 2 句：五个空位 + 「五路」 -->
+  <div class="chip" id="five" data-r="1.5">代码评审 · 五路</div>
+  <div class="slot" id="p1"><span class="num">1</span></div>
+  <div class="slot" id="p2"><span class="num">2</span></div>
+  <div class="slot" id="p3"><span class="num">3</span></div>
+  <div class="slot" id="p4"><span class="num">4</span></div>
+  <div class="slot" id="p5"><span class="num">5</span></div>
+
+  <!-- 五路 Agent -->
+  <div class="tile" id="a1" data-r="-1.2"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name spec" style="--r:-2deg">对照规格</div></div>
+  <div class="tile" id="a2" data-r="1.2"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">领域视角</div></div>
+  <div class="tile" id="a3" data-r="1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name adv" style="--r:2deg">对抗 × 2–3</div></div>
+  <div class="tile" id="a4" data-r="-1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name xm" style="--r:-2deg">换模型</div></div>
+  <div class="tile cond" id="a5" data-r="0.8" data-shadow="0"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">历史</div></div>
+
+  <!-- 第 3 句：对照规格的旁注 -->
+  <div class="tag" id="n1" data-r="-3"><div>该做的有没有漏？</div><div>有没有做出范围？</div></div>
+  <!-- 第 4 句：领域视角手里的清单卡 -->
+  <div class="card" id="ck" data-r="-1.5"><div class="tab" data-r="-3">清单</div><div class="en">按评审清单逐项查</div><div class="zh">这类代码的常见错误</div></div>
+  <!-- 第 6 句：对抗三种 -->
+  <div class="chip adv" id="c1" data-r="-2">并发</div>
+  <div class="chip adv" id="c2" data-r="1.5">资源泄漏</div>
+  <div class="chip adv" id="c3" data-r="-1.5">错误没有处理</div>
+  <!-- 第 8 句：换模型旁注；第 9 句：实录小字 -->
+  <div class="tag" id="n4" data-r="3">能否发现不同遗漏？<br><small>独立整体查 · 不拿清单</small></div>
+  <div class="card" id="r4" data-r="1"><div class="tab ink" data-r="-2">实录 · 示例项目</div>这次自动修的 2 条，都是 Codex 找出来的<span class="src">code-review-report.md:88-89</span></div>
+  <!-- 第 10 句：历史旁注 -->
+  <div class="tag" id="n5" data-r="-3">以前修过的，有没有重犯？<br><small>改名或旧文件改超 200 行才派</small></div>
+
+  <!-- 第 12–13 句：实录小卡 -->
+  <div class="card" id="rc" data-r="-1">
+    <div class="tab ink" data-r="2">实录 · 示例项目</div>
+    <div class="l"><b>这次派了：</b></div>
+    <div class="l">对照规格 1 · 领域 1 · 对抗 3</div>
+    <div class="l">Codex 1 · 历史 1<span class="hs" id="h279">一个旧文件改了 279 行</span></div>
+    <span class="src">code-review-report.md:18、:71、:77</span>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算；录音后按实测对齐）。
+  var AT = {
+    "all": 0.207,
+    "slots": 3.821,
+    "a1": 8.96,
+    "n1": [
+        10.64,
+        12.08
+    ],
+    "a2": 14.4,
+    "ck": 16.24,
+    "a3": 21.28,
+    "c": [
+        26.32,
+        27.2,
+        28.8
+    ],
+    "a4": 31.12,
+    "n4": 32.72,
+    "a5": 41.12,
+    "n5": 42.88,
+    "rc": 51.04,
+    "r4": 53.6,
+    "h279": 51.4,
+    "end": 57.557
+};
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+  }
+  // 一段亮度：from 起亮，to 起灭，同一时刻只有一个
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.3)) * (1 - T.ease(T.p(t, b - 0.3, 0.3))); }
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: AT.end,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句
+      T.enter(T.$('all'), P(t, AT.all, 0.5), 16);
+
+      // 第 2 句：空位、连线、「五路」
+      T.enter(T.$('five'), P(t, AT.slots, 0.45), -12);
+      // SVG 路径依次是左上、右上、左侧、右侧、下方，对应规格、对抗、领域、换模型、历史。
+      T.all('.w').forEach(function (w, i) { wire(w, E(P(t, [AT.a1,AT.a3,AT.a2,AT.a4,AT.a5][i], 0.6))); });
+      var starts = [AT.a1, AT.a2, AT.a3, AT.a4, AT.a5];
+      for (var i = 1; i <= 5; i++) {
+        var sl = T.$('p' + i);
+        // 空位出现；对应的 Agent 进场时空位淡出（被方块盖住）
+        sl.style.opacity = 0;
+        T.enter(T.$('a' + i), P(t, starts[i - 1], 0.5), 14);
+      }
+
+      // 当前：讲到哪一路亮哪一路（第 12 句起交给实录卡）
+      cur(T.$('a1'), on(t, AT.a1 + 0.2, AT.a2), 12);
+      cur(T.$('a2'), on(t, AT.a2 + 0.2, AT.a3), 12);
+      cur(T.$('a3'), on(t, AT.a3 + 0.2, AT.a4), 12);
+      cur(T.$('a4'), on(t, AT.a4 + 0.2, AT.a5), 12);
+      cur(T.$('a5'), on(t, AT.a5 + 0.2, AT.rc), 0.001);
+      cur(T.$('rc'), on(t, AT.rc + 0.3, 999), 10);
+
+      // 各路旁注
+      T.enter(T.$('n1'), P(t, AT.n1[0] - 0.1, 0.4), -10);
+      T.all('#n1 div').forEach(function (d, j) { d.style.opacity = E(P(t, AT.n1[j], 0.35)); });
+      T.enter(T.$('ck'), P(t, AT.ck, 0.45), 14);
+      ['c1', 'c2', 'c3'].forEach(function (id, j) { T.enter(T.$(id), P(t, AT.c[j], 0.4), 12); });
+      T.enter(T.$('n4'), P(t, AT.n4, 0.4), -10);
+      T.enter(T.$('r4'), P(t, AT.r4, 0.45), 14);
+      T.enter(T.$('n5'), P(t, AT.n5, 0.4), -10);
+
+      // 第 12–13 句：实录小卡
+      T.enter(T.$('rc'), P(t, AT.rc, 0.5), 16);
+      T.$('h279').style.opacity = E(P(t, AT.h279, 0.4));
+    }
+  });
+</script>
+</body>
+</html>

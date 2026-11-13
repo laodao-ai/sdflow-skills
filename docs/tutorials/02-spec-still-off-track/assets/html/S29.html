@@ -1,0 +1,172 @@
+<!doctype html>
+<!-- S29 · 标题卡 · 回到开头两个现象，三章各一句要点 · script 115–122「好，我们回到开头那两个现象。……每份规格都过通用规则，再按这次需求过领域清单并生成图表。」
+     作者 2026-10-18 定：只讲重点。人 / Agent 分工下一页 S30 讲，这一页不放；新流程图与 /sdflow-spec 组框、清单塔、领域标签、图鉴与八张图缩略都删掉。
+     - 纸底（2026-10-20 作者定：只有章节标签页用深色底）。卡上不配蓝 / 琥珀；状态沿用导航画面三态：没讲到 = 透明底淡墨描边淡墨字（淡空壳，墨色 65% 不透明度），讲过 = 奶白底墨描边墨字，当前 = 黄色描边。
+     - 左边两张现象卡（开场那两张贴纸的文字）：只问它想到的 / 同一个需求，方案每次不一样。两个现象都由「怎么问」解决，两条箭头都指向 1 怎么问。
+     - 右边三张卡对上本期三章，竖排：1 怎么问 / 2 怎么写 / 3 写成什么样。每张只写一句要点：
+       怎么问：问谁 · 有证据才停 · 你来拍板；怎么写：先纪要，再成文；写成什么样：通用规则 + 领域清单 + 图表。
+       （作者 2026-10-18 把要点「先攻承重约束」换成「有证据才停」，「通用规则 + 领域清单 + 图表」；2026-10-19 第六轮改稿，原 126、127 句并成一句，原「那是因为拍板的是 AI」一句删去，句号减 2 后重排）
+     - 打勾用奶白圆片 + 墨色勾，不用绿色：绿色只表示测试通过（visual-v4 第二节）。
+     - 第 115 句：两张现象卡和三张卡的淡空壳同时出（开口 0.5 秒内有内容）。
+     - 第 116 句：现象卡一「当前」。
+     - 第 117 句：箭头连到「怎么问」，卡亮起、打勾、标「当前」，出「问谁」，念到「有证据了才停」出「有证据才停」。
+     - 第 118 句：现象卡二「当前」，「怎么问」的「当前」淡出。
+     - 第 119 句：第二条箭头也连到「怎么问」，念到「你来拍板」出这四个字，标「当前」。
+     - 第 120 句：两张现象卡和两条箭头变灰，「你来拍板」的「当前」淡出。
+     - 第 121 句：「怎么写」亮起、打勾、标「当前」，出「先纪要，再成文」。
+     - 第 122 句：「写成什么样」亮起、打勾、标「当前」，出「通用规则 + 领域清单 + 图表」；念完「当前」淡出，三张卡都亮着、都打勾停到页尾。
+     - 2026-10-19 第七轮改稿：全稿句号按 139 句重排；卡 1 要点三段改 flex 固定间距，「有证据才停 ·」与「你来拍板」之间不再多出一截。
+     - 动画节点（按录音实测，frame-times.py，2026-10-19，集中在下面的 CUE 数组里）。 -->
+<html lang="zh-CN" data-frame-id="S29">
+<head>
+<meta charset="utf-8">
+<title>S29 · 回到开头两个现象</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 纸底（2026-10-20 作者定）。「没讲到」= 墨色 65% 不透明度，叠在渲染后的纸底 #8b949e 上约 #3f4246，对比度 3.28:1。 */
+  :root { --notyet: rgba(22,22,22,.65); }
+
+  #lines { position: absolute; left: 0; top: 0; width: 1920px; height: 930px; }
+
+  /* 现象卡 */
+  .phen { width: 520px; box-sizing: border-box; white-space: normal; text-align: center;
+          font-family: var(--display); font-weight: 800; font-size: 48px; line-height: 1.3; }
+
+  /* 三张卡：起手是淡空壳（透明底、淡墨描边、淡墨字），讲到时点亮。 */
+  .c29 { left: 880px; width: 960px; height: 210px; padding: 0;
+         background: transparent; border-color: var(--notyet); color: var(--notyet); box-shadow: none; }
+  /* 编号圆片空壳时用纸底色（渲染后约 #8b949e）填实，免得卡的描边从数字后面穿过。 */
+  .c29 .num { position: absolute; left: -32px; top: -32px;
+              background: #8b949e; border-color: var(--notyet); color: var(--notyet); }
+  .c29 .hd { position: absolute; left: 70px; top: 26px; white-space: nowrap;
+             font-family: var(--display); font-weight: 800; font-size: 64px; line-height: 1.15; }
+  .c29 .pt { position: absolute; left: 70px; top: 122px; white-space: nowrap;
+             font-family: var(--body); font-weight: 600; font-size: 44px; line-height: 1.2; color: var(--ink); }
+  .c29 .pt span { opacity: 0; }
+  /* 卡 1 的三段要点：固定间距 20px，不靠空格字符（空格宽度随前后字不同，「有证据才停 ·」后面会多出一截）。 */
+  .c29 .pt.row { display: flex; align-items: baseline; gap: 20px; }
+  .c29 .pt b { font-weight: 600; }
+  /* 「你来拍板」：行内文字的「当前」只用黄描边加光晕，不加 T.current 的两圈外环（外环会压住前面的分隔点和卡的下沿）。 */
+  #q3 { padding: 0 6px; margin: 0 -6px; border-radius: 6px; outline-offset: 3px; }
+  /* 打勾：奶白圆片 + 墨色勾。 */
+  .ok { position: absolute; right: 48px; top: 61px; width: 88px; height: 88px; box-sizing: border-box; border-radius: 50%;
+        background: var(--cream); border: 5px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); opacity: 0; }
+  .ok svg { position: absolute; left: 14px; top: 16px; width: 50px; height: 46px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="lines" viewBox="0 0 1920 930" aria-hidden="true">
+    <!-- 两张现象卡 → 1 怎么问 -->
+    <path id="ar1" d="M636 246 L 845 171" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" pathLength="1"/>
+    <polygon id="ar1h" points="860,166 841,185 833,163" fill="#161616"/>
+    <path id="ar2" d="M636 506 L 848 244" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" pathLength="1"/>
+    <polygon id="ar2h" points="858,232 852,258 834,243" fill="#161616"/>
+  </svg>
+
+  <!-- 开场两个现象 -->
+  <div class="chip phen" id="p1" data-r="-2.5" style="left:96px;top:198px">只问它想到的</div>
+  <div class="chip phen" id="p2" data-r="2" style="left:96px;top:428px">同一个需求，<br>方案每次不一样</div>
+
+  <!-- 三张卡，对上本期三章 -->
+  <div class="card c29" id="c1" data-r="-1" style="top:66px"><span class="num">1</span>
+    <div class="hd">怎么问</div>
+    <div class="pt row"><span id="q1">问谁</span><span id="q2s">·</span><span id="q2">有证据才停</span><span id="q3s">·</span><span id="q3">你来拍板</span></div>
+    <span class="ok" id="ok1"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </div>
+  <div class="card c29" id="c2" data-r="1" style="top:350px"><span class="num">2</span>
+    <div class="hd">怎么写</div>
+    <div class="pt"><span id="w1">先纪要，再成文</span></div>
+    <span class="ok" id="ok2"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </div>
+  <div class="card c29" id="c3" data-r="-1.2" style="top:634px"><span class="num">3</span>
+    <div class="hd">写成什么样</div>
+    <div class="pt"><span id="s1">通用规则 + 领域清单 + 图表</span></div>
+    <span class="ok" id="ok3"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 句子开口时刻（秒，本页起算）。按录音实测（frame-times.py，2026-10-19）。
+  var CUE = [
+    0.0,   // 115 好，我们回到开头那两个现象。
+    3.6,   // 116 只问它想到的？
+    5.6,   // 117 那就先分清问谁，再一条条拷问，有证据了才停。
+    11.76, // 118 同一个需求，方案每次不一样？
+    14.96, // 119 那就把每一问的决定收回到你手里，由你来拍板，不让 AI 自己选。
+    21.84, // 120 剩下两件事，是把问出来的东西写对、写全。
+    27.68, // 121 先落纪要，再从纪要一次写成，不用回头去改。
+    32.8   // 122 每份规格都过通用规则，再按这次需求过领域清单并生成图表。
+  ];
+  var END = 38.6;   // 第 122 句说完（实测 38.56）
+  function S(n) { return CUE[n - 115]; }
+
+  var DIM = [160, 157, 151], NOTYET = [63, 66, 70], INK = [22, 22, 22], CREAM = [242, 239, 230], PAPER = [139, 148, 158];   // 纸底渲染后约 #8b949e
+  function span(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.3))); }
+  function draw(el, p) { el.style.strokeDasharray = '1'; el.style.strokeDashoffset = String(1 - T.ease(p)); }
+  function fade(el, p) { el.style.opacity = T.ease(p); }
+  // 「当前」描边；a 是硬投影的不透明度（空壳没有投影）。
+  function cur(el, g, s, a) {
+    T.current(el, g, s);
+    el.style.boxShadow = el.style.boxShadow.replace(/#161616|rgb\(22, 22, 22\)/g, 'rgba(22,22,22,' + (a == null ? 1 : a) + ')');
+  }
+  // 淡空壳 → 讲过：透明底淡墨描边淡墨字 → 奶白底墨描边墨字。卡上的编号跟着变。
+  function lit(card, p) {
+    var c = T.mix(NOTYET, INK, p), num = card.querySelector('.num');
+    [card, num].forEach(function (e) { e.style.borderColor = c; e.style.color = c; });
+    card.style.background = 'rgba(242,239,230,' + p + ')';
+    num.style.background = T.mix(PAPER, CREAM, p);
+  }
+  // 三张卡：点亮时刻、打勾、当前的起止。
+  function step(t, id, okId, t0, curEnd) {
+    var card = T.$(id), p = T.ease(T.p(t, t0, 0.5));
+    lit(card, p);
+    cur(card, span(t, t0, curEnd), 10, p);
+    T.enter(T.$(okId), T.p(t, t0 + 0.3, 0.4), 12);
+  }
+
+  Stage({
+    duration: 39.8,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 第 115 句：两张现象卡和三张卡的淡空壳同时出。
+      T.enter(T.$('p1'), T.p(t, S(115), 0.4), 14);
+      T.enter(T.$('p2'), T.p(t, S(115) + 0.05, 0.4), 14);
+      ['c1', 'c2', 'c3'].forEach(function (id, i) { T.enter(T.$(id), T.p(t, S(115) + i * 0.05, 0.4), 14); });
+
+      // 第 120 句：两张现象卡和箭头变灰。
+      var g = T.ease(T.p(t, S(120), 0.6));
+      ['p1', 'p2'].forEach(function (id) { T.$(id).style.background = T.mix(CREAM, DIM, g); });
+      ['ar1', 'ar2'].forEach(function (id) { T.$(id).setAttribute('stroke', T.mix(INK, NOTYET, g)); });
+      ['ar1h', 'ar2h'].forEach(function (id) { T.$(id).setAttribute('fill', T.mix(INK, NOTYET, g)); });
+
+      // 第 116 句：现象卡一当前。第 117 句：连到「怎么问」，亮起、打勾、当前，要点逐段出。
+      cur(T.$('p1'), span(t, S(116), S(117)), 7);
+      draw(T.$('ar1'), T.p(t, S(117), 0.4));
+      fade(T.$('ar1h'), T.p(t, S(117) + 0.3, 0.2));
+      step(t, 'c1', 'ok1', S(117), S(118));
+      fade(T.$('q1'), T.p(t, S(117) + 1.0, 0.4));   // 念到「问谁」（实测 6.64）
+      fade(T.$('q2'), T.p(t, S(117) + 4.0, 0.4));   // 念到「有证据了才停」（实测 9.6）
+      fade(T.$('q2s'), T.p(t, S(117) + 4.0, 0.4));
+
+      // 第 118 句：现象卡二当前。第 119 句：也连到「怎么问」，念到「你来拍板」出这四个字并标当前。
+      cur(T.$('p2'), span(t, S(118), S(119)), 7);
+      draw(T.$('ar2'), T.p(t, S(119), 0.4));
+      fade(T.$('ar2h'), T.p(t, S(119) + 0.3, 0.2));
+      fade(T.$('q3s'), T.p(t, S(119) + 3.6, 0.4));
+      fade(T.$('q3'), T.p(t, S(119) + 3.6, 0.4));
+      var g3 = span(t, S(119) + 3.6, S(120)), q3 = T.$('q3');
+      q3.style.outline = '6px solid rgba(245,207,74,' + g3 + ')';
+      q3.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.5 * g3) + ')';
+
+      // 第 121 句：怎么写。第 122 句：写成什么样；念完「当前」淡出，三张卡亮着停到页尾。
+      step(t, 'c2', 'ok2', S(121), S(122));
+      fade(T.$('w1'), T.p(t, S(121) + 0.4, 0.4));
+      step(t, 'c3', 'ok3', S(122), END);
+      fade(T.$('s1'), T.p(t, S(122) + 0.4, 0.4));
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- S51 · 标题卡 · script 246–248「演示仓在简介里。……下期见。」
+     片尾三项自上而下：演示仓地址（等宽，照原样）、征集一句、logo 加署名。
+     logo 只用 ../../../shared/logo.svg 原样引用，放在炭灰卡上。
+     时刻跟句子开口走：仓库卡 0 秒（246 句开口），征集卡 247 句开口，署名卡 248 句开口。
+     2026-10-07 晚最后三句重录（review/audio-edit.md 第五轮），按新字幕改成 2.33、6.88 秒。 -->
+<html lang="zh-CN" data-frame-id="S51">
+<head>
+<meta charset="utf-8">
+<title>S51 · 片尾</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .repo { left: 160px; top: 120px; width: 1600px; height: 190px; padding: 0 56px; display:flex; align-items:center; }
+  .repo .cmd2 { font-family: var(--mono); font-weight: 700; font-size: 62px; color: var(--ink); white-space: nowrap; }
+  .repo .tab { font-size: 42px; }
+  .ask { left: 240px; top: 410px; width: 1440px; height: 190px; padding: 24px 56px 0; display:flex; align-items:center; }
+  .ask .big { font-size: 60px; }
+  .sig { left: 560px; top: 700px; width: 800px; height: 210px; padding: 0 40px; display:flex; align-items:center; gap: 36px; }
+  .sig img { width: 150px; height: 150px; flex: none; }
+  .sig .big { font-size: 84px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card repo" id="repo" data-r="-1.5"><div class="tab ink">演示仓 · 见简介</div><div class="cmd2">github.com/laodao-ai/sdd-tdd-loop-demo</div></div>
+  <div class="card ask" id="ask" data-r="1.5"><div class="tab ink" style="transform:rotate(2deg)">留言告诉我</div><div class="big">你用 AI 开发的时候碰到过什么问题？</div></div>
+  <div class="card dark sig" id="sig" data-r="-1"><img src="../../../shared/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 9,   // 署名卡 6.88 起入场 0.6 秒，过了 duration 动画就停
+    init: function () { return T.fonts('演示仓见简介留言告诉我你用开发的时候碰到过什么问题老刀'); },
+    render: function (t) {
+      T.enter(T.$('repo'), T.p(t, 0.0, 0.6), 30);
+      T.enter(T.$('ask'), T.p(t, 2.33, 0.6), 30);
+      T.enter(T.$('sig'), T.p(t, 6.88, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

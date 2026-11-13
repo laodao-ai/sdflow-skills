@@ -1,0 +1,107 @@
+<!doctype html>
+<!-- S29 · 机制动画 · script 122–128「一共三步。……证明不了任何事。」
+     TDD 三步循环：① 写测试，跑 → 红  ② 写刚好通过的代码  ③ 再跑 → 绿；③ 底下一条回线回到 ①。
+     - 红 / 绿 = 测试失败 / 通过，只用在 ① ③ 的结果条上；底色从奶白渐变过去（T.fill）。
+     - 讲 TDD 概念，还没讲到 Superpowers：不用琥珀。
+     - 念到哪一步，哪一步是当前；「为什么一定要先失败」时 ① 重新成为当前，旁边白色虚线注
+       「先红 = 它真的在测」（.tag：说明，不是定论之外的新编码）。
+     - 可复用：整个循环放在 #loop 一个容器里，坐标都相对容器。S41 要小图标时，
+       复制 #loop 这一段，用 transform: scale() 缩放即可。 -->
+<html lang="zh-CN" data-frame-id="S29">
+<head>
+<meta charset="utf-8">
+<title>S29 · 红到绿</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #loop { position: absolute; left: 100px; top: 220px; width: 1720px; height: 800px; }
+  .step { top: 160px; width: 500px; height: 300px; padding: 30px 32px; display: flex; flex-direction: column; }
+  .step .head { display: flex; align-items: center; gap: 20px;
+    font-family: var(--display); font-weight: 800; font-size: 50px; line-height: 1.15; }
+  /* 结果条：先是奶白（还没跑），跑完变红 / 绿。 */
+  .lamp { margin-top: auto; height: 90px; border-radius: 8px; border: 4px solid var(--ink); background: var(--cream);
+    display: flex; align-items: center; padding: 0 26px; color: var(--ink);
+    font-family: var(--mono); font-weight: 800; font-size: 44px; letter-spacing: 2px; }
+  .code { margin-top: auto; }
+  .code i { display: block; height: 16px; border-radius: 8px; background: #c9c5bb; margin-top: 22px; }
+  .fwd { position: absolute; top: 280px; width: 110px; height: 60px; }
+  .back { position: absolute; left: 230px; top: 470px; width: 1300px; height: 200px; }
+  .note { left: 0; top: 0; font-size: 38px; padding: 12px 28px; }
+  .lead { position: absolute; left: 120px; top: 74px; width: 4px; height: 80px;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,.85) 0 12px, transparent 12px 22px); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="loop">
+    <div class="tag note" id="note" data-r="-4">先红 = 它真的在测</div>
+    <div class="lead" id="lead"></div>
+
+    <div class="card step" id="st1" data-r="-1.5" style="left:0">
+      <div class="head"><span class="num">1</span>写测试，跑</div>
+      <div class="lamp" id="red">FAIL</div>
+    </div>
+    <svg class="fwd" id="f1" style="left:515px" viewBox="0 0 110 60">
+      <path d="M8 30 H72" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/><polygon points="66,8 106,30 66,52" fill="#f2efe6"/></svg>
+
+    <div class="card step" id="st2" data-r="1" style="left:610px">
+      <div class="head"><span class="num">2</span><span>写刚好<br>通过的代码</span></div>
+      <div class="code"><i style="width:70%"></i><i style="width:88%;margin-left:36px"></i><i style="width:40%"></i></div>
+    </div>
+    <svg class="fwd" id="f2" style="left:1125px" viewBox="0 0 110 60">
+      <path d="M8 30 H72" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/><polygon points="66,8 106,30 66,52" fill="#f2efe6"/></svg>
+
+    <div class="card step" id="st3" data-r="-1" style="left:1220px">
+      <div class="head"><span class="num">3</span>再跑</div>
+      <div class="lamp" id="green">PASS</div>
+    </div>
+
+    <!-- 回线：③ 之后回到 ①，下一个测试。 -->
+    <svg class="back" id="back" viewBox="0 0 1300 200" fill="none">
+      <path d="M1240 20 C 1240 170, 1100 170, 900 170 L 400 170 C 200 170, 30 170, 30 40" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+      <circle cx="1240" cy="14" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+      <polygon points="8,48 30,4 52,48" fill="#f2efe6"/>
+    </svg>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 当前：同一时刻只有一步；「为什么要先失败」时回到 ①。
+  function cur(id, on, off, t) {
+    var g = T.ease(T.p(t, on, 0.3));
+    if (off !== null) g *= 1 - T.ease(T.p(t, off, 0.3));
+    return g;
+  }
+  Stage({
+    duration: 20,
+    init: function () { return T.fonts('先红=它真的在测写测试，跑刚好通过的代码再'); },
+    render: function (t) {
+      // ① 写一个测试，跑：必须失败。
+      // 时刻按实测（2026-10-06，frame-times.py）：第一步@1.52，失败@5.92，第二步@7.68，写刚好@8.56，第三步@11.36，再跑@12.32，通过@13.44，那为什么@15.36，先失败@18.48，说明@18.96。
+      T.enter(T.$('st1'), T.p(t, 1.52, 0.5), 20);
+      T.fill(T.$('red'), [229, 83, 75], T.p(t, 5.92, 0.5));
+
+      // ② 写刚好能让它通过的代码。
+      T.wipe(T.$('f1'), T.p(t, 7.68, 0.4), 'x');
+      T.enter(T.$('st2'), T.p(t, 8.56, 0.5), 20);
+
+      // ③ 再跑，通过。
+      T.wipe(T.$('f2'), T.p(t, 11.36, 0.4), 'x');
+      T.enter(T.$('st3'), T.p(t, 12.32, 0.5), 20);
+      T.fill(T.$('green'), [76, 195, 138], T.p(t, 13.44, 0.5));
+      T.$('back').style.clipPath = 'inset(0 0 0 ' + ((1 - T.ease(T.p(t, 15.36, 0.8))) * 100) + '%)';  // 从右往左画回去
+
+      // 当前：① → ② → ③ → 回到 ①（为什么一定要先失败）。
+      var g1 = Math.max(cur('st1', 1.52, 8.56, t), cur('st1', 15.36, null, t));
+      T.current(T.$('st1'), g1);
+      T.current(T.$('st2'), cur('st2', 8.56, 12.32, t));
+      T.current(T.$('st3'), cur('st3', 12.32, 15.36, t));
+
+      // 先红 = 它真的在测。
+      T.enter(T.$('note'), T.p(t, 18.48, 0.5), -14);
+      T.wipe(T.$('lead'), T.p(t, 18.96, 0.4), 'y');
+    }
+  });
+</script>
+</body>
+</html>

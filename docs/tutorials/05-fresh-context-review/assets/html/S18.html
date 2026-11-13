@@ -1,0 +1,178 @@
+<!doctype html>
+<!-- S18 · 机制动画（引文卡）· script 113–117「为什么要限制修改轮数？……SDFlow 也是先审一轮，再最多修改、复审两轮。」（5 句，2026-11-02 第 6 轮由 7 句压成 5 句）
+     实录 · 原文摘要：Anthropic《How the Claude Code team does code review》2026-10-15。文章在 S15 第一次出现，这里再放一次出处卡（不加「同 S15」这类内部标注，画面是给观众看的）。
+     出处卡照 S15 的写法（奶白卡 + 墨底「实录 · 原文摘要」标签 + 标题 + Anthropic · 2026-10-15）；Claude Code 团队标签炭灰底奶白字、SDFlow 琥珀（同 S15 列头；本期粉 = 对抗、紫 = 换模型，不借）。
+     引用的是文章，不是 skill 或文件原文，所以用奶白引文卡，不用黑底代码窗口（同第 3 期 S14 的说明，visual-v4 4.6）。
+     原文（script.md「来源与限定」，2026-11-01 与本地剪藏 CC:146、:152 逐字核过；本页又对剪藏读过一遍）：
+       ① “An agent author and an agent reviewer can keep each other busy indefinitely.”（CC:146）
+       ② “After three rounds, the reviewer asks the author to step back and reconsider the approach.”（CC:152），分镜给的加框段
+          “After three rounds, the reviewer asks the author to step back” 加粗加下划线，念到时黄框。
+     计数器「50+ 轮」出自 “One CLI PR went through more than fifty rounds of review and fixes overnight”（CC:146），英文小字放计数器下面；
+       第 3 句念到「最后是人叫停的」时，计数卡下方出小字「人叫停」。
+     SDFlow 小牌只写「首轮 + 2 轮复审」，不写学自 Anthropic（script.md 第 112 行：上限早于这篇文章）。
+       卡底「Anthropic 内部数据，没找到第三方复现」第 6 轮删去（口播那句已删）。
+     中文：① 用原文直译「写代码的 agent 和审代码的 agent，能让对方一直忙下去」（第 6 轮口播改成「AI 写、AI 审，可以一直改下去」，原话不再逐字对得上，留直译）；
+       ② 用分镜给的「三轮之后，请写的一方退一步重想方案」；计数器小字的中文「一个 PR，一夜跑了 50 多轮评审和修复」译自原文。
+     问题贴纸（4.8）：第 1 句「为什么要限制修改轮数？」正中放大停约 1 秒，缩到左上。
+     口播时刻（还没录音，按每分钟 220 字估，加句间 0.15 秒；录音后用 frame-times.py 对齐）：
+       1 句 t0.0：问题贴纸
+       2 句 t2.05：t2.3 出处卡；t3.2 引文卡 + 原文 ①；t4.2 中文
+       3 句 t6.3：t6.4 计数卡；t9.4–10.8 数字跳到 50（念到「50 多轮」），t10.9「+」；t13.2「人叫停」小字
+       4 句 t14.35：t14.6 原文 ② 进卡（卡变高）；t15.0 黄框；t15.9 中文
+       5 句 t21.6：t21.7 SDFlow 小牌，留到页末
+       估计念完 t25.7；时长 26.7 秒。黄只给「当前」，同一时刻一处。内容整体在 y 930 以内。 -->
+<html lang="zh-CN" data-frame-id="S18">
+<head>
+<meta charset="utf-8">
+<title>S18 · 为什么要限制修改轮数</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 56px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+
+  /* 出处卡：同 S15 */
+  #src { left: 1040px; top: 62px; width: 800px; padding: 14px 28px 16px; }
+  #src .tab { left: -14px; top: -44px; font-size: 32px; padding: 4px 22px; }
+  #src b { display: block; font-family: var(--display); font-weight: 800; font-size: 36px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  #src span { display: block; margin-top: 4px; font-family: var(--mono); font-weight: 600; font-size: 26px; color: rgba(22,22,22,.8); }
+
+  /* 引文卡：高度由脚本按已进卡的原文写入 */
+  #quote { left: 60px; top: 270px; width: 1276px; padding: 22px 36px; overflow: hidden; }
+  .pair .en { font-weight: 600; font-size: 37px; line-height: 1.32; color: var(--ink); }
+  .pair .en b { font-weight: 800; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
+  .pair .cn { margin-top: 12px; font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.25; color: var(--ink); white-space: nowrap; }
+  #p2 { margin-top: 28px; padding-top: 28px; border-top: 4px dashed rgba(22,22,22,.6); }
+  #fb { position: absolute; box-sizing: border-box; border: 6px solid transparent; border-radius: 8px; pointer-events: none; opacity: 0; }
+
+  /* 计数卡：Claude Code 团队（炭灰底奶白字，同 S15） */
+  #cnt { left: 1370px; top: 270px; width: 490px; height: 372px; padding: 0; }
+  #cnt .tab { font-size: 32px; padding: 4px 18px; background: var(--charcoal); color: var(--cream); }
+  #num { position: absolute; left: 36px; top: 30px; font-family: var(--display); font-weight: 800; font-size: 150px; line-height: 1; color: var(--ink); white-space: nowrap; }
+  #num .u { font-size: 60px; margin-left: 10px; }
+  #plus { display: inline-block; }
+  #cntD { position: absolute; left: 36px; top: 200px; width: 430px; }
+  #cntD .zh { font-weight: 700; font-size: 30px; line-height: 1.25; color: var(--ink); }
+  #cntD .qt { margin-top: 4px; font-style: italic; font-weight: 600; font-size: 26px; line-height: 1.25; color: rgba(22,22,22,.8); }
+
+  /* SDFlow 小牌 */
+  #sdf { left: 1370px; top: 770px; width: 490px; padding: 22px 30px; }
+  #sdf .tab { font-size: 34px; padding: 3px 20px; }
+  #sdf b { display: block; font-family: var(--display); font-weight: 800; font-size: 50px; line-height: 1.15; color: var(--ink); white-space: nowrap; }
+
+  #man { left: 1660px; top: 664px; font-size: 32px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">为什么要限制修改轮数？</div></div>
+
+  <div class="card" id="src" data-r="1"><div class="tab ink" data-r="-2">实录 · 原文摘要</div><b>How the Claude Code team does code review</b><span>Anthropic · 2026-10-15</span></div>
+
+  <div class="card" id="quote" data-r="0.3">
+    <div class="pair" id="p1">
+      <div class="en" id="e1">“An agent author and an agent reviewer can keep each other busy indefinitely.”</div>
+      <div class="cn" id="z1">写代码的 agent 和审代码的 agent，能让对方一直忙下去。</div>
+    </div>
+    <div class="pair" id="p2">
+      <div class="en" id="e2">“<b id="k2">After three rounds, the reviewer asks the author to step back</b> and reconsider the approach.”</div>
+      <div class="cn" id="z2">三轮之后，请写的一方退一步重想方案。</div>
+    </div>
+  </div>
+  <div id="fb"></div>
+
+  <div class="card" id="cnt" data-r="-1">
+    <div class="tab" data-r="-2">Claude Code 团队</div>
+    <div id="num"><span id="n">1</span><span id="plus">+</span><span class="u">轮</span></div>
+    <div id="cntD">
+      <div class="zh">一个 PR，一夜跑了<br>50 多轮评审和修复</div>
+      <div class="qt">“more than fifty rounds of review and fixes overnight”</div>
+    </div>
+  </div>
+
+  <div class="card" id="sdf" data-r="1.2"><div class="tab" data-r="-2" style="background: var(--amber)">SDFlow</div><b>首轮 + 2 轮复审</b></div>
+
+  <div class="tag" id="man" data-r="3">人叫停</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：按每分钟 220 字估，录音后按实测改。注释写本画面第几句。
+  var CUE = {
+    hold: 1.561, move: 0.5,            // 1 句：问题贴纸
+    src: 3.44, q: 4.304, z1: 5.264,       // 2 句：出处卡、原文 ① 与中文
+    cnt: 7.36, run: 9.775, runLen: 1.4, plus: 10.983, man: 12.834,   // 3 句：计数；「人叫停」小字
+    p2: 13.981, box: 14.334, z2: 15.128,   // 4 句：原文 ②
+    sdf: 20.279                        // 5 句：SDFlow 小牌
+  };
+  var H1 = 0, H2 = 0, BOX = null;
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function op(id, t, a) { T.$(id).style.opacity = T.ease(T.p(t, a, 0.4)); }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 26.241,
+    init: function () {
+      return T.fonts(T.$('stage').textContent).then(function () {
+        // 引文卡两档高度：只有 ①、①+②；量加粗那一段的位置给黄框（卡没有位移时量）
+        var q = T.$('quote'), cs = getComputedStyle(q);
+        var pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) * 2;
+        H1 = T.$('p1').offsetHeight + pad;
+        H2 = T.$('p1').offsetHeight + T.$('p2').offsetHeight + 28 + pad;
+        q.style.height = H2 + 'px';
+        q.style.transform = 'none';
+        BOX = T.rect(T.$('k2'));
+        q.style.transform = '';
+      });
+    },
+    render: function (t) {
+      // 1 句：问题贴纸正中放大 → 左上
+      T.enter(T.$('hdr'), T.p(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move)), S = 1.6, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // 2 句：出处卡
+      show('src', t, CUE.src, 14);
+      T.current(T.$('src'), on(t, CUE.src, CUE.q), 10);
+
+      // 2 句：引文卡 + 原文 ①；4 句：原文 ② 进卡，卡变高
+      var q = T.$('quote');
+      T.enter(q, T.p(t, CUE.q, 0.5), 16);
+      var g = T.ease(T.p(t, CUE.p2, 0.6));
+      q.style.height = (H1 + (H2 - H1) * g) + 'px';
+      op('e1', t, CUE.q); op('z1', t, CUE.z1);
+      op('e2', t, CUE.p2); op('z2', t, CUE.z2);
+      T.$('p2').style.borderTopColor = 'rgba(22,22,22,' + (0.6 * g) + ')';
+      T.current(q, on(t, CUE.q, CUE.cnt), 10);
+
+      // 4 句：加框段黄框，讲到下一句淡出
+      var fb = T.$('fb'), f = on(t, CUE.box, CUE.sdf);
+      if (BOX) {
+        fb.style.left = (BOX.x - 10) + 'px'; fb.style.top = (BOX.y - 4) + 'px';
+        fb.style.width = (BOX.w + 20) + 'px'; fb.style.height = (BOX.h + 10) + 'px';
+      }
+      fb.style.opacity = f > 0.001 ? 1 : 0;
+      fb.style.borderColor = 'rgba(245,207,74,' + f + ')';
+      fb.style.boxShadow = '0 0 36px rgba(245,207,74,' + (0.45 * f) + ')';
+
+      // 3 句：计数卡，一夜跳到 50+
+      show('cnt', t, CUE.cnt, 14);
+      var r = T.ease(T.p(t, CUE.run, CUE.runLen));
+      T.$('n').textContent = String(Math.max(1, Math.round(1 + 49 * r)));
+      var pl = T.p(t, CUE.plus, 0.3);
+      T.$('plus').style.opacity = T.ease(pl);
+      T.$('plus').style.transform = 'scale(' + (1.6 - 0.6 * T.ease(pl)) + ')';
+      T.current(T.$('cnt'), on(t, CUE.cnt, CUE.p2), 10);
+      show('man', t, CUE.man, 8);   // 3 句末：「人叫停」小字
+
+      // 5 句：SDFlow 小牌
+      show('sdf', t, CUE.sdf, 14);
+      T.current(T.$('sdf'), on(t, CUE.sdf, 999), 10);
+    }
+  });
+</script>
+</body>
+</html>

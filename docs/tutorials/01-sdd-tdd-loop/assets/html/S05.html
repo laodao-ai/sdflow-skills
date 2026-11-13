@@ -1,0 +1,81 @@
+<!doctype html>
+<!-- S05 · 标题卡 · 目录 · script 18–21「我们先聊聊规格驱动开发和 OpenSpec，再来聊测试驱动开发和 Superpowers，最后看看两个怎么配合着用。……那好，我们现在开始。」
+     2026-10-06 改成六项深色版（样张 design-demos/chapter-label/S05.html，作者定版）。进场不配音效：
+     - 导航类画面统一深色底（同 S26a）：墨色 --ink，质感层压到 0.35。
+     - 第 3 项拆成「测试驱动开发」「Superpowers」，共六项，和 6 张章节标签页一一对应。
+     - 深色底上原来的暗卡看不见，没讲到的项改成「透明底 + 浅色描边 + 灰字」；讲到的变奶白；当前项加黄色描边 + 外发光。
+     - 18 句一句话报完前五项，念到哪个名字点亮哪个（2026-10-06 目录口播由 5 句压成 1 句）。
+     - 第 6 项「解决了什么」口播里没有，放在 18 句念完后点亮。
+     - 20 句「下面的演示，我都是在 Claude Code 里面做的」不动画面。
+     - 21 句「那好，我们现在开始」：当前项的黄色描边淡出，六项都停在点亮状态。不再回到 ①，因为下一帧就是 ① 的章节标签页（作者 2026-10-06 定）。
+     - 时刻按实测（2026-10-06，frame-times.py）：LIT、OFF。
+     编号圆片、卡片都不上蓝 / 琥珀：目录讲的是章节，不是工具本身。 -->
+<html lang="zh-CN" data-frame-id="S05">
+<head>
+<meta charset="utf-8">
+<title>S05 · 目录</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 质感层是半透明灰，叠在深底上会把底提亮成中灰；深色页只留三分之一的质感。 */
+  #stage { background: var(--ink); }
+  #stage .paper { opacity: 0.35; }
+  .row {
+    width: 1020px; height: 96px; display: flex; align-items: center; gap: 32px; padding: 0 36px; left: 450px;
+    box-shadow: 10px 10px 0 #0b0b0b;
+  }
+  .row .big { font-size: 60px; white-space: nowrap; }
+  .row .num { width: 68px; height: 68px; font-size: 34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="tab" data-r="-3" style="left:436px;top:70px"><div class="tab" style="position:relative;left:0;top:0;display:inline-block;box-shadow:7px 7px 0 #0b0b0b">目录</div></div>
+  <!-- 行距 118：第 18 句的字幕会折成两行，第一行顶到 y≈885，第 6 行要在它上面。 -->
+  <div class="card row" id="r1" data-r="-1" style="top:156px"><div class="num">1</div><div class="big">规格驱动开发</div></div>
+  <div class="card row" id="r2" data-r="1"  style="top:274px"><div class="num">2</div><div class="big">OpenSpec</div></div>
+  <div class="card row" id="r3" data-r="-1" style="top:392px"><div class="num">3</div><div class="big">测试驱动开发</div></div>
+  <div class="card row" id="r4" data-r="1"  style="top:510px"><div class="num">4</div><div class="big">Superpowers</div></div>
+  <div class="card row" id="r5" data-r="-1" style="top:628px"><div class="num">5</div><div class="big">两个怎么接</div></div>
+  <div class="card row" id="r6" data-r="1"  style="top:746px"><div class="num">6</div><div class="big">解决了什么</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 每项被点亮（成为当前项）的时刻：18 句念到「规格驱动开发」「OpenSpec」「测试驱动开发」「Superpowers」「最后」时
+  // 点亮 ①–⑤，18 句念完点亮 ⑥。按实测（2026-10-06，frame-times.py）：
+  // 规 1.12 / OpenSpec 2.64 / 测 5.44 / Superpowers 6.64 / 最 8.40 / 18 句结束 10.24。
+  var LIT = [1.12, 2.64, 5.44, 6.64, 8.4, 10.24];
+  // 21 句开口（实测 22.32）：当前项的描边淡出。
+  var OFF = 22.32;
+  var CREAM = [242, 239, 230], INK = [22, 22, 22], DIM = [160, 157, 151];
+
+  Stage({
+    duration: 24,
+    init: function () { return T.fonts('目录规格驱动开发测试两个怎么接解决了什么'); },
+    render: function (t) {
+      T.enter(T.$('tab'), T.p(t, 0, 0.5), 20);
+      var off = T.ease(T.p(t, OFF, 0.4));
+      for (var i = 0; i < 6; i++) {
+        var el = T.$('r' + (i + 1));
+        T.enter(el, T.p(t, 0.1 + i * 0.12, 0.5), 20);
+        var lit = T.ease(T.p(t, LIT[i], 0.4));
+        // 没讲到：透明底 + 浅色描边 + 灰字；讲到：奶白底 + 墨描边 + 墨字。
+        el.style.background = 'rgba(242,239,230,' + lit + ')';
+        el.style.borderColor = T.mix(DIM, INK, lit);
+        el.style.color = T.mix(DIM, INK, lit);
+        var num = el.firstChild;
+        num.style.background = 'rgba(242,239,230,' + lit + ')';
+        num.style.borderColor = T.mix(DIM, INK, lit);
+        num.style.color = T.mix(DIM, INK, lit);
+        // 当前项：自己点亮后淡入，下一项点亮时淡出；最后一项留到 21 句再淡出。
+        var g = lit;
+        if (i < 5) g = lit * (1 - T.ease(T.p(t, LIT[i + 1], 0.3)));
+        else g = lit * (1 - off);
+        T.current(el, g, 10);
+        el.style.boxShadow = el.style.boxShadow.replace(/#161616/g, '#0b0b0b');
+      }
+    }
+  });
+</script>
+</body>
+</html>

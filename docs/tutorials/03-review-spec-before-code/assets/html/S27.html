@@ -1,0 +1,116 @@
+<!doctype html>
+<!-- S27 · 机制动画 · 局限与改进（讲局限和原理）· script 181–187「说到这，审完、拍完板，是不是就没问题了？……清单里没有这一条，领域审也想不到去问。」（7 句）
+     实录 · 示例项目。依据：第 2 期 main-spec-check.md 第一、三节；r3 D11：NTF-01 钉死为 UTC、秒精度、以 Z 结尾（示例仓 2e84aeb 的 spec-review-report.md 第 115 行）；拍板区没问时区。
+     10-24 晚作者定：「局限与改进」单独成第四章，原 S27 拆成两页：本页 S27 讲局限和原理，改进办法在 S27a。删去「那句话也问不出」一句（原 201 句）。
+     - 「UTC」用黄色实底贴纸（.guess）：它只用于 AI 的「猜」。红绿不用。
+     - 开头（4.8）：第 181 句的问题贴纸「审完就没问题了吗？」先在正中放大，停 1 秒，缩小移到左上；之后各块讲到时进场（不放空壳）。
+     - 第 182 句：出「时区：从头到尾没人问过我」（提前 0.4 秒，让问题贴纸落位后只有标题的时间不超过 3 秒）。第 183 句：问号「值班的人看的是哪个时间？」。
+     - 第 184 句：上半两格「上一期拷问：没问」「这一套评审：把 UTC 写死进规格」，「实录 · 示例项目」标签跟第一格。
+     - 第 185 句只有口播（「这种问题不容易发现」），画面不变。
+     - 第 186 句：两格下方一行「只查写下来的 · 大家都默认 → 没人问」，旁标「局限」；念到「写下来的」出第一段，念到「大家都默认」出第二段与「局限」。
+     - 第 187 句：再下面一行「清单里没有 → 领域审也想不到」，留到页末。
+     版面：内容占满 y 40–880，上中部不留大片空白；四块自上而下，后出的加在下面，不替换前面的。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。
+     句子起点（页内秒）：181 句 0，182 句 4.88，183 句 11.60，184 句 17.68，185 句 24.16，186 句 26.48，187 句 32.48，念完 35.6；页内时长 36.72。
+     配色（2026-10-23）：上一期拷问「没问」奶白；这一套评审蓝浅（规格一侧）；UTC 黄贴纸；「局限」墨色虚线标签；末行墨底深色卡。
+     内容整体在 y 900 以内，避开字幕带。  -->
+<html lang="zh-CN" data-frame-id="S27">
+<head>
+<meta charset="utf-8">
+<title>S27 · 局限：时区没人问，清单里没有就想不到</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 上半两格 */
+  .st { top: 350px; height: 210px; padding: 22px 34px; white-space: nowrap; }
+  .st .who { font-weight: 600; font-size: 40px; line-height: 1.3; }
+  .st .val { margin-top: 8px; font-family: var(--display); font-weight: 800; font-size: 58px; line-height: 1.3; }
+  /* 黄色实底贴纸：贴纸本身是 .guess，这里改成行内排版。 */
+  .st .guess { position: relative; display: inline-block; font-size: 54px; padding: 2px 18px; margin: 0 4px; }
+  #s1 { left: 90px; width: 580px; }
+  #s2 { left: 740px; width: 940px; background: var(--blue-soft); }
+
+  /* 局限那一行：几块并排，位置靠 flex，没出场的块也占位，整行不会跳 */
+  #defrow { position: absolute; left: 90px; top: 630px; display: flex; align-items: center; gap: 26px; }
+  #defrow > * { position: relative; }
+  #defrow .chip { font-size: 54px; font-family: var(--display); font-weight: 800; padding: 12px 30px; }
+  #dot { font-size: 54px; font-weight: 800; color: var(--ink); }
+  #lim { font-size: 40px; font-family: var(--display); font-weight: 800; }
+
+  /* 末行 */
+  #nolist { left: 90px; top: 784px; width: 1000px; height: 110px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  #nolist .big { font-size: 58px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="q1" data-r="-2" style="left:80px;top:40px;font-size:48px">审完就没问题了吗？</div>
+  <div class="tag" id="tz" style="left:800px;top:52px;font-size:36px">时区：从头到尾没人问过我</div>
+
+  <!-- 问号 -->
+  <div class="chip" id="q2" data-r="1.5" style="left:80px;top:160px;font-size:60px;padding:12px 30px">值班的人看的是哪个时间？</div>
+
+  <!-- 上半两格 -->
+  <div class="tab ink" id="rl" style="left:70px;top:304px;font-size:36px">实录 · 示例项目</div>
+  <div class="card st" id="s1" data-r="0"><div class="who">上一期拷问</div><div class="val">没问</div></div>
+  <div class="card st" id="s2" data-r="0"><div class="who">这一套评审</div><div class="val">把 <span class="guess" id="g2">UTC</span> 写死进规格</div></div>
+
+  <!-- 局限：只查写下来的 · 大家都默认 → 没人问 -->
+  <div id="defrow">
+    <div class="chip" id="d1" data-r="-1">只查写下来的</div>
+    <div id="dot">·</div>
+    <div class="chip" id="d2" data-r="1">大家都默认 → 没人问</div>
+    <div class="tag" id="lim" data-r="3">局限</div>
+  </div>
+
+  <!-- 末行 -->
+  <div class="card dark" id="nolist" data-r="-0.5"><div class="big">清单里没有 → 领域审也想不到</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒。
+  var CUE = {
+    tz: 4.68,                        // 182 句开口（4.88）
+    q2: 11.4,                        // 183 句开口（11.60）：问号
+    s1: 17.48, s2: 18.44,            // 184 句：拷问没问（句首 17.68）；评审把 UTC 写死进规格（念到「评审」18.64）
+    d1: 27.16,                       // 186 句念到「写下来的」（27.36，ASR 听成「审下来的」）：只查写下来的
+    d2: 28.6,                        // 186 句念到「大家都默认」（28.80）：大家都默认 → 没人问，旁标局限
+    no: 32.28                        // 187 句开口（32.48）：清单里没有 → 领域审也想不到
+  };
+  var P = T.p, E = T.ease;
+  function span(t, a, b) { return E(P(t, a, 0.4)) * (1 - E(P(t, b, 0.3))); }
+
+  Stage({
+    duration: 36.72,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 181 句：开头问题贴纸，0–1.0 秒在正中放大，1.0–1.6 秒缩小移到左上。
+      var q = T.$('q1'), W = q.offsetWidth, H = q.offsetHeight, m = E(P(t, 1.0, 0.6));
+      q.style.opacity = E(P(t, 0, 0.4));
+      q.style.transform = 'translate(' + ((1 - m) * (960 - (80 + W / 2))) + 'px,' + ((1 - m) * (470 - (40 + H / 2))) + 'px) scale(' + (1.7 - 0.7 * m) + ') rotate(-2deg)';
+
+      // 182 句：时区。183 句：上方问号。
+      T.enter(T.$('tz'), P(t, CUE.tz, 0.4), 14);
+      T.enter(T.$('q2'), P(t, CUE.q2, 0.5), 24);
+      T.current(T.$('q2'), span(t, CUE.q2 + 0.3, CUE.s1), 10);
+
+      // 184 句：上半两格，「实录」标签跟第一格。
+      T.enter(T.$('rl'), P(t, CUE.s1, 0.4), 12);
+      T.enter(T.$('s1'), P(t, CUE.s1, 0.45), 14);
+      T.current(T.$('s1'), span(t, CUE.s1 + 0.3, CUE.s2), 10);
+      T.enter(T.$('s2'), P(t, CUE.s2, 0.45), 14);
+      T.current(T.$('s2'), span(t, CUE.s2 + 0.3, CUE.d1), 10);
+
+      // 186 句：只查写下来的；大家都默认 → 没人问，旁标局限。
+      T.enter(T.$('d1'), P(t, CUE.d1, 0.45), 14);
+      T.$('dot').style.opacity = E(P(t, CUE.d2, 0.3));
+      T.enter(T.$('d2'), P(t, CUE.d2, 0.45), 14);
+      T.enter(T.$('lim'), P(t, CUE.d2 + 0.4, 0.4), 12);
+
+      // 187 句：清单里没有 → 领域审也想不到。
+      T.enter(T.$('nolist'), P(t, CUE.no, 0.45), 14);
+    }
+  });
+</script>
+</body>
+</html>

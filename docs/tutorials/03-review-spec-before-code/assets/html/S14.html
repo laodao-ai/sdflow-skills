@@ -1,0 +1,186 @@
+<!doctype html>
+<!-- S14 · 标题卡 · script 105–109「AI 审完了，就轮到人了：报告一大份，人看不过来怎么办？……要审的东西一多，人就容易随手点同意。你是不是也经常这么干？」
+     Böckeler 原文三句（英文原文 + 中文），出处 martinfowler.com《Understanding Spec-Driven-Development: Kiro, spec-kit, and Tessl》，2025-10-15，
+     角上「个人体验」。作者名、日期、「个人体验」口播不念，留在画面上作为出处标注。三句英文原文照分镜抄入，本页没有联网核对原文；
+     中文是分镜没给、这里按原意译的，作者录前对一遍。
+     引用的是文章，不是 skill 或文件原文，所以用奶白卡，不用黑底代码窗口（visual-v4 §4.7 那条只管 skill / 文件原文）。
+     10-24 作者意见：①英文原文和中文翻译放进同一张引文卡，和上面的出处卡分开（出处卡在上，引文卡在下，中间留距离）；
+       ②「随手点同意」放到画面下方，单独一张大字突出的卡（炭灰底奶白字，整页最重的块）；
+       ③卡边上加小动画，见下面第 109 句；
+       ④没讲到的不先放出来（visual-v4 4.8）：不再有空壳，出处卡、每一句引文、「随手点同意」卡、手指都讲到时才出现；引文卡随引文增加而变高。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。句起点：105 句 0，106 句 6.32，107 句 14.88，108 句 22.08，109 句 25.44；页长 28.08 秒。
+     句子与动画节点：
+       第 105 句 问题贴纸「报告一大份，人看不过来怎么办？」一开口在屏幕正中放大出现，停约 2.6 秒，再用 0.7 秒缩小移到左上
+       第 106 句 「martinfowler.com 上有篇文章，作者试了 spec-kit 等三个规格驱动开发的工具」（10-25 改句）：出处卡落下（作者、网站、日期、文章名），当前；同时角上「个人体验」落下（保留作出处标注）
+       第 107 句 「作者说，生成的 markdown 一大堆要审，又啰嗦又累人，宁可去审代码」：引文卡落下，三句原文 + 中文依次加进卡里，卡变高；卡当前
+       第 108 句 「要审的东西一多，人就容易随手点同意」：下方「随手点同意」大卡落下，当前，留到页末
+       第 109 句 「你是不是也经常这么干？」：右边弹出 emoji 🫵（指尖正对观众，去色成灰白），先缩 0.9 蓄力，再冲向镜头、周围出放射短线，回弹停住；随后右边弹出气泡「说的就是你～」（10-25 作者意见：气泡从手的左边移到右边，手的位置不变）（歪 6 度，0→1.15→1），气泡里的字用娃娃体（Wawati SC）逐字蹦出、上下错落、左右歪，「～」最后晃两下；手上下点两下停住。手的图标 104px，冲出峰值 1.2 倍、停在 1.0 倍（作者 10-24：图标小一点、字样式俏皮一点）。最后一帧手和气泡都留着。10-24 作者意见：指向观众后说「说的就是你」，要俏皮；原几何手认不出，改用系统 emoji（渲染机需有 Apple Color Emoji 字体）。
+     配色（2026-10-24）：引文卡奶白 / 墨，中文里的「markdown」是规格文档，浅蓝底；「代码」是执行一侧，浅琥珀底；「随手点同意」卡用炭灰底奶白字（本期粉已表示对抗审，不借）。黄只给「当前」，同一时刻一个。内容整体在 y 940 以内，避开底部字幕带。 -->
+<html lang="zh-CN" data-frame-id="S14">
+<head>
+<meta charset="utf-8">
+<title>S14 · Böckeler 的体验</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #headw { left: 90px; top: 56px; transform-origin: 0 0; }
+  #headw .chip { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; }
+  #tagp { right: 80px; top: 74px; font-family: var(--display); font-weight: 800; font-size: 38px; }
+
+  /* 长卡手写倾角 0.4 度：按自动倾角 1–2 度两端会错开几十像素（visual-v4 §4.3 第 4 条） */
+  #src { left: 90px; top: 206px; width: 1740px; height: 124px; padding: 10px 36px; display: flex; flex-direction: column; justify-content: center; }
+  #src .a { font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.2; }
+  #src .b { font-weight: 600; font-size: 34px; line-height: 1.3; white-space: nowrap; }
+
+  /* 引文卡：高度由脚本按已出现的引文数写入 */
+  #quote { left: 90px; top: 372px; width: 1740px; height: 40px; padding: 20px 36px; overflow: hidden; }
+  .pair { height: 106px; }
+  .pair .en { font-weight: 600; font-size: 32px; line-height: 1.3; white-space: nowrap; }
+  .pair .cn { font-family: var(--display); font-weight: 800; font-size: 42px; line-height: 1.25; white-space: nowrap; }
+  .hb, .ha { padding: 0 8px; margin: 0 -2px; border-radius: 6px; }
+  .hb { background: var(--blue-soft); }
+  .ha { background: var(--amber-soft); }
+
+  /* 下方：随手点同意（整页最亮的块）+ 手指 */
+  #ok { left: 90px; top: 790px; width: 520px; height: 112px; padding: 0; display: flex; align-items: center; justify-content: center;
+        background: var(--charcoal); color: var(--cream); font-family: var(--display); font-weight: 800; font-size: 68px; white-space: nowrap; }
+  /* 手：系统 emoji 🫵（Index Pointing at the Viewer，指尖正对镜头），去色成灰白，配墨色描影，和贴纸风格一致；中心约 (1350, 830) */
+  #hand { left: 1150px; top: 760px; width: 150px; height: 150px; display: flex; align-items: center; justify-content: center; transform-origin: 50% 50%; }
+  #hand .em { font-size: 104px; line-height: 1; filter: grayscale(1) brightness(1.18) contrast(1.15) drop-shadow(4px 0 0 #161616) drop-shadow(-4px 0 0 #161616) drop-shadow(0 4px 0 #161616) drop-shadow(0 -4px 0 #161616) drop-shadow(8px 8px 0 #161616); }
+  #handLines { position: absolute; left: 0; top: 0; width: 150px; height: 150px; overflow: visible; }
+  /* 对话气泡：在手的右边（10-25），奶白底墨边，尾巴在左边，指向手。手连冲出峰值与放射线右缘约 x 1315，气泡从 1350 起 */
+  /* 气泡字用娃娃体（macOS 自带 Wawati SC），逐字蹦出、上下错落、左右歪，开玩笑的口气 */
+  #bub { left: 1350px; top: 766px; width: 400px; height: 104px; display: flex; align-items: center; justify-content: center; gap: 2px;
+         background: var(--cream); color: var(--ink); border: 5px solid var(--ink); border-radius: 30px; box-shadow: 8px 8px 0 var(--ink);
+         font-family: "Wawati SC", "Hannotate SC", var(--display); font-weight: 700; font-size: 64px; -webkit-text-stroke: 1.5px var(--ink); white-space: nowrap; transform-origin: 0% 60%; }
+  #bub .c { display: inline-block; }
+  #bub::after { content: ""; position: absolute; left: -30px; top: 38px; width: 0; height: 0;
+                border-top: 18px solid transparent; border-bottom: 18px solid transparent; border-right: 30px solid var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="headw"><div class="chip" id="head">报告一大份，人看不过来怎么办？</div></div>
+  <div class="tag" id="tagp">个人体验</div>
+
+  <div class="card" id="src" data-r="-0.4">
+    <div class="a">Birgitta Böckeler · martinfowler.com · 2025-10-15</div>
+    <div class="b">《Understanding Spec-Driven-Development: Kiro, spec-kit, and Tessl》</div>
+  </div>
+
+  <div class="card" id="quote" data-r="0.3">
+    <div class="pair" id="p1">
+      <div class="en">"spec-kit created a LOT of markdown files for me to review."</div>
+      <div class="cn">spec-kit 给我生成了一大堆 <span class="hb">markdown</span> 要审。</div>
+    </div>
+    <div class="pair" id="p2">
+      <div class="en">"Overall they were just very verbose and tedious to review."</div>
+      <div class="cn">整体上它们很啰嗦，审起来很累人。</div>
+    </div>
+    <div class="pair" id="p3">
+      <div class="en">"I'd rather review code than all these markdown files."</div>
+      <div class="cn">比起审这些 <span class="hb">markdown</span> 文件，我宁可审<span class="ha">代码</span>。</div>
+    </div>
+  </div>
+
+  <div class="card" id="ok" data-r="-1.5">随手点同意</div>
+
+  <!-- 手：🫵 指向观众；冲出来时周围出放射短线 -->
+  <div class="abs" id="hand">
+    <svg id="handLines" viewBox="0 0 200 200" aria-hidden="true"><g stroke="#161616" stroke-width="6" stroke-linecap="round" fill="none">
+      <path d="M100 4 V-14"/><path d="M168 32 L182 18"/><path d="M196 100 H214"/><path d="M168 168 L182 182"/>
+      <path d="M32 32 L18 18"/><path d="M4 100 H-14"/><path d="M32 168 L18 182"/></g></svg>
+    <span class="em">🫵</span>
+  </div>
+
+  <div class="card" id="bub" data-r="-6"><span class="c">说</span><span class="c">的</span><span class="c">就</span><span class="c">是</span><span class="c">你</span><span class="c">～</span></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：按每分钟 220 字估，录音后按实测改。
+  var CUE = {
+    // 按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒
+    head: 0.0, headHold: 2.6, headMove: 0.7,   // headHold 原 3.2，按 105 句实测句长 5.2/6.3 缩放
+    src: 6.12, srcEnd: 16.52, // 106 句：出处卡落下，当前
+    tag: 7.12,                // 106 句：角上「个人体验」（出处标注），在出处卡后 1.0 秒
+    q: [16.52, 18.44, 19.72], // 107 句：一大堆要审 / 又啰嗦又累人 / 宁可去审代码（引文卡随之变高）
+    qEnd: 23.64,
+    ok: 23.64,                // 108 句念到「随手点同意」：大卡落下，当前，留到页末
+    hand: 25.24,              // 109 句开口：手从右侧弹出（缩 0.9 蓄力）；后面一串到 27.69（气泡「～」晃完）
+    lunge: 25.59, settle: 25.74, // 冲向镜头 1.35 倍，回弹 1.1
+    bub: 25.99,               // 气泡「说的就是你」弹出
+    nod: 26.44, nodEnd: 27.04 // 手点两下头
+  };
+  var HEAD_SCALE = 1.5;
+  var HEAD_CENTER = [960, 500];
+
+  function gate(t, from, to) { return T.ease(T.p(t, from, 0.4)) * (1 - T.ease(T.p(t, to, 0.4))); }
+
+  Stage({
+    duration: 28.08,
+    init: function () { return T.fonts('报告一大份人看不过来怎么办个体验给我生成了堆要审整体上它们很啰嗦审起来累比这些文件宁可代码随手点同意说的就是你'); },
+    render: function (t) {
+      // 105 句：问题贴纸先在正中放大，再缩到左上
+      T.enter(T.$('head'), T.p(t, CUE.head, 0.45), -14);
+      var hw = T.$('headw'), hd = T.$('head');
+      var mv = T.ease(T.p(t, CUE.headHold, CUE.headMove));
+      var fx = HEAD_CENTER[0] - HEAD_SCALE * hd.offsetWidth / 2 - 90, fy = HEAD_CENTER[1] - HEAD_SCALE * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + (HEAD_SCALE + (1 - HEAD_SCALE) * mv) + ')';
+
+      // 106 句：出处卡
+      T.enter(T.$('src'), T.p(t, CUE.src, 0.5), 16);
+      T.current(T.$('src'), gate(t, CUE.src + 0.3, CUE.srcEnd), 10);
+      T.enter(T.$('tagp'), T.p(t, CUE.tag, 0.45), -12);
+
+      // 107 句：引文卡随引文增加变高；每一对原文 + 中文进卡时淡入
+      var quote = T.$('quote');
+      var h = 40, shown = 0;
+      ['p1', 'p2', 'p3'].forEach(function (id, i) {
+        var e = T.ease(T.p(t, CUE.q[i], 0.5));
+        var p = T.$(id);
+        p.style.opacity = e;
+        p.style.transform = 'translateY(' + ((1 - e) * 12) + 'px)';
+        h += 106 * e;
+        if (e > 0) shown++;
+      });
+      quote.style.height = h + 'px';
+      T.enter(quote, T.p(t, CUE.q[0], 0.5), 16);
+      T.current(quote, gate(t, CUE.q[0] + 0.3, CUE.qEnd), 10);
+
+      // 108 句：随手点同意，当前，留到页末
+      T.enter(T.$('ok'), T.p(t, CUE.ok, 0.5), 16);
+      T.current(T.$('ok'), T.ease(T.p(t, CUE.ok + 0.3, 0.4)), 10);
+
+      // 109 句：手弹出 → 缩 0.9 蓄力 → 冲向镜头 1.35 → 回弹 1.1 → 气泡 → 点头；最后一帧手 1.1 倍 + 气泡都留着
+      var hand = T.$('hand');
+      var appear = T.ease(T.p(t, CUE.hand, 0.2));
+      var lunge = T.ease(T.p(t, CUE.lunge, CUE.settle - CUE.lunge));
+      var settle = T.ease(T.p(t, CUE.settle, 0.3));
+      var sc = 0.85 + 0.35 * lunge - 0.2 * settle;
+      var nodP = T.p(t, CUE.nod, CUE.nodEnd - CUE.nod);
+      var nod = nodP > 0 && nodP < 1 ? Math.sin(nodP * Math.PI * 4) * 9 * (1 - nodP) : 0;
+      hand.style.opacity = appear;
+      hand.style.transform = 'translate(' + ((1 - appear) * 60) + 'px,' + nod + 'px) scale(' + sc + ')';
+      var burst = T.p(t, CUE.lunge, 0.1) * (1 - T.p(t, CUE.lunge + 0.15, 0.35));
+      T.$('handLines').style.opacity = burst;
+
+      // 气泡：0 → 1.15 → 1 弹跳，歪斜 -6 度
+      var bp = T.p(t, CUE.bub, 0.35);
+      var bs = bp < 0.6 ? 1.15 * T.ease(bp / 0.6) : 1.15 - 0.15 * T.ease((bp - 0.6) / 0.4);
+      var bub = T.$('bub');
+      bub.style.opacity = bp > 0 ? 1 : 0;
+      bub.style.transform = 'rotate(-6deg) scale(' + bs + ')';
+      // 逐字蹦出：每字晚 0.07 秒，从下往上弹（过冲 1.2 倍），停在上下错落、左右歪的位置；末字「～」最后晃两下
+      var OFF = [[-4, -6], [5, 4], [-3, -3], [4, 5], [-6, -8], [8, 2]];
+      T.all('#bub .c').forEach(function (c, i) {
+        var q = T.p(t, CUE.bub + 0.35 + i * 0.07, 0.28);
+        var k = q < 0.6 ? 1.2 * T.ease(q / 0.6) : 1.2 - 0.2 * T.ease((q - 0.6) / 0.4);
+        var wob = i === 5 ? Math.sin(T.p(t, CUE.bub + 0.9, 0.8) * Math.PI * 4) * 14 * (1 - T.p(t, CUE.bub + 0.9, 0.8)) : 0;
+        c.style.opacity = q > 0 ? 1 : 0;
+        c.style.transform = 'translateY(' + (OFF[i][1] + (1 - Math.min(1, q * 1.6)) * 12) + 'px) rotate(' + (OFF[i][0] + wob) + 'deg) scale(' + k + ')';
+      });
+    }
+  });
+</script>
+</body>
+</html>

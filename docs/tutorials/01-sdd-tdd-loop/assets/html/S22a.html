@@ -1,0 +1,101 @@
+<!doctype html>
+<!-- S22a · 机制动画 · script 89–95「现在四个文档都齐了，我们看一眼目录。……这四个文档你看过，没问题了，再让它动手写代码。」
+     真实目录，不是示意：演示工作仓 /Users/demo/sdd-tdd-loop-demo 在 /opsx:ff 之后的 openspec/changes/add-over-temperature-alert/
+     （2026-10-06 核过；.openspec.yaml 是隐藏文件，不画）。目录树的样式沿用 S24。
+     - 蓝：OpenSpec（目录树卡的标签）。
+     - 黄色描边 + 外发光 = 当前：先是这次的改动目录（90 句），再逐个是四个文件（91–94 句），最后回到改动目录（95 句）。
+     - 每个文件讲到时，右边落下一张标签：上行是它管什么，下行是这次例子里写了什么。标签内容出自真实文件：
+       proposal.md 的 What Changes 第 1 条、spec.md 的 4 个场景（S21 已展示）、design.md 的 Decisions 第 1 条、tasks.md 实数 6 项。
+     - 时刻按实测（2026-10-06，frame-times.py），SAY 是各句开口秒。 -->
+<html lang="zh-CN" data-frame-id="S22a">
+<head>
+<meta charset="utf-8">
+<title>S22a · 四个文档</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .tree { left: 90px; top: 96px; width: 1740px; height: 690px; padding: 0; }
+  .tree .tab { font-size: 44px; }
+  .row {
+    position: absolute; height: 56px; padding: 0 10px; border-radius: 4px;
+    display: flex; align-items: center; gap: 12px; white-space: nowrap;
+    font-family: var(--mono); font-size: 32px; color: var(--ink); background: var(--cream);
+  }
+  .row svg { width: 36px; height: 36px; flex: none; }
+
+  .label { left: 1090px; padding: 10px 26px 12px; line-height: 1.25; }
+  .label b { display: block; font-family: var(--display); font-weight: 800; font-size: 40px; }
+  .label span { display: block; font-size: 30px; font-weight: 600; }
+
+  .end { left: 1060px; top: 806px; display: flex; align-items: center; gap: 18px; padding: 10px 28px 10px 12px; }
+  .end .num { width: 56px; height: 56px; font-size: 28px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card tree" id="tree" data-r="-0.6">
+    <div class="tab os">OpenSpec</div>
+
+    <div class="row" id="rOpen" data-shadow="0"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M3 8 H14 L17 11 H33 V30 H3 Z"/></svg>openspec/</div>
+    <div class="row" id="rChanges" data-shadow="0"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M3 8 H14 L17 11 H33 V30 H3 Z"/></svg>changes/</div>
+    <div class="row" id="rDir" data-shadow="0"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M3 8 H14 L17 11 H33 V30 H3 Z"/></svg>add-over-temperature-alert/</div>
+
+    <div class="row file" data-shadow="0"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>proposal.md</div>
+    <div class="row file" data-shadow="0"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>specs/over-temperature-alert/spec.md</div>
+    <div class="row file" data-shadow="0"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>design.md</div>
+    <div class="row file" data-shadow="0"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>tasks.md</div>
+
+    <div class="chip label" data-r="-1.2"><b>为什么做、做什么</b><span>超过 80 度，stderr 多一行告警</span></div>
+    <div class="chip label" data-r="1"><b>做到什么样算对</b><span>4 个场景</span></div>
+    <div class="chip label" data-r="-0.8"><b>打算怎么做</b><span>判断超温写成一个单独的函数，方便测试</span></div>
+    <div class="chip label" data-r="1.2"><b>一张清单</b><span>6 项待办，带复选框</span></div>
+  </div>
+
+  <div class="chip end" id="end" data-r="-1.5"><span class="num os">✓</span>你看过、没问题，再让它写代码</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 树的排布（卡片内坐标）：前三行是目录，后四行是文件，文件行之间留出标签的高度。
+  var X0 = 36, DX = 66;
+  function place(el, top, l) { el.style.top = top + 'px'; el.style.left = (X0 + l * DX) + 'px'; }
+  var FILE_TOP = [250, 366, 482, 598];  // 行距 116：卡片压到 690 高，结尾标签才放得进字幕带（y ≥ 940）以上
+
+  // 每句开口的时刻（秒），89–95 句。
+  var SAY = [0.0, 4.48, 7.60, 14.40, 19.84, 28.00, 31.52];
+
+  Stage({
+    duration: 33,
+    init: function () { return T.fonts('为什么做做什么超过度多一行告警到样算对个场景打算怎么判断温写成单独的函数方便测试张清单项待办带复选框你看过没问题再让它代码'); },
+    render: function (t) {
+      // 89：目录树出现。
+      T.enter(T.$('tree'), T.p(t, 0.0, 0.6), 24);
+      place(T.$('rOpen'), 40, 0);
+      place(T.$('rChanges'), 106, 1);
+      place(T.$('rDir'), 172, 2);
+      var files = T.all('.file');
+      var labels = T.all('.label');
+      for (var i = 0; i < 4; i++) {
+        place(files[i], FILE_TOP[i], 3);
+        labels[i].style.top = (FILE_TOP[i] - 32) + 'px';
+      }
+
+      // 90：这次的改动单独一个文件夹；95：回到这个文件夹，四个文件都看过了。
+      var dirOn = T.ease(T.p(t, SAY[1], 0.4)) * (1 - T.ease(T.p(t, SAY[2] - 0.2, 0.3)));
+      var dirBack = T.ease(T.p(t, SAY[6], 0.4));
+      T.current(T.$('rDir'), Math.max(dirOn, dirBack));
+
+      // 91–94：逐个文件成为当前，右边落下标签；标签留着不收。
+      for (var j = 0; j < 4; j++) {
+        var on = T.ease(T.p(t, SAY[2 + j], 0.4));
+        var off = T.ease(T.p(t, SAY[3 + j] - 0.2, 0.3));
+        T.current(files[j], on * (1 - off));
+        T.enter(labels[j], T.p(t, SAY[2 + j] + 0.2, 0.5), 18);
+      }
+
+      // 95：看过再动手。
+      T.enter(T.$('end'), T.p(t, SAY[6] + 0.3, 0.5), 20);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- S50 · 标题卡 · script 244–245「这六步，我后来整理成了一套流程，叫 sdflow。……后面，我们一步一步来聊。」
+     「sdflow」大字放在炭灰卡里（工具名，保持英文）；下面一排后几期的期名，取自 media-strategy/topic-plan-2026-10.md 第一轮 2–6 期的阶段名。
+     不用蓝 / 琥珀：sdflow 不是这两个工具。
+     时刻按实测（2026-10-06，frame-times.py）：大字 0 秒（244 句开口），五个期名从 245 句开口（4.80 秒）起，间隔 0.5 秒。 -->
+<html lang="zh-CN" data-frame-id="S50">
+<head>
+<meta charset="utf-8">
+<title>S50 · sdflow 与后几期</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .hero { left: 400px; top: 230px; width: 1120px; height: 340px; display: flex; align-items: center; justify-content: center; }
+  .hero .big { font-size: 220px; line-height: 1; font-family: var(--mono); font-weight: 700; letter-spacing: -4px; }
+  .hero .tab { font-size: 42px; }
+  .chip.ep { font-size: 52px; padding: 16px 40px; top: 730px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card dark hero" id="h" data-r="-1.5"><div class="tab ink" style="background:var(--cream);color:var(--ink)">我整理成的流程</div><div class="big">sdflow</div></div>
+  <div class="chip ep" id="e1" data-r="-2" style="left:280px">规格</div>
+  <div class="chip ep" id="e2" data-r="2" style="left:550px">实现</div>
+  <div class="chip ep" id="e3" data-r="-1.5" style="left:820px">代码评审</div>
+  <div class="chip ep" id="e4" data-r="2.5" style="left:1180px">收尾</div>
+  <div class="chip ep" id="e5" data-r="-2" style="left:1450px">总览</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 7.2,
+    init: function () { return T.fonts('我整理成的流程规格实现代码评审收尾总览'); },
+    render: function (t) {
+      T.enter(T.$('h'), T.p(t, 0.0, 0.7), 30);
+      T.items('.ep', 4.8, 0.5, t, 30);
+    }
+  });
+</script>
+</body>
+</html>

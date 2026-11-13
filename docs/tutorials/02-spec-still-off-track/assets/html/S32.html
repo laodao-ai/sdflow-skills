@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- S32 · 标题卡 · script 132–134「总之，我自己的判断是，想拿到一份靠得住的规格，怎么问、怎么写、写成什么样，这三件事得一起管。……但范围和方案澄清、事实核对和决定确认，这几样不能省。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     - 上：深色大字卡：怎么问、怎么写、写成什么样 / 三件事一起管。卡先出，三件事逐个点亮，念完点亮第二行。
+     - 中：两张条件卡：小改动探索可缩短甚至跳过（133 句）；范围和方案澄清、事实核对、决定确认不能省（134 句，作者 2026-10-18 改）。
+     - 原下方两张小字贴纸（先纪要后成文有漏改案例、没有成本对照）随原 154–156 句作者 2026-10-18 删去。
+     节点时刻集中在 CUE，按录音实测（frame-times.py，2026-10-19；132 开口 0.0、133 开口 10.96、134 开口 16.8、134 说完 22.96）。 -->
+<html lang="zh-CN" data-frame-id="S32">
+<head>
+<meta charset="utf-8">
+<title>S32 · 判断句</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #head { left: 160px; top: 100px; width: 1600px; height: 340px; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 0 50px; }
+  #head .l1 { font-size: 112px; white-space: nowrap; }
+  #head .l2 { font-size: 112px; white-space: nowrap; color: var(--yellow); }
+  #head .w { opacity: .25; }
+  .cond { left: 160px; width: 1600px; height: 112px; display: flex; align-items: center; padding: 0 44px; font-weight: 600; font-size: 44px; color: var(--ink); white-space: nowrap; }
+  .cond b { font-family: var(--display); font-weight: 800; margin-right: 22px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card dark" id="head" data-r="-0.8">
+    <div class="big l1"><span class="w" id="w1">怎么问</span>、<span class="w" id="w2">怎么写</span>、<span class="w" id="w3">写成什么样</span></div>
+    <div class="big l2 w" id="l2">三件事一起管</div>
+  </div>
+
+  <div class="card cond" id="ca" data-r="1" style="top:520px"><b>小改动</b>目标和方向已清楚：探索可以缩短，甚至跳过</div>
+  <div class="card cond" id="cb" data-r="-1" style="top:670px"><b>不能省</b>范围和方案澄清、事实核对、决定确认</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按录音实测（frame-times.py，2026-10-19）。
+  //   head  132 句开口（0.0）：深色大字卡出现（字暗着）
+  //   w1/w2/w3  132 句「怎么问」「怎么写」「写成什么样」念到时点亮
+  //   l2    132 句「这三件事得一起管」点亮（8.32）
+  //   ca    133 句「小改动」（12.8）
+  //   cb    134 句「范围和方案澄清、事实核对和决定确认」（17.2）
+  var CUE = { head: 0.0, w1: 5.12, w2: 6.16, w3: 7.04, l2: 8.32,
+              ca: 12.8, cb: 17.2 };
+  var P = T.p, E = T.ease;
+  function lit(el, at) { el.style.opacity = 0.25 + 0.75 * E(P(window.__t, at, 0.4)); }
+
+  Stage({
+    duration: 24.1,
+    init: function () { return T.fonts('怎么问写成什么样三件事一起管小改动目标和方向已清楚探索可以缩短甚至跳过不能省范围和方案澄清核对决定确认'); },
+    render: function (t) {
+      window.__t = t;
+      T.enter(T.$('head'), P(t, CUE.head, 0.6), 24);
+      lit(T.$('w1'), CUE.w1); lit(T.$('w2'), CUE.w2); lit(T.$('w3'), CUE.w3); lit(T.$('l2'), CUE.l2);
+
+      T.enter(T.$('ca'), P(t, CUE.ca, 0.5), 20);
+      T.enter(T.$('cb'), P(t, CUE.cb, 0.5), 20);
+      T.current(T.$('ca'), E(P(t, CUE.ca, 0.4)) * (1 - E(P(t, CUE.cb, 0.4))), 10);
+      T.current(T.$('cb'), E(P(t, CUE.cb, 0.4)), 10);
+
+    }
+  });
+</script>
+</body>
+</html>

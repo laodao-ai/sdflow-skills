@@ -1,0 +1,87 @@
+<!doctype html>
+<!-- 章节标签页模版（2026-10-06 定版，样张 episodes/01-sdd-tdd-loop/design-demos/chapter-label/S26a.html）。
+     用法：复制到 episodes/<slug>/assets/html/<ID>.html，只改 <html> 上的四个属性：
+       data-frame-id  画面 ID，和文件名相同（check-ids.sh 会核）
+       data-chapter   第几章，从 1 起
+       data-total     这期一共几章
+       data-name      章节名，和目录页 S05 那一项的字一致
+     以及 <title>。页面里的其余部分不用改。
+     画面规则（visual-v4「导航画面」）：
+     - 导航类画面（目录页与章节标签页）用深色底：墨色 --ink，纸底质感层压到 0.35。
+     - 正中一张奶白标签卡：编号圆片 + 章节名。不上蓝 / 琥珀：章节讲的是进度，不是工具。
+     - 下面一排进度点：讲过的 = 灰实心（--cream-dim，「已过去」），当前 = 奶白 + 黄色描边（「当前」），没讲的 = 只有浅色描边。
+     - 深色底上墨色硬投影看不见，投影改用更深的 #0b0b0b。
+     - 进场配音效 design/sfx/chapter.wav，由 render.sh 在画面起点后 0.15 秒混入；页面本身无声。
+     - 不配口播，只放章节音效；时间轴在上一页末句后 0.4 秒起给 2.2 秒（2026-10-07）。 -->
+<html lang="zh-CN" data-frame-id="S45a" data-chapter="6" data-total="6" data-name="解决了什么">
+<head>
+<meta charset="utf-8">
+<title>S45a · 章节 ⑥ 解决了什么</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 质感层是半透明灰，叠在深底上会把底提亮成中灰；深色页只留三分之一的质感。 */
+  #stage { background: var(--ink); }
+  #stage .paper { opacity: 0.35; }
+  .label {
+    left: 50%; top: 360px; transform-origin: center;
+    display: flex; align-items: center; gap: 44px; padding: 44px 72px 44px 52px;
+    box-shadow: 14px 14px 0 #0b0b0b;
+  }
+  .label .num { width: 150px; height: 150px; font-size: 76px; border-width: 7px; }
+  .label .big { font-size: 128px; white-space: nowrap; }
+
+  .dots { position: absolute; left: 0; width: 1920px; top: 760px; display: flex; justify-content: center; gap: 34px; }
+  .dot {
+    width: 58px; height: 58px; box-sizing: border-box; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700; font-size: 26px;
+    border: 4px solid var(--cream-dim); color: var(--cream-dim); background: transparent;
+  }
+  .dot.done { background: var(--cream-dim); color: var(--ink); border-color: var(--cream-dim); }
+  .dot.now { background: var(--cream); color: var(--ink); border-color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card label" id="label" data-r="-1.5"><div class="num" id="num"></div><div class="big" id="name"></div></div>
+  <div class="dots" id="dots"></div>
+</div>
+<script>
+  // 按 <html> 上的属性填编号、章节名和进度点。要在 Stage 开始画之前填好，居中靠的是卡片的实际宽度。
+  (function () {
+    var root = document.documentElement;
+    var chapter = Number(root.getAttribute('data-chapter'));
+    var total = Number(root.getAttribute('data-total'));
+    document.getElementById('num').textContent = chapter;
+    document.getElementById('name').textContent = root.getAttribute('data-name');
+    var dots = document.getElementById('dots');
+    for (var i = 1; i <= total; i++) {
+      var d = document.createElement('div');
+      d.className = 'dot' + (i < chapter ? ' done' : i === chapter ? ' now' : '');
+      if (i === chapter) { d.id = 'now'; d.setAttribute('data-shadow', '0'); }
+      d.textContent = i;
+      dots.appendChild(d);
+    }
+  })();
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 整张卡居中：left 50% 再左移自身宽度一半，倾角在 enter 里叠加。
+  function center(el) { el.style.marginLeft = (-el.offsetWidth / 2) + 'px'; }
+
+  Stage({
+    duration: 2.2,  // visual-v4「章节标签页」：时间轴给 2.2 秒，不配口播
+    init: function () { return T.fonts(document.documentElement.getAttribute('data-name')); },
+    render: function (t) {
+      var label = T.$('label');
+      center(label);
+      T.enter(label, T.p(t, 0.0, 0.5), 30);
+      var dots = T.all('.dot');
+      for (var i = 0; i < dots.length; i++) T.enter(dots[i], T.p(t, 0.3 + i * 0.05, 0.4), 12);
+      T.current(T.$('now'), T.ease(T.p(t, 0.7, 0.4)));
+    }
+  });
+</script>
+</body>
+</html>

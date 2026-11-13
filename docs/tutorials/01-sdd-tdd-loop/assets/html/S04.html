@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- S04 · 标题卡 · script 13–17「大家好，我是老刀Cheney。……让「做完了」是真的做完了。」
+     上面署名 + logo；下面延续 S03 的两张贴纸卡，各往下连一个工具名。
+     颜色：蓝 = OpenSpec，连在「做出来的不是我要的」下；琥珀 = Superpowers，连在「说做完了，其实不对」下。
+     两张卡倾角和 S03 一致（定下来的东西，±1.5–2°），不加新编码。 -->
+<html lang="zh-CN" data-frame-id="S04">
+<head>
+<meta charset="utf-8">
+<title>S04 · 署名与两个工具</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .sign { left: 150px; top: 80px; width: 640px; height: 170px; display: flex; align-items: center; gap: 28px; padding: 0 36px; }
+  .sign img { width: 108px; height: 108px; flex: none; }
+  .sign .big { font-size: 84px; white-space: nowrap; }
+  .pair { width: 760px; height: 250px; display: flex; align-items: flex-end; padding: 0 56px 22px; }
+  .pair .big { font-size: 76px; }
+  .link { width: 8px; height: 90px; background: var(--ink); }
+  .tool { width: 760px; height: 130px; display: flex; align-items: center; justify-content: center; padding: 0;
+          color: var(--ink); }
+  .tool.os { background: var(--blue); color: var(--ink); }
+  .tool.sp { background: var(--amber); color: var(--ink); }
+  .tool .big { font-size: 80px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card sign" id="sign" data-r="-1">
+    <img src="../../../shared/logo.svg" alt="">
+    <div class="big">老刀Cheney</div>
+  </div>
+
+  <div class="card pair" id="c1" data-r="-2" style="left:150px;top:370px">
+    <div class="tab ink">第一件</div>
+    <div class="big">做出来的<br>不是我要的</div>
+  </div>
+  <div class="card pair" id="c2" data-r="1.5" style="left:1010px;top:390px">
+    <div class="tab ink" style="transform:rotate(2deg)">第二件</div>
+    <div class="big">说做完了，<br>其实不对</div>
+  </div>
+
+  <div class="abs link" id="l1" style="left:526px;top:650px"></div>
+  <div class="abs link" id="l2" style="left:1386px;top:670px"></div>
+  <div class="card tool os" id="t1" data-r="-1" style="left:150px;top:740px"><div class="big">OpenSpec</div></div>
+  <div class="card tool sp" id="t2" data-r="1" style="left:1010px;top:760px"><div class="big">Superpowers</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 26,
+    init: function () { return T.fonts('老刀第一件二做出来的不是我要说完了，其实对'); },
+    render: function (t) {
+      // 时刻按实测（2026-10-06，frame-times.py；2026-10-07 第 14 句补录后重测），画面内秒数；括号里是对应的口播。
+      T.enter(T.$('sign'), T.p(t, 0.0, 0.6), 30);   // 13 句开口「大家好」
+      T.enter(T.$('c1'), T.p(t, 3.77, 0.6), 30);    // 14 句念到「两个工具」的「两」
+      T.enter(T.$('c2'), T.p(t, 4.09, 0.6), 30);    // 「工具」
+      T.wipe(T.$('l1'), T.p(t, 14.30, 0.4), 'y');   // 16 句开口「OpenSpec 负责规格驱动开发」，连线先出，工具名晚 0.3（照旧）
+      T.enter(T.$('t1'), T.p(t, 14.60, 0.5), 20);
+      T.wipe(T.$('l2'), T.p(t, 23.34, 0.4), 'y');    // 17 句念到「Superpowers」23.34
+      T.enter(T.$('t2'), T.p(t, 23.64, 0.5), 20);
+    }
+  });
+</script>
+</body>
+</html>

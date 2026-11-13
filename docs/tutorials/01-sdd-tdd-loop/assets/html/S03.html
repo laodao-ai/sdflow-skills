@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- S03 · 标题卡 · script 12「这两件事，用 AI 写过代码的人，多半都碰到过。」
+     两句并排：开场的两件事各一张贴纸卡。卡片定下来了，倾角小（±1.5–2°）。
+     不加颜色编码：这两句还没落到任何工具上，蓝 / 琥珀留给 S04。 -->
+<html lang="zh-CN" data-frame-id="S03">
+<head>
+<meta charset="utf-8">
+<title>S03 · 两件事</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .pair { width: 760px; height: 400px; display: flex; align-items: center; padding: 40px 56px 32px; }
+  .pair .big { font-size: 84px; }
+  .pair .tab { font-size: 40px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card pair" id="c1" data-r="-2" style="left:150px;top:330px">
+    <div class="tab ink">第一件</div>
+    <div class="big">做出来的<br>不是我要的</div>
+  </div>
+  <div class="card pair" id="c2" data-r="1.5" style="left:1010px;top:350px">
+    <div class="tab ink" style="transform:rotate(2deg)">第二件</div>
+    <div class="big">说做完了，<br>其实不对</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 3,
+    init: function () { return T.fonts('第一件二做出来的不是我要说完了，其实对'); },
+    render: function (t) {
+      // 时刻按实测（2026-10-06，frame-times.py）：12 句开口 0.00「这两种情况」出第一张，念到「情况」0.40 出第二张。
+      T.enter(T.$('c1'), T.p(t, 0.0, 0.6), 30);
+      T.enter(T.$('c2'), T.p(t, 0.4, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

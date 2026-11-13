@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- S25 · 标题卡 · script 104–106「OpenSpec 自己也能写代码，……原因下一段讲。」
+     左：蓝标签 = OpenSpec 的命令卡（不倾斜）。右：琥珀卡 = 实现交给 Superpowers。
+     先出命令，再出右边那一行（口播顺序）。 -->
+<html lang="zh-CN" data-frame-id="S25">
+<head>
+<meta charset="utf-8">
+<title>S25 · opsx:apply</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #cmd { left: 150px; top: 400px; width: 800px; height: 300px; padding-top: 44px; }
+  #cmd .tab { font-size: 40px; }
+  #cmd .c1 { font-size: 64px; color: #fff; font-weight: 700; }
+  #cmd .c2 { font-family: var(--body); font-size: 48px; font-weight: 600; margin-top: 14px; }
+  #sp { left: 1060px; top: 420px; width: 700px; height: 260px; display: flex; align-items: center; padding: 28px 44px; }
+  #sp .big { font-size: 66px; }
+  #sp .big em { font-style: normal; color: var(--amber); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="cmd" id="cmd" data-r="0"><div class="tab os">OpenSpec</div><div class="c1">/opsx:apply</div><div class="c2">照 tasks 一项项做</div></div>
+  <div class="card sp" id="sp" data-r="1.5"><div class="big">我把实现交给<br><em>Superpowers</em></div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 12,
+    init: function () { return T.fonts('照一项做我把实现交给OpenSpecSuperpowers'); },
+    render: function (t) {
+      T.enter(T.$('cmd'), T.p(t, 5.92, 0.6), 30);   // 105 句念到 apply@5.92（实测）
+      T.enter(T.$('sp'), T.p(t, 10.56, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

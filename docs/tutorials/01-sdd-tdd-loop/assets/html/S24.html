@@ -1,0 +1,139 @@
+<!doctype html>
+<!-- S24 · 机制动画（示意）· script 99–103「做完以后呢？……就是现在这份规格。」
+     示意，不是录屏：归档这一步没录（D7 修订，第 2 到 4 段暂停），右上角标「示意」。
+     一棵 openspec/ 目录树，跟着口播动两下：
+       101 句：changes/add-over-temperature-alert/ 整个挪进 changes/archive/；
+       102 句：这次的 delta 规格（specs/over-temperature-alert/spec.md）复制一份合进 openspec/specs/。
+     - 蓝：OpenSpec（目录树卡的标签、命令卡标签）。
+     - 黄色描边 + 外发光 = 当前：先是命令，再是被挪动的目录，最后是合并后的主规格（103 句「AI 先读到的就是这份」）。
+     - 飞过去的那份副本只用半透明表示「在路上」，不用黄贴纸（黄贴纸专指 AI 的猜）。
+     - 目录名照写；官方归档时会给目录名加日期前缀，这里按分镜不加。 -->
+<html lang="zh-CN" data-frame-id="S24">
+<head>
+<meta charset="utf-8">
+<title>S24 · 归档</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .tree { left: 90px; top: 130px; width: 1110px; height: 790px; padding: 0; }
+  .tree .tab { font-size: 44px; }
+  .row {
+    position: absolute; height: 56px; display: flex; align-items: center; gap: 12px; white-space: nowrap;
+    font-family: var(--mono); font-size: 32px; color: var(--ink);
+  }
+  .row svg { width: 36px; height: 36px; flex: none; }
+  .blk { position: absolute; width: 860px; height: 338px; border-radius: 8px; background: var(--cream); }
+  .blk .row { left: 14px; }
+  .ghost {
+    position: absolute; padding: 4px 16px; border-radius: 6px; background: var(--cream);
+    border: 4px solid var(--ink); font-family: var(--mono); font-size: 32px; color: var(--ink); white-space: nowrap;
+  }
+
+  .cmd.arch { left: 1290px; top: 190px; font-size: 42px; }
+  .cmd.arch .tab { font-family: var(--display); white-space: nowrap; }
+  .step { left: 1290px; display: flex; align-items: center; gap: 18px; padding: 10px 24px 10px 12px; }
+  .step .num { width: 56px; height: 56px; font-size: 28px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="mock" id="mock">示意</div>
+
+  <div class="card tree" id="tree" data-r="-0.8">
+    <div class="tab os">OpenSpec</div>
+
+    <div class="row" id="rOpen"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M3 8 H14 L17 11 H33 V30 H3 Z"/></svg>openspec/</div>
+    <div class="row" id="rSpecs"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M3 8 H14 L17 11 H33 V30 H3 Z"/></svg>specs/</div>
+    <div class="row" id="rNew"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>over-temperature-alert/spec.md</div>
+    <div class="row" id="rChanges"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M3 8 H14 L17 11 H33 V30 H3 Z"/></svg>changes/</div>
+    <div class="row" id="rArch"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M3 8 H14 L17 11 H33 V30 H3 Z"/></svg>archive/</div>
+
+    <!-- 这次的改动目录：整块挪动。 -->
+    <div class="blk" id="blk">
+      <div class="row" style="top:6px"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M3 8 H14 L17 11 H33 V30 H3 Z"/></svg>add-over-temperature-alert/</div>
+      <div class="row" style="top:72px;left:80px"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>proposal.md</div>
+      <div class="row" style="top:138px;left:80px"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>design.md</div>
+      <div class="row" style="top:204px;left:80px"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>tasks.md</div>
+      <div class="row" id="rDelta" style="top:270px;left:80px"><svg viewBox="0 0 36 36" fill="none" stroke="#161616" stroke-width="4" stroke-linejoin="round"><path d="M8 3 H23 L29 9 V33 H8 Z M23 3 V9 H29"/></svg>specs/over-temperature-alert/spec.md</div>
+    </div>
+
+    <div class="ghost" id="ghost">spec.md</div>
+  </div>
+
+  <div class="cmd arch" id="cmd" data-r="1.5"><div class="tab os">OpenSpec</div>/opsx:archive</div>
+  <div class="chip step" id="s1" data-r="-2" style="top:450px"><span class="num">1</span>这次改动挪进归档目录</div>
+  <div class="chip step" id="s2" data-r="1.5" style="top:590px"><span class="num">2</span>规格合并进主规格</div>
+  <div class="chip step" id="s3" data-r="-1.5" style="top:730px"><span class="num">3</span>下次 AI 先读这份规格</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 树的排布：第 i 行的 top，第 l 层的 left（卡片内坐标）。
+  var Y0 = 40, DY = 66, X0 = 36, DX = 66;
+  function y(i) { return Y0 + i * DY; }
+  function x(l) { return X0 + l * DX; }
+  function place(el, i, l) { el.style.top = y(i) + 'px'; el.style.left = x(l) + 'px'; }
+
+  // 按实测（2026-10-06，frame-times.py）：MOVE = 101 句开口，MERGE = 102 句开口，NEXT = 103 句念到「AI 先读到的」。
+  var MOVE = 6.56, MERGE = 9.12, NEXT = 13.92;
+
+  Stage({
+    duration: 15,
+    init: function () { return T.fonts('示意这次改动挪进归档目录规格合并进主规格下次先读这份'); },
+    render: function (t) {
+      // 99：目录树出现。
+      T.enter(T.$('tree'), T.p(t, 0.0, 0.6), 24);
+      T.enter(T.$('mock'), T.p(t, 0.3, 0.5), -10);
+
+      // 100：跑命令。
+      T.enter(T.$('cmd'), T.p(t, 2.64, 0.5), 24);
+      T.current(T.$('cmd'), T.ease(T.p(t, 2.74, 0.3)) * (1 - T.ease(T.p(t, MOVE - 0.2, 0.3))), 12);
+
+      // 101：改动目录整块挪进 archive/。先抬起、archive/ 从下面滑上来，再落进去。
+      var lift = T.ease(T.p(t, MOVE, 0.4)) * (1 - T.ease(T.p(t, MOVE + 1.0, 0.4)));
+      var m = T.ease(T.p(t, MOVE + 0.2, 1.1));
+      // 102：合并，specs/ 下面多出一行，下面的行整体往下让一行。
+      var g = T.ease(T.p(t, MERGE, 0.6));
+
+      place(T.$('rOpen'), 0, 0);
+      place(T.$('rSpecs'), 1, 1);
+      place(T.$('rNew'), 2, 2);
+      place(T.$('rChanges'), 2 + g, 1);
+      place(T.$('rArch'), 8 - 5 * m + g, 2);
+      var blk = T.$('blk');
+      blk.style.top = (y(3 + m + g) - 6) + 'px';
+      blk.style.left = (x(2 + m) - 14 + lift * 24) + 'px';
+      blk.style.zIndex = 2;
+      blk.style.transform = 'rotate(' + (lift * -1.5) + 'deg)';
+      var cur = T.ease(T.p(t, MOVE, 0.3)) * (1 - T.ease(T.p(t, MERGE - 0.2, 0.3)));
+      blk.style.boxShadow = '0 0 0 6px rgba(138,147,157,' + cur + '), 0 0 0 16px rgba(22,22,22,' + cur + '), ' + (lift * 10) + 'px ' + (lift * 10) + 'px 0 #161616, 0 0 60px rgba(245,207,74,' + (0.5 * cur) + ')';
+      blk.style.outline = '7px solid rgba(245,207,74,' + cur + ')';
+      blk.style.outlineOffset = '6px';
+      T.enter(T.$('s1'), T.p(t, MOVE - 0.2, 0.5), 20);
+
+      // 102：delta 规格复制一份，半透明飞到 specs/ 下面，落地后那一行出现。
+      T.enter(T.$('s2'), T.p(t, MERGE - 0.2, 0.5), 20);
+      var fly = T.ease(T.p(t, MERGE, 0.9));
+      var ghost = T.$('ghost');
+      // 起点：delta 行里「spec.md」那几个字；终点：新行里「spec.md」那几个字。CH = 32px 等宽字宽。
+      var CH = 19.2;
+      var fromTop = y(8), fromLeft = x(3) - 14 + 80 + 48 + 29 * CH - 20;
+      var toTop = y(2), toLeft = x(2) + 48 + 23 * CH - 20;
+      ghost.style.top = (fromTop + (toTop - fromTop) * fly) + 'px';
+      ghost.style.left = (fromLeft + (toLeft - fromLeft) * fly) + 'px';
+      ghost.style.opacity = 0.75 * T.ease(T.p(t, MERGE - 0.1, 0.2)) * (1 - T.ease(T.p(t, MERGE + 0.9, 0.3)));
+      ghost.style.zIndex = 3;
+      var nrow = T.$('rNew');
+      nrow.style.opacity = T.ease(T.p(t, MERGE + 0.8, 0.4));
+
+      // 103：合并后的主规格成为当前。
+      T.enter(T.$('s3'), T.p(t, NEXT + 0.2, 0.5), 20);
+      var n = T.ease(T.p(t, NEXT, 0.4));
+      nrow.style.outline = '6px solid rgba(245,207,74,' + n + ')';
+      nrow.style.outlineOffset = '8px';
+      nrow.style.borderRadius = '4px';
+      nrow.style.boxShadow = '0 0 0 8px rgba(138,147,157,' + n + '), 0 0 0 17px rgba(22,22,22,' + n + '), ' + '0 0 50px rgba(245,207,74,' + (0.5 * n) + ')';
+    }
+  });
+</script>
+</body>
+</html>

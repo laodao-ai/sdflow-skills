@@ -1,0 +1,202 @@
+<!doctype html>
+<!-- S35f · 终端 · script 175–178「我切到这个子代理的画面看了一眼。……跟计划里那五步，一步不差。」
+     cast 03-sp-subagent-dev 回放秒 101–116.7，1.5 倍速（标「1.5 倍速」），中途在 113.5 停帧 1.67 秒，放完停在最后一帧。
+     区间按回放核准（2026-10-06）：78–96 是任务 1 子代理画面的实时尾段，只有 GREEN 和提交，没有 RED；
+     96.5–100.5 作者往回翻到顶（倒序滚动）；101 起画面从子代理的提示词顺序重绘到提交，
+     写测试（107）→ RED 报错 undefined: IsOverTemp（112.5）→ 写实现（113）→ GREEN 全过（115.5）→ Committed 8c1f11a（116.5）。
+     停帧：RED 报错行只在 112.5–114.5 两个回放秒里可见，1.5 倍速下只有 1.3 秒。113.5 这一帧 RED 报错行和
+     Update(sensor.go) 同屏，停 1.67 秒，让红框盖住口播「报错：IsOverTemp 不存在」、黄框接上「然后写实现」。
+     倍速角标仍写「1.5 倍速」，停帧未另标。
+     - 底部状态栏：这段 cast 跑子代理时状态栏有 6–8 行，前 30 行里就有模型名和费用那一行。
+       按行文字找（Cost $ / Context / Usage），从那一行盖到底。
+     - 启动头（Claude Code v… / Sonnet 5.5 · Claude Pro）：按行文字找，在屏上就盖住。本区间从 101 起已滚出。
+     - 子代理提示词里的「Co-Authored-By: Claude Sonnet 5.5」是正文，不盖。
+     - 框（框的位置按行文字在 DOM 里找，不写死坐标；黄色只给当前一个，下一个亮起后降成淡灰框）：
+       ① 黄：Update(sensor_test.go) 到 func TestIsOverTemp（「它先写测试」）
+       ② 红：RED 那次运行到「fails as expected with "undefined: IsOverTemp"」（「一跑，报错」，测试失败才用红）
+       ③ 黄：Update(sensor.go)（「然后写实现」）
+       ④ 绿：「Perfect! All tests pass.」（「再跑，通过」，测试通过才用绿）
+       ⑤ 黄：Committed 8c1f11a（「提交」，留到结尾）
+       框的出现时间按实测（2026-10-06，frame-times.py）：取口播开口秒和这些行在回放里出现的秒，两者里晚的那个。
+       ① 4.2（它先写测试：口播 3.04，func TestIsOverTemp 那行 4.2 出现）
+       ② 7.45（一跑，报错：口播 4.48 / 报 5.36，RED 报错行 7.45 才出现）
+       ③ 8.32（然后写实现：口播 8.32，Update(sensor.go) 7.95 已在屏上）
+       ④ 11.15（再跑，通过：口播 9.60，Perfect! All tests pass. 11.15 才出现）
+       ⑤ 11.9（提交：口播 11.12，Committed 8c1f11a 11.9 才出现）
+     窗口本身不倾斜，只让标签倾斜（终端要能读）。 -->
+<html lang="zh-CN" data-frame-id="S35f">
+<head>
+<meta charset="utf-8">
+<title>S35f · 子代理 TDD</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 让出底部字幕带（y ≥ 940，visual-v4 §4.1）：窗口上移、整体缩到 0.947，30 行都留着。 */
+  .window { left: 150px; top: 72px; width: 1620px; height: 908px; padding: 18px 20px; overflow: visible; transform: scale(0.947); transform-origin: 50% 0; }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 872px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: 0; width: 1580px; height: 1004px; }
+  /* 播放器暂停时会画播放按钮和加载圈；画面不可交互，全部藏掉。 */
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  /* 终端底色跟随主题，盖过 cast 自带的底色。 */
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  .mask { position: absolute; right: 0; background: #1b1b1d; display: none; }
+  .qbox { position: absolute; left: 6px; width: 1568px; box-sizing: border-box; border: 5px solid transparent; border-radius: 8px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .window .speed { right: -30px; top: -34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip" id="clip">
+      <div id="term"></div>
+      <div class="qbox" id="b1"></div>
+      <div class="qbox" id="b2"></div>
+      <div class="qbox" id="b3"></div>
+      <div class="qbox" id="b4"></div>
+      <div class="qbox" id="b5"></div>
+    </div>
+    <div class="speed" id="spd">1.5 倍速</div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+  </div>
+</div>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/03-sp-subagent-dev.js"></script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 画面秒 → 回放秒的分段表：相邻两点之间线性插值；回放秒相同 = 停帧，画面秒相同 = 剪接。
+  var KEYS = [[0, 101], [8.333, 113.5], [10.0, 113.5], [12.133, 116.7]];
+  var HOLD = 4.747;   // 总长 = 画面时长 16.88 秒（时间轴，实测）。
+  var DURATION = KEYS[KEYS.length - 1][0] + HOLD;
+  var INPUT_MASK = false;   // 输入框里作者提前打好的字：本帧输入框只有占位提示，不用盖。
+  var player;
+
+  var YELLOW = [245, 207, 74], RED = [229, 83, 75], GREEN = [76, 195, 138], DIM = [120, 118, 112];
+  // 每个框：alt 是候选 [起始行文字, 结束行文字或 null, 结束行找不到时往下多框几行]，按顺序取第一个找得到的。
+  var BOXES = [
+    { box: 'b1', c: YELLOW, at: 4.2, next: 7.45, alt: [['sensor/sensor_test.go)', 'func TestIsOverTemp', 0], ['func TestIsOverTemp', null, 0]] },
+    { box: 'b2', c: RED, at: 7.45, next: 8.32, alt: [['verify it fails as expected', 'undefined: IsOverTemp', 0], ['undefined: IsOverTemp', null, 1]] },
+    { box: 'b3', c: YELLOW, at: 8.32, next: 11.15, alt: [['Update(~/sdd-tdd-loop-demo-alert/sensor/sensor.go)', null, 1]] },
+    { box: 'b4', c: GREEN, at: 11.15, next: 11.9, alt: [['Perfect! All tests pass.', null, 0]] },
+    { box: 'b5', c: YELLOW, at: 11.9, alt: [['Committed 8c1f11a', null, 0]] }
+  ];
+
+  function castAt(t) {
+    var c = KEYS[0][1];
+    for (var i = 1; i < KEYS.length; i++) {
+      var a = KEYS[i - 1], b = KEYS[i];
+      if (t >= b[0]) { c = b[1]; continue; }
+      if (b[0] > a[0]) c = a[1] + (b[1] - a[1]) * (t - a[0]) / (b[0] - a[0]);
+      break;
+    }
+    return c;
+  }
+
+  function lines() { return T.all('#term .ap-line'); }
+  function find(L, text, after) {
+    for (var i = after || 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 行在 .clip 里的上下沿（px，按 1920 宽的舞台坐标）。
+  function span(L, i0, i1) {
+    var clip = T.$('clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { top: (L[i0].getBoundingClientRect().top - clip.top) / k, bottom: (L[i1].getBoundingClientRect().bottom - clip.top) / k };
+  }
+
+  // 要盖住的行：[起始行, 结束行, 左边留几个字符]。
+  function maskRows(L) {
+    var out = [];
+    for (var i = 0; i < L.length; i++) {
+      var s = L[i].textContent;
+      // 启动头：版本号、模型名和套餐、目录。
+      if (/Claude Code v\d/.test(s)) { out.push([Math.max(i - 1, 0), Math.min(i + 2, L.length - 1), 0]); }
+      else if (s.indexOf('· Claude Pro') >= 0) { out.push([i, Math.min(i + 1, L.length - 1), 0]); }
+    }
+    // 底部状态栏：从模型名 / 费用那一行盖到底。
+    for (var j = 0; j < L.length; j++) {
+      if (/Cost \$|Context\s+\d+%|Usage\s+\d+%/.test(L[j].textContent)) { out.push([j, L.length - 1, 0]); break; }
+    }
+    // 输入框里提前打好、当时还没发出去的字：留下「❯」，盖住后面的字。
+    if (INPUT_MASK) {
+      for (var k = L.length - 1; k > 0; k--) {
+        var t = L[k].textContent;
+        if (t.charAt(0) === '❯' && L[k - 1].textContent.indexOf('────') >= 0) {
+          if (t.slice(1).trim() && t.indexOf('Message @') < 0) out.push([k, k, 2]);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  function overlays(t) {
+    var L = lines();
+    var clip = T.$('clip');
+    var rows = maskRows(L);
+    var cw = 1580 / 120;
+    var masks = T.all('#clip .mask');
+    while (masks.length < rows.length) {
+      var d = document.createElement('div');
+      d.className = 'mask';
+      clip.insertBefore(d, T.$('b1'));
+      masks.push(d);
+    }
+    masks.forEach(function (m, n) {
+      if (n >= rows.length) { m.style.display = 'none'; return; }
+      var s = span(L, rows[n][0], rows[n][1]);
+      m.style.display = 'block';
+      m.style.left = (rows[n][2] * cw) + 'px';
+      m.style.top = s.top + 'px';
+      m.style.height = (s.bottom - s.top) + 'px';
+    });
+
+    BOXES.forEach(function (q) {
+      var box = T.$(q.box);
+      var i0 = -1, i1 = -1;
+      for (var a = 0; a < q.alt.length && i0 < 0; a++) {
+        i0 = find(L, q.alt[a][0]);
+        if (i0 < 0) continue;
+        i1 = q.alt[a][1] ? find(L, q.alt[a][1], i0) : -1;
+        if (i1 < 0) i1 = Math.min(i0 + q.alt[a][2], L.length - 1);
+      }
+      if (i0 < 0 || t < q.at) { box.style.opacity = 0; return; }
+      box.style.opacity = 1;
+      var s = span(L, i0, i1);
+      // 上下各留 4px，框线不压字。
+      box.style.top = (s.top - 4) + 'px';
+      box.style.height = (s.bottom - s.top + 8) + 'px';
+      // 当前这一个用自己的颜色；下一个亮起后降成淡灰框（讲过了）。
+      var on = T.ease(T.p(t, q.at, 0.35));
+      var next = q.next === undefined ? 0 : T.ease(T.p(t, q.next, 0.35));
+      var g = on * (1 - next);
+      var rgb = q.c.join(',');
+      box.style.borderColor = next > 0 ? T.mix(q.c, DIM, next) : 'rgba(' + rgb + ',' + g + ')';
+      box.style.boxShadow = '0 0 40px rgba(' + rgb + ',' + (0.45 * g) + '), inset 0 0 24px rgba(' + rgb + ',' + (0.25 * g) + ')';
+    });
+  }
+
+  Stage({
+    duration: DURATION,
+    init: function () {
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS['03-sp-subagent-dev'] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      return T.fonts('实录倍速');
+    },
+    render: function (t) {
+      T.enter(T.$('spd'), T.p(t, 0, 0.4), -12);
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位遮罩和框。
+      return Promise.resolve(player.seek(castAt(t)))
+        .then(function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); })
+        .then(function () { overlays(t); });
+    }
+  });
+</script>
+</body>
+</html>

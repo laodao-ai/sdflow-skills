@@ -1,0 +1,117 @@
+/* 第 2 期封面的样式（布局、字体、颜色照首期 episodes/01-sdd-tdd-loop/assets/cover/；要求见本期 storyboard.md「## 封面」）。
+   cover.html（出封面图）和 S01（开头的片头）共用，所以全部挂在 .cv 下，
+   不和画面自己的 .doc、.sig、.three 等类冲突。颜色、字体用 theme.css 的变量。
+   以文字为主，右栏两张卡只是点缀（作者 2026-10-07），168px 宽时当纹理看。
+   左栏照首期：问题句 + 两张工具贴纸「OpenSpec + grill-me」+ 一行副标「怎么问，怎么写，写成什么样」。
+   工具贴纸取自平台副标题「OpenSpec 加 grill-me，先问到底再写」（作者 2026-10-17 定）。
+   工具贴纸固定左蓝右琥珀，按位置不按工具（作者 2026-10-17 定，visual-v4.md 第二节「颜色的意思」例外），
+   不表示规格一侧 / 执行一侧。
+   清单卡用深色卡（照首期对话卡），塔三层从下往上 蓝 / 浅蓝 / 奶白。
+   不用红绿（测试结果）、黄（实底只用于 AI 的猜，描边只表示当前讲到的元素）。
+   四种版式：
+     .cv           主封面，也是片头：左栏问题句 + 两个工具 + 副标；右栏两张卡错位叠放
+     .cv.text      纯文字变体：去掉右栏，问题句放大，发布时和主封面一起做 YouTube「测试与比较」
+     .cv.p34       视频号个人主页卡片 3:4（1080×1440）：问题句、工具、副标从上往下排，右栏两张卡缩小放底部
+     .cv.l43       视频号分享卡片 4:3（1440×1080）：和主封面同一布局，问题句、工具和右栏缩小
+   右下角 x≥1640 且 y≥960 是时长角标区，主封面和纯文字变体都留空。 */
+
+.cv { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.cv .cv-abs { position: absolute; }
+
+/* 问题句：墨字直压纸底，两行。字号按左栏宽度定：第 2 行最宽，右边要离右栏留出空。 */
+.cv .cv-q {
+  left: 92px; top: 92px; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 172px; line-height: 1.1;
+  letter-spacing: -2px; white-space: nowrap;
+}
+.cv .cv-q .cv-ai { letter-spacing: 0; margin-right: 0.12em; }
+
+/* 两个工具：OPENSPEC + grill-me。结构、尺寸、描边、硬投影照首期 .cv-tools。
+   纵向位置按本期问题句的底边（约 y 470）定，比首期的 660 高。 */
+.cv .cv-tools { left: 100px; top: 590px; width: 1000px; height: 130px; transform-origin: 0 0; }
+.cv .cv-tool {
+  position: absolute; top: 0; box-sizing: border-box; height: 112px;
+  display: flex; align-items: center; gap: 18px; padding: 0 34px;
+  border: 5px solid var(--ink); border-radius: 10px; box-shadow: 9px 9px 0 var(--ink); color: var(--ink);
+}
+.cv .cv-tool.os { left: 0; background: var(--blue); }
+.cv .cv-tool.gm { left: 500px; background: var(--amber); }
+.cv .cv-tool.os img { width: 320px; height: 40px; display: block; }
+.cv .cv-tool.gm span { font-family: var(--display); font-weight: 800; font-size: 58px; line-height: 1; }
+.cv .cv-plus {
+  position: absolute; left: 410px; top: 0; width: 72px; height: 112px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 800; font-size: 96px; color: var(--ink);
+}
+
+.cv .cv-sub {
+  left: 104px; top: 772px; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 58px; line-height: 1.1;
+}
+
+/* 频道 logo：奶白圆底 + 墨环，右上。 */
+.cv .cv-badge {
+  left: 1636px; top: 44px; width: 220px; height: 220px; box-sizing: border-box; border-radius: 50%;
+  background: var(--cream); border: 6px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.cv .cv-badge img { width: 190px; height: 190px; display: block; }
+
+/* 右栏：两张卡错位叠放（作者 2026-10-17 定）。用 theme.css 的 .card 和 .tab，只覆盖位置与尺寸。
+   后面一张：十三种设计图的缩略网格（S25a），五列三行，缩略图只画框和线。
+   前面一张：深色卡里的三层清单塔（S25：通用 / 后端 · 嵌入式 · 前端 / Go · ESP32 · React）。 */
+.cv .cv-side { left: 1250px; top: 300px; width: 620px; height: 600px; }
+.cv .cv-side .card { padding: 0; }
+.cv .cv-side .tab { font-size: 40px; padding: 4px 22px; }
+
+.cv .cv-grid { left: 74px; top: 0; width: 540px; height: 300px; }
+.cv .cv-tiles { position: absolute; left: 27px; top: 52px; display: grid; grid-template-columns: repeat(5, 88px); gap: 10px 9px; }
+.cv .cv-dg {
+  width: 88px; height: 62px; box-sizing: border-box; padding: 6px 5px; border-radius: 6px;
+  background: var(--cream); border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
+  display: flex; align-items: center; justify-content: center;
+}
+.cv .cv-dg svg { width: 76px; height: 35px; overflow: visible; }
+.cv .cv-dg .s { fill: none; stroke: #161616; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+.cv .cv-dg .b { fill: #f2efe6; stroke: #161616; stroke-width: 6; stroke-linejoin: round; }
+.cv .cv-dg .k { fill: #161616; }
+.cv .cv-dg .d { fill: none; stroke: #161616; stroke-width: 5; stroke-dasharray: 9 7; }
+.cv .cv-dg .a { fill: none; stroke: #161616; stroke-width: 6; stroke-linecap: round; marker-end: url(#cv-ah); }
+.cv .cv-dg .os { fill: #43a0ed; stroke: #161616; stroke-width: 6; stroke-linejoin: round; }
+
+/* 深色卡照首期对话卡：.card.dark，标签奶白底墨字；深底上的描边和硬投影用 #0b0b0b。 */
+.cv .cv-tower { left: 0; top: 256px; width: 590px; height: 306px; box-shadow: 14px 14px 0 var(--ink); }
+.cv .cv-tower .tab { background: var(--cream); color: var(--ink); }
+.cv .cv-stack { position: absolute; left: 26px; top: 50px; width: 528px; height: 224px; }
+.cv .cv-blk {
+  position: absolute; width: 164px; height: 64px; box-sizing: border-box; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; white-space: nowrap;
+  background: var(--cream); color: var(--ink); border: 4px solid #0b0b0b; box-shadow: 5px 5px 0 #0b0b0b;
+  font-family: var(--display); font-weight: 800; font-size: 38px; line-height: 1;
+}
+.cv .cv-blk.base { width: 528px; background: var(--blue); }
+.cv .cv-blk.mid { background: var(--blue-soft); }
+.cv .cv-blk.top { background: var(--cream); }
+
+/* 纯文字变体：去掉右栏，问题句放大。第 1 行要让开右上的 logo，第 2 行在 logo 下面，可以更宽。 */
+.cv.text .cv-side { display: none; }
+.cv.text .cv-q { top: 64px; font-size: 246px; line-height: 1.08; letter-spacing: -3px; }
+.cv.text .cv-tools { top: 700px; }
+.cv.text .cv-sub { top: 864px; }
+
+/* 视频号 3:4。舞台 1080×1440 由 cover.html 设。 */
+.cv.p34 { width: 1080px; height: 1440px; }
+.cv.p34 .cv-badge { left: 820px; top: 48px; width: 196px; height: 196px; }
+.cv.p34 .cv-badge img { width: 168px; height: 168px; }
+.cv.p34 .cv-q { left: 64px; top: 262px; font-size: 134px; }
+.cv.p34 .cv-tools { left: 70px; top: 616px; transform: scale(.86); }
+.cv.p34 .cv-sub { left: 74px; top: 764px; }
+.cv.p34 .cv-side { left: 196px; top: 896px; transform: scale(.86); transform-origin: 0 0; }
+
+/* 视频号 4:3。舞台 1440×1080 由 cover.html 设。和主封面同一布局，问题句、工具和右栏缩小。 */
+.cv.l43 { width: 1440px; height: 1080px; }
+.cv.l43 .cv-badge { left: 1166px; top: 44px; }
+.cv.l43 .cv-q { top: 100px; font-size: 140px; }
+.cv.l43 .cv-tools { top: 530px; transform: scale(.8); }
+.cv.l43 .cv-sub { top: 680px; }
+.cv.l43 .cv-side { left: 980px; top: 470px; transform: scale(.7); transform-origin: 0 0; }

@@ -1,0 +1,93 @@
+<!doctype html>
+<!-- S16a · 引文卡 · script 116–118「可报告还是一大堆，好多个 markdown 文件，看起来也累。……他现在让 Claude 出网页，页面最后放一个复制按钮，把在上面做的带回 Claude Code。」
+     Thariq Shihipar（Claude Code 团队）两段原文（英文原文 + 中文），出处 claude.com/blog《Using Claude Code: The Unreasonable Effectiveness of HTML》，2026-05-20，
+     2026-10-24 核对原文。英文照原文逐字抄入；中文是按原意译的，作者录前对一遍。
+     只用原文，不用新智元转述的「才能保持判断力」。接 S14 的 Böckeler：那边说问题，这边说方向。
+     引用的是文章，不是 skill 或文件原文，所以用奶白卡，不用黑底代码窗口（visual-v4 §4.7 那条只管 skill / 文件原文）。
+     10-24 作者意见：①两段引文的英文原文和中文放进同一张引文卡，和上面的出处卡分开（出处卡在上，引文卡在下，中间留距离）；
+       ②没讲到的不先放出来（visual-v4 4.8）：没讲到的那段不放空壳，讲到时再加进同一张卡里，卡随之变高；
+       ③一页一层：第一段出现后留到页末，第二段是加在下面，不替换第一段。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。
+     句起点：116 句 0，117 句 5.12，118 句 12.00，末句结束 18.32，页长 19.52 秒。句子与动画节点：
+       第 116 句 标题「好多个 markdown 文件，看起来也累」一开口就落下；0.5 秒起出处卡落下（页上有主体，不留空屏）
+       第 117 句 「超过一百行的 markdown，他自己都不怎么读」：引文卡落下，里面是第一段英文 + 中文，当前
+       第 118 句 「页面最后放一个复制按钮，把在上面做的带回 Claude Code」：第二段英文 + 中文加进同一张卡，卡变高，当前继续留在这张卡上，到页末
+     配色（2026-10-24）：引文卡奶白 / 墨；只点一处，和 S14 一致：中文里的「Markdown」是规格文档，浅蓝底。
+     黄只给「当前」；不用紫和粉；不加「示意」角标。内容整体在 y 940 以内，避开底部字幕带。 -->
+<html lang="zh-CN" data-frame-id="S16a">
+<head>
+<meta charset="utf-8">
+<title>S16a · Thariq 的做法</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #head { left: 90px; top: 50px; font-family: var(--display); font-weight: 800; font-size: 52px; }
+
+  .src { left: 90px; width: 1740px; padding: 12px 36px; }
+  #src { top: 175px; height: 132px; display: flex; flex-direction: column; justify-content: center; }
+  #src .a { font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.2; white-space: nowrap; }
+  #src .b { font-weight: 600; font-size: 34px; line-height: 1.3; white-space: nowrap; }
+
+  /* 引文卡：高度由脚本按已出现的段数写入 */
+  #quote { left: 90px; top: 390px; width: 1740px; height: 40px; padding: 20px 36px; overflow: hidden; }
+  .pair .en { font-weight: 600; font-size: 32px; line-height: 1.3; }
+  .pair .cn { font-family: var(--display); font-weight: 800; font-size: 42px; line-height: 1.25; margin-top: 6px; }
+  #p2 { margin-top: 22px; padding-top: 18px; border-top: 4px dashed rgba(22,22,22,.75); }
+  .hb { padding: 0 8px; margin: 0 -2px; border-radius: 6px; background: var(--blue-soft); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="head" data-r="-1">好多个 markdown 文件，看起来也累</div>
+
+  <div class="card src" id="src" data-r="-0.4">
+    <div class="a">Thariq Shihipar（Claude Code 团队）· claude.com/blog · 2026-05-20</div>
+    <div class="b">《Using Claude Code: The Unreasonable Effectiveness of HTML》</div>
+  </div>
+
+  <div class="card" id="quote" data-r="0.3">
+    <div class="pair" id="p1">
+      <div class="en">I tend to not actually read more than a 100-line Markdown file, and I certainly am not able to get anyone else in my organization to read it.</div>
+      <div class="cn">超过一百行的 <span class="hb">Markdown</span>，我基本不会真读，更没法让组织里的别人读。</div>
+    </div>
+    <div class="pair" id="p2">
+      <div class="en">The trick is always to end with an export: a "copy as JSON" or "copy as prompt" button &hellip;&nbsp; You stay in the loop, but the loop gets much tighter.</div>
+      <div class="cn">诀窍是最后总放一个导出按钮，「复制为 JSON」或「复制为提示词」&hellip;&hellip; 人还在回路里，只是这条回路短多了。</div>
+    </div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：按每分钟 220 字估，录音后按实测改。
+  var CUE = {
+    // 按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒
+    head: 0.0,
+    src: 0.5,      // 116 句：出处卡一开口就落下（不留空屏）
+    q1: 4.92,      // 117 句起点：引文卡落下，第一段，当前
+    q2: 11.8       // 118 句起点：第二段加进同一张卡，卡变高，当前不变
+  };
+
+  Stage({
+    duration: 19.52,
+    init: function () { return T.fonts('好多个文件看起来也累超过一百行的基本不会真读没法让组织别人诀窍是最后总放一个导出按钮复制为提示词人还在环只收得更紧了团队'); },
+    render: function (t) {
+      T.enter(T.$('head'), T.p(t, CUE.head, 0.45), -14);
+      T.enter(T.$('src'), T.p(t, CUE.src, 0.5), 16);
+
+      // 引文卡：第一段进来时卡落下；第二段进来时卡变高。卡里的段高按排版后的实际高度算
+      var quote = T.$('quote'), h = 40;
+      [['p1', CUE.q1], ['p2', CUE.q2]].forEach(function (x) {
+        var e = T.ease(T.p(t, x[1], 0.5)), p = T.$(x[0]);
+        p.style.opacity = e;
+        p.style.transform = 'translateY(' + ((1 - e) * 12) + 'px)';
+        h += (p.offsetHeight + parseFloat(getComputedStyle(p).marginTop)) * e;
+      });
+      quote.style.height = h + 'px';
+      T.enter(quote, T.p(t, CUE.q1, 0.5), 16);
+      // 当前只在引文卡上，从第一段起一直到页末
+      T.current(quote, T.ease(T.p(t, CUE.q1 + 0.3, 0.4)), 10);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,331 @@
+<!doctype html>
+<!-- S15 · 机制动画（末句含实录）· script 110–115「我的做法是，评审中途不问人，人只看最后的报告。……这一次，18 条采纳，直接改进了规格文档；要我拍板的，只有 1 条。」
+     示意：评审进行中，没有弹窗。一串发现流过来，分成三股：
+       「采纳 → 已改进文档」（改动处带小标记）/「裁掉 → 写理由」/「拿不准 → 需拍板」（副文「写清推荐和后果」），只有最后一股流向「人」。
+       左边一张 gstack autoplan 小卡：先自动定，最后给人看（依据 autoplan/SKILL.md:620），111 句出现后留到页末。
+       10-24 作者删去 gstack 单个评审「一节一停」那句，左边的对照栏随之删去。
+     没讲到的不先放出来（visual-v4 4.8）：开头只有标题行和「评审发现」；「人」念到「人只看最后的报告」才出现；
+       三个出口卡和各自的线讲到哪股才出现，不放暗色占位。
+     实录（末句）：r3 报告 demo-temp-monitor `2e84aeb` 的 openspec/changes/alarm-notify/spec-review-report.md 第 77、79、92、101 行（2026-10-24 核对原件）。
+       第 101 行「[自动决策]（高置信，已写入四件套，标 `[spec-review-amendment]`；设计门可推翻）」下面是 D1–D18 共 18 条；第 77 行「[需拍板]」、第 79 行 Q1 标题；
+       第 92 行「默认处理：拍板前 spec 不动」。窗口里长行截断加「…」，放大卡放全文（第 79 行的来源括号截断，标「…」）。
+       r3 与 r2 不同：r2 是「已按推荐方案先行修订，人可推翻」，r3 拍板前 spec 不动，所以「拿不准」卡副文改为「写清推荐和后果」，不再写「已按推荐改好」。
+     区分三股用形状、文字和颜色：采纳是深蓝底卡（规格一侧，改的是规格文档），裁掉是灰底虚线框（被留下），拿不准是浅蓝卡（需拍板，规格一侧）。红绿不用。
+     配色：三股按语义配色，流动的小方块同色（采纳蓝、裁掉灰虚线、拿不准浅蓝）；
+       报告窗口是黑底代码窗口，「实录」标签墨底；「D1–D18 · 18 条」浅蓝小贴纸；「人」保持墨底。黄只给当前，同一时刻一个黄框。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。句起点：110 句 0，111 句 5.60，112 句 12.16，113 句 17.12，
+       114 句 22.88，115 句 28.08，末句结束 33.60，页长 34.72 秒。句子与动画节点：
+       110 句 顶部「评审进行中 · 不弹窗问人」；右边「评审发现」点亮，小方块流出；念到「人只看最后的报告」「人」出现
+       111 句 左边 autoplan 小卡
+       112 句 念到「能定的，AI 自己定」采纳、裁掉两股的线和出口卡出现，小方块分流
+       113 句 采纳卡为当前，念到「都打上标记」三个小标记一个个出现
+       114 句 拿不准一股：线和出口卡出现；念到「写清推荐和后果」卡里出副文；这一股流进「人」
+       115 句 报告窗口出现在右上：念到「18 条采纳」第 101 行黄框，放大卡长出，旁边「D1–D18 · 18 条」；
+              念到「要我拍板的，只有 1 条」黄框换到第 77、79 行并放大；再换到第 92 行「拍板前 spec 不动」并放大，留到页末
+     一页一层：最后一帧 autoplan 小卡、右边三股与人、报告窗口都在；原文行一直在窗口里。
+     10-25：第二张（第 77、79 行）和第三张（第 92 行）各有自己的黄框、各连各的引线，到页末两个框都在；第一张收起时它的框一起淡出。
+     放大卡三张，放在左边 autoplan 小卡下面（x 70–850，y 388–930）：
+       一、二张（约 240 + 235 高）叠不进第三张，所以第三张（第 92 行，约 170 高）长出时收起最早的第一张，第三张占第一张的位置；
+       第二张留着不动（visual-v4 4.7：放不下时先收最早的，其余的留着）。窗口其余部分压暗约 0.35，有卡在就一直在。
+       每张卡停留：第 101 行约 4.7 秒（28.44–33.16），第 77、79 行到页末约 2.9 秒（31.8–34.72），第 92 行到页末约 2.0 秒（32.76–34.72）。
+     引线（visual-v4 4.7，10-24 起）：每张卡一根，用 T.lead()，黄色 2px，从黄框（报告里框住的行）离卡最近的角连到卡离黄框最近的角；
+       随卡展开从黄框一端擦出，卡收起时缩回黄框。引线层 #leads（z-index 11）在报告窗口与压暗之上、放大卡（z-index 12）之下。 -->
+<html lang="zh-CN" data-frame-id="S15">
+<head>
+<meta charset="utf-8">
+<title>S15 · 评审中途不问人：18 条采纳，1 条需拍板</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #head { left: 70px; top: 46px; font-family: var(--display); font-weight: 800; font-size: 46px; }
+
+  /* 右边：评审发现 -> 三个出口 -> 人 */
+  #src { left: 900px; top: 540px; width: 140px; height: 180px; padding: 0; display: flex; align-items: center; justify-content: center;
+         text-align: center; font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.3; }
+  .row { left: 1130px; width: 480px; height: 130px; padding: 0 30px; display: flex; flex-direction: column; justify-content: center; }
+  .row .a { font-family: var(--display); font-weight: 800; font-size: 36px; line-height: 1.2; white-space: nowrap; }
+  .row .s { margin-top: 4px; font-family: var(--mono); font-weight: 500; font-size: 26px; line-height: 1.3; white-space: nowrap; min-height: 34px; }
+  #r1 { top: 420px; } #r2 { top: 575px; border-style: dashed; } #r3 { top: 730px; }
+  #r1 .s { color: var(--blue-soft); }
+  #r2 { background: var(--cream-dim); }
+  #r3 { background: var(--blue-soft); }
+  .tok.b { background: var(--blue); }
+  .tok.s { background: var(--blue-soft); }
+  .tok.g { background: var(--cream-dim); }
+  #res .tx b { font-weight: 700; color: var(--blue-soft); }
+  .mk { opacity: 0; margin-right: 2px; }
+  #n3 { opacity: 0; }
+  #wires { left: 0; top: 0; width: 1920px; height: 1080px; }
+
+  /* 流动的小方块：发现 */
+  .tok { position: absolute; width: 28px; height: 28px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 6px; background: var(--cream); opacity: 0; }
+  .tok.d { border-style: dashed; }
+
+  /* 人 */
+  #human { left: 1690px; top: 700px; width: 190px; height: 200px; box-sizing: border-box; border-radius: 12px; background: var(--charcoal);
+           border: 5px solid var(--ink); box-shadow: 12px 12px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  #human svg { width: 90px; height: 90px; margin-top: -20px; }
+  #human .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(-3deg); padding: 6px 22px; background: var(--cream);
+                 color: var(--ink); white-space: nowrap; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+                 font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1; }
+
+  /* 左边小卡：gstack autoplan，111 句出现后留到页末 */
+  #gs { left: 70px; top: 184px; width: 700px; height: 170px; padding: 18px 24px; display: flex; flex-direction: column; justify-content: center; }
+  #gs .a { font-family: var(--mono); font-weight: 700; font-size: 38px; }
+  #gs .b { margin-top: 6px; font-family: var(--display); font-weight: 800; font-size: 42px; white-space: nowrap; line-height: 1.2; }
+
+
+  /* 右上：r3 报告第 77、79、92、101 行，黑底代码窗口；长行截断，放大卡放全文 */
+  #res { left: 900px; top: 166px; width: 960px; padding: 0; overflow: visible; white-space: normal; }
+  #res .tab { left: 20px; top: -62px; font-size: 34px; padding: 4px 20px; }
+  #res .bar0 { height: 44px; display: flex; align-items: center; padding: 0 22px; box-sizing: border-box; background: var(--charcoal);
+               border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0; font-size: 26px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #res .bd { position: relative; padding: 10px 22px 12px; font-size: 26px; line-height: 40px; overflow: hidden; border-radius: 0 0 7px 7px; }
+  #res .ln { position: relative; display: flex; gap: 18px; white-space: nowrap; padding: 0 8px; margin: 0 -8px; border-radius: 6px; }
+  #res .no { flex: none; width: 44px; color: var(--unlit); }
+  #res .tx { color: var(--cream); }
+  #rdim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: #161616; opacity: 0; z-index: 2; }
+  #d18 { left: 1590px; top: 342px; padding: 2px 16px; font-family: var(--display); font-weight: 800; font-size: 30px; background: var(--blue-soft); box-shadow: 5px 5px 0 var(--ink); z-index: 9; }
+
+  /* 放大卡：autoplan 小卡下面的左边空处，终端深底，不加色边；第一、二张叠放，第三张长出时收起第一张、占它的位置 */
+  .zc { position: absolute; left: 70px; top: 388px; width: 780px; box-sizing: border-box; padding: 18px 26px 20px; background: var(--term); color: var(--cream);
+        border: 5px solid var(--ink); border-radius: 12px; box-shadow: 10px 10px 0 var(--ink); opacity: 0; z-index: 12; }
+  .zc .h { font-family: var(--mono); font-weight: 500; font-size: 28px; color: var(--unlit); margin-bottom: 6px; }
+  .zc .l { font-weight: 600; font-size: 34px; line-height: 1.4; }
+  .zc .l + .l { margin-top: 6px; }
+  .zc code { font-family: var(--mono); font-weight: 600; font-size: 30px; color: var(--blue-soft); }
+  .zc .k { font-weight: 800; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
+  .zc .s { font-size: 28px; color: var(--cream-dim); }
+  /* 第 77、79 行这张字多：来源括号单起一行、字号 28（10-25 由 24 改 28），行距收到 1.3 */
+  #z2 { top: 616px; padding-top: 16px; padding-bottom: 16px; }
+  #z2 .h { margin-bottom: 2px; }
+  #z2 .l { line-height: 1.3; }
+  #z2 .s { display: block; margin-top: 2px; font-size: 28px; line-height: 1.25; }
+
+  .badge { position: absolute; padding: 4px 16px; border: 4px dashed var(--ink); border-radius: 8px; background: var(--cream); color: var(--ink);
+           font-family: var(--display); font-weight: 800; font-size: 30px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="head">评审进行中 · 不弹窗问人</div>
+
+  <!-- 右边：我的做法 -->
+  <div class="card" id="src">评审<br>发现</div>
+
+  <svg class="abs" id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <path id="wt" pathLength="1" d="M1044 630 H1076" fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="6" stroke-linecap="round"/>
+    <path id="w1" pathLength="1" d="M1076 630 C 1100 630, 1100 485, 1124 485" fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="6" stroke-linecap="round"/>
+    <path id="w2" pathLength="1" d="M1076 630 C 1100 630, 1100 640, 1124 640" fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="6" stroke-linecap="round"/>
+    <path id="w3" pathLength="1" d="M1076 630 C 1100 630, 1100 795, 1124 795" fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="6" stroke-linecap="round"/>
+    <path id="wh" pathLength="1" d="M1622 795 H1670" fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="6" stroke-linecap="round"/>
+    <polygon id="h1" points="1108,473 1128,485 1108,497" fill="#161616" opacity="0"/>
+    <polygon id="h2" points="1108,628 1128,640 1108,652" fill="#161616" opacity="0"/>
+    <polygon id="h3" points="1108,783 1128,795 1108,807" fill="#161616" opacity="0"/>
+    <polygon id="hh" points="1668,783 1690,795 1668,807" fill="#161616" opacity="0"/>
+  </svg>
+
+  <div class="card os row" id="r1">
+    <div class="a">采纳 → 已改进文档</div>
+    <div class="s"><span class="mk">◆</span><span class="mk">◆</span><span class="mk">◆</span> 每处带一个小标记</div>
+  </div>
+  <div class="card row" id="r2">
+    <div class="a">裁掉 → 写理由</div>
+    <div class="s">每一条裁掉的都附理由</div>
+  </div>
+  <div class="card row" id="r3">
+    <div class="a">拿不准 → 需拍板</div>
+    <div class="s"><span id="n3">写清推荐和后果</span></div>
+  </div>
+
+  <div class="abs" id="human" data-r="1.5">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8">
+      <circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name">人</div>
+  </div>
+
+  <div class="card" id="gs">
+    <div class="a">gstack autoplan</div>
+    <div class="b">先自动定，最后给人看</div>
+  </div>
+
+
+  <div class="cmd" id="res" data-r="0">
+    <div class="tab ink" data-r="-2">实录 · 示例项目</div>
+    <div class="bar0">spec-review-report.md · 2e84aeb</div>
+    <div class="bd">
+      <div class="ln" id="l77"><span class="no">77</span><span class="tx">### [需拍板]</span></div>
+      <div class="ln" id="l79"><span class="no">79</span><span class="tx">**Q1 · `TM_NOTIFY_COOLDOWN` 要不要设下限**（来源：…</span></div>
+      <div class="ln" id="l92"><span class="no">92</span><span class="tx">- **默认处理**：拍板前 spec 不动（仍为「大于 0」），…</span></div>
+      <div class="ln" id="l101"><span class="no">101</span><span class="tx">### [自动决策]（高置信，已写入四件套，…</span></div>
+      <div id="rdim"></div>
+    </div>
+  </div>
+  <div class="chip" id="d18" data-r="2">D1–D18 · 18 条</div>
+
+  <!-- 引线层：在报告窗口与压暗之上、放大卡之下（T.lead 把每张卡的引线画进这一层） -->
+  <svg class="abs" id="leads" viewBox="0 0 1920 1080" aria-hidden="true" style="left:0;top:0;width:1920px;height:1080px;z-index:11;pointer-events:none"></svg>
+
+  <!-- 放大卡：一次一张（同一处放不下两张）。文字照报告原文，** 粗体按渲染后显示 -->
+  <div class="zc" id="z1" data-r="0">
+    <div class="h">spec-review-report.md:101</div>
+    <div class="l">### [自动决策]（高置信，<span class="k">已写入四件套</span>，标 <code>[spec-review-amendment]</code>；设计门可推翻）</div>
+  </div>
+  <div class="zc" id="z2" data-r="0">
+    <div class="h">spec-review-report.md:77、79</div>
+    <div class="l">### [需拍板]</div>
+    <div class="l"><b>Q1 · <code>TM_NOTIFY_COOLDOWN</code> <span class="k">要不要设下限</span></b><span class="s">（来源：对抗镜 B F4、对抗镜 C F8、plan-eng P-4、<span style="white-space:nowrap">strategy S-4</span>，簇 M10，置信 中）</span></div>
+  </div>
+  <div class="zc" id="z3" data-r="0">
+    <div class="h">spec-review-report.md:92</div>
+    <div class="l">- <b>默认处理</b>：<span class="k">拍板前 spec 不动</span>（仍为「大于 0」），design NFR 行已注明「见 Q1」。</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：按每分钟 220 字估，录音后按实测改。注释写的是本页第几句（全稿 110–115）。
+
+  var CUE = {
+    // 按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒
+    head: 0.0, src: 0.2, trunk: 0.5,         // 110 句开口附近，本来就在 0.5 秒内，只把 head 提到 0
+    human: 2.68,                             // 110 句念到「人只看最后的报告」：人出现
+    gs: 5.4,                                // 111 句：autoplan 小卡
+    r1: 13.8, r2: 14.6, w1: 13.8, w2: 14.6,  // 112 句念到「能定的，AI 自己定」：采纳、裁掉两股
+    mk: [19.8, 20.4, 21.0],                  // 113 句念到「改过的地方都打上标记」
+    r3: 22.68, w3: 22.68, wh: 23.72,           // 114 句：拿不准的，才留给人拍板
+    note3: 25.0,                             // 114 句念到「写清推荐和后果」
+    res: 27.88,                              // 115 句：报告窗口
+    z: [28.44, 31.8, 32.76]                  // 115 句「18 条采纳」第 101 行 → 「要我拍板的，只有 1 条」第 77、79 行 → 第 92 行
+  };
+  var TOK = [];
+  var P = T.p, E = T.ease;
+
+  // 小方块：沿一条三次贝塞尔曲线或直线循环流动，两头淡入淡出。
+  function bez(p0, p1, p2, p3, u) {
+    var a = 1 - u;
+    return [a * a * a * p0[0] + 3 * a * a * u * p1[0] + 3 * a * u * u * p2[0] + u * u * u * p3[0],
+            a * a * a * p0[1] + 3 * a * a * u * p1[1] + 3 * a * u * u * p2[1] + u * u * u * p3[1]];
+  }
+  function mkTok(path, dashed, k, n, period, start, color) {
+    var el = document.createElement('div');
+    el.className = 'tok' + (dashed ? ' d' : '') + (color ? ' ' + color : '');
+    T.$('stage').appendChild(el);
+    TOK.push({ el: el, path: path, k: k, n: n, period: period, start: start });
+  }
+  var TRUNK = [[1044, 630], [1056, 630], [1066, 630], [1076, 630]];
+  function lane(y) { return [[1076, 630], [1100, 630], [1100, y], [1124, y]]; }
+  var HUMAN = [[1622, 795], [1640, 795], [1654, 795], [1672, 795]];
+  for (var i = 0; i < 2; i++) mkTok(TRUNK, false, i, 2, 1.2, CUE.trunk);
+  for (var j = 0; j < 3; j++) {
+    mkTok(lane(485), false, j, 3, 1.5, CUE.w1 + 0.4, 'b');
+    mkTok(lane(640), true, j, 3, 1.5, CUE.w2 + 0.4, 'g');
+    mkTok(lane(795), false, j, 3, 1.5, CUE.w3 + 0.4, 's');
+    mkTok(HUMAN, false, j, 3, 1.5, CUE.wh + 0.3);
+  }
+  function drawTok(t) {
+    TOK.forEach(function (o) {
+      var u = ((t - o.start) / o.period + o.k / o.n);
+      if (t < o.start) { o.el.style.opacity = 0; return; }
+      u = u - Math.floor(u);
+      var p = bez(o.path[0], o.path[1], o.path[2], o.path[3], u);
+      o.el.style.left = (p[0] - 14) + 'px';
+      o.el.style.top = (p[1] - 14) + 'px';
+      // 报告窗口出现后，流动的小方块淡出，不留在静帧上（10-25）
+      o.el.style.opacity = Math.min(1, u * 6, (1 - u) * 6) * (1 - E(P(t, CUE.res, 0.6)));
+    });
+  }
+
+  function gate(t, from, to) { return E(P(t, from, 0.4)) * (1 - E(P(t, to, 0.4))); }
+  function wire(id, t, at) { T.$(id).setAttribute('stroke-dashoffset', 1 - E(P(t, at, 0.5))); T.$(id).setAttribute('stroke-dasharray', 1); }
+
+
+  // 放大卡（visual-v4 4.7）：黄框先出现，0.4 秒后卡从黄框处长出，约 0.6 秒展开；同一处放不下两张，新卡长出时上一张才收起
+  var ZC = [
+    // to：下一处黄框起，这一处的黄框淡出；gone：卡收起的时刻（null 为留到页末）
+    { z: 'z1', rows: ['l101'], from: CUE.z[0], to: CUE.z[1], gone: CUE.z[2] + 0.4 },
+    { z: 'z2', rows: ['l77', 'l79'], from: CUE.z[1], to: CUE.z[2], gone: null },
+    { z: 'z3', rows: ['l92'], from: CUE.z[2], to: null, gone: null }
+  ];
+  var GEO = null;
+  function measure() {
+    // 窗口和卡都要在没有位移、没有缩放时量；render 每帧会重设它们的 transform
+    T.$('res').style.transform = 'none';
+    GEO = ZC.map(function (c) {
+      var z = T.$(c.z); z.style.transform = 'none';
+      var zr = z.getBoundingClientRect();
+      var a = T.$(c.rows[0]).getBoundingClientRect(), b = T.$(c.rows[c.rows.length - 1]).getBoundingClientRect();
+      // 黄框是框住的几行合起来的外框（.ln 的矩形就是黄框外缘）
+      var ra = T.rect(T.$(c.rows[0])), rb = T.rect(T.$(c.rows[c.rows.length - 1]));
+      c.line = T.lead({ x: ra.x, y: ra.y, w: ra.w, h: rb.y + rb.h - ra.y }, T.rect(z));
+      return { dx: (a.left + a.width / 2) - (zr.left + zr.width / 2), dy: ((a.top + b.bottom) / 2) - (zr.top + zr.height / 2) };
+    });
+  }
+  function zoom(i, t) {
+    var c = ZC[i], g = GEO[i];
+    // 卡留着，只有放不下时（c.gone）才收起；黄框和卡同进同出
+    var a = E(P(t, c.from, 0.3)), out = c.gone === null ? 0 : E(P(t, c.gone, 0.3));
+    // 10-25：黄框跟着自己的卡走，卡在就一直在（第 77、79 行与第 92 行各有自己的框、自己的引线）；卡收起时框才淡出
+    var on = a * (1 - out), inn = E(P(t, c.from + 0.4, 0.6)), k = inn * (1 - out);
+    // 窗口里的行：黄色内描边 + 外发光；放大卡出现时窗口压暗（#rdim），框住的行抬到压暗层之上
+    c.rows.forEach(function (id) {
+      var el = T.$(id);
+      el.style.boxShadow = 'inset 0 0 0 4px rgba(245,207,74,' + on + '), 0 0 24px rgba(245,207,74,' + (0.5 * on) + ')';
+      el.style.background = on > 0.01 ? 'rgba(27,27,29,' + on + ')' : 'transparent';
+      el.style.zIndex = on > 0.01 ? 3 : 0;
+    });
+    var z = T.$(c.z), s = 0.3 + 0.7 * inn;
+    z.style.opacity = k;
+    z.style.transform = 'translate(' + ((1 - inn) * g.dx) + 'px,' + ((1 - inn) * g.dy) + 'px) scale(' + s + ')';
+    // 引线：和卡同步，从黄框一端擦出，卡收起时缩回黄框
+    T.leadDraw(c.line, k);
+    return k;
+  }
+
+  Stage({
+    duration: 34.72,
+    init: function () { return T.fonts('评审进行中不弹窗问人发现采纳已改进文档裁掉写理由每一条的都附拿不准需拍板清推荐和后果实录示例项目先自动定最后给看每处带标记条自动决策高置信写入四件套标设计门可推翻要设下限来源对抗镜簇置中默认处理前不动仍为大于行已注明见').then(measure); },
+    render: function (t) {
+      T.enter(T.$('head'), P(t, CUE.head, 0.45), -14);
+
+      // 右边：110 句一开口就在的评审发现；「人」念到「人只看最后的报告」才出现
+      T.enter(T.$('src'), P(t, CUE.src, 0.5), 16);
+      T.enter(T.$('human'), P(t, CUE.human, 0.5), 16);
+      wire('wt', t, CUE.trunk - 0.2);
+
+      // 三个出口卡：讲到哪股，哪股的卡和线才出现
+      T.enter(T.$('r1'), P(t, CUE.r1, 0.5), 16);
+      T.enter(T.$('r2'), P(t, CUE.r2, 0.5), 16);
+      T.enter(T.$('r3'), P(t, CUE.r3, 0.5), 16);
+            wire('w1', t, CUE.w1); T.$('h1').setAttribute('opacity', E(P(t, CUE.w1 + 0.4, 0.3)));
+      wire('w2', t, CUE.w2); T.$('h2').setAttribute('opacity', E(P(t, CUE.w2 + 0.4, 0.3)));
+      wire('w3', t, CUE.w3); T.$('h3').setAttribute('opacity', E(P(t, CUE.w3 + 0.4, 0.3)));
+      wire('wh', t, CUE.wh); T.$('hh').setAttribute('opacity', E(P(t, CUE.wh + 0.4, 0.3)));
+      drawTok(t);
+
+      // 113 句：小标记；114 句：写清推荐和后果
+      var mks = T.all('.mk');
+      for (var m = 0; m < mks.length; m++) mks[m].style.opacity = E(P(t, CUE.mk[m], 0.3));
+      T.$('n3').style.opacity = E(P(t, CUE.note3, 0.4));
+
+      // 当前：采纳卡 -> 拿不准卡 + 人
+      T.current(T.$('r1'), gate(t, CUE.r1, CUE.r3), 10);
+      T.current(T.$('r3'), gate(t, CUE.r3, CUE.res), 10);
+      T.current(T.$('human'), gate(t, CUE.wh, CUE.res), 12);
+
+      // 111 句：autoplan 小卡出现，留到页末
+      T.enter(T.$('gs'), P(t, CUE.gs, 0.5), -16);
+      T.current(T.$('gs'), gate(t, CUE.gs + 0.4, CUE.r1), 10);
+      T.enter(T.$('res'), P(t, CUE.res, 0.5), 20);
+      T.enter(T.$('d18'), P(t, CUE.z[0] + 0.3, 0.4), -10);
+
+      // 115 句：黄框依次落在第 101 行、第 77+79 行、第 92 行；放大卡从黄框处长出，其余压暗
+      // 压暗：有卡在画面上就一直在；两张卡交接时两张的显示度相加，不让压暗在交接处回落
+      var dk = 0;
+      for (var q = 0; q < ZC.length; q++) dk += zoom(q, t);
+      T.$('rdim').style.opacity = 0.35 * Math.min(1, dk);
+    }
+  });
+</script>
+</body>
+</html>

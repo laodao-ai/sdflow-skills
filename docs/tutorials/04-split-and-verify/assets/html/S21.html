@@ -1,0 +1,157 @@
+<!doctype html>
+<!-- S21 · 机制动画（上排两张实录，停机单示意）· script 147–151「测不了的，比如固件要上板子，有的操作得人手去点。……平时你不用盯着每个 ticket，它停下来的时候，才需要你。」
+     右上「测不了」是示例项目 alarm-notify 的实录，标「实录 · 示例项目」：e2e 一行取自 task6-verify.md:18，人工真机冒烟一行取自 task5-e2e-and-conventions.md:20（原文「人工真机冒烟**未执行**，……由人在收尾阶段做」，去掉加粗）。
+     左上证据行是同一示例项目的实录，与 S20 第一行一致（task6-verify.md:16，命令只留 scripts/test.sh unit），标「实录 · 示例项目」；停机单是示意；左下角 mqtt-console 小卡是原文摘要，标「实录 · 原文摘要」。
+     - 第 1 句：左「测得了 → 证据行」（一行证据）；念到「测不了的」时右边出「测不了」实录卡：e2e · — · 未覆盖 · 依据；念到「得人手去点」时下面出一行「人工真机冒烟：未执行，由人在收尾阶段做」。
+     - 第 2 句：「如实写上没覆盖和原因，或者停下来交给你」，画面不新增。
+     - 第 3 句：「这次示例项目没有 e2e 层，收尾时就如实写了『未覆盖』，真机冒烟测试留给人延后做」：右卡里 e2e 未覆盖那一行、人工真机冒烟那一行各加黄框，念到「未覆盖」「真机冒烟」时亮起，留到页末。
+     - 第 4 句：「如果中间停下来了，也写清楚：卡在哪、查过什么、改了什么、下一步怎么恢复」：停机单标题和「人」出现，四项逐项出；左下角出 mqtt-console 小卡，四步链。
+     - 第 5 句：「人」当前（黄描边），旁小字「停下来的时候，才需要你」。
+     配色：蓝 / 琥珀按一侧：证据行是执行一侧，琥珀标签；停机单是流程节点，奶白；「未覆盖」用虚线格，不用红（红只表示测试失败）；黄只作「当前」描边和第 3 句的重点框。
+     内容都在 y 920 以内，避开字幕带。
+     口播时刻按每分钟 220 字估算（还没录音），录音后用 frame-times.py 对齐。 -->
+<html lang="zh-CN" data-frame-id="S21">
+<head>
+<meta charset="utf-8">
+<title>S21 · 测不了就写未覆盖，或者停下交给人</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .box { padding: 52px 30px 22px; }
+  .box .tab { font-size: 40px; }
+  .grid { display: flex; flex-direction: column; border: 4px solid var(--ink); border-radius: 8px; background: var(--cream); overflow: hidden; }
+  .grid .g { display: flex; }
+  .grid .g > div { box-sizing: border-box; padding: 6px 12px; font-family: var(--mono); font-weight: 600; font-size: 28px; border-right: 3px solid var(--ink); white-space: nowrap; display: flex; align-items: center; height: 52px; }
+  .grid .g > div:last-child { border-right: 0; }
+  .grid .hd > div { background: var(--charcoal); color: #fff; font-family: var(--body); font-weight: 700; font-size: 26px; height: 44px; }
+  .grid .g + .g > div { border-top: 3px solid var(--ink); }
+
+  #ok { left: 60px; top: 140px; width: 870px; height: 215px; }
+  #ok .tab { background: var(--amber); }
+  #ok .tab.ink { background: var(--ink); color: #fff; }
+  #ok .grid { width: 810px; } #ok .grid .g:not(.hd) > div { font-size: 24px; }
+  #ok .c1 { width: 100px; } #ok .c2 { width: 320px; } #ok .c3 { width: 120px; } #ok .c4 { width: 120px; } #ok .c5 { width: 150px; }
+
+  #no { left: 990px; top: 140px; width: 870px; height: 290px; }
+  #no .tab { background: var(--cream); }
+  #no .tab.ink { background: var(--ink); color: #fff; }
+  #no .smoke { display: inline-block; margin-top: 14px; padding: 2px 8px; font-size: 32px; font-weight: 700; line-height: 1.3; }
+  #no .grid { width: 810px; border-style: dashed; }
+  #no .grid .g > div { height: auto; min-height: 52px; }
+  #no .grid .hd > div { min-height: 44px; }
+  #no .c1 { width: 80px; } #no .c2 { width: 90px; } #no .c3 { width: 120px; font-family: var(--body); } #no .c4 { width: 520px; font-family: var(--body); font-size: 26px; white-space: normal; }
+
+  #sheet { left: 990px; top: 490px; width: 520px; height: 290px; padding: 56px 30px 20px; }
+  #sheet .tab { background: var(--ink); color: #fff; }
+  #sheet .ln { font-size: 36px; font-weight: 600; line-height: 1.35; }
+  #sheet .ln b { font-family: var(--display); font-weight: 800; margin-right: 10px; }
+
+  #human { left: 1590px; top: 500px; width: 270px; height: 230px; position: absolute; box-sizing: border-box; border-radius: 12px; background: var(--charcoal);
+           border: 5px solid var(--ink); box-shadow: 12px 12px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  #human svg { width: 100px; height: 100px; margin-top: -24px; }
+  #human .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(-3deg); padding: 8px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink); font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1; }
+  #only { left: 1480px; top: 800px; font-size: 30px; padding: 6px 18px; }
+
+  #mq { left: 60px; top: 480px; width: 870px; height: 330px; padding: 54px 30px 18px; }
+  #mq .tab { background: var(--cream); font-size: 36px; }
+  #mq .src { font-family: var(--mono); font-size: 26px; color: #4a4a4a; margin-bottom: 8px; }
+  #mq .st { font-size: 36px; font-weight: 700; line-height: 1.5; white-space: nowrap; }
+  #mq .st span { font-family: var(--display); font-weight: 800; margin-right: 10px; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="w1" d="M1428 438 V478"/>
+      <path id="w2" d="M1516 615 H1584"/>
+    </g>
+  </svg>
+
+  <div class="card box" id="ok" data-r="-0.8"><div class="tab" data-r="-3">测得了 → 证据行</div><div class="tab ink" data-r="2" style="left:380px;font-size:34px">实录 · 示例项目</div>
+    <div class="grid"><div class="g hd"><div class="c1">层</div><div class="c2">命令</div><div class="c3">退出码</div><div class="c4">用例数</div><div class="c5">提交号</div></div>
+      <div class="g"><div class="c1">unit</div><div class="c2">scripts/test.sh unit</div><div class="c3">0</div><div class="c4">250</div><div class="c5">f5a3e61</div></div></div>
+  </div>
+
+  <div class="card box" id="no" data-r="0.8"><div class="tab" data-r="2">测不了</div><div class="tab ink" data-r="-2" style="left:200px;font-size:34px">实录 · 示例项目</div>
+    <div class="grid"><div class="g hd"><div class="c1">层</div><div class="c2">命令</div><div class="c3">结果</div><div class="c4">依据</div></div>
+      <div class="g" id="e2eRow"><div class="c1">e2e</div><div class="c2">—</div><div class="c3">未覆盖</div><div class="c4">openspec/config.yaml 注明本项目没有 e2e 层</div></div></div>
+    <div class="smoke" id="smoke">人工真机冒烟：未执行，由人在收尾阶段做</div>
+  </div>
+
+  <div class="card" id="sheet" data-r="-1"><div class="tab" data-r="-3">停机单</div>
+    <div class="ln" id="p1"><b>1</b>卡在哪</div><div class="ln" id="p2"><b>2</b>查过什么</div><div class="ln" id="p3"><b>3</b>改了什么</div><div class="ln" id="p4"><b>4</b>下一步怎么恢复</div></div>
+  <div id="human" data-r="1.2">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8"><circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/></svg>
+    <div class="name">人</div></div>
+  <div class="tag" id="only" data-r="3">停下来的时候，才需要你</div>
+
+  <div class="card" id="mq" data-r="0.8"><div class="tab" data-r="-3">实录 · 原文摘要</div>
+    <div class="src">mqtt-console</div>
+    <div class="st" id="m1"><span>1</span>原生菜单自动化点不开</div>
+    <div class="st" id="m2"><span>2</span>停下</div>
+    <div class="st" id="m3"><span>3</span>人授权后补完</div>
+    <div class="st" id="m4"><span>4</span>在最终提交上重跑</div></div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    base: 0.0,    // 第 1 句：测得了 → 证据行；念到「测不了的」出右边
+    no: 1.49,      // 「测不了的」
+    s2: 5.68,      // 第 2 句：写「未覆盖」或停下来（画面不新增）
+    s3: 10.32,     // 第 3 句：e2e 未覆盖一行、人工真机冒烟一行加黄框
+    s4: 19.28,     // 第 4 句：停机单标题、人、四项、mqtt-console 小卡
+    s5: 27.92      // 第 5 句：人当前
+  };
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = p >= 0.99 ? 'url(#ah)' : 'none';
+  }
+  function pop(id, p, dy) { T.enter(T.$(id), p, dy === undefined ? 12 : dy); }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 33.540,
+    init: function () { return T.fonts('测得了证据行测不了上板子要人手点的原生菜单层命令结果依据注明本项目没有层实录示例项目人工真机冒烟未执行由在收尾阶段做未覆盖停机单卡在哪查过什么改了什么下一步怎么恢复人停下来的时候才需要你实录原文摘要自动化点不开停下授权后补完在最终提交上重跑'); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句
+      pop('ok', P(t, AT.base, 0.5), 14);
+      pop('no', P(t, AT.no, 0.5), 14);
+      pop('smoke', P(t, AT.no + 3.0, 0.4), 6);
+
+      // 第 3 句：重点黄框（念到「未覆盖」「真机冒烟」），留到页末
+      var hl1 = E(P(t, AT.s3 + 3.6, 0.4)), hl2 = E(P(t, AT.s3 + 7.2, 0.4));
+      var row = T.$('e2eRow'), sm = T.$('smoke');
+      row.style.outline = '7px solid rgba(245,207,74,' + hl1 + ')'; row.style.outlineOffset = '-7px';
+      sm.style.outline = '7px solid rgba(245,207,74,' + hl2 + ')'; sm.style.outlineOffset = '3px';
+
+      // 第 4 句：停下来交给人，停机单四项逐项出
+      pop('sheet', P(t, AT.s4, 0.5), 14);
+      wire(T.$('w1'), E(P(t, AT.s4 + 0.2, 0.4)));
+      pop('human', P(t, AT.s4 + 0.6, 0.5), 12);
+      wire(T.$('w2'), E(P(t, AT.s4 + 1.0, 0.4)));
+      var at3 = [0.2, 2.0, 3.6, 4.8];
+      for (var i = 0; i < 4; i++) pop('p' + (i + 1), P(t, AT.s4 + at3[i], 0.35), 6);
+      pop('mq', P(t, AT.s4 + 5.8, 0.5), 14);
+      var m = [0.4, 1.2, 2.0, 2.8];
+      for (var j = 0; j < 4; j++) pop('m' + (j + 1), P(t, AT.s4 + 6.2 + m[j], 0.3), 6);
+
+      // 第 5 句：人，当前
+      T.current(T.$('human'), E(P(t, AT.s5, 0.4)), 12);
+      pop('only', P(t, AT.s5 + 0.4, 0.4), -8);
+    }
+  });
+</script>
+</body>
+</html>

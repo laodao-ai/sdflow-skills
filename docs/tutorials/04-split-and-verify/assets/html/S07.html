@@ -1,0 +1,147 @@
+<!doctype html>
+<!-- S07 · 机制动画 · script 19–21「而 Matt Pocock 的思路是反过来的，ticket 只写行为和验收标准，不管具体的实现。……开发任务是按照每个都能单独验收的标准来切分。」
+     承接 S06：左边灰卡是 S06 那张旧计划卡缩小后的样子（灰 = 被留下，visual-v4 第二节），不再重画 S06 的行数和原文（4.8a 不重复前页）。
+     事实来源（2026-10-30 打开原文核过）：
+       Matt Pocock skills 仓 skills/engineering/to-tickets/SKILL.md:31-34（本机 ~/.skills/mattpocock-skills/，与 ~/.agents/skills/to-tickets/SKILL.md 逐字节相同）：
+         第 32 行「- A completed slice is demoable or verifiable on its own」，英文照抄；窗口顶栏写 to-tickets/SKILL.md:31-34，窗口里显示第 32 行，行号照原文。
+         第 31 行「Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests)」是竖线打穿四层的出处，不上屏，画面只画四层名。
+       中文「做完的一个切片，自己就能演示或验证」是按原意译的，原文没有中文。
+     颜色：Matt Pocock 紫（辅助色，S06–S08 同；旁边有名字）；灰卡 = 被留下；竖线紫；四层是奶白卡。
+     没讲到的不先放出来：ticket 卡随口播逐行长高，行与行之间不放空壳。
+     口播时刻（还没录音，按每分钟 220 字估，加句间 0.5 秒；录音后用 frame-times.py 对齐）：
+       第 1 句 t0.0：左边灰卡一开始就在；t0.2 Matt Pocock 名字标签落下；t3.0 ticket 卡与「行为」落下（不放空卡）、t4.6「验收」
+       第 2 句 t7.6：t7.6「按能单独验收来切」标签 + 原文窗口；t10.6「竖着切」四层依次落下，t11.7 竖线从上往下打穿
+       t12.7：「代码 → 留到实现」，t14.3「留到实现」；原第 3 句 2026-10-31 删掉，意思并进第 1 句「不管具体的实现」，这一行仍排在最后，对齐时放在第 2 句末
+       估计念完 t16.5；时长 17.2 秒。内容整体在 y 940 以内。 -->
+<html lang="zh-CN" data-frame-id="S07">
+<head>
+<meta charset="utf-8">
+<title>S07 · Matt Pocock：只写行为和验收</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 左：S06 的旧计划卡，缩小变灰 */
+  #old { left: 90px; top: 290px; width: 470px; height: 560px; padding: 30px 34px; background: var(--cream-dim); }
+  #old .a { font-family: var(--display); font-weight: 800; font-size: 50px; line-height: 1.15; }
+  #old .b { margin-top: 12px; font-family: var(--display); font-weight: 800; font-size: 42px; line-height: 1.2; }
+  #old .blk { margin-top: 26px; height: 120px; box-sizing: border-box; border: 5px solid var(--ink); border-radius: 8px; background: #c9c5bc;
+              display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 54px; }
+  #old .blk + .blk { margin-top: 18px; }
+
+  /* 右：ticket 卡，高度由脚本按已出现的行写入 */
+  #tk { left: 640px; top: 290px; width: 1190px; height: 60px; padding: 0 36px; overflow: visible; }
+  #tkTab { background: var(--violet); font-size: 46px; z-index: 2; }
+  #tkin { position: absolute; left: 36px; right: 36px; top: 28px; }
+  .row { margin-bottom: 28px; }
+  #r1 { display: flex; gap: 28px; height: 100px; }
+  #r1 .b { flex: 1; box-sizing: border-box; border: 5px solid var(--ink); border-radius: 8px; background: var(--violet-soft);
+           display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 58px; }
+  #r2 { display: flex; gap: 30px; height: 250px; }
+  #qw { position: relative; width: 660px; box-sizing: border-box; overflow: hidden; background: var(--term); border: 5px solid var(--ink); border-radius: 12px; box-shadow: 8px 8px 0 var(--ink); }
+  #qw .bar0 { height: 44px; display: flex; align-items: center; padding: 0 20px; background: var(--charcoal); border-bottom: 4px solid var(--ink);
+              font-family: var(--mono); font-size: 22px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #qw .en { padding: 12px 20px 0; display: flex; gap: 14px; font-family: var(--mono); font-size: 26px; line-height: 38px; color: #e4e0d6; font-variant-ligatures: none; }
+  #qw .en i { flex: none; font-style: normal; color: var(--unlit); }
+  #qw .en b { color: #fff; font-weight: 800; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
+  #qw .zh { padding: 8px 20px 0 68px; font-weight: 600; font-size: 30px; line-height: 40px; color: var(--cream); }
+  #lay { position: relative; flex: 1; height: 250px; }
+  #lay .cap { position: absolute; left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1; color: var(--ink); }
+  .layer { position: absolute; left: 0; width: 100%; height: 44px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 6px; background: var(--cream);
+           font-family: var(--mono); font-weight: 700; font-size: 28px; line-height: 36px; padding-left: 20px; color: var(--ink); }
+  #pierce { position: absolute; left: 50%; margin-left: -18px; top: 44px; width: 36px; height: 206px; box-sizing: border-box;
+            background: var(--violet); border: 4px solid var(--ink); border-radius: 18px; }
+  #r3 { height: 96px; line-height: 1; box-sizing: border-box; border: 5px dashed var(--ink); border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 26px;
+        font-family: var(--display); font-weight: 800; font-size: 56px; margin-bottom: 0; }
+  #r3 .code { padding: 6px 18px; font-size: 52px; background: var(--cream-dim); border: 4px solid var(--ink); border-radius: 6px; }
+  #r3 .arrow { font-size: 52px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="old" data-r="-1.2">
+    <div class="a">Superpowers 早期</div>
+    <div class="b">计划：测试 + 代码</div>
+    <div class="blk">测试</div>
+    <div class="blk">代码</div>
+  </div>
+
+  <div class="tab" id="tkTab" style="left:626px;top:242px">Matt Pocock 的 ticket</div>
+  <div class="card" id="tk" data-r="0.4">
+    <div id="tkin">
+      <div class="row" id="r1"><div class="b" id="b1">行为</div><div class="b" id="b2">验收</div></div>
+      <div class="row" id="r2">
+        <div id="qw">
+          <div class="bar0">to-tickets/SKILL.md:31-34</div>
+          <div class="en"><i>32</i><span>- A completed slice is <b>demoable or verifiable on its own</b></span></div>
+          <div class="zh">做完的一个切片，自己就能演示或验证</div>
+        </div>
+        <div id="lay">
+          <div class="cap" id="cap">按能单独验收来切</div>
+          <div class="layer" id="L1" style="top:54px">schema</div>
+          <div class="layer" id="L2" style="top:104px">API</div>
+          <div class="layer" id="L3" style="top:154px">UI</div>
+          <div class="layer" id="L4" style="top:204px">tests</div>
+          <div id="pierce"></div>
+        </div>
+      </div>
+      <div class="row" id="r3"><span class="code">代码</span><span class="arrow">→</span><span id="r3b">留到实现</span></div>
+    </div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：已按录音实测句子起点对齐（2026-11-03）。
+  var CUE = {
+    tab: 0.211,                // 第 1 句：Matt Pocock 名字标签先落下
+    tk: 3.158,                 // 「行为」前 0.2 秒：ticket 卡落下（卡里一开始就有「行为」，不放空卡）
+    b1: 3.368, b2: 4.842,        // 「行为」「验收」
+    r2: 8.0,                 // 第 2 句：标签 + 原文窗口
+    layer: 9.176, pierce: 9.608, // 「竖着切」：四层依次落下，竖线打穿
+    r3: 10.0, r3b: 10.917      // 第 3 句
+  };
+  // 每行的高度（含下边距），行出现时卡随之变高
+  var H1 = 128, H2 = 278, H3 = 90;
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 12.580,
+    init: function () { return T.fonts('早期计划测试代码的行为验收按能单独验收来切做完一个切片自己就演示或验证留到实现'); },
+    render: function (t) {
+      T.enter(T.$('old'), T.p(t, 0, 0.4), 10);
+
+      // ticket 卡：随行出现变高（高 = 上边距 + 已出现的行；r1、r2 自带下边距 28，r3 没有，所以 r3 出现时补 28）
+      var e1 = T.ease(T.p(t, CUE.b1, 0.4)), e2 = T.ease(T.p(t, CUE.r2, 0.5)), e3 = T.ease(T.p(t, CUE.r3, 0.4));
+      T.$('tk').style.height = Math.max(60, 28 + H1 * e1 + H2 * e2 + H3 * e3 + (e3 > 0 ? 28 * e3 : 0)) + 'px';
+      T.enter(T.$('tk'), T.p(t, CUE.tk, 0.45), 14);
+      T.enter(T.$('tkTab'), T.p(t, CUE.tab, 0.45), -12);
+
+      // 第 1 句：两块
+      T.$('r1').style.display = e1 > 0 ? 'flex' : 'none';
+      T.$('b1').style.opacity = e1;
+      T.$('b1').style.transform = 'translateY(' + ((1 - e1) * 12) + 'px)';
+      var eb2 = T.ease(T.p(t, CUE.b2, 0.4));
+      T.$('b2').style.opacity = eb2;
+      T.$('b2').style.transform = 'translateY(' + ((1 - eb2) * 12) + 'px)';
+
+      // 第 2 句：原文窗口、四层、竖线
+      T.$('r2').style.display = e2 > 0 ? 'flex' : 'none';
+      T.$('r2').style.opacity = e2;
+      T.$('qw').style.transform = 'translateY(' + ((1 - e2) * 14) + 'px)';
+      T.$('cap').style.opacity = e2;
+      ['L1', 'L2', 'L3', 'L4'].forEach(function (id, i) {
+        var q = T.ease(T.p(t, CUE.layer + i * 0.25, 0.35));
+        T.$(id).style.opacity = q;
+        T.$(id).style.transform = 'translateY(' + ((1 - q) * -12) + 'px)';
+      });
+      T.wipe(T.$('pierce'), T.p(t, CUE.pierce, 0.7), 'y');
+      T.$('pierce').style.opacity = t >= CUE.pierce ? 1 : 0;
+
+      // 第 3 句：代码 → 留到实现
+      T.$('r3').style.display = e3 > 0 ? 'flex' : 'none';
+      T.$('r3').style.opacity = e3;
+      T.$('r3b').style.opacity = T.ease(T.p(t, CUE.r3b, 0.4));
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<!-- S17 · 机制动画（示意）· script 85–95「具体怎么生成代码呢？SDFlow 和 Superpowers、Matt Pocock 一样。……这些规则，都原样写在派给 agent 的提示词 里。」
+     示意，不标「实录」。上：一张循环卡，中间 ticket，验收项一条一条往外引，转一圈回到 ticket 上打勾；下：三张小卡，两个坏测试、一条做法。
+     - 第 1–2 句：循环卡（标签「TDD 测试驱动开发：先写测试，再写实现」）与卡里的 ticket（三条验收项）从开头就在；卡内左上小字点三家名（storyboard「两家点名」：S17 首句允许）。
+     - 第 3 句（第 11 轮改为「从 ticket 上挑一条验收项，写一个测试，跑一下，必须失败，也就是红的。」，比原来长约 1.3 秒，后面节点顺延）：ticket → ① 挑一条验收项 → ② 写一个测试 → ③ 运行，红。
+     - 第 4 句：④ 写刚好够的实现 → ⑤ 运行，绿 → 回到 ticket，打掉第一条勾（下一条）。
+     - 第 5–6 句：下方反例小卡「恒真」（第 5 句出）。第 7–8 句：反例小卡「盯内部」（第 7 句出）。
+     - 第 9–10 句：下方一格做法「补断言前：先改坏被测代码，确认会红」（第 9 句出）；第 10 句补「不红 = 什么也没测到」。
+     - 第 11 句：循环卡右上角贴标签「原样写进派给 agent 的提示词」。
+     配色：红、绿只用在 ③ ⑤ 这两格（测试失败 / 通过）；写测试、写实现、做法是执行一侧，琥珀；循环卡标签琥珀（TDD 在执行一侧）；ticket 与两个坏测试用奶白，坏测试不用红（红只表示测试失败）；不用辅助色。
+     内容都在 y 920 以内，避开字幕带。
+     口播时刻按每分钟 220 字估算（标点算字，英文词算 2 字，句间 0.5 秒；还没录音；2026-10-31 按第 11 轮第 3 句加长后重估），录音后用 frame-times.py 对齐：
+       1 句 0.0 · 2 句 6.8 · 3 句 13.8 · 4 句 23.0 · 5 句 30.3 · 6 句 33.8 · 7 句 43.3 · 8 句 53.1 · 9 句 61.2 · 10 句 71.0 · 11 句 75.8，第 11 句约 81.0 念完。 -->
+<html lang="zh-CN" data-frame-id="S17">
+<head>
+<meta charset="utf-8">
+<title>S17 · TDD：先写测试，再写实现</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 上：循环卡 */
+  #lc { left: 60px; top: 130px; width: 1800px; height: 575px; padding: 0; }
+  #lc .tab { background: var(--amber); font-size: 42px; }
+  #who { left: 90px; top: 178px; font-size: 32px; padding: 6px 20px; }
+  #pt { left: 1270px; top: 100px; font-size: 34px; padding: 8px 22px; }
+
+  #tk { left: 810px; top: 290px; width: 300px; height: 260px; padding: 16px 24px; }
+  #tk .h { font-family: var(--display); font-weight: 800; font-size: 48px; line-height: 1.1; margin-bottom: 10px; }
+  #tk .it { font-size: 36px; font-weight: 600; line-height: 1.45; white-space: nowrap; }
+  .st { height: 66px; padding: 0 24px; display: flex; align-items: center; justify-content: center; font-size: 38px; box-sizing: border-box; }
+  #c1 { left: 784px; top: 180px; }
+  #c2 { left: 1355px; top: 290px; } #c3 { left: 1375px; top: 590px; }
+  #c4 { left: 238px; top: 590px; }  #c5 { left: 295px; top: 290px; }
+  #c3 { background: var(--fail); } #c5 { background: var(--pass); }
+  #c2, #c4 { background: var(--amber); }
+  #nx { left: 612px; top: 352px; font-size: 30px; padding: 4px 14px; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+
+  /* 下：三张卡 */
+  .bc { top: 762px; width: 570px; height: 145px; padding: 32px 30px 12px; }
+  .bc .tab { font-size: 36px; }
+  .bc .code { font-family: var(--mono); font-weight: 600; font-size: 28px; line-height: 1.4; margin-top: 2px; white-space: nowrap; }
+  .bc .tx { font-size: 34px; font-weight: 600; line-height: 1.35; white-space: nowrap; }
+  #d1 { left: 60px; } #d2 { left: 675px; } #d3 { left: 1290px; }
+  #d3 .tab { background: var(--amber); }
+  #res { position: static; display: inline-block; margin-top: 6px; font-size: 30px; padding: 2px 16px; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div class="card" id="lc" data-r="0.3"><div class="tab" data-r="-2">TDD 测试驱动开发：先写测试，再写实现</div></div>
+  <div class="tag" id="who" data-r="-3">Superpowers · Matt Pocock · SDFlow 都用</div>
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="a0" d="M960 286 V254"/>
+      <path id="a1" d="M1142 213 Q1490 207 1500 282"/>
+      <path id="a2" d="M1500 364 V582"/>
+      <path id="a3" d="M1369 623 H608"/>
+      <path id="a4" d="M420 584 V364"/>
+      <path id="a5" d="M551 323 Q700 322 802 360"/>
+    </g>
+  </svg>
+
+  <div class="card" id="tk" data-r="1.2">
+    <div class="h">ticket</div>
+    <div class="it" id="i1">☐ 验收项 1</div><div class="it">☐ 验收项 2</div><div class="it">☐ 验收项 3</div>
+  </div>
+  <div class="chip st" id="c1" data-r="-1.5">① 挑一条验收项</div>
+  <div class="chip st" id="c2" data-r="1.2">② 写一个测试</div>
+  <div class="chip st" id="c3" data-r="-1.2">③ 运行，红</div>
+  <div class="chip st" id="c4" data-r="1.5">④ 写刚好够的实现</div>
+  <div class="chip st" id="c5" data-r="-1.4">⑤ 运行，绿</div>
+  <div class="tag" id="nx" data-r="3">下一条</div>
+
+  <!-- 第 8 句：贴在循环卡右上角 -->
+  <div class="chip" id="pt" data-r="3.5">原样写进派给 agent 的提示词</div>
+
+  <div class="card bc" id="d1" data-r="-1.2"><div class="tab" data-r="-3">反例：恒真</div>
+    <div class="code">expect(add(a, b)).toBe(a + b)</div>
+    <div class="tx">照着代码再算一遍，永远不失败</div></div>
+  <div class="card bc" id="d2" data-r="1"><div class="tab" data-r="2">反例：盯内部</div>
+    <div class="tx" style="margin-top:4px">改了写法、行为没变，测试挂了</div></div>
+  <div class="card bc" id="d3" data-r="-0.8"><div class="tab" data-r="-2">做法：补断言前</div>
+    <div class="tx">先改坏被测代码，确认会红</div>
+    <div class="chip" id="res" data-r="2.5">不红 = 什么也没测到</div></div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    base: 0.0,    // 第 1–2 句：循环卡、ticket、三家名
+    s2: 11.76,     // 第 3 句：挑验收项 → 写测试 → 红
+    s3: 20.64,     // 第 4 句：写实现 → 绿 → 下一条
+    s4: 26.72,     // 第 5–6 句：反例，恒真（第 5 句出卡）
+    s5: 35.52,     // 第 7–8 句：反例，盯内部（第 7 句出卡）
+    s6: 47.92,     // 第 9 句：补断言前先改坏
+    s7: 55.946,     // 第 10 句：不红 = 什么也没测到
+    s8: 58.506      // 第 11 句：原样写进提示词
+  };
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = p >= 0.99 ? 'url(#ah)' : 'none';
+  }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 63.806,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句：循环卡与 ticket 一起出
+      T.enter(T.$('lc'), P(t, AT.base, 0.5), 16);
+      T.enter(T.$('tk'), P(t, AT.base + 0.2, 0.5), 16);
+      T.enter(T.$('who'), P(t, AT.base + 3.0, 0.4), -10);
+
+      // 第 3 句：循环前半
+      wire(T.$('a0'), E(P(t, AT.s2 + 0.2, 0.4)));
+      T.enter(T.$('c1'), P(t, AT.s2 + 0.2, 0.45), 12);
+      wire(T.$('a1'), E(P(t, AT.s2 + 2.8, 0.5)));
+      T.enter(T.$('c2'), P(t, AT.s2 + 3.0, 0.45), 12);
+      wire(T.$('a2'), E(P(t, AT.s2 + 5.4, 0.5)));
+      T.enter(T.$('c3'), P(t, AT.s2 + 5.6, 0.45), 12);
+
+      // 第 4 句：循环后半，回到 ticket 打勾
+      wire(T.$('a3'), E(P(t, AT.s3 + 0.1, 0.5)));
+      T.enter(T.$('c4'), P(t, AT.s3 + 0.4, 0.45), 12);
+      wire(T.$('a4'), E(P(t, AT.s3 + 2.8, 0.5)));
+      T.enter(T.$('c5'), P(t, AT.s3 + 3.0, 0.45), 12);
+      wire(T.$('a5'), E(P(t, AT.s3 + 4.6, 0.5)));
+      T.enter(T.$('nx'), P(t, AT.s3 + 4.8, 0.4), -8);
+      T.$('i1').textContent = t >= AT.s3 + 5.2 ? '☑ 验收项 1' : '☐ 验收项 1';
+
+      // 第 5–10 句：下方三张卡
+      T.enter(T.$('d1'), P(t, AT.s4, 0.5), 14);
+      T.enter(T.$('d2'), P(t, AT.s5, 0.5), 14);
+      T.enter(T.$('d3'), P(t, AT.s6, 0.5), 14);
+      T.enter(T.$('res'), P(t, AT.s7, 0.4), -10);
+
+      // 第 11 句：循环卡右上角的标签
+      T.enter(T.$('pt'), P(t, AT.s8 + 0.3, 0.45), -14);
+    }
+  });
+</script>
+</body>
+</html>

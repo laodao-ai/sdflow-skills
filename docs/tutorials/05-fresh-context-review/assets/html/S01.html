@@ -1,0 +1,229 @@
+<!doctype html>
+<!-- S01 · 第 11 轮（2026-11-09），口播 1–5。
+     封面随问题句淡出；七个 ticket 的审过标记与绿色测试点依次出现。整体评审贴纸写「整体评审」，配四张「严重」贴纸。锁连接打开、新建、删除三条入口，只有打开经过锁；末句突出两条未接入口「谁来接？」。保留现有锁、窗口、纸底与卡片。来源：mqtt-console 评审报告 :24–36。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S01">
+<head>
+<meta charset="utf-8">
+<title>S01 · 开场：七个 ticket 都审过，锁只管住一条路</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../../assets/cover/cover.css">
+<style>
+  /* ===== mqtt-console 记录的共用画法（S07、S20 照抄）===== */
+  .tk { position: absolute; width: 200px; height: 110px; padding: 0; box-shadow: 8px 8px 0 var(--ink); overflow: hidden; }
+  .tk::before { content: ''; position: absolute; left: 0; top: 0; right: 0; height: 16px; background: var(--amber); border-bottom: 4px solid var(--ink); }
+  .tk .w { position: absolute; left: 22px; top: 36px; font-family: var(--mono); font-weight: 700; font-size: 26px; }
+  .tk .n { position: absolute; right: 24px; top: 20px; font-family: var(--display); font-weight: 900; font-size: 56px; line-height: 1.3; }
+  .ok { position: absolute; padding: 2px 14px; font-size: 26px; font-weight: 700; border-width: 3px; box-shadow: 5px 5px 0 var(--ink); }
+  .ok b { font-family: var(--display); font-weight: 900; margin-right: 6px; }
+  .dots { position: absolute; display: flex; align-items: center; gap: 8px; font-size: 26px; font-weight: 700; color: var(--ink); }
+  .dots i { width: 24px; height: 24px; box-sizing: border-box; border-radius: 50%; border: 3px solid var(--ink); background: var(--cream); }
+  .dots span { margin-right: 4px; }
+  svg.lock { position: absolute; width: 110px; height: 130px; overflow: visible; }
+  svg.win { position: absolute; width: 130px; height: 96px; overflow: visible; }
+  .wn { position: absolute; font-size: 28px; padding: 2px 14px; }
+
+  /* ===== 本页 ===== */
+  #cover .cv-side { top: 428px; } /* 片头留出字幕安全区；独立封面不受影响。 */
+  #rec { left: 140px; top: 36px; font-size: 28px; padding: 4px 18px; }
+  #big { left: 140px; top: 430px; width: 1570px; height: 470px; padding: 0; }
+  #big .tab { font-size: 38px; }
+  .sev { position: absolute; top: 400px; padding: 4px 22px; background: var(--ink); color: var(--cream);
+         font-family: var(--display); font-weight: 900; font-size: 40px; }
+  #lock { left: 1085px; top: 466px; }
+  #wa { left: 200px; top: 482px; } #wb { left: 200px; top: 692px; }
+  #wan { left: 214px; top: 590px; } #wbn { left: 214px; top: 800px; }
+  #want { left: 620px; top: 588px; font-size: 26px; padding: 2px 14px; }
+  #ws { left: 1330px; top: 490px; width: 330px; height: 370px; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  #ws svg { width: 150px; height: 120px; }
+  #ws .big { font-size: 52px; }
+  .door { position: absolute; font-family: var(--display); font-weight: 800; font-size: 40px; padding: 2px 22px; }
+  #d1 { left: 450px; top: 500px; } #d2 { left: 450px; top: 650px; } #d3 { left: 450px; top: 780px; }
+  #by { left: 960px; top: 720px; background: var(--ink); color: var(--cream); font-size: 32px; padding: 4px 18px; }
+  #only { left: 1040px; top: 606px; background: var(--ink); color: var(--cream); font-size: 32px; padding: 4px 18px; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; overflow: visible; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip tab ink" id="rec" data-r="-2">实录 · 原文摘要 · mqtt-console</div>
+
+  <!-- 七个 ticket：卡、审过、测试点（位置由脚本按 x = 140 + 240 i 排） -->
+  <div id="row"></div>
+
+  <!-- 括线：七个卡并进大卡 -->
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <path id="brace" d="M150 334 V352 H1770 V334 M925 352 V414" fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/>
+  </svg>
+
+  <div class="card" id="big" data-r="0.4"><div class="tab">整体评审</div></div>
+  <div class="sev" id="v1" data-r="-4" style="left:1090px">严重</div>
+  <div class="sev" id="v2" data-r="3" style="left:1230px">严重</div>
+  <div class="sev" id="v3" data-r="-3" style="left:1370px">严重</div>
+  <div class="sev" id="v4" data-r="4" style="left:1510px">严重</div>
+
+  <!-- 路：在大卡之上、锁与窗口之下 -->
+  <svg id="lanes" viewBox="0 0 1920 1080" aria-hidden="true" style="position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:visible">
+    <defs><marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- 两个窗口想进来：短箭头 -->
+      <path id="aA" d="M338 530 H368" stroke="#161616" stroke-opacity=".85" stroke-width="6" marker-end="url(#ah2)"/>
+      <path id="aB" d="M338 740 H368" stroke="#161616" stroke-opacity=".85" stroke-width="6" marker-end="url(#ah2)"/>
+      <!-- 窗口汇到一根竖线，再分三条路 -->
+      <path id="bus" d="M390 530 V810" stroke="#161616" stroke-opacity=".85" stroke-width="6" pathLength="1"/>
+      <path id="gB" d="M600 680 H1322" stroke="#f5cf4a" stroke-width="20" opacity="0"/>
+      <path id="gC" d="M600 810 H1322" stroke="#f5cf4a" stroke-width="20" opacity="0"/>
+      <path id="l1" d="M390 530 H1322" stroke="#161616" stroke-opacity=".85" stroke-width="6" marker-end="url(#ah2)" pathLength="1"/>
+      <path id="l2" d="M390 680 H1322" stroke="#161616" stroke-opacity=".85" stroke-width="6" marker-end="url(#ah2)" pathLength="1"/>
+      <path id="l3" d="M390 810 H1322" stroke="#161616" stroke-opacity=".85" stroke-width="6" marker-end="url(#ah2)" pathLength="1"/>
+    </g>
+  </svg>
+
+  <svg class="win" id="wa" viewBox="0 0 130 96" aria-hidden="true"><rect x="2.5" y="2.5" width="125" height="91" rx="10" fill="#f2efe6" stroke="#161616" stroke-width="5"/><line x1="2.5" y1="26" x2="127.5" y2="26" stroke="#161616" stroke-width="4"/><circle cx="17" cy="14" r="4.5" fill="#161616"/><circle cx="31" cy="14" r="4.5" fill="#161616"/><circle cx="45" cy="14" r="4.5" fill="#161616"/></svg>
+  <svg class="win" id="wb" viewBox="0 0 130 96" aria-hidden="true"><rect x="2.5" y="2.5" width="125" height="91" rx="10" fill="#f2efe6" stroke="#161616" stroke-width="5"/><line x1="2.5" y1="26" x2="127.5" y2="26" stroke="#161616" stroke-width="4"/><circle cx="17" cy="14" r="4.5" fill="#161616"/><circle cx="31" cy="14" r="4.5" fill="#161616"/><circle cx="45" cy="14" r="4.5" fill="#161616"/></svg>
+  <div class="chip wn" id="wan" data-r="-2">窗口 A</div>
+  <div class="chip wn" id="wbn" data-r="2">窗口 B</div>
+  <div class="tag" id="want" data-r="-3">想同时进来</div>
+
+  <div class="card" id="ws" data-r="1">
+    <svg viewBox="0 0 150 120" aria-hidden="true"><path d="M8 22 H58 L70 36 H142 V112 H8 Z" fill="#f2efe6" stroke="#161616" stroke-width="6" stroke-linejoin="round"/><line x1="8" y1="50" x2="142" y2="50" stroke="#161616" stroke-width="5"/></svg>
+    <div class="big">工作区</div>
+  </div>
+
+  <div class="chip door" id="d1" data-r="-1.5">打开</div>
+  <div class="chip door" id="d2" data-r="1.5">新建</div>
+  <div class="chip door" id="d3" data-r="-1">删除</div>
+  <div class="chip" id="by" data-r="-3">绕过锁</div>
+
+  <svg class="lock" id="lock" viewBox="0 0 110 130" aria-hidden="true">
+    <path d="M28 60 V38 a27 27 0 0 1 54 0 V60" fill="none" stroke="#161616" stroke-width="11" stroke-linecap="round"/>
+    <rect x="5" y="52" width="100" height="74" rx="10" fill="#f29b50" stroke="#161616" stroke-width="5"/>
+    <circle cx="55" cy="82" r="9" fill="#161616"/><rect x="51" y="86" width="8" height="22" rx="3" fill="#161616"/>
+    <g id="lx" stroke="#161616" stroke-width="12" stroke-linecap="round" opacity="0"><line x1="14" y1="58" x2="96" y2="124"/><line x1="96" y1="58" x2="14" y2="124"/></g>
+  </svg>
+  <div class="chip" id="only" data-r="2">入口谁来接？</div>
+
+  <div id="cover"></div>
+</div>
+<script>
+  // 七个 ticket 块：卡 + 审过 + 测试点。先建 DOM，再加载 theme.js（自动倾角要看到这些元素）。
+  (function () {
+    var html = '';
+    for (var i = 0; i < 7; i++) {
+      var x = 140 + 240 * i;
+      html += '<div class="card tk" id="tk' + i + '" style="left:' + x + 'px;top:110px"><span class="w">ticket</span><span class="n">' + (i + 1) + '</span></div>' +
+              '<div class="chip ok" id="ok' + i + '" style="left:' + (x + 22) + 'px;top:236px"><b>✓</b>审过</div>' +
+              '<div class="dots" id="dt' + i + '" style="left:' + (x + 18) + 'px;top:292px"><span>测试</span><i></i><i></i><i></i><i></i></div>';
+    }
+    document.getElementById('row').outerHTML = html;
+  })();
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script src="../../assets/cover/cover.js"></script>
+<script>
+  var HAS_COVER = typeof Cover === 'function';
+  var COVER_END = HAS_COVER ? 2.0 : 0;   // 封面全显到 2.0 秒，2.0–2.2 淡出，2.2 主内容进场；没有封面组件时 0.2 秒进场
+  var S = COVER_END + 0.2;
+
+  // 口播时刻（秒，画面内，估算）。
+  var AT = {
+    "rec": 2.393,
+    "tk0": 2.502,
+    "tkGap": 0.22,
+    "ok0": 7.93,
+    "okGap": 0.15,
+    "dot0": 9.604,
+    "dotGap": 0.12,
+    "brace": 10.723,
+    "big": 11.087,
+    "sev0": 11.584,
+    "sevGap": 0.3,
+    "lock": 14.474,
+    "win": 15.159,
+    "want": 15.788,
+    "ws": 16.237,
+    "bus": 17.136,
+    "d1": 18.035,
+    "d2": 19.832,
+    "d3": 20.731,
+    "by": 21.181,
+    "byOff": 999,
+    "okFlash": 23.14,
+    "okFlashOff": 24.039,
+    "x": 999,
+    "only": 24.039
+};
+  var GREEN = [76, 195, 138];
+
+  function draw(el, p) { el.style.strokeDasharray = 1; el.style.strokeDashoffset = 1 - T.ease(p); el.style.opacity = p > 0 ? 1 : 0; }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 30.320,
+    init: function () {
+      var jobs = [T.fonts(T.$('stage').textContent)];
+      if (HAS_COVER) jobs.push(Cover(T.$('cover'), { mode: 'main', base: '../../assets/cover/', brand: '../../../shared/logo.svg' }));
+      return Promise.all(jobs);
+    },
+    render: function (t) {
+      T.tilt();
+      T.$('cover').style.opacity = HAS_COVER ? 1 - T.p(t, COVER_END, 0.2) : 0;
+
+      // 第 2 句：七个 ticket、审过、测试点
+      T.enter(T.$('rec'), T.p(t, AT.rec, 0.4), 10);
+      for (var i = 0; i < 7; i++) {
+        T.enter(T.$('tk' + i), T.p(t, AT.tk0 + i * AT.tkGap, 0.4), 18);
+        T.enter(T.$('ok' + i), T.p(t, AT.ok0 + i * AT.okGap, 0.35), 10);
+        var dt = T.$('dt' + i);
+        T.enter(dt, T.p(t, AT.ok0 + 0.2 + i * AT.okGap, 0.35), 8);
+        dt.querySelectorAll('i').forEach(function (d, j) {
+          T.fill(d, GREEN, T.p(t, AT.dot0 + (i * 4 + j) * AT.dotGap * 0.25 + i * AT.dotGap, 0.3));
+        });
+        // 第 6 句：七个「审过」还在，黄框闪一次
+        var g = T.ease(T.p(t, AT.okFlash + i * 0.12, 0.3)) * (1 - T.ease(T.p(t, AT.okFlashOff, 0.4)));
+        T.current(T.$('ok' + i), g, 5);
+      }
+
+      // 第 3 句：括线、大卡、四张严重
+      draw(T.$('brace'), T.p(t, AT.brace, 0.5));
+      T.enter(T.$('big'), T.p(t, AT.big, 0.5), 16);
+      for (var k = 1; k <= 4; k++) T.enter(T.$('v' + k), T.p(t, AT.sev0 + (k - 1) * AT.sevGap, 0.35), -22);
+
+      // 第 4 句：锁、两个窗口、工作区
+      T.$('lock').style.opacity = T.ease(T.p(t, AT.lock, 0.4));
+      T.$('lock').style.transform = 'translateY(' + (1 - T.ease(T.p(t, AT.lock, 0.4))) * -16 + 'px)';
+      ['wa', 'wb'].forEach(function (id, j) {
+        var p = T.p(t, AT.win + j * 0.2, 0.4);
+        T.$(id).style.opacity = T.ease(p);
+        T.$(id).style.transform = 'translateX(' + (1 - T.ease(p)) * -20 + 'px)';
+      });
+      T.enter(T.$('wan'), T.p(t, AT.win + 0.1, 0.4), 8);
+      T.enter(T.$('wbn'), T.p(t, AT.win + 0.3, 0.4), 8);
+      T.$('aA').style.opacity = T.ease(T.p(t, AT.want, 0.3));
+      T.$('aB').style.opacity = T.ease(T.p(t, AT.want, 0.3));
+      T.enter(T.$('want'), T.p(t, AT.want, 0.4), -10);
+      T.enter(T.$('ws'), T.p(t, AT.ws, 0.45), 16);
+
+      // 第 5 句：三条路。打开穿过锁；新建、删除从锁下面绕过去
+      draw(T.$('bus'), T.p(t, AT.bus, 0.4));
+      draw(T.$('l1'), T.p(t, AT.d1, 0.7));
+      T.enter(T.$('d1'), T.p(t, AT.d1, 0.35), 10);
+      draw(T.$('l2'), T.p(t, AT.d2, 0.7));
+      T.enter(T.$('d2'), T.p(t, AT.d2, 0.35), 10);
+      draw(T.$('l3'), T.p(t, AT.d3, 0.7));
+      T.enter(T.$('d3'), T.p(t, AT.d3, 0.35), 10);
+      T.enter(T.$('by'), T.p(t, AT.by, 0.4), -12);
+      var gb = T.ease(T.p(t, AT.by, 0.4)) * (1 - T.ease(T.p(t, AT.byOff, 0.4)));
+      T.$('gB').setAttribute('opacity', 0.85 * gb);
+      T.$('gC').setAttribute('opacity', 0.85 * gb);
+
+      // 第 6 句：锁上墨色叉，「只管住一条路」
+      T.$('lx').setAttribute('opacity', 0);
+      T.enter(T.$('only'), T.p(t, AT.only, 0.4), 12);
+    }
+  });
+</script>
+</body>
+</html>

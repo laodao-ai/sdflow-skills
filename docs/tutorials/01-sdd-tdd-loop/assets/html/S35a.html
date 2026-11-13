@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- S35a · 标题卡 · script 156–158「如果你手上还没有规格，……光说不够，我们接着刚才的超温告警，实际跑一遍。」
+     版式同 S17（演示说明）：两张卡并排，下一帧接第 2、3 段录屏。
+     - 左卡「这次」：上面一行灰字「没有规格时：先把需求问清楚，再写计划」（第 1 句，不是这次的情况，所以灰）；
+       下面大字「规格 OpenSpec 已写好 → 直接写计划」（第 2 句）。OpenSpec 用蓝色小标签，同其它帧的区块名。
+     - 右卡「演示」：「接着超温告警，实际跑一遍」（第 3 句）。超温告警是 S17 起的同一个需求。
+     - 两张都是定下来的事实，倾角小。不是示意画面，不贴「示意」。 -->
+<html lang="zh-CN" data-frame-id="S35a">
+<head>
+<meta charset="utf-8">
+<title>S35a · 接着跑一遍</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .box { width: 760px; height: 440px; padding: 0 56px; display: flex; flex-direction: column; justify-content: center; gap: 28px; }
+  .box .big { font-size: 84px; white-space: nowrap; }
+  #a .if { font-weight: 600; font-size: 34px; color: #6b675f; white-space: nowrap; }
+  #a .rule { height: 0; border-top: 4px dashed rgba(22, 22, 22, .35); }
+  #a .big { font-size: 64px; display: flex; align-items: center; gap: 18px; }
+  .os-tag {
+    display: inline-block; padding: 4px 18px; border-radius: 8px; border: 4px solid var(--ink); box-shadow: 5px 5px 0 var(--ink);
+    background: var(--blue); color: var(--ink); font-size: 44px; line-height: 1.15; transform: rotate(-2deg);
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card box" id="a" data-r="-1.5" style="left:150px;top:310px">
+    <div class="tab ink">这次</div>
+    <div class="if" id="if">没有规格时：先把需求问清楚，再写计划</div>
+    <div class="rule" id="rule"></div>
+    <div class="big" id="spec">规格 <span class="os-tag">OpenSpec</span> 已写好</div>
+    <div class="big" id="plan">→ 直接写计划</div>
+  </div>
+  <div class="card box" id="b" data-r="1.5" style="left:1010px;top:330px">
+    <div class="tab ink" style="transform:rotate(2deg)">演示</div>
+    <div class="big">接着超温告警，<br>实际跑一遍</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 句子开口时间（秒），按实测（2026-10-06，frame-times.py）：
+  // 156 句 0（没有规格时……），157 句 5.76（这次规格已写好，直接写计划；「直接写计划」的直在 8.64），158 句 11.28（接着超温告警，实际跑一遍）。
+  var BEATS = { card: 0.3, spec: 5.76, plan: 8.64, demo: 11.28 };
+
+  Stage({
+    duration: 14,
+    init: function () { return T.fonts(document.getElementById('stage').textContent); },
+    render: function (t) {
+      // 156：没有规格时，先问需求再写计划（左卡带着这行灰字落下）。
+      T.enter(T.$('a'), T.p(t, BEATS.card, 0.6), 30);
+
+      // 157：这次规格已写好，所以直接写计划。
+      T.wipe(T.$('rule'), T.p(t, BEATS.spec, 0.4), 'x');
+      T.enter(T.$('spec'), T.p(t, BEATS.spec + 0.1, 0.5), 14);
+      T.enter(T.$('plan'), T.p(t, BEATS.plan, 0.5), 14);
+
+      // 158：接着超温告警，实际跑一遍。
+      T.enter(T.$('b'), T.p(t, BEATS.demo, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

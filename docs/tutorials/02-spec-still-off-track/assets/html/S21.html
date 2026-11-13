@@ -1,0 +1,293 @@
+<!doctype html>
+<!-- S21 · 机制动画 · script 76–83「所以现在反过来：先落纪要，再成文。……纪要定稿时还会算一个内容指纹，生成规格文档前对一下，防止纪要被悄悄改掉。」
+     纪要流程卡。重点是三段：当场写进纪要 → 从纪要一次写成四个文档 → 写完拿纪要逐条对。内容指纹只占 83 句，角上一张小卡。
+     纪要小节标题是实录：示例项目 8a485f1 openspec/changes/alarm-notify/decision-memo.md 第 17、33、42 行（## 拍板决策 / ## 承重约束 / ## 接受的边角），右上角标「实录 · 示例项目」。
+     指纹小卡的两个值取自 recording/07 的实际结果（06:14:29）：纪要里写的 b8fa85493133，工作树重算 c8a57e899355；标「示例」，不写成主线失败。
+     分镜写的是放补拍 cast 两秒；cast 文件 `20261017-060944-repro-memo-hash-repro.cast` 不在本期 assets/casts 下，这里先用小卡重画同一个结果，换成录像时只需替换右下角这张卡。
+     句子与动画节点（时刻按录音实测，frame-times.py，2026-10-19，集中在下面的 CUE 常量里）：
+       76 句 先落纪要，再成文 → 一开口（0.15 秒）标题贴纸在屏幕正中放大出现（约 1.7 倍），停约 1 秒，再用 0.6 秒缩小并移到左上的位置（用外层容器 #headw 做 translate + scale，贴纸自己只管倾角）；
+              落位后（1.6 秒起）整条流程的空壳淡淡地出（透明度 .3）：三步卡、箭头、纪要窗口（三个小节先是虚线空框）、
+              纪要到四个文档的连线和四个文档卡，下面各句讲到哪个点亮哪个
+       77 句 建好分支和目录，放一份纪要草稿 → 「拷问起手」→「建分支 · 建目录 · 纪要草稿」点亮，右边纪要窗口点亮，盖「草稿」章
+       78 句 纪要里记四样 → 三个小节标题（原文 ## 拍板决策 / ## 承重约束 / ## 接受的边角）随口播依次加黄框，
+              白话补充「含砍掉的候选」「证据锚」是贴在窗口右沿的奶白小卡，不混进原文
+       79 句 每拍板一条，当场写进去 → 「每拍一条，当场写入」，纪要卡里一条一条写入
+              （作者 2026-10-18 把原 81、82 两句对调，动画节点跟着对调）
+       80 句 中途断了，也只丢上一次写入以后的那一点 → 虚线「断了」，只丢最后一格
+       81 句 收住以后，再从纪要把四个文档一个一个写出来，每写完一个就跑一遍校验 → 纪要到四个文档的连线点亮，四个文档一个一个点亮，每个带「校验」勾（奶白圆片墨色勾）
+       82 句 写完拿纪要逐条对：漏没漏 · 反没反 · 多没多 → 四个文档回连纪要，三项逐个打勾
+       83 句 纪要定稿时还会算一个内容指纹，生成前对一下 → 右下角「示例」小卡，两个指纹值不一样，停下
+     纪要是文件原文，用黑底代码窗口（分镜「约定」· 文件原文，作者 2026-10-17 定）：标题栏 decision-memo.md:17,33,42，左边行号，
+     窗口不倾斜，只有「纪要」标签和白话小卡倾斜；横条是各小节下的条目，示意写入进度，不是原文。
+     开头不留空屏（visual-v4 §4.8，作者 2026-10-18 定）：开头 0.5 秒内有标题和流程空壳，不出现只有标题的状态。只调了出场时机与空壳，其它设计不变。
+     内容整体在 y 940 以上，避开字幕带。
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排；第 81 句措辞改了（「再从纪要把四个文档一个一个写出来」），长度基本不变，秒数不动。
+       红绿只表示测试结果（visual-v4 第二节）：所有勾改成奶白圆片 + 墨色勾（同 S29 的 .ok），「不一样 → 停下」改墨底奶白字。 -->
+<html lang="zh-CN" data-frame-id="S21">
+<head>
+<meta charset="utf-8">
+<title>S21 · 先落纪要，再成文</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #real { right: 64px; top: 40px; }
+  /* 标题贴纸的定位容器：对它做 scale / translate；贴纸 #head 在里面，只管自己的倾角 */
+  #headw { left: 90px; top: 86px; transform-origin: 0 0; }
+  #headw .chip { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; }
+
+  /* 拷问时：三步 */
+  .step { top: 226px; height: 124px; padding: 0 24px; display: flex; align-items: center; justify-content: center; text-align: center;
+          font-weight: 700; font-size: 34px; line-height: 1.3; }
+  #pA { left: 90px; width: 230px; }
+  #pB { left: 400px; width: 330px; }
+  #pC { left: 812px; width: 388px; }
+
+  /* 纪要：黑底代码窗口（基于 .cmd），标题栏写文件与行号 */
+  #memo { left: 1290px; top: 170px; width: 540px; height: 392px; padding: 0; overflow: visible; white-space: normal; }
+  #memo .tab { left: -12px; top: -50px; font-size: 34px; padding: 4px 20px; }
+  #memo .bar0 { height: 48px; display: flex; align-items: center; padding: 0 22px; box-sizing: border-box;
+                background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0;
+                font-size: 26px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #memo .bd { padding: 18px 22px 0; }
+  #stamp { position: absolute; right: -30px; top: -36px; padding: 2px 14px; background: var(--cream); color: var(--ink);
+           border: 3px dashed var(--ink); border-radius: 6px; font-weight: 700; font-size: 30px; opacity: 0; }
+  .sec { position: relative; height: 100px; padding-left: 66px; }
+  .sec .ln { position: absolute; left: 0; top: 0; height: 46px; line-height: 46px; font-size: 30px; color: var(--unlit); opacity: 0; }
+  .sec .h { display: inline-block; height: 46px; line-height: 46px; padding: 0 10px; margin-left: -10px; border-radius: 6px;
+            font-weight: 700; font-size: 34px; color: var(--cream); white-space: nowrap; opacity: 0; }
+  /* 空壳状态下小节标题的占位：虚线空框，标题点亮时淡出 */
+  .sec .slot { position: absolute; left: 56px; top: 0; width: 300px; height: 46px; box-sizing: border-box;
+               border: 3px dashed rgba(242,239,230,.55); border-radius: 6px; }
+  .sec .bar { height: 12px; border-radius: 6px; background: rgba(140,200,245,.6); margin: 8px 0 0; opacity: 0; }
+  .sec .bar.s { width: 55%; }
+  /* 白话补充：贴在窗口右沿的奶白小卡 */
+  .sec .say { left: auto; right: -44px; top: 2px; padding: 2px 14px; font-size: 28px; border-width: 4px; box-shadow: 5px 5px 0 var(--ink); opacity: 0; }
+
+  #cut { left: 760px; top: 470px; }
+
+  #wires { left: 0; top: 120px; width: 1920px; height: 560px; }
+
+  /* 四个文档 */
+  .doc { top: 668px; width: 280px; height: 130px; padding: 0 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .doc .nm { font-family: var(--mono); font-weight: 700; font-size: 36px; }
+  .doc .chk { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-weight: 600; font-size: 34px; opacity: 0; }
+  /* 打勾：奶白圆片 + 墨色勾（同 S29 的 .ok）；不用绿色，绿色只表示测试通过。 */
+  .tick { display: inline-flex; width: 38px; height: 38px; border-radius: 50%; background: var(--cream); border: 4px solid var(--ink);
+          box-shadow: 3px 3px 0 var(--ink); align-items: center; justify-content: center; box-sizing: border-box; flex: none; }
+  .tick svg { width: 20px; height: 18px; }
+  #d0 { left: 90px; } #d1 { left: 395px; } #d2 { left: 700px; } #d3 { left: 1005px; }
+
+  /* 逐条对 */
+  #cmpTag { left: 90px; top: 852px; }
+  .cmp { top: 846px; display: flex; align-items: center; gap: 14px; }
+  .cmp .tick { opacity: 0; }
+  #c0 { left: 560px; } #c1 { left: 820px; } #c2 { left: 1080px; }
+
+  /* 指纹小卡 */
+  #fp { left: 1420px; top: 612px; width: 420px; height: 310px; padding: 18px 28px; }
+  #fp .ttl { font-family: var(--display); font-weight: 800; font-size: 40px; margin-bottom: 6px; }
+  #fp .row { opacity: 0; margin-top: 6px; }
+  #fp .lb { font-weight: 600; font-size: 28px; line-height: 1.1; color: #4a4a4a; }
+  #fp .hv { font-family: var(--mono); font-weight: 700; font-size: 34px; line-height: 1.2; }
+  #fpEx { position: absolute; right: 18px; top: 16px; }
+  #fpStop { display: inline-block; margin-top: 12px; padding: 2px 22px; background: var(--ink); color: var(--cream);
+            border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+            font-family: var(--display); font-weight: 800; font-size: 38px; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="tag" id="real">实录 · 示例项目</div>
+  <div class="abs" id="headw"><div class="chip" id="head">先落纪要，再成文</div></div>
+
+  <!-- 拷问时 -->
+  <div class="card step" id="pA">拷问起手</div>
+  <div class="card os step" id="pB">建分支 · 建目录 · 纪要草稿</div>
+  <div class="card os step" id="pC">每拍一条，当场写入</div>
+
+  <!-- 纪要 -->
+  <div class="cmd" id="memo" data-r="0">
+    <div class="tab os" id="memoTab" data-r="-2" style="transform: rotate(-2deg)">纪要</div>
+    <div id="stamp">草稿</div>
+    <div class="bar0">decision-memo.md:17,33,42</div>
+    <div class="bd">
+      <div class="sec"><span class="slot" id="slot0"></span><span class="ln" id="n0">17</span><span class="h" id="h0">## 拍板决策</span><div class="chip say" id="s0" data-r="2">含砍掉的候选</div><div class="bar" id="b0"></div><div class="bar s" id="b1"></div></div>
+      <div class="sec"><span class="slot" id="slot1"></span><span class="ln" id="n1">33</span><span class="h" id="h1">## 承重约束</span><div class="chip say" id="s1" data-r="-2">证据锚</div><div class="bar" id="b2"></div><div class="bar s" id="b3"></div></div>
+      <div class="sec"><span class="slot" id="slot2"></span><span class="ln" id="n2">42</span><span class="h" id="h2">## 接受的边角</span><div class="bar" id="b4"></div><div class="bar s" id="b5"></div></div>
+    </div>
+  </div>
+  <div class="tag" id="cut">断了 · 只丢最后一格</div>
+
+  <svg class="abs" id="wires" viewBox="0 120 1920 560" aria-hidden="true">
+    <g id="wCA" opacity="0">
+      <path d="M1208 288 H1270" fill="none" stroke="#161616" stroke-width="7"/>
+      <polygon points="1288,288 1266,276 1266,300" fill="#161616"/>
+    </g>
+    <g id="wAB" opacity="0">
+      <path d="M326 288 H388" fill="none" stroke="#161616" stroke-width="7"/>
+      <polygon points="396,288 376,277 376,299" fill="#161616"/>
+    </g>
+    <g id="wBC" opacity="0">
+      <path d="M736 288 H800" fill="none" stroke="#161616" stroke-width="7"/>
+      <polygon points="808,288 788,277 788,299" fill="#161616"/>
+    </g>
+    <path id="wCut" d="M1190 496 H1282" fill="none" stroke="#161616" stroke-width="6" stroke-dasharray="12 10" stroke-linecap="round" opacity="0"/>
+    <g id="wFwd" opacity="0">
+      <path d="M1340 566 V612 H230 M230 612 V654 M535 612 V654 M840 612 V654 M1145 612 V654" fill="none" stroke="#161616" stroke-width="7" stroke-linejoin="round"/>
+      <polygon points="230,666 218,644 242,644" fill="#161616"/>
+      <polygon points="535,666 523,644 547,644" fill="#161616"/>
+      <polygon points="840,666 828,644 852,644" fill="#161616"/>
+      <polygon points="1145,666 1133,644 1157,644" fill="#161616"/>
+    </g>
+    <g id="wBack" opacity="0">
+      <path d="M268 660 V636 H1392 V578 M573 660 V636 M878 660 V636 M1183 660 V636" fill="none" stroke="#f2efe6" stroke-width="6" stroke-dasharray="14 10" stroke-linejoin="round"/>
+      <polygon points="1392,566 1380,590 1404,590" fill="#f2efe6"/>
+    </g>
+  </svg>
+
+  <!-- 四个文档 -->
+  <div class="card doc" id="d0"><div class="nm">proposal</div><div class="chk">校验 <span class="tick"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+  <div class="card doc" id="d1"><div class="nm">design</div><div class="chk">校验 <span class="tick"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+  <div class="card doc" id="d2"><div class="nm">specs</div><div class="chk">校验 <span class="tick"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+  <div class="card doc" id="d3"><div class="nm">tasks</div><div class="chk">校验 <span class="tick"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+
+  <!-- 逐条对 -->
+  <div class="tag" id="cmpTag">拿纪要逐条对</div>
+  <div class="chip cmp" id="c0">漏没漏<span class="tick"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+  <div class="chip cmp" id="c1">反没反<span class="tick"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+  <div class="chip cmp" id="c2">多没多<span class="tick"><svg viewBox="0 0 30 28"><path d="M3 15 L11 23 L27 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+
+  <!-- 指纹 -->
+  <div class="card" id="fp">
+    <div class="tag" id="fpEx">示例</div>
+    <div class="ttl">纪要指纹</div>
+    <div class="row" id="fr0"><div class="lb">纪要里写的</div><div class="hv">b8fa85493133</div></div>
+    <div class="row" id="fr1"><div class="lb">现在重算的</div><div class="hv">c8a57e899355</div></div>
+    <div id="fpStop">不一样 → 停下</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。按录音实测（frame-times.py，2026-10-19）。注释写的是对应全稿第几句。
+  var CUE = {
+    head: 0.15,                // 76 句一开口：标题贴纸在屏幕正中放大出现
+    headHold: 1.15,            // 76 句：放大停约 1 秒后开始缩小
+    headMove: 0.6,             // 缩小并移到左上位置用 0.6 秒
+    shell: 1.6,                // 76 句：贴纸落位后，整条流程的空壳（淡），每块错开 0.06 秒
+    pA: 4.8,                   // 77 句「拷问一开始」
+    pB: 6.0,                   // 77 句「建好分支和这次改动的目录」
+    memo: 9.4,                 // 77 句「放一份纪要的草稿」，纪要卡出现
+    stamp: 10.3,               // 77 句，盖「草稿」章
+    real: 11.9,                // 78 句开口，右上角「实录 · 示例项目」
+    heads: [14.2, 18.9, 24.3], // 78 句「定了什么，砍掉了哪些方案」「承重约束和它的证据」「决定接受的地方」
+    headsEnd: 25.4,            // 78 句念完，黄框撤掉
+    pC: 26.5,                  // 79 句「每拍板一条，当场写进去」
+    wCA: 27.1,                 // 79 句，从「当场写入」连到纪要
+    bars: 27.2,                // 79 句，纪要里一格一格写入（每格间隔 0.4 秒，共 6 格，29.5 秒写完）
+    cut: 30.4,                 // 80 句「中途断了」，最后一格断掉
+    cutGone: 34.5,             // 81 句开口前后，「断了」收起
+    fwd: 35.8,                 // 81 句「再从纪要一次写成四个文档」
+    docs: [37.4, 38.3, 39.2, 40.1],   // 81 句「一个一个写」，每个文档出现；校验勾晚 0.7 秒
+    back: 43.7,                // 82 句「它还要拿纪要逐条对一遍」，四个文档回连纪要
+    cmpTag: 44.1,              // 82 句
+    cmp: [46.8, 48.5, 50.4],   // 82 句「决定有没有漏」「约束有没有写反」「有没有加了纪要里没有的东西」
+    fp: 53.3,                  // 83 句「纪要定稿时还会算一个内容指纹」
+    fpRows: [54.9, 57.9],      // 83 句「生成规格文档前对一下」两个值依次出现
+    fpStop: 59.2               // 83 句「防止纪要被悄悄改掉」，不一样，停下
+  };
+
+  var HEAD_SCALE = 1.7;          // 标题贴纸开头的放大倍数
+  var HEAD_CENTER = [960, 500];  // 放大时贴纸中心在画布上的位置
+  var SHELL = 0.3;  // 空壳透明度：讲到之前先占位，讲到时点亮到 1
+  // 空壳：shell 时刻起淡入到 SHELL，lit 时刻点亮到 1。卡片用 enter 进场，再乘上点亮系数。
+  function ghost(el, t, i, lit, dy) {
+    T.enter(el, T.p(t, CUE.shell + i * 0.06, 0.5), dy);
+    el.style.opacity = parseFloat(el.style.opacity) * (SHELL + (1 - SHELL) * T.ease(T.p(t, lit, 0.45)));
+  }
+  function ghostLine(el, t, i, lit) {
+    el.setAttribute('opacity', T.ease(T.p(t, CUE.shell + i * 0.06, 0.5)) * (SHELL + (1 - SHELL) * T.ease(T.p(t, lit, 0.3))));
+  }
+
+  // 代码窗口里的「当前」行：同 T.current 的黄描边，去掉为浅色底准备的灰环，深色窗口里只留黄框 + 外发光。
+  function lineOn(el, g) {
+    if (g <= 0.01) { el.style.outline = 'none'; el.style.boxShadow = 'none'; return; }
+    T.current(el, g, 0.01);
+    el.style.outlineOffset = '5px';
+    el.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.5 * g) + ')';
+  }
+
+  Stage({
+    duration: 62,
+    init: function () { return T.fonts('实录示例项目先落纪要再成文拷问起手建分支目录草稿每拍一条当场写入拍板决策含砍掉的候选承重约束证据锚接受的边角断了只丢最后一格校验拿逐条对漏没反多指纹里写的现在重算不一样停下'); },
+    render: function (t) {
+      // 标题贴纸：容器先放大到正中，停一会儿，再缩小移回原位；贴纸自己的进场（淡入、倾角）照旧
+      T.enter(T.$('head'), T.p(t, CUE.head, 0.45), -14);
+      var hw = T.$('headw'), hd = T.$('head');
+      var mv = T.ease(T.p(t, CUE.headHold, CUE.headMove));
+      var fx = HEAD_CENTER[0] - HEAD_SCALE * hd.offsetWidth / 2 - 90, fy = HEAD_CENTER[1] - HEAD_SCALE * hd.offsetHeight / 2 - 86;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + (HEAD_SCALE + (1 - HEAD_SCALE) * mv) + ')';
+      T.enter(T.$('real'), T.p(t, CUE.real, 0.45), -14);
+
+      // 拷问时三步与纪要窗口：开头是空壳，讲到时点亮
+      ghost(T.$('pA'), t, 0, CUE.pA, 16);
+      ghostLine(T.$('wAB'), t, 1, CUE.pB - 0.3);
+      ghost(T.$('pB'), t, 2, CUE.pB, 16);
+      ghostLine(T.$('wBC'), t, 3, CUE.pC - 0.3);
+      ghost(T.$('pC'), t, 4, CUE.pC, 16);
+      ghostLine(T.$('wCA'), t, 5, CUE.wCA);
+      ghost(T.$('memo'), t, 5, CUE.memo, 20);
+      T.$('stamp').style.opacity = T.ease(T.p(t, CUE.stamp, 0.3));
+
+      // 79 句：一格一格写入
+      var cutP = T.ease(T.p(t, CUE.cut, 0.4));
+      for (var i = 0; i < 6; i++) {
+        var bar = T.$('b' + i);
+        var on = T.ease(T.p(t, CUE.bars + i * 0.4, 0.3));
+        // 最后一格在 80 句断掉：变灰变虚线
+        bar.style.opacity = i === 5 ? on * (1 - 0.65 * cutP) : on;
+      }
+      var last = T.$('b5');
+      last.style.background = cutP > 0.01 ? 'transparent' : 'rgba(140,200,245,.6)';
+      last.style.border = cutP > 0.01 ? '3px dashed rgba(140,200,245,.9)' : '0';
+      last.style.boxSizing = 'border-box';
+      T.$('wCut').setAttribute('opacity', cutP * (1 - T.ease(T.p(t, CUE.cutGone, 0.4))));
+      T.enter(T.$('cut'), T.p(t, CUE.cut + 0.2, 0.45), 10);
+      T.$('cut').style.opacity = T.ease(T.p(t, CUE.cut + 0.2, 0.45)) * (1 - T.ease(T.p(t, CUE.cutGone, 0.4)));
+
+      // 78 句：三个小节标题依次点亮（行号同时出现，白话小卡晚 0.25 秒贴上）
+      for (var h = 0; h < 3; h++) {
+        var el = T.$('h' + h);
+        var hp = T.ease(T.p(t, CUE.heads[h], 0.35));
+        el.style.opacity = hp;
+        T.$('n' + h).style.opacity = hp;
+        if (h < 2) T.enter(T.$('s' + h), T.p(t, CUE.heads[h] + 0.25, 0.4), -8);
+        var end = h < 2 ? CUE.heads[h + 1] : CUE.headsEnd;
+        var gg = T.ease(T.p(t, CUE.heads[h], 0.3)) * (1 - T.ease(T.p(t, end, 0.3)));
+        lineOn(el, gg);
+        T.$('slot' + h).style.opacity = 1 - hp;
+      }
+
+      // 81 句：纪要 → 四个文档，每个带校验勾
+      ghostLine(T.$('wFwd'), t, 6, CUE.fwd);
+      for (var d = 0; d < 4; d++) {
+        ghost(T.$('d' + d), t, 7 + d, CUE.docs[d], 18);
+        T.$('d' + d).querySelector('.chk').style.opacity = T.ease(T.p(t, CUE.docs[d] + 0.7, 0.3));
+      }
+
+      // 82 句：回连纪要，逐条打勾
+      T.$('wBack').setAttribute('opacity', T.ease(T.p(t, CUE.back, 0.4)));
+      T.enter(T.$('cmpTag'), T.p(t, CUE.cmpTag, 0.45), 10);
+      for (var c = 0; c < 3; c++) {
+        T.enter(T.$('c' + c), T.p(t, CUE.cmp[c], 0.4), 12);
+        T.$('c' + c).querySelector('.tick').style.opacity = T.ease(T.p(t, CUE.cmp[c] + 0.4, 0.25));
+      }
+
+      // 83 句：指纹小卡
+      T.enter(T.$('fp'), T.p(t, CUE.fp, 0.5), 18);
+      for (var r = 0; r < 2; r++) T.$('fr' + r).style.opacity = T.ease(T.p(t, CUE.fpRows[r], 0.35));
+      T.$('fpStop').style.opacity = T.ease(T.p(t, CUE.fpStop, 0.3));
+    }
+  });
+</script>
+</body>
+</html>

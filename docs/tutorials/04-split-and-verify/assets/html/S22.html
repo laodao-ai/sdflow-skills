@@ -1,0 +1,110 @@
+<!doctype html>
+<!-- S22 · 机制动画（三栏对比卡）· script 152–161「SDFlow 怎么做就讲完了，最后跟那两家再对比一下。……总结一句话：先写测试再写代码，实现的时候只测相关的，最后全量跑测试，每一步都留下审查证据。」
+     「三家怎么测」，作本章小结。列：Superpowers · Matt Pocock · SDFlow；行：谁来做、先写测试、测试好坏、每个任务跑什么、最后跑什么、证据、测不了，七行逐字照 script.md 的 S22 画面行。
+     - 第 1 句：七个行名和「三家怎么测」从开头就在，三个列头在 1.0–2.2 秒依次出现（行名和列头是这一页的主体，格子里的内容讲到时才出）。第 1 句念完前只有行名和列头，约 6 秒，比 4.8「只有标题不超过 3 秒」长，录音后看要不要把第一列第一格提前。
+     - 第 2–4 句：Superpowers 一列逐格出现；第 5–7 句：Matt Pocock 一列；第 8–9 句：SDFlow 一列。当前列的列头黄描边。
+     - 第 10 句：卡底一行大字「先写测试 · 实现时只测相关的 · 最后全量跑 · 每步留证据」（作者 2026-10-31 第 173 条）。
+     - SDFlow 一列的标记：「同 Matt」格标「学 Matt Pocock」，「照搬 Matt」格标「学 Matt Pocock」，「每个 ticket 一个新 agent」标「学 Superpowers」；「改坏验红」「改动相关的集成」「收尾 ticket」「每层一行证据」四处标「SDFlow 自己加的」，这四段字本身也是墨底白字（.mk），同 S15。
+       「同 Matt，审查查顺序 · 改坏验红」一格同时带两个标记（学 Matt Pocock 管「同 Matt」，SDFlow 自己加的管「审查查顺序 · 改坏验红」）。
+     配色：列头与标记同色：Superpowers 琥珀（执行一侧，首期起一直是琥珀），Matt Pocock 紫（辅助色，本页有文字说明；本期里紫 = Matt Pocock），SDFlow 墨底白字；「SDFlow 自己加的」墨底；不用红绿蓝。卡底保持奶白（带色标签的卡底奶白）。
+     密度：七行三列照原文逐格做，正文 30px，低于 visual-v4 第三节「正文 34px」下限；标记 26px 达到标签下限。这是对比卡的信息量决定的，请作者看。
+     内容都在 y 930 以内，避开字幕带。
+     口播时刻按每分钟 220 字估算（还没录音；2026-10-31 按第 10 轮评审后的口播重估：第 2–10 句起点 6.5、14.6、20.9、29.0、34.1、42.0、46.9、58.3、67.8），录音后用 frame-times.py 对齐。 -->
+<html lang="zh-CN" data-frame-id="S22">
+<head>
+<meta charset="utf-8">
+<title>S22 · 三家怎么测</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #tb { position: absolute; left: 60px; top: 34px; width: 1800px; display: grid; grid-template-columns: 180px 440px 520px 640px; gap: 8px; align-items: stretch; }
+  .hd { box-sizing: border-box; height: 58px; margin-bottom: 14px; display: flex; align-items: center; justify-content: center; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--ink); }
+  #h1 { background: var(--amber); } #h2 { background: var(--violet); } #h3 { background: var(--ink); color: #fff; }
+  .lb { box-sizing: border-box; display: flex; align-items: center; padding: 4px 10px; font-weight: 800; font-size: 32px; line-height: 1.2; color: var(--ink); }
+  .ce { box-sizing: border-box; padding: 4px 12px; background: var(--cream); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px;
+        font-weight: 600; font-size: 32px; line-height: 1.25; min-height: 84px; position: relative; display: flex; align-items: center; flex-wrap: wrap; align-content: center; }
+  .ce code { font-family: var(--mono); font-weight: 600; font-size: 26px; margin: 0 4px; }
+  .tg { position: absolute; right: 14px; top: -19px; z-index: 2; font-style: normal; font-size: 26px; font-weight: 700; line-height: 1.2; padding: 0 10px; border: 3px solid var(--ink); border-radius: 6px; white-space: nowrap; }
+  .sd { padding-top: 22px; }
+  /* SDFlow 自己加的那段字：墨底白字，和 .tg.me 同色，同 S15（作者 2026-10-31）；inline-block 让底色不跨行、不压上下行 */
+  .mk { display: inline-block; background: var(--ink); color: #fff; padding: 0 10px; border-radius: 6px; line-height: 1.3; }
+  /* .ce 是 flex，墨底段两边的空格会被吞掉，紧贴前后的「+」或正文；只在原文有空格的两边用外边距补回 */
+  #c3_4 .mk { margin: 0 8px; }
+  #c3_5 .mk { margin-right: 8px; }
+  .tg.t2 { right: 244px; }
+  .tg.sp { background: var(--amber); } .tg.mt { background: var(--violet); } .tg.me { background: var(--ink); color: #fff; }
+  #end { position: absolute; left: 60px; top: 872px; width: 1800px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 52px; line-height: 1.1; color: var(--ink); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+<div id="tb">
+  <div class="lb" id="lt" style="font-size:36px;font-family:var(--display);white-space:nowrap;padding:0">三家怎么测</div>
+  <div class="hd" id="h1">Superpowers</div><div class="hd" id="h2">Matt Pocock</div><div class="hd" id="h3">SDFlow</div>
+  <div class="lb" id="l1">谁来做</div>
+  <div class="ce" id="c1_1">每个任务一个新 agent，不并行</div><div class="ce" id="c2_1"><code>implement</code> 自己做；<code>implement-spec</code> 每票一个子代理并行</div><div class="ce sd" id="c3_1">每个 ticket 一个新 agent，能并行 <i class="tg sp">学 Superpowers</i></div>
+  <div class="lb" id="l2">先写测试</div>
+  <div class="ce" id="c1_2">铁律，先写了代码就删掉重来</div><div class="ce" id="c2_2">先红后绿</div><div class="ce sd" id="c3_2">同 Matt，<span class="mk">审查查顺序 · 改坏验红</span> <i class="tg me">SDFlow 自己加的</i><i class="tg mt t2">学 Matt Pocock</i></div>
+  <div class="lb" id="l3">测试好坏</div>
+  <div class="ce" id="c1_3">有反模式清单</div><div class="ce" id="c2_3">接缝事先约定 · 不写恒真 · 不盯内部</div><div class="ce sd" id="c3_3">照搬 Matt 的三条，接缝自己定 <i class="tg mt">学 Matt Pocock</i></div>
+  <div class="lb" id="l4">每个任务跑什么</div>
+  <div class="ce" id="c1_4">针对性测试，提交前跑全套件</div><div class="ce" id="c2_4"><code>implement</code> 最后跑全套件；<code>implement-spec</code> 没写</div><div class="ce sd" id="c3_4">单元 + <span class="mk">改动相关的集成</span> + 标 <code>[e2e]</code> 的 <i class="tg me">SDFlow 自己加的</i></div>
+  <div class="lb" id="l5">最后跑什么</div>
+  <div class="ce" id="c1_5">全套件</div><div class="ce" id="c2_5">没写</div><div class="ce sd" id="c3_5"><span class="mk">收尾 ticket</span> 三层全跑，同一个提交 <i class="tg me">SDFlow 自己加的</i></div>
+  <div class="lb" id="l6">证据</div>
+  <div class="ce" id="c1_6">交红、绿两次输出；没有新跑的输出不许说完成</div><div class="ce" id="c2_6">没要求</div><div class="ce sd" id="c3_6"><span class="mk">每层一行证据</span>，0 用例算失败 <i class="tg me">SDFlow 自己加的</i></div>
+  <div class="lb" id="l7">测不了</div>
+  <div class="ce" id="c1_7">报「卡住了」</div><div class="ce" id="c2_7">没写</div><div class="ce sd" id="c3_7">写「未覆盖」和原因，或停下</div>
+</div>
+<div id="end">先写测试 · 实现时只测相关的 · 最后全量跑 · 每步留证据</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    base: 0.0,    // 第 1 句：行名
+    sp: 5.703,      // 第 2–4 句：Superpowers（第 2 句 6.5，第 3 句 14.6，第 4 句 20.9）
+    mt: 23.543,     // 第 5–7 句：Matt Pocock（第 5 句 29.0，第 6 句 34.1，第 7 句 42.0）
+    sd: 38.103,     // 第 8–9 句：SDFlow（第 8 句 46.9，第 9 句 58.3）
+    end: 56.823     // 第 10 句：总结一句话
+  };
+  // 每一格出现的时刻 [行, 秒]
+  // 2026-11-03：独立数组也按逐字时间对齐，不能只更新上面的AT列头节点。
+  var SP = [[1, 6.88], [2, 13.52], [3, 15.68], [4, 19.04], [5, 19.52], [6, 21.04], [7, 22.40]];
+  var MT = [[1, 24.00], [2, 25.84], [3, 28.24], [4, 34.56], [5, 34.76], [6, 35.44], [7, 36.82]];
+  var SD = [[1, 37.92], [2, 43.04], [3, 40.08], [4, 48.64], [5, 52.24], [6, 54.48], [7, 55.92]];
+
+  function fade(el, p) {
+    var e = T.ease(p);
+    el.style.opacity = e;
+    el.style.transform = 'translateY(' + ((1 - e) * 10) + 'px)';
+  }
+  function col(prefix, list, t, hdr) {
+    for (var i = 0; i < list.length; i++) fade(T.$(prefix + '_' + list[i][0]), T.p(t, list[i][1], 0.35));
+  }
+  // 列头：第 1 句里「那两家」时就出现（不留空屏），念到这一列的时候黄描边
+  function head(id, show, from, to, t) {
+    var h = T.$(id);
+    fade(h, T.p(t, show, 0.4));
+    T.current(h, T.ease(T.p(t, from + 0.3, 0.4)) * (1 - T.ease(T.p(t, to, 0.4))), 5);
+  }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 67.003,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      fade(T.$('lt'), T.p(t, AT.base, 0.4));
+      for (var i = 1; i <= 7; i++) fade(T.$('l' + i), T.p(t, AT.base + 0.2 + i * 0.15, 0.35));
+
+      head('h1', 1.0, AT.sp, AT.mt, t); col('c1', SP, t);
+      head('h2', 1.6, AT.mt, AT.sd, t); col('c2', MT, t);
+      head('h3', 2.2, AT.sd, AT.end, t); col('c3', SD, t);
+
+      T.enter(T.$('end'), T.p(t, AT.end + 0.3, 0.5), 14);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!doctype html>
+<!-- S28d（原 S20d、S24f） · 标题卡（示意）· script 203–207「评审是在给定的方案里挑，大家共同默认的前提，没人去查。……讨论方案也好，让它做决策也好，任何时候，你都可以问这一句，很有用。」
+     「一句话『魔法咒语』」章第 3 页（原 S18 后半）。示意，原理图，右上角「示意」。
+     - 第 203 句：标题「评审：在给定的方案里挑」一开头就在；三张方案卡落下，下面压着同一块「共同的前提」，旁边问号「没人查」。
+     - 第 204 句：右上角一行虚线说明「写进 SDFlow」，念到「单独问」时接上「· 不如单独问」（10-24 作者定：从右侧卡片改到右上角，改成说明行；「原因没深究」删去）。
+     - 第 206 句：那句话缩成一条（深色条）落下，当前，旁边标「我的经验」。
+       10-24 删去「这句话管用，是因为……」一句，也删去「箭头指回目标、再指向前提」的动画。
+     - 第 207 句：底部一行「讨论方案 · 做决策 · 任何时候」，随口播逐个进场（10-24 新规则：不放空壳）；念到「问这一句」时那句话再亮一次（当前）。
+     配色（2026-10-23）：三张方案卡和「讨论方案」「做决策」是规格一侧，用浅蓝；「那句话」条用墨底白字，加奶白「我的经验」标签，这页最醒目的一块；「共同的前提」保持炭灰底，「写进 SDFlow」保持奶白 / 墨。紫只留给「另一个模型」（2026-10-25 改），本页不用紫。
+     颜色：不用红绿；黄只给「当前」描边（同一时刻只有一个）；不用黄实底（问号贴纸是奶白底）。
+     内容整体在 y 900 以内，避开底部字幕带（y ≥ 940）。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。
+       句子起点（页内秒）：第 203 句 0.00，204 句 6.40，205 句 12.16（「我猜跟上下文和大模型的注意力机制有关，没有深究，有用就用了」），206 句 19.28，207 句 21.92，念完 28.64；页内时长 29.76。 -->
+<html lang="zh-CN" data-frame-id="S28d">
+<head>
+<meta charset="utf-8">
+<title>S28d · 共同的前提没人查，问那句话</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #head { left: 70px; top: 70px; font-size: 44px; }
+  #m1, #m2, #m3, #l1, #l2 { background: var(--blue-soft); }
+  #bar { background: var(--ink); }
+
+  .sc { top: 240px; width: 400px; height: 130px; padding: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 54px; }
+  #m1 { left: 90px; } #m2 { left: 535px; } #m3 { left: 980px; }
+  #slab { left: 90px; top: 410px; width: 970px; height: 120px; padding: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 54px; }
+  #ask { left: 1090px; top: 425px; display: flex; align-items: center; padding: 8px 22px 8px 12px; font-size: 44px; }
+  #ask .num { width: 60px; height: 60px; font-size: 38px; margin-right: 14px; }
+
+  #bar { left: 90px; top: 640px; width: 1290px; height: 100px; padding: 0 40px; display: flex; align-items: center; font-family: var(--display); font-weight: 800; font-size: 42px; white-space: nowrap; }
+  #bar .tab { left: 1000px; top: -52px; font-size: 34px; padding: 4px 22px; }
+
+  /* 右上角一行虚线说明（.tag），和左上标题同高 */
+  #sdf { right: 70px; top: 78px; font-size: 34px; white-space: nowrap; }
+
+  #last { position: absolute; left: 90px; top: 810px; display: flex; align-items: center; gap: 22px; }
+  #last .chip { position: static; font-size: 46px; padding: 8px 26px; }
+  #last .dot { font-family: var(--display); font-weight: 800; font-size: 46px; color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="head" data-r="-2">评审：在给定的方案里挑</div>
+
+  <div class="card sc" id="m1" data-r="-1.2">方案 A</div>
+  <div class="card sc" id="m2" data-r="1">方案 B</div>
+  <div class="card sc" id="m3" data-r="-0.8">方案 C</div>
+  <div class="card dark" id="slab" data-r="0.6">共同的前提</div>
+  <div class="chip" id="ask" data-r="3"><span class="num">?</span>没人查</div>
+
+  <div class="card dark" id="bar" data-r="-0.6">那句话：按第一性原理，从目标出发，重新调研<div class="tab" id="exp" data-r="2">我的经验</div></div>
+
+  <div class="tag" id="sdf" data-r="1.5">
+    写进 SDFlow<span id="sdf2"> · 不如单独问</span>
+  </div>
+
+  <div id="last">
+    <div class="chip" id="l1" data-r="-2">讨论方案</div><span class="dot" id="d1">·</span>
+    <div class="chip" id="l2" data-r="1.5">做决策</div><span class="dot" id="d2">·</span>
+    <div class="chip" id="l3" data-r="-1.5">任何时候</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒。
+  var AT = {
+    head: 0.0,                                  // 203 句开口：标题一开头就在
+    m: [0.84, 1.14, 1.44],                      // 203 句「给定的方案」（给 1.04）：三张方案卡（间隔不变）
+    slab: 2.76, ask: 4.28,                      // 203 句「共同默认的前提」（共 2.96）「没人去查」（没 4.48）
+    sdf: 7.64, sdf2: 9.8,                       // 204 句「写进 SDFlow」（写 7.84）「单独问」（单 10.00）
+    bar: 19.08, barCur: 19.38, barEnd: 21.52, exp: 20.12, // 206 句开口（19.28）：那句话缩成一条，当前；「经验」（20.32）出「我的经验」；barEnd = 207 句起点（21.92）前 0.4 秒
+    last: 22.28, l: [22.28, 23.72, 25.4],       // 207 句「讨论方案」（22.48）「让它做决策」（23.92）「任何时候」（25.60）：三段逐个点亮
+    again: 26.68                                // 「问这一句」（问 26.88）：那句话再亮
+  };
+  var P = T.p, E = T.ease;
+
+  function gate(t, from, to) { return E(P(t, from, 0.4)) * (to === undefined ? 1 : 1 - E(P(t, to, 0.4))); }
+  function fade(el, t, at) { el.style.opacity = E(P(t, at, 0.35)); }
+
+  Stage({
+    duration: 29.76,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.enter(T.$('head'), P(t, AT.head, 0.45), 14);
+
+      // 203 句：三张方案卡，下面压着同一块「共同的前提」，旁边「没人查」
+      for (var i = 0; i < 3; i++) T.enter(T.$('m' + (i + 1)), P(t, AT.m[i], 0.5), 16);
+      T.enter(T.$('slab'), P(t, AT.slab, 0.5), 16);
+      T.enter(T.$('ask'), P(t, AT.ask, 0.45), -14);
+
+      // 204 句：右上角说明行「写进 SDFlow · 不如单独问」
+      T.enter(T.$('sdf'), P(t, AT.sdf, 0.5), 16);
+      fade(T.$('sdf2'), t, AT.sdf2);
+
+      // 206 句：那句话缩成一条（当前），旁标「我的经验」
+      T.enter(T.$('bar'), P(t, AT.bar, 0.5), 16);
+      fade(T.$('exp'), t, AT.exp);
+      var bar = gate(t, AT.barCur, AT.barEnd) + gate(t, AT.again);   // 两段不重叠
+      T.current(T.$('bar'), Math.min(1, bar), 10);
+
+      // 207 句：底部一行，逐个点亮
+      var ls = ['l1', 'd1', 'l2', 'd2', 'l3'], at = [AT.l[0], AT.l[1], AT.l[1], AT.l[2], AT.l[2]];
+      for (var j = 0; j < ls.length; j++) {
+        var el = T.$(ls[j]);
+        if (el.hasAttribute('data-r')) T.enter(el, P(t, at[j], 0.4), 12);
+        else el.style.opacity = E(P(t, at[j], 0.4));
+      }
+    }
+  });
+</script>
+</body>
+</html>

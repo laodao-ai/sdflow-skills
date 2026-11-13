@@ -1,0 +1,260 @@
+<!doctype html>
+<!-- S25a · 机制动画 · script 101–107「图也按需求来画：结构上画上下文、容器和组件图。……能在写的时候防住的，就别留到评审再查。」
+     十三种设计图的图鉴（示意）。图的分类与名字依据 ~/.sdflow/workflow/design-diagrams.md 第二节分类、第三节触发表；
+     名字取口播与分镜的叫法（第二节的 Context / Container / Component / 依赖图 / 序列图 / 流程·决策图 / 阻塞 DAG，
+     分别写作 上下文图 / 容器图 / 组件图 / 模块关系图 / 时序图 / 决策图 / 任务依赖图；竞态时序图 = 第三节「并发 / 共享可变状态 → 序列图（竞态交互时序）」）。
+     - 每张缩略图只画这种图长什么样（几个框几条线），不写场景。不是示例项目的产物，右上角标「示意」。
+     - 0 秒：十三张暗着排好（三行：结构 5 / 行为 5 / 验证与决策 3，左边是组名）。
+     - 101 句：念到「结构」时结构组亮起，组名当前。
+     - 102 句：念到「状态机」时行为组亮起。
+     - 103 句：念到「测试覆盖图」时验证与决策组亮起。
+     - 104 句：念到「看懂方案」时上方出标签 ①「看懂方案」，当前到 105 句开口。
+     - 105 句：念到「走一遍」时出标签 ②「逼 AI 走一遍流程、露出盲点」，当前到 106 句开口。
+     - 106 句：念到「配置」时底部出 openspec/config.yaml 一行（示例项目 fd14628，取 context 段 :23-28 里画图规则那一行 :25），当前到 107 句开口。
+       文件原文用黑底代码窗口（分镜「约定」· 文件原文，作者 2026-10-17 定）：标题栏「示例项目 fd14628 · openspec/config.yaml:25」（2026-10-19：删去右下独立的「实录 · 示例项目 fd14628」虚线标签），窗口不倾斜，原文那一行加黄框。
+     - 107 句：网格、两个标签、配置行都留到页尾，接 S26；配置行的「当前」黄框在第 107 句开口时淡出（不再淡出网格，页尾不留空屏）。
+     - 时刻按录音实测（frame-times.py，2026-10-19），集中在 CUE 数组与 AT_* 常量。
+     - 内容整体在 y 930 以上，避开底部字幕带。
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排；网格不再淡出；配置窗口标题栏并入「示例项目 fd14628」，删去 #rec 标签。 -->
+<html lang="zh-CN" data-frame-id="S25a">
+<head>
+<meta charset="utf-8">
+<title>S25a · 十三种设计图</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .grp { position: absolute; left: 60px; width: 200px; height: 200px; box-sizing: border-box;
+         display: flex; align-items: center; justify-content: center; text-align: center;
+         background: var(--ink); color: var(--cream); border-radius: 10px; box-shadow: 8px 8px 0 #0b0b0b;
+         font-family: var(--display); font-weight: 800; font-size: 46px; line-height: 1.15; }
+
+  .tile { width: 298px; height: 200px; padding: 14px 18px 10px; border-width: 4px; box-shadow: 7px 7px 0 var(--ink);
+          display: flex; flex-direction: column; align-items: center; }
+  .tile svg { width: 260px; height: 120px; flex: none; overflow: visible; }
+  .tile .nm { margin-top: 6px; font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1.1; white-space: nowrap; }
+  .tile svg .s { fill: none; stroke: #161616; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  .tile svg .b { fill: #f2efe6; stroke: #161616; stroke-width: 4; stroke-linejoin: round; }
+  .tile svg .k { fill: #161616; }
+  .tile svg .d { fill: none; stroke: #161616; stroke-width: 3; stroke-dasharray: 7 6; }
+  .tile svg .a { fill: none; stroke: #161616; stroke-width: 4; stroke-linecap: round; marker-end: url(#ah); }
+  .tile svg .os { fill: #43a0ed; stroke: #161616; stroke-width: 4; stroke-linejoin: round; }
+
+  .r1 { top: 162px; } .r2 { top: 388px; } .r3 { top: 614px; }
+
+  .ben { top: 36px; display: flex; align-items: center; gap: 18px; padding: 10px 26px 10px 14px; font-size: 40px; }
+  .ben .num { width: 60px; height: 60px; }
+
+  /* 文件原文：黑底代码窗口（基于 .cmd），标题栏写文件与行号，窗口不倾斜。 */
+  #cfg { left: 60px; top: 829px; width: 1800px; padding: 0; overflow: visible; white-space: normal; box-shadow: 8px 8px 0 var(--ink); }
+  #cfg .bar { height: 40px; display: flex; align-items: center; padding: 0 24px; box-sizing: border-box;
+              background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0;
+              font-size: 26px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #cfg .body { height: 60px; display: flex; align-items: center; gap: 30px; padding: 0 24px; font-size: 34px; white-space: nowrap; }
+  #cfg .ln { flex: none; color: var(--unlit); }
+  #cfg .code { padding: 0 8px; margin: 0 -8px; border-radius: 6px; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 箭头头部，各缩略图共用 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 Z" fill="#161616"/>
+      </marker>
+    </defs>
+  </svg>
+
+  <div class="mock">示意</div>
+
+  <div class="chip ben" id="ben1" style="left:290px"><span class="num">1</span>看懂方案</div>
+  <div class="chip ben" id="ben2" style="left:680px"><span class="num">2</span>逼 AI 走一遍流程、露出盲点</div>
+
+  <!-- 组名 -->
+  <div class="grp r1" id="g1" data-r="-1">结构</div>
+  <div class="grp r2" id="g2" data-r="1">行为</div>
+  <div class="grp r3" id="g3" data-r="-1">验证与<br>决策</div>
+
+  <!-- 结构 -->
+  <div class="card tile r1 t1" style="left:290px">
+    <svg viewBox="0 0 260 120"><!-- 上下文图：用户 ↔ 系统 ↔ 外部系统 -->
+      <circle class="b" cx="32" cy="36" r="13"/><path class="s" d="M12 86 Q32 50 52 86 Z"/>
+      <rect class="os" x="92" y="30" width="80" height="58" rx="6"/>
+      <rect class="b" x="204" y="38" width="46" height="42" rx="5" stroke-dasharray="7 6"/>
+      <line class="a" x1="58" y1="60" x2="88" y2="60"/><line class="a" x1="176" y1="59" x2="200" y2="59"/>
+    </svg><div class="nm">上下文图</div></div>
+  <div class="card tile r1 t1" style="left:606px">
+    <svg viewBox="0 0 260 120"><!-- 容器图：边界里的应用、服务、数据库 -->
+      <rect class="d" x="6" y="6" width="248" height="108" rx="8"/>
+      <rect class="b" x="22" y="36" width="58" height="44" rx="5"/>
+      <rect class="b" x="106" y="36" width="58" height="44" rx="5"/>
+      <path class="b" d="M190 34 v44 a20 7 0 0 0 40 0 v-44"/><ellipse class="b" cx="210" cy="34" rx="20" ry="7"/>
+      <line class="a" x1="82" y1="58" x2="102" y2="58"/><line class="a" x1="166" y1="58" x2="186" y2="58"/>
+    </svg><div class="nm">容器图</div></div>
+  <div class="card tile r1 t1" style="left:922px">
+    <svg viewBox="0 0 260 120"><!-- 组件图：一个容器里的几个模块 -->
+      <rect class="b" x="10" y="6" width="240" height="108" rx="8"/>
+      <rect class="os" x="30" y="22" width="70" height="32" rx="4"/><rect class="b" x="160" y="22" width="70" height="32" rx="4"/>
+      <rect class="b" x="30" y="70" width="70" height="32" rx="4"/><rect class="b" x="160" y="70" width="70" height="32" rx="4"/>
+      <line class="a" x1="102" y1="38" x2="156" y2="38"/><line class="a" x1="65" y1="56" x2="65" y2="66"/><line class="a" x1="102" y1="86" x2="156" y2="86"/>
+    </svg><div class="nm">组件图</div></div>
+  <div class="card tile r1 t1" style="left:1238px">
+    <svg viewBox="0 0 260 120"><!-- 模块关系图：模块之间的依赖方向 -->
+      <rect class="os" x="10" y="44" width="56" height="32" rx="4"/>
+      <rect class="b" x="102" y="8" width="56" height="32" rx="4"/><rect class="b" x="102" y="80" width="56" height="32" rx="4"/>
+      <rect class="b" x="194" y="44" width="56" height="32" rx="4"/>
+      <line class="a" x1="66" y1="52" x2="98" y2="32"/><line class="a" x1="66" y1="68" x2="98" y2="88"/>
+      <line class="a" x1="158" y1="32" x2="190" y2="52"/><line class="a" x1="158" y1="88" x2="190" y2="68"/>
+    </svg><div class="nm">模块关系图</div></div>
+  <div class="card tile r1 t1" style="left:1554px">
+    <svg viewBox="0 0 260 120"><!-- 部署图：两台机器上的部署单元 -->
+      <path class="b" d="M14 30 l14 -14 h76 l-14 14 Z"/><path class="b" d="M90 30 l14 -14 v72 l-14 14 Z"/><rect class="b" x="14" y="30" width="76" height="72"/>
+      <rect class="os" x="28" y="50" width="48" height="30" rx="3"/>
+      <path class="b" d="M160 30 l14 -14 h76 l-14 14 Z"/><path class="b" d="M236 30 l14 -14 v72 l-14 14 Z"/><rect class="b" x="160" y="30" width="76" height="72"/>
+      <rect class="b" x="174" y="50" width="48" height="30" rx="3"/>
+      <line class="s" x1="106" y1="66" x2="158" y2="66"/>
+    </svg><div class="nm">部署图</div></div>
+
+  <!-- 行为 -->
+  <div class="card tile r2 t2" style="left:290px">
+    <svg viewBox="0 0 260 120"><!-- 状态机图：状态 + 转换，含一条回边 -->
+      <circle class="k" cx="12" cy="66" r="8"/>
+      <circle class="b" cx="62" cy="66" r="24"/><circle class="os" cx="140" cy="66" r="24"/><circle class="b" cx="218" cy="66" r="24"/>
+      <line class="a" x1="22" y1="66" x2="34" y2="66"/><line class="a" x1="88" y1="66" x2="112" y2="66"/><line class="a" x1="166" y1="66" x2="190" y2="66"/>
+      <path class="a" d="M206 44 Q140 -4 74 44"/>
+    </svg><div class="nm">状态机图</div></div>
+  <div class="card tile r2 t2" style="left:606px">
+    <svg viewBox="0 0 260 120"><!-- 数据流图：输入 → 处理 → 输出，旁边一个存储 -->
+      <rect class="b" x="6" y="22" width="56" height="40" rx="4"/>
+      <circle class="os" cx="130" cy="42" r="26"/>
+      <rect class="b" x="198" y="22" width="56" height="40" rx="4"/>
+      <line class="a" x1="64" y1="42" x2="98" y2="42"/><line class="a" x1="158" y1="42" x2="194" y2="42"/>
+      <path class="s" d="M96 96 h68 M96 116 h68"/><line class="a" x1="130" y1="70" x2="130" y2="90"/>
+    </svg><div class="nm">数据流图</div></div>
+  <div class="card tile r2 t2" style="left:922px">
+    <svg viewBox="0 0 260 120"><!-- 决策图：一个判断，两条分支 -->
+      <path class="os" d="M130 8 L170 46 L130 84 L90 46 Z"/>
+      <rect class="b" x="6" y="80" width="62" height="34" rx="4"/><rect class="b" x="192" y="80" width="62" height="34" rx="4"/>
+      <path class="a" d="M90 46 H37 V76"/><path class="a" d="M170 46 H223 V76"/>
+    </svg><div class="nm">决策图</div></div>
+  <div class="card tile r2 t2" style="left:1238px">
+    <svg viewBox="0 0 260 120"><!-- 时序图：三条生命线，消息按先后排 -->
+      <rect class="b" x="12" y="2" width="56" height="24" rx="3"/><rect class="os" x="102" y="2" width="56" height="24" rx="3"/><rect class="b" x="192" y="2" width="56" height="24" rx="3"/>
+      <line class="d" x1="40" y1="28" x2="40" y2="118"/><line class="d" x1="130" y1="28" x2="130" y2="118"/><line class="d" x1="220" y1="28" x2="220" y2="118"/>
+      <line class="a" x1="40" y1="48" x2="124" y2="48"/><line class="a" x1="130" y1="72" x2="214" y2="72"/>
+      <line class="a" x1="220" y1="98" x2="46" y2="98" stroke-dasharray="8 6"/>
+    </svg><div class="nm">时序图</div></div>
+  <div class="card tile r2 t2" style="left:1554px">
+    <svg viewBox="0 0 260 120"><!-- 竞态时序图：两条请求同时打到同一个共享状态 -->
+      <rect class="b" x="6" y="2" width="56" height="24" rx="3"/><rect class="os" x="102" y="2" width="56" height="24" rx="3"/><rect class="b" x="198" y="2" width="56" height="24" rx="3"/>
+      <line class="d" x1="34" y1="28" x2="34" y2="118"/><line class="d" x1="226" y1="28" x2="226" y2="118"/>
+      <rect class="b" x="122" y="40" width="16" height="74"/>
+      <line class="a" x1="34" y1="54" x2="116" y2="54"/><line class="a" x1="226" y1="62" x2="144" y2="62"/>
+      <path class="s" d="M150 84 l14 14 M164 84 l-14 14"/>
+    </svg><div class="nm">竞态时序图</div></div>
+
+  <!-- 验证与决策 -->
+  <div class="card tile r3 t3" style="left:290px">
+    <svg viewBox="0 0 260 120"><!-- 测试覆盖图：代码路径 → 测试类型 -->
+      <rect class="b" x="6" y="6" width="70" height="26" rx="3"/><rect class="b" x="6" y="47" width="70" height="26" rx="3"/><rect class="b" x="6" y="88" width="70" height="26" rx="3"/>
+      <rect class="os" x="184" y="10" width="70" height="26" rx="13"/><rect class="b" x="184" y="84" width="70" height="26" rx="13"/>
+      <line class="a" x1="78" y1="19" x2="180" y2="23"/><line class="a" x1="78" y1="60" x2="180" y2="27"/><line class="a" x1="78" y1="101" x2="180" y2="97"/>
+    </svg><div class="nm">测试覆盖图</div></div>
+  <div class="card tile r3 t3" style="left:606px">
+    <svg viewBox="0 0 260 120"><!-- 对比表：候选 × 评估维度 -->
+      <rect class="b" x="6" y="6" width="248" height="108" rx="4"/>
+      <rect class="os" x="6" y="6" width="248" height="30" rx="4"/>
+      <path class="s" d="M6 72 H254 M84 6 V114 M170 6 V114"/>
+      <path class="s" d="M110 52 l8 9 l16 -18 M196 88 l8 9 l16 -18"/>
+      <path class="s" d="M198 46 l16 16 M214 46 l-16 16 M112 84 l16 16 M128 84 l-16 16"/>
+      <path class="s" d="M22 54 h44 M22 92 h44"/>
+    </svg><div class="nm">对比表</div></div>
+  <div class="card tile r3 t3" style="left:922px">
+    <svg viewBox="0 0 260 120"><!-- 任务依赖图：三个任务都完成后才能做第四个 -->
+      <circle class="b" cx="40" cy="20" r="16"/><circle class="b" cx="40" cy="60" r="16"/><circle class="b" cx="40" cy="100" r="16"/>
+      <circle class="os" cx="214" cy="60" r="20"/>
+      <line class="a" x1="58" y1="24" x2="190" y2="54"/><line class="a" x1="58" y1="60" x2="188" y2="60"/><line class="a" x1="58" y1="96" x2="190" y2="66"/>
+    </svg><div class="nm">任务依赖图</div></div>
+
+  <!-- 底部：示例项目的 openspec/config.yaml 里那一行 -->
+  <div class="cmd" id="cfg" data-r="0">
+    <div class="bar">示例项目 fd14628 · openspec/config.yaml:25</div>
+    <div class="body"><span class="ln">25</span><span class="code" id="cfgLine">design-diagrams.md  设计画图规则（哪些图、何时画、ASCII 优先）</span></div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 句子开口时刻，按录音实测（frame-times.py，2026-10-19）。下标 0 = 本页第 1 句 = 全稿 101 句。
+  var CUE = [
+    0.0,   // 101 图也按需求来画：结构上画上下文、容器和组件图。
+    6.56,  // 102 行为上画状态机、数据流、决策和时序图。
+    11.52, // 103 还有测试覆盖图、对比表和任务依赖图。
+    16.8,  // 104 画图有两个好处：一是方便你看懂方案……
+    24.96, // 105 二是逼着 AI 把流程一步步走一遍……
+    32.96, // 106 这些要求我写进了 OpenSpec 的配置里……
+    40.72  // 107 能在写的时候防住的，就别留到评审再查。（44.08 念完）
+  ];
+  function S(n) { return CUE[n - 101]; }
+
+  // 句内节点，取该词第一个字的实测开始时间（可提前至多 0.2 秒）
+  var AT_G = [2.3, 7.5, 12.0];   // 101「结构」（结 2.40）、102「状态机」（状 7.52）、103「测试覆盖图」（测 12.08）
+  var GAP  = [0.3, 0.25, 0.35];  // 组内逐张亮起的间隔
+  var AT_BEN1 = 20.1;            // 104 句念到「看懂方案」（看 20.16）
+  var AT_BEN2 = 27.6;            // 105 句念到「走一遍」（走 27.68）
+  var AT_CFG  = 35.0;            // 106 句念到「配置」（配 35.04）
+
+  var CREAM = [242, 239, 230], DIM = [160, 157, 151];
+  // 代码窗口里的「当前」行：同 T.current 的黄描边，去掉为浅色底准备的灰环，深色窗口里只留黄框 + 外发光。
+  function lineOn(el, g) {
+    T.current(el, g, 0.01);
+    el.style.outlineOffset = '4px';
+    el.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.5 * g) + ')';
+  }
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+
+  Stage({
+    duration: 45.2,
+    init: function () { return T.fonts('示意看懂方案逼走一遍流程、露出盲点结构行为验证与决策上下文图容器组件模块关系部署状态机数据流时序竞态测试覆盖对比表任务依赖示例项目设计画规则（哪些何时ASCII优先）·'); },
+    render: function (t) {
+      T.enter(document.querySelector('.mock'), T.p(t, 0.2, 0.4), -10);
+
+      // 网格：0 秒暗着排好，留到页尾（2026-10-19 第七轮：原 107 句开口后淡出，屏上空约 5 秒）
+      var fade = 1;
+      var NEXT = [S(102), S(103), S(104)];
+      for (var g = 0; g < 3; g++) {
+        var grp = T.$('g' + (g + 1));
+        T.enter(grp, T.p(t, 0.1 + g * 0.1, 0.4), 12);
+        grp.style.opacity = T.ease(T.p(t, 0.1 + g * 0.1, 0.4)) * fade;
+        T.current(grp, on(t, AT_G[g], NEXT[g]), 8);
+
+        var tiles = T.all('.t' + (g + 1));
+        for (var i = 0; i < tiles.length; i++) {
+          var el = tiles[i];
+          var pin = T.p(t, 0.2 + (g * 5 + i) * 0.04, 0.4);
+          T.enter(el, pin, 12);
+          el.style.opacity = T.ease(pin) * fade;
+          var lit = T.ease(T.p(t, AT_G[g] + i * GAP[g], 0.5));
+          el.style.background = T.mix(DIM, CREAM, lit);
+          el.querySelector('svg').style.opacity = 0.35 + 0.65 * lit;
+          el.querySelector('.nm').style.opacity = 0.45 + 0.55 * lit;
+        }
+      }
+
+      // 104、105 句：两个好处
+      T.enter(T.$('ben1'), T.p(t, AT_BEN1, 0.45), -14);
+      T.current(T.$('ben1'), on(t, AT_BEN1, S(105)), 7);
+      T.enter(T.$('ben2'), T.p(t, AT_BEN2, 0.45), -14);
+      T.current(T.$('ben2'), on(t, AT_BEN2, S(106)), 7);
+
+      // 106 句：底部配置行 + 出处
+      var cfg = T.$('cfg');
+      var pc = T.ease(T.p(t, AT_CFG, 0.5));
+      cfg.style.opacity = pc;
+      cfg.style.transform = 'translateY(' + ((1 - pc) * -12) + 'px)';
+      lineOn(T.$('cfgLine'), on(t, AT_CFG, S(107)));
+
+    }
+  });
+</script>
+</body>
+</html>

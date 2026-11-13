@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- S28 · 标题卡 · script 118–121「那怎么办呢？……简称 TDD。」
+     术语卡：中文名大字，下一行英文全称加简称，再下一句一句话讲清做法（贴纸）。
+     还没提 Superpowers，所以不用琥珀；不加颜色编码。卡是定下来的定义，倾角小。 -->
+<html lang="zh-CN" data-frame-id="S28">
+<head>
+<meta charset="utf-8">
+<title>S28 · 测试驱动开发</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #term { left: 260px; top: 250px; width: 1400px; height: 380px; padding: 36px 64px; }
+  #term .big { font-size: 140px; line-height: 1.2; }
+  #term .en { font-family: var(--display); font-weight: 800; font-size: 64px; color: #4a4843; margin-top: 10px; white-space: nowrap; }
+  #how { left: 520px; top: 710px; font-size: 56px; padding: 16px 40px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="term" data-r="-1.5"><div class="big">测试驱动开发</div><div class="en">Test-Driven Development（TDD）</div></div>
+  <div class="chip" id="how" data-r="2">先写测试，再写实现</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 10,
+    init: function () { return T.fonts('测试驱动开发（）先写测试，再写实现'); },
+    render: function (t) {
+      T.enter(T.$('term'), T.p(t, 9.28, 0.6), 30);   // 120 句念到「测试驱动开发」@9.28（实测）
+      T.enter(T.$('how'), T.p(t, 4.96, 0.6), 30);   // 先写测试，再写实现：先@4.96（按实测，2026-10-06，frame-times.py）
+    }
+  });
+</script>
+</body>
+</html>

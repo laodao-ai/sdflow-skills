@@ -1,0 +1,105 @@
+<!doctype html>
+<!-- S27a · 标题卡 · 局限与改进（讲改进办法）· script 188–191「所以我的办法是，把它写成一条新规则，加进领域清单。……你用的时候，也可以把自己项目踩过的坑，一条条加进去。」（4 句）
+     10-24 晚作者定：从 S27 拆出（原 S27 下半部分），版式照原样放大、居中。
+     规则编号待回填：「BE-新」是占位，SDFlow 后端清单（~/.sdflow/workflow/spec-checklists/domains/backend.md）加完这条规则后，按实际编号和原文回填。
+     BE-01、BE-08、BE-09 是该文件里的真实条目名，淡显（墨色 65% 不透明，2026-10-25 由 50% 提到 65%，浅蓝底上够读）。
+     - 第 188 句：标题贴纸「改进：加一条领域规则」先在正中放大，停 1 秒，缩小移到左上（4.8）；念到「新规则」出后端清单卡，三行已有规则淡显。
+     - 第 189 句：念到「加了一条」新加一行「BE-新  给人看的时间 → 时区先问人」，当前。
+     - 第 190 句：箭头从清单卡指向「领域审 → 交人拍板」，念到「下次领域审」出，当前。
+     - 第 191 句：一行「你的坑 → 加进你的清单」，念到「踩过的坑」出。
+     一页一层：后出的加在下面或旁边，不替换前面的。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。
+     句子起点（页内秒）：188 句 0，189 句 6.00，190 句 13.12，191 句 18.56，念完 22.96；页内时长 23.36。
+     配色：后端清单是规格一侧，卡底蓝浅，新行奶白 + 墨边；领域审卡奶白；「你的坑」深色卡；不用黄实底（黄实底只表示 AI 的猜）。
+     内容整体在 y 880 以内，避开字幕带。  -->
+<html lang="zh-CN" data-frame-id="S27a">
+<head>
+<meta charset="utf-8">
+<title>S27a · 改进：加一条领域规则</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #lines { position: absolute; left: 0; top: 0; width: 1920px; height: 930px; }
+
+  /* 后端清单卡：放大、居中 */
+  /* 整体居中：卡、下面两格都落在 x 240–1680；卡内四行间距 110，新行下沿离面板下沿 20px 以上 */
+  #cl { left: 240px; top: 215px; width: 1440px; height: 510px; padding: 0; background: var(--blue-soft); }
+  .rl { position: absolute; left: 36px; width: 1358px; height: 84px; box-sizing: border-box; display: flex; align-items: center; gap: 30px;
+        font-weight: 600; font-size: 48px; color: var(--ink); white-space: nowrap; }
+  .rl .id { font-family: var(--mono); font-weight: 700; font-size: 42px; }
+  .old { opacity: 0; }
+  #nr { background: var(--cream); border: 4px solid var(--ink); border-radius: 8px; padding-left: 20px; font-family: var(--display); font-weight: 800; font-size: 54px; opacity: 0; }
+  #nr .id { font-family: var(--mono); font-size: 42px; }
+
+  #rv { left: 240px; top: 790px; width: 660px; height: 100px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  #rv .big { font-size: 54px; white-space: nowrap; }
+  #yk { left: 960px; top: 790px; width: 720px; height: 100px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  #yk .big { font-size: 54px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="lines" viewBox="0 0 1920 930" aria-hidden="true">
+    <path id="ar" d="M570 732 C 585 750 555 764 570 778" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" pathLength="1"/>
+    <polygon id="arh" points="552,768 588,768 570,788" fill="#161616"/>
+  </svg>
+
+  <div class="chip" id="q1" data-r="-2" style="left:80px;top:40px;font-size:52px">改进：加一条领域规则</div>
+
+  <div class="card" id="cl" data-r="0">
+    <div class="tab os" id="clt" style="font-size:44px">后端清单</div>
+    <div class="rl old" id="r1" style="top:50px"><span class="id">BE-01</span>DB Schema 迁移</div>
+    <div class="rl old" id="r2" style="top:160px"><span class="id">BE-08</span>退避重试与熔断</div>
+    <div class="rl old" id="r3" style="top:270px"><span class="id">BE-09</span>优雅退出与部署</div>
+    <div class="rl" id="nr" style="top:380px;height:90px"><span class="id">BE-新</span>给人看的时间 → 时区先问人</div>
+  </div>
+
+  <div class="card" id="rv" data-r="-1"><div class="big">领域审 → 交人拍板</div></div>
+  <div class="card dark" id="yk" data-r="0.5"><div class="big">你的坑 → 加进你的清单</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒。
+  var CUE = {
+    cl: 2.52, rows: [3.12, 3.52, 3.92],  // 188 句念到「新规则」（2.72）：后端清单卡与已有规则（淡显）；三行间隔不变
+    nr: 7.56, nrEnd: 12.82,              // 189 句念到「加一条」（7.76）：新行（当前）；nrEnd = 190 句起点前 0.3 秒
+    ar: 12.92, rv: 13.32, rvEnd: 18.26,  // 190 句念到「下次」（13.12）、「领域审」（13.52）：箭头与领域审卡（当前）；rvEnd = 191 句起点前 0.3 秒
+    yk: 20.6                             // 191 句念到「踩过的坑」（20.80）：一行
+  };
+  var P = T.p, E = T.ease;
+  function span(t, a, b) { return E(P(t, a, 0.4)) * (1 - E(P(t, b, 0.3))); }
+
+  Stage({
+    duration: 23.36,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 188 句：开头标题贴纸，0–1.0 秒在正中放大，1.0–1.6 秒缩小移到左上。
+      var q = T.$('q1'), W = q.offsetWidth, H = q.offsetHeight, m = E(P(t, 1.0, 0.6));
+      q.style.opacity = E(P(t, 0, 0.4));
+      q.style.transform = 'translate(' + ((1 - m) * (960 - (80 + W / 2))) + 'px,' + ((1 - m) * (470 - (40 + H / 2))) + 'px) scale(' + (1.7 - 0.7 * m) + ') rotate(-2deg)';
+
+      // 188 句：后端清单卡，已有规则淡显。
+      T.enter(T.$('cl'), P(t, CUE.cl, 0.5), 16);
+      CUE.rows.forEach(function (a, i) { T.$('r' + (i + 1)).style.opacity = .65 * E(P(t, a, 0.4)); });
+
+      // 189 句：新加一行。
+      T.enter(T.$('nr'), P(t, CUE.nr, 0.45), 12);
+      T.$('nr').style.opacity = E(P(t, CUE.nr, 0.45));
+      T.current(T.$('nr'), span(t, CUE.nr + 0.3, CUE.nrEnd), 8);
+
+      // 190 句：箭头指向「领域审 → 交人拍板」。
+      var ap = E(P(t, CUE.ar, 0.5));
+      T.$('ar').style.strokeDasharray = '1';
+      T.$('ar').style.strokeDashoffset = String(1 - ap);
+      T.$('ar').style.opacity = ap > 0 ? 1 : 0;
+      T.$('arh').style.opacity = E(P(t, CUE.ar + 0.4, 0.2));
+      T.enter(T.$('rv'), P(t, CUE.rv, 0.45), 14);
+      T.current(T.$('rv'), span(t, CUE.rv + 0.3, CUE.rvEnd), 10);
+
+      // 191 句：你的坑 → 加进你的清单。
+      T.enter(T.$('yk'), P(t, CUE.yk, 0.45), 14);
+    }
+  });
+</script>
+</body>
+</html>

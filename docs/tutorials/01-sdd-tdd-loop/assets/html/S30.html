@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- S30 · 机制动画 · script 129–132「这么走下来，每一步只有两种结果：通过，或者不通过。……AI 一着急，就想先把代码写出来。」
+     - 上排四步，每步只有两盏灯：「不通过」亮红、「通过」亮绿（红 / 绿 = 测试失败 / 通过）。
+       每一步都先红后绿（接 S29：先失败，再通过）。步骤只编号，不编步骤名。
+     - 中间：「AI 说：做完了」被一道墨线划掉（「错」不用红），换成「看测试」；「看测试」是当前。
+     - 2026-10-06：原第 135 句（压短开场后是 131 句）「Superpowers 就是用来管住这件事的」移到章节标签页 S30a，原来最后出现的 Superpowers 字样删掉。 -->
+<html lang="zh-CN" data-frame-id="S30">
+<head>
+<meta charset="utf-8">
+<title>S30 · 看测试</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .step { top: 230px; width: 380px; height: 300px; padding: 24px 30px; }
+  .lamps { position: absolute; left: 30px; right: 30px; bottom: 26px; display: flex; justify-content: space-around; }
+  .lamp { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .lamp i { width: 84px; height: 84px; box-sizing: border-box; border-radius: 50%; border: 5px solid var(--ink); background: var(--cream); }
+  .lamp span { font-weight: 600; font-size: 32px; color: var(--ink); white-space: nowrap; }
+  .step .num { position: absolute; left: 24px; top: 20px; }
+
+  .said { left: 180px; top: 680px; font-family: var(--display); font-weight: 800; font-size: 54px; padding: 16px 36px; }
+  .strike { position: absolute; left: 160px; top: 704px; width: 520px; height: 60px; }
+  .arrow { position: absolute; left: 740px; top: 704px; width: 220px; height: 70px; }
+  .look { left: 1000px; top: 660px; padding: 22px 48px; }
+  .look .big { font-size: 72px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card step" id="st0" data-r="-1.5" style="left:110px"><span class="num">1</span>
+    <div class="lamps"><div class="lamp"><i class="no"></i><span>不通过</span></div><div class="lamp"><i class="ok"></i><span>通过</span></div></div></div>
+  <div class="card step" id="st1" data-r="1" style="left:560px"><span class="num">2</span>
+    <div class="lamps"><div class="lamp"><i class="no"></i><span>不通过</span></div><div class="lamp"><i class="ok"></i><span>通过</span></div></div></div>
+  <div class="card step" id="st2" data-r="-1" style="left:1010px"><span class="num">3</span>
+    <div class="lamps"><div class="lamp"><i class="no"></i><span>不通过</span></div><div class="lamp"><i class="ok"></i><span>通过</span></div></div></div>
+  <div class="card step" id="st3" data-r="1.5" style="left:1460px"><span class="num">4</span>
+    <div class="lamps"><div class="lamp"><i class="no"></i><span>不通过</span></div><div class="lamp"><i class="ok"></i><span>通过</span></div></div></div>
+
+  <div class="chip said" id="said" data-r="-3">AI 说：做完了</div>
+  <svg class="strike" id="strike" viewBox="0 0 520 60">
+    <path d="M14 44 Q 260 20 506 14" fill="none" stroke="#161616" stroke-width="9" stroke-linecap="round"/>
+  </svg>
+  <svg class="arrow" id="arrow" viewBox="0 0 220 70">
+    <path d="M28 38 Q 100 22 170 34" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="20" cy="38" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    <polygon points="162,12 214,34 164,56" fill="#f2efe6"/>
+  </svg>
+  <div class="card look" id="look" data-r="1.5" data-shadow="10"><div class="big">看测试</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var CREAM = [242, 239, 230], FAIL = [229, 83, 75], PASS = [76, 195, 138];
+  function lerp(a, b, p) { return [0, 1, 2].map(function (k) { return a[k] + (b[k] - a[k]) * p; }); }
+  Stage({
+    duration: 9.5,
+    init: function () { return T.fonts('不通过AI 说：做完了看测试'); },
+    render: function (t) {
+      // 1. 一排步骤；每一步先亮红（不通过），再亮绿（通过），红灯随之熄灭。
+      // 时刻按实测（2026-10-06，frame-times.py）：每一步@1.28，做没做完@6.40，不用听@7.36，看测试@8.56。
+      T.items('.step', 0.2, 0.25, t, 24);
+      var no = T.all('.lamp i.no'), ok = T.all('.lamp i.ok');
+      for (var i = 0; i < 4; i++) {
+        var r = T.p(t, 1.28 + i * 0.7, 0.3), g = T.p(t, 1.63 + i * 0.7, 0.3);
+        // 红灯：奶白 → 红（不通过），绿灯亮起时红灯熄回奶白。
+        no[i].style.background = T.mix(lerp(CREAM, FAIL, T.ease(r)), CREAM, T.ease(g));
+        T.fill(ok[i], PASS, g);
+      }
+
+      // 2. 做没做完，不听它说，看测试。
+      T.enter(T.$('said'), T.p(t, 6.40, 0.4), 16);
+      T.strike(T.$('strike'), T.p(t, 7.36, 0.4));
+      T.$('said').style.background = T.mix(CREAM, [196, 193, 186], T.ease(T.p(t, 7.36, 0.4)));
+      T.wipe(T.$('arrow'), T.p(t, 8.56, 0.4), 'x');
+      T.enter(T.$('look'), T.p(t, 8.56, 0.45), 20);
+      T.current(T.$('look'), T.ease(T.p(t, 8.56, 0.3)));
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!doctype html>
+<!-- S16a · 机制动画（探索之后进 /sdflow-spec）· script 46–50「像上一期那种小改动，边界和方向一开始就很清楚，探索可以很短，甚至可以跳过。……这里我主要借鉴了 grill-with-docs 的核心思路和做法，然后增加了一些自己的规则。」
+     2026-10-19 第五轮改稿：新开一页，放在 S17 前。第 46–47 句原在 S16（缩小画面 + 右边小卡），第 48–50 句的 grill 画面原在 S17（原第 53–54 句），
+     口播改了，画面跟着改：不再放「直接调用被划掉」「别人的仓库」「grill-me 更新版压住」那几步。
+     开头不留空屏（visual-v4 §4.8）：第 46 句一开口流程一行就出。
+     布局（内容全在 y 920 以上，避开底部字幕带）：
+     - 上排流程一行（y 150–380）：左 explore 节点（x 80、y 210），箭头上「开搞」贴纸，右 /sdflow-spec 深色卡（x 700–1700、y 150–380），
+       卡里三步「澄清 · 拷问 · 成文」。explore 下方贴纸「小改动：可短可跳过」；卡底下贴纸「每次都跑」对着「澄清」；
+       「+ 我加的规则」虚线贴纸压在卡的右上角（卡的子元素，跟着卡一起倾）。
+     - 下排（y 560–810）：左「第三方 skill」卡（x 120、y 600，grill-me / grill-with-docs，样式取自 S17 原 #gA），
+       箭头从卡右边沿 y 705 走到 x 1540，再向上指到 /sdflow-spec 卡底边（y 388）。箭头上的标签「借鉴核心思路和做法」压在横线上。
+     - 黄只表示「当前」：第 47 句「澄清」，第 48 句移到「拷问」，第 49 句开口淡出；「亮」用奶白实底（澄清、拷问、成文）：黄框移走后「澄清」也停在奶白实底，不退回空心（2026-10-19 第七轮）。explore 改虚线框 = 可省略，不是当前。
+     时间线（按录音实测，frame-times.py，2026-10-19；全部写在 CUES 里）：
+     - 第 46 句（0–7.44）：0 explore → 0.3 箭头 → 0.65「开搞」 → 0.9 深色卡；1.2 念到「小改动」贴纸「小改动：可短可跳过」；
+       5.28 念到「探索可以很短」explore 改虚线框（实线投影淡掉）。
+     - 第 47 句（8.64–17.84）：9.04 念到「澄清」黄框；9.6 念到「跳不过」贴纸「每次都跑」。
+     - 第 48 句（18.96–20.48）：19.84 念到「就进拷问」黄框从「澄清」移到「拷问」，「澄清」点亮成奶白实底。
+     - 第 49 句（21.44–30.32）：21.44 开口 黄框淡出、左「第三方 skill」卡进场；23.52 念到「吸收进了 SDFlow」箭头画向 /sdflow-spec（画 0.9 秒，箭头头最后出）；
+       28.88 念到「拷问和生成规格」卡里「拷问」亮，29.6 念到「生成」「成文」亮。
+     - 第 50 句（31.44–38.8）：32.32 念到「借鉴」箭头上出标签「借鉴核心思路和做法」；36.88 念到「然后增加」/sdflow-spec 旁贴虚线贴纸「+ 我加的规则」。
+       念完（38.8）停在最后一帧，duration 40（本页实测时长 40.00）。
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排。第 48 句由「探索完了，然后就是拷问。」改成「澄清完，就进拷问。」（少 3 字，约 0.8 秒）：
+       第 48 句开口（19.5）与「拷问」黄框（20.6）不变，第 49 句起的节点整体前移 0.8 秒，duration 42 → 41。
+       末态：「澄清」在黄框移走时（cur2）点亮成奶白实底，同「拷问」「成文」。 -->
+<html lang="zh-CN" data-frame-id="S16a">
+<head>
+<meta charset="utf-8">
+<title>S16a · 探索之后进 sdflow-spec</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 上排：explore → 开搞 → /sdflow-spec */
+  #fE { left: 80px; top: 210px; font-family: var(--mono); font-weight: 700; font-size: 46px; padding: 14px 30px; }
+  #tSmall { left: 60px; top: 330px; }
+  #fArrow { left: 0; top: 0; width: 1920px; height: 940px; overflow: visible; }
+  #fGo { left: 440px; top: 226px; font-family: var(--display); font-weight: 800; font-size: 44px; padding: 6px 26px; }
+  #fS { left: 700px; top: 150px; width: 1000px; height: 230px; padding: 38px 44px 0; }
+  #fS .nm { font-family: var(--mono); font-weight: 700; font-size: 54px; line-height: 1.25; white-space: nowrap; }
+  #fS .steps { display: flex; gap: 20px; margin-top: 26px; }
+  #fS .st { padding: 6px 24px; border: 3px solid var(--cream-dim); border-radius: 8px; font-weight: 600; font-size: 42px; color: var(--cream); white-space: nowrap; }
+  #tEvery { left: 30px; top: 258px; }
+  #sRule { left: 700px; top: -62px; border-style: dashed; box-shadow: none; }
+
+  /* 下排：第三方 skill → 箭头 → /sdflow-spec（样式取自 S17 原 #gA） */
+  #gA { left: 120px; top: 600px; width: 600px; height: 210px; padding: 46px 40px 0; }
+  #gA .nm { font-family: var(--mono); font-weight: 700; font-size: 52px; line-height: 1.25; white-space: nowrap; }
+  #gA .nm.s { font-size: 40px; }
+  #gArrow { left: 0; top: 0; width: 1920px; height: 940px; overflow: visible; }
+  #gLab { left: 880px; top: 668px; font-size: 40px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg class="abs" id="fArrow" viewBox="0 0 1920 940" aria-hidden="true">
+    <path id="fArrowP" d="M352 262 H690" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" pathLength="1"/>
+    <polygon id="fArrowH" points="696,262 672,248 672,276" fill="#161616"/>
+  </svg>
+  <div class="chip" id="fE" data-r="-1">explore</div>
+  <div class="tag" id="tSmall" data-r="-3">小改动：可短可跳过</div>
+  <div class="chip" id="fGo" data-r="-2">开搞</div>
+  <div class="card dark" id="fS" data-r="1">
+    <div class="nm">/sdflow-spec</div>
+    <div class="steps"><span class="st" id="st1">澄清</span><span class="st" id="st2">拷问</span><span class="st" id="st3">成文</span></div>
+    <div class="tag" id="tEvery" data-r="-2">每次都跑</div>
+    <div class="chip" id="sRule" data-r="3">+ 我加的规则</div>
+  </div>
+
+  <div class="card" id="gA" data-r="-1">
+    <div class="tab ink">第三方 skill</div>
+    <div class="nm">grill-me</div>
+    <div class="nm s">grill-with-docs</div>
+  </div>
+  <svg class="abs" id="gArrow" viewBox="0 0 1920 940" aria-hidden="true">
+    <path id="gArrowP" d="M732 705 H1540 V412" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/>
+    <polygon id="gArrowH" points="1540,388 1524,414 1556,414" fill="#161616"/>
+  </svg>
+  <div class="chip" id="gLab" data-r="-1">借鉴核心思路和做法</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，画面从 0 算）。按录音实测（frame-times.py，2026-10-19）。
+  var CUES = {
+    fE: 0,               // 第 46 句 一开口：explore 节点
+    fArrow: 0.3,         // 箭头画出
+    fGo: 0.65,            // 「开搞」贴纸
+    fS: 0.9,             // /sdflow-spec 深色卡（含三步）
+    small: 1.2,          // 第 46 句 「小改动」：贴纸「小改动：可短可跳过」
+    dashed: 5.28,        // 第 46 句 「探索可以很短」：explore 改虚线框
+    cur1: 9.04,          // 第 47 句 「澄清」：黄框
+    every: 9.6,         // 第 47 句 「跳不过」：贴纸「每次都跑」
+    cur2: 19.84,         // 第 48 句 「就进拷问」：黄框移到「拷问」，「澄清」同时点亮
+    gA: 21.44,           // 第 49 句 开口：第三方 skill 卡；黄框淡出
+    absorb: 23.52,       // 第 49 句 「吸收进了 sdflow」：箭头画向 /sdflow-spec
+    lit2: 28.88,         // 第 49 句 「拷问和生成规格」：「拷问」亮
+    lit3: 29.6,          //   「生成」「成文」亮
+    lab: 32.32,          // 第 50 句 「借鉴」：箭头上的标签
+    rule: 36.88          // 第 50 句 「然后增加」：虚线贴纸「+ 我加的规则」
+  };
+  var CREAM = [242, 239, 230], DIM = [160, 157, 151];
+
+  function gate(t, from, to) { return T.ease(T.p(t, from, 0.4)) * (1 - T.ease(T.p(t, to, 0.4))); }
+  // 步骤格的黄框：只给「当前」。
+  function yellow(el, g) {
+    el.style.outline = '5px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '4px';
+    el.style.boxShadow = '0 0 30px rgba(245,207,74,' + (0.5 * g) + ')';
+  }
+  // 步骤格点亮：奶白实底 + 墨字。
+  function lit(el, p) {
+    el.style.background = 'rgba(242,239,230,' + p + ')';
+    el.style.color = T.mix([242, 239, 230], [22, 22, 22], p);
+    el.style.borderColor = T.mix(DIM, [242, 239, 230], p);
+  }
+
+  Stage({
+    duration: 40,
+    init: function () { return T.fonts('开搞小改动可短跳过每次都跑澄清拷问成文第三方借鉴核心思路和做法我加的规则'); },
+    render: function (t) {
+      // 第 46 句：流程一行
+      T.enter(T.$('fE'), T.p(t, CUES.fE, 0.4), 14);
+      var pa = T.p(t, CUES.fArrow, 0.4);
+      T.$('fArrowP').style.strokeDasharray = '1';
+      T.$('fArrowP').style.strokeDashoffset = String(1 - T.ease(pa));
+      T.$('fArrowH').style.opacity = T.ease(T.p(t, CUES.fArrow + 0.3, 0.2));
+      T.enter(T.$('fGo'), T.p(t, CUES.fGo, 0.4), -10);
+      T.enter(T.$('fS'), T.p(t, CUES.fS, 0.5), 16);
+      T.enter(T.$('tSmall'), T.p(t, CUES.small, 0.4), 12);
+      // explore 改虚线框：实线变虚线，墨色投影淡掉（可省略 = 不再是实心的一步）
+      var dz = T.ease(T.p(t, CUES.dashed, 0.4)), fe = T.$('fE');
+      fe.style.borderStyle = dz > 0 ? 'dashed' : 'solid';
+      fe.style.boxShadow = '7px 7px 0 rgba(22,22,22,' + (1 - dz) + ')';
+
+      // 第 47–48 句：黄框先给「澄清」，再移到「拷问」；第 49 句开口淡出
+      yellow(T.$('st1'), gate(t, CUES.cur1, CUES.cur2));
+      lit(T.$('st1'), T.ease(T.p(t, CUES.cur2, 0.4)));   // 黄框移走后「澄清」停在奶白实底
+      yellow(T.$('st2'), gate(t, CUES.cur2, CUES.gA));
+      T.enter(T.$('tEvery'), T.p(t, CUES.every, 0.4), 12);
+
+      // 第 49 句：第三方 skill 卡，箭头画向 /sdflow-spec，卡里「拷问」「成文」亮
+      T.enter(T.$('gA'), T.p(t, CUES.gA, 0.5), 16);
+      var pb = T.p(t, CUES.absorb, 0.9);
+      T.$('gArrowP').style.strokeDasharray = '1';
+      T.$('gArrowP').style.strokeDashoffset = String(1 - T.ease(pb));
+      T.$('gArrowH').style.opacity = T.ease(T.p(t, CUES.absorb + 0.8, 0.2));
+      lit(T.$('st2'), T.ease(T.p(t, CUES.lit2, 0.4)));
+      lit(T.$('st3'), T.ease(T.p(t, CUES.lit3, 0.4)));
+
+      // 第 50 句：箭头标签，虚线贴纸
+      T.enter(T.$('gLab'), T.p(t, CUES.lab, 0.4), -10);
+      T.enter(T.$('sRule'), T.p(t, CUES.rule, 0.4), -12);
+    }
+  });
+</script>
+</body>
+</html>

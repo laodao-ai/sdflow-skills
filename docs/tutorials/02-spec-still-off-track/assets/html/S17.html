@@ -1,0 +1,258 @@
+<!doctype html>
+<!-- S17 · 机制动画（拷问三问卡）· script 51–60「拷问阶段：怎么问到点上呢？……这三问说的其实是一件事：AI 负责把问题找出来、给出推荐方案、把后果摆清楚，决策还是你来做。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排；第 52、60 句措辞改（三件事→三个问题，这三件→这三问），不调时刻
+     2026-10-18 作者定：整页重排。开头不留空屏（visual-v4 §4.8）。
+     2026-10-19 第五轮改稿：原第 53–54 句的 grill 画面移到 S16a；本页从拷问阶段的问句起，第 51 句一开口顶行就在屏幕正中放大。
+     布局：
+     - 顶行（y 30–126）：左边「拷问：怎么问到点上？」，样式同 S15 顶行；右边引文黑底代码窗口（实录，sdflow-spec/SKILL.md:62 原文一行），
+       文件原文一律黑底代码窗口，标题栏写文件与行号，窗口不倾斜，只有「实录」标签倾斜（分镜「约定」· 文件原文，作者 2026-10-17 定）。
+     - 三条等高横带（x 60–1860，每条高 170，y 224 / 422 / 620）：左边行标题（编号 + 名字），x 500 一条竖线，右边是内容区（x 525–1820）。
+       讲过的行内容一直留着，不变灰；只给当前行加黄色「当前」描边（作者 2026-10-18 定）。
+     - 最下一行（y 806 起）：AI 找问题、给推荐、摆后果 → 你来决策。
+     时间线（按录音实测，frame-times.py，2026-10-19；全部写在 CUES 里）：
+     - 第 51 句（0–2.32 秒）：顶行贴纸一开口（0 秒）在屏幕正中放大出现，念到句末前（1.4 秒起，用 0.6 秒）缩小移回左上（同 S20a、S21 的标题贴纸）。
+     - 第 52 句（3.43 秒起）：3.83 秒起三条横带以空壳淡淡地出（透明度 .35，行标题可见）；念到「问谁」（5.99）「先问什么」（7.11）「问到什么时候停」（8.71）时三条横带依次点亮。
+       「问谁」一行的三格先是空壳（只有格标题，淡）。
+     - 第 53–55 句（10.95 秒起）：「问谁」一行当前，三格依次点亮：查得到的 → AI 自己查 / 有几个方案 → AI 调研后带推荐和三方面后果（系统 · 用户 · 开发），你拍板 /
+       只有你知道的（需求 · 约束 · 偏好）→ 问你。第 54 句念到「你来拍板」（27.51 秒）时顶行右边落下引文窗口。
+     - 第 56 句（37.35 秒）：S16 探索实录那句「这个只有你知道」缩成一张小卡，飞进第三格，留在格里。
+     - 第 57 句（42.39 秒起）：「先问什么」一行当前：「承重约束 → 先攻」（44.79），旁边一块「前提」（47.67）撑着方案 A B C（48.27 起）；念到「它一倒」（50.95 秒）时前提一晃，三张一起晃，晃完回原位，之后一直留着。
+     - 第 58–59 句（54.63 秒起）：「问到什么时候停」一行当前：「问了 N 轮」（57.51）被划掉（58.23），右边「每条承重约束有证据：」（58.87）+ 三种证据：文件行号（63.43）/ 命令输出（65.91）/ 你的确认（67.75）。
+     - 第 60 句（70.07 秒起）：横带的当前描边淡出，最下一行出来（73.83），念到「决策还是你来做」（80.39 秒）时「你来决策」加黄框。口播念完约 81.7 秒，duration 82.9（本页实测时长 82.87）。
+     - 不用蓝 / 琥珀 / 红 / 绿；黄只给「当前」。横带手写倾角 ±0.3°（长卡按自动倾角 1–2° 两端会错开十几像素，作者规则 §4.3 第 4 条允许单独调）；
+       会被自动倾斜的组件不用 transform 定位，只在进场、飞入、晃动的动画里临时叠 transform。
+     - 内容整体在 y 920 以上，避开底部字幕带。 -->
+<html lang="zh-CN" data-frame-id="S17">
+<head>
+<meta charset="utf-8">
+<title>S17 · 拷问三问卡</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 顶行：样式同 S15 #head。外层 #headw 管放大和位移，贴纸自己只管倾角 */
+  #headw { left: 60px; top: 30px; transform-origin: 0 0; }
+  #head { left: 0; top: 0; height: 96px; padding: 0 44px; display: flex; align-items: center; }
+
+  #head .a { font-family: var(--display); font-weight: 800; font-size: 56px; color: var(--ink); white-space: nowrap; }
+
+  /* 顶行右边：引文窗口（基于 .cmd，缩小） */
+  #quote { left: 1200px; top: 56px; width: 660px; padding: 0; overflow: visible; white-space: normal; }
+  #quote .tab { left: auto; right: 22px; top: -48px; font-size: 34px; padding: 2px 20px; }
+  #quote .bar { height: 40px; display: flex; align-items: center; padding: 0 22px; box-sizing: border-box;
+                background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0;
+                font-size: 26px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #quote .body { padding: 12px 22px 14px; display: flex; gap: 26px; font-size: 34px; line-height: 1.4; }
+  #quote .ln { flex: none; color: var(--unlit); }
+  #quote .q { flex: 1; white-space: nowrap; color: var(--cream); }
+
+  /* 三条横带：左边行标题，竖线右边内容区。内容用横带内的坐标定位。 */
+  .band { left: 60px; width: 1800px; height: 170px; padding: 0; }
+  #band1 { top: 224px; }
+  #band2 { top: 422px; }
+  #band3 { top: 620px; }
+  .band .lab { position: absolute; left: 24px; top: 0; height: 160px; display: flex; align-items: center; gap: 16px; }
+  .band .lab .num { width: 58px; height: 58px; font-size: 34px; }
+  .band .lab .t { font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--ink); white-space: nowrap; }
+  .band .div { position: absolute; left: 440px; top: 18px; width: 5px; height: 124px; background: var(--ink); opacity: .75; border-radius: 3px; }
+
+  /* 问谁：三格（横带内坐标） */
+  .cell { top: 7px; height: 146px; padding: 8px 18px; border-width: 4px; box-shadow: 6px 6px 0 var(--ink); }
+  .cell .h { font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1.1; color: var(--ink); white-space: nowrap; }
+  .cell .b { font-weight: 600; font-size: 34px; line-height: 1.25; color: var(--ink); white-space: nowrap; }
+  .cell .b i { font-style: normal; font-family: var(--mono); font-weight: 700; margin-right: 8px; }
+  #c1 { left: 465px; width: 260px; }
+  #c2 { left: 743px; width: 535px; }
+  #c3 { left: 1296px; width: 460px; padding: 8px 14px; }
+  /* 第 56 句飞进第三格的缩略卡：S16 探索实录里那一句。放在第三格「→ 问你」右边，28px，留在格内 */
+  #thumb { left: 1440px; top: 100px; padding: 0 12px; border-width: 4px; box-shadow: 5px 5px 0 var(--ink);
+           font-weight: 600; font-size: 28px; line-height: 1.15; white-space: nowrap; }
+
+  /* 先问什么（横带内坐标） */
+  #k2 { left: 465px; top: 44px; font-family: var(--display); font-weight: 800; font-size: 44px; padding: 8px 24px; }
+  #k2 .a { font-family: var(--mono); font-weight: 700; margin: 0 12px; }
+  .plan { top: 12px; width: 210px; text-align: center; padding: 4px 0; font-size: 34px; border-width: 4px; box-shadow: 5px 5px 0 var(--ink); }
+  #p1 { left: 960px; }
+  #p2 { left: 1200px; }
+  #p3 { left: 1440px; }
+  #base { left: 930px; top: 96px; width: 750px; height: 58px; padding: 0; display: flex; align-items: center; justify-content: center;
+          font-family: var(--display); font-weight: 800; font-size: 40px; border-width: 4px; box-shadow: 6px 6px 0 var(--ink); }
+
+  /* 问到什么时候停（横带内坐标） */
+  #stop { left: 465px; top: 46px; background: var(--cream); }
+  #strike { left: 477px; top: 0; height: 5px; background: var(--ink); border-radius: 3px; }
+  #need { left: 715px; top: 58px; font-weight: 600; font-size: 34px; color: var(--ink); white-space: nowrap; }
+  .ev { top: 46px; }
+  #e1 { left: 1070px; }
+  #e2 { left: 1305px; }
+  #e3 { left: 1540px; }
+
+  /* 最下一行 */
+  #last { left: 60px; top: 806px; padding: 10px 24px; }
+  #last .k { font-weight: 600; font-size: 42px; color: var(--ink); }
+  #last .a { font-family: var(--mono); font-weight: 700; font-size: 38px; color: var(--ink); margin: 0 14px; }
+  #last .you { display: inline-block; padding: 0 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="headw"><div class="card" id="head"><span class="a">拷问：怎么问到点上？</span></div></div>
+
+  <div class="cmd" id="quote" data-r="0">
+    <div class="tab ink" data-r="-2" style="transform: rotate(-2deg)">实录</div>
+    <div class="bar">sdflow-spec/SKILL.md:62</div>
+    <div class="body"><span class="ln">62</span><span class="q">人做的是拍板，不是替你做调研。</span></div>
+  </div>
+
+  <!-- 1 问谁 -->
+  <div class="card band" id="band1" data-r="-0.3">
+    <div class="lab"><span class="num">1</span><span class="t">问谁</span></div>
+    <div class="div"></div>
+    <div class="card cell" id="c1" data-r="1"><div class="h">查得到的</div><div class="b" id="c1b"><i>→</i>AI 自己查</div></div>
+    <div class="card cell" id="c2" data-r="-1"><div class="h">有几个方案</div><div class="b" id="c2b"><i>→</i>AI 调研后带推荐和三方面后果<br>（系统 · 用户 · 开发），你拍板</div></div>
+    <div class="card cell" id="c3" data-r="1"><div class="h">只有你知道的</div><div class="b" id="c3b">需求 · 约束 · 偏好<br><i>→</i>问你</div></div>
+    <div class="card dark" id="thumb" data-r="-2">这个只有你知道</div>
+  </div>
+
+  <!-- 2 先问什么 -->
+  <div class="card band" id="band2" data-r="0.3">
+    <div class="lab"><span class="num">2</span><span class="t">先问什么</span></div>
+    <div class="div"></div>
+    <div class="chip" id="k2">承重约束<span class="a">→</span>先攻</div>
+    <div class="card" id="base" data-r="0">前提</div>
+    <div class="chip plan" id="p1" data-r="0">方案 A</div>
+    <div class="chip plan" id="p2" data-r="0">方案 B</div>
+    <div class="chip plan" id="p3" data-r="0">方案 C</div>
+  </div>
+
+  <!-- 3 问到什么时候停 -->
+  <div class="card band" id="band3" data-r="-0.3">
+    <div class="lab"><span class="num">3</span><span class="t">问到什么时候停</span></div>
+    <div class="div"></div>
+    <div class="chip" id="stop">问了 N 轮</div>
+    <div class="abs" id="strike"></div>
+    <div class="abs" id="need">每条承重约束有证据：</div>
+    <div class="chip ev" id="e1">文件行号</div>
+    <div class="chip ev" id="e2">命令输出</div>
+    <div class="chip ev" id="e3">你的确认</div>
+  </div>
+
+  <div class="chip" id="last"><span class="k">AI 找问题、给推荐、摆后果</span><span class="a">→</span><span class="k"><span class="you" id="you">你来决策</span></span></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，画面从 0 算）。按录音实测（frame-times.py，2026-10-19）。
+  var CUES = {
+    head: 0,                      // 第 51 句 一开口：顶行贴纸在屏幕正中放大出现
+    headMove: 1.4,                // 第 51 句末：缩小移回左上，用 0.6 秒
+    shell: 3.83,                  // 第 52 句 开口后：三条横带空壳（每条晚 0.12 秒）
+    lit: [5.99, 7.11, 8.71],         // 第 52 句 「问谁」「先问什么」「问到什么时候停」：横带点亮
+    cur1: 10.95, cur2: 42.39, cur3: 54.63, curEnd: 70.07,  // 第 53 / 57 / 58 句开口换当前行，第 60 句开口描边淡出
+    c1: 13.19,                    // 第 53 句 「代码里查得到的事实」
+    c2: 18.63,                    // 第 54 句 「有几个方案可选的」
+    quote: 27.51,                 // 第 54 句 「你来拍板」：引文窗口
+    c3: 29.51,                    // 第 55 句 「只有你自己知道的」
+    thumbFrom: 37.35, thumbTo: 38.35,  // 第 56 句 「前面探索里那句」：缩略卡飞进第三格
+    k2: 44.79,                    // 第 57 句 「先攻承重约束」
+    base: 47.67,                  // 第 57 句 「好几个方案都靠它支撑着的那个前提」
+    plans: [48.27, 48.67, 49.07],
+    shake: 50.95,                 // 第 57 句 「它一倒」：前提一晃，三张一起晃
+    stop: 57.51, strike: 58.23,     // 第 58 句 「不看问了几轮」→ 划掉
+    need: 58.87,                  // 第 58 句 「看每条承重约束有没有证据」
+    ev: [63.43, 65.91, 67.75],       // 第 59 句 「代码的文件和行号」「命令的输出」「你本人的确认」
+    last: 73.83,                  // 第 60 句 「AI 负责把问题找出来……」
+    you: 80.39                    // 第 60 句 「决策还是你来做」
+  };
+  var SHELL = 0.35;  // 空壳透明度：讲到之前先占位，讲到时点亮到 1
+  var HEAD_SCALE = 1.5;          // 顶行贴纸开头的放大倍数
+  var HEAD_CENTER = [960, 470];  // 放大时贴纸中心在画布上的位置
+
+  function gate(t, from, to) { return T.ease(T.p(t, from, 0.4)) * (1 - T.ease(T.p(t, to, 0.4))); }
+  function mulOpacity(el, k) { el.style.opacity = parseFloat(el.style.opacity) * k; }
+  // 阻尼摇晃：t0 起幅度 amp 度，约 2.5 秒衰减回 0。
+  function wobble(t, t0, amp, phase) {
+    if (t < t0) return 0;
+    var d = t - t0;
+    return amp * Math.sin(13 * d + phase) * Math.exp(-1.8 * d);
+  }
+
+  Stage({
+    duration: 82.9,
+    init: function () { return T.fonts('拷问怎么到点上实录人做的是拍板不替你调研谁查得自己有几个方案后带推荐和三面果系统用户开发只知道需求约束偏好这先什承重攻前提时候停了轮每条证据文件行号命令输出确认找题给摆来决策'); },
+    render: function (t) {
+      // 第 51 句：顶行贴纸先在正中放大，句末缩小移回左上
+      T.enter(T.$('head'), T.p(t, CUES.head, 0.4), -14);
+      var hw = T.$('headw'), hd = T.$('head');
+      var mv = T.ease(T.p(t, CUES.headMove, 0.6));
+      var fx = HEAD_CENTER[0] - HEAD_SCALE * hd.offsetWidth / 2 - 60, fy = HEAD_CENTER[1] - HEAD_SCALE * hd.offsetHeight / 2 - 30;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + (HEAD_SCALE + (1 - HEAD_SCALE) * mv) + ')';
+      T.enter(T.$('quote'), T.p(t, CUES.quote, 0.5), -16);
+
+      // 三条横带：第 52 句开口后空壳淡入，念到三个词时依次点亮；当前行黄描边
+      var cur = [gate(t, CUES.cur1, CUES.cur2), gate(t, CUES.cur2, CUES.cur3), gate(t, CUES.cur3, CUES.curEnd)];
+      for (var i = 0; i < 3; i++) {
+        var band = T.$('band' + (i + 1));
+        T.enter(band, T.p(t, CUES.shell + i * 0.12, 0.5), 16);
+        mulOpacity(band, SHELL + (1 - SHELL) * T.ease(T.p(t, CUES.lit[i], 0.4)));
+        T.current(band, cur[i], 10);
+      }
+
+      // 问谁：三格先是空壳（只有格标题，淡），念到哪格哪格点亮
+      ['c1', 'c2', 'c3'].forEach(function (id) {
+        var on = T.ease(T.p(t, CUES[id], 0.45));
+        var el = T.$(id);
+        el.style.opacity = SHELL + (1 - SHELL) * on;
+        el.style.transform = 'translateY(' + ((1 - on) * 0) + 'px) rotate(' + el.getAttribute('data-r') + 'deg)';
+        var b = T.$(id + 'b');
+        b.style.opacity = on;
+        b.style.transform = 'translateY(' + ((1 - on) * 10) + 'px)';
+      });
+
+      // 第 56 句：缩略卡从左上飞进第三格，留在格里
+      var f = T.ease(T.p(t, CUES.thumbFrom, CUES.thumbTo - CUES.thumbFrom));
+      var th = T.$('thumb');
+      th.style.opacity = T.ease(T.p(t, CUES.thumbFrom, 0.2));
+      th.style.transform = 'translate(' + ((1 - f) * -760) + 'px,' + ((1 - f) * -150) + 'px) rotate(' + (-2 + (1 - f) * -8) + 'deg) scale(' + (1 + (1 - f) * 0.3) + ')';
+
+      // 先问什么：「承重约束 → 先攻」，前提撑着三个方案；念到「它一倒」一起晃，晃完回原位
+      T.enter(T.$('k2'), T.p(t, CUES.k2, 0.45), 14);
+      T.enter(T.$('base'), T.p(t, CUES.base, 0.45), 14);
+      ['p1', 'p2', 'p3'].forEach(function (id, j) { T.enter(T.$(id), T.p(t, CUES.plans[j], 0.4), -20); });
+      if (t >= CUES.shake) {
+        var w = wobble(t, CUES.shake, 3, 0);
+        T.$('base').style.transform = 'rotate(' + w + 'deg)';
+        var off = [-1, 0, 1];
+        ['p1', 'p2', 'p3'].forEach(function (id, j) {
+          var wj = wobble(t, CUES.shake + 0.05 * j, 7, 0.8 * j);
+          // 前提转动时，上面的方案跟着上下错开，再各自晃
+          var dy = Math.sin(w * Math.PI / 180) * off[j] * 240;
+          T.$(id).style.transform = 'translate(0,' + dy.toFixed(1) + 'px) rotate(' + (w + wj).toFixed(2) + 'deg)';
+        });
+      }
+
+      // 问到什么时候停：「问了 N 轮」划掉，右边三种证据
+      T.enter(T.$('stop'), T.p(t, CUES.stop, 0.4), 14);
+      var stopEl = T.$('stop');
+      stopEl.style.background = T.mix([242, 239, 230], [160, 157, 151], T.ease(T.p(t, CUES.strike, 0.4)));
+      var sk = T.$('strike');
+      sk.style.left = (465 + 12) + 'px';
+      sk.style.width = (stopEl.offsetWidth - 24) + 'px';
+      sk.style.top = (46 + stopEl.offsetHeight / 2 - 3) + 'px';
+      T.strike(sk, T.p(t, CUES.strike, 0.4));
+      sk.style.opacity = T.p(t, CUES.stop, 0.2);
+      var nd = T.ease(T.p(t, CUES.need, 0.4));
+      T.$('need').style.opacity = nd;
+      T.$('need').style.transform = 'translateY(' + ((1 - nd) * 10) + 'px)';
+      ['e1', 'e2', 'e3'].forEach(function (id, j) { T.enter(T.$(id), T.p(t, CUES.ev[j], 0.4), 14); });
+
+      // 最下一行
+      T.enter(T.$('last'), T.p(t, CUES.last, 0.5), 16);
+      var g = T.ease(T.p(t, CUES.you, 0.4));
+      var y = T.$('you');
+      y.style.outline = '6px solid rgba(245,207,74,' + g + ')';
+      y.style.outlineOffset = '4px';
+      y.style.boxShadow = '0 0 0 4px rgba(138,147,157,' + g + '), 0 0 0 10px rgba(22,22,22,' + g + '), 0 0 40px rgba(245,207,74,' + (0.5 * g) + ')';
+    }
+  });
+</script>
+</body>
+</html>

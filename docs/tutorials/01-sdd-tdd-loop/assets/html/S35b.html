@@ -1,0 +1,145 @@
+<!doctype html>
+<!-- S35b · 终端 · script 159–161「我接着刚才的会话，敲了 /superpowers:writing-plans。……没多久，它就写好了一份计划。」
+     cast 02-sp-writing-plans 回放秒 7–31，2 倍速（标「2 倍速」），播 12 秒，停 1.6 秒，共 13.6 秒（画面时长，按实测）。
+     7 秒时重新提交的 /superpowers:writing-plans 已在屏上（4.5–5 秒是从历史里翻出命令再回车，中间闪过「❯ exit」，不进画面）。
+     - 旧历史：命令在屏上出现两次。按行文字找最后一次，从第 0 行盖到它的上一行，用底色盖住。
+       盖住的有：启动横幅（含「Sonnet 5.5 · Claude Pro」）、两次 /model、第一次中断的尝试。
+     - 只露前 30 行：底部 4 行状态栏（模型名、用量）不进画面。另按「Cost $」找状态栏行，
+       它若上移进画面，从这一行盖到窗口底（本段不会发生，逻辑与 S35e 一致）。
+     - 黄框 1 个：「Wrote 157 lines」这一行。cast 29.1 秒写出（画面 11.05 秒），按实测（2026-10-06，frame-times.py）
+       11.05 秒加框：第 3 句「没多久，它就写好了一份计划」10.08 秒开口，行还没出来，取行出现的时刻。
+     窗口本身不倾斜，只让标签倾斜（终端要能读）。 -->
+<html lang="zh-CN" data-frame-id="S35b">
+<head>
+<meta charset="utf-8">
+<title>S35b · writing-plans</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 让出底部字幕带（y ≥ 940，visual-v4 §4.1）：窗口上移、整体缩到 0.947，30 行都留着。 */
+  .window { left: 150px; top: 72px; width: 1620px; height: 908px; padding: 18px 20px; overflow: visible; transform: scale(0.947); transform-origin: 50% 0; }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 872px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: 0; width: 1580px; height: 1004px; }
+  /* 播放器暂停时会画播放按钮和加载圈；画面不可交互，全部藏掉。 */
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  /* 终端底色跟随主题，盖过 cast 自带的底色。 */
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  .mask { position: absolute; left: 0; width: 1580px; background: #1b1b1d; display: none; }
+  .qbox { position: absolute; left: 6px; width: 1568px; box-sizing: border-box; border: 5px solid transparent; border-radius: 8px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .window .speed { right: -30px; top: -34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip">
+      <div id="term"></div>
+      <div class="mask" id="mask"></div>
+      <div class="mask" id="mask-status"></div>
+      <div class="qbox" id="b1"></div>
+    </div>
+    <div class="speed" id="spd">2 倍速</div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+  </div>
+</div>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/02-sp-writing-plans.js"></script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var CAST_START = 7, CAST_END = 31, SPEED = 2;
+  var PLAY = (CAST_END - CAST_START) / SPEED;
+  var HOLD = 1.6;   // 总长 = 画面时长 13.6 秒（时间轴，实测）
+  var CLIP_H = 872;
+  var player;
+
+  // 框：起始行与结束行的文字特征（to 为 null 时只框一行）。
+  var BOXES = [
+    { box: 'b1', from: 'Wrote 157 lines', to: null, at: 11.05 }
+  ];
+
+  function lines() { return T.all('#term .ap-line'); }
+  function find(L, text, after) {
+    for (var i = after || 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  function findLast(L, text) {
+    for (var i = L.length - 1; i >= 0; i--) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 行在 .clip 里的上下沿（px，按 1920 宽的舞台坐标）。
+  function span(L, i0, i1) {
+    var clip = document.querySelector('.clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { top: (L[i0].getBoundingClientRect().top - clip.top) / k, bottom: (L[i1].getBoundingClientRect().bottom - clip.top) / k };
+  }
+
+  function overlays(t) {
+    var L = lines();
+    // 旧历史：从第 0 行盖到最后一次提交的命令的上一行。命令折成两行，两行都露出来。
+    var cmd = findLast(L, '/superpowers:writing-plans Use');
+    var mask = T.$('mask');
+    if (cmd > 0) {
+      var m = span(L, 0, cmd - 1);
+      mask.style.display = 'block';
+      mask.style.top = m.top + 'px';
+      mask.style.height = (m.bottom - m.top) + 'px';
+    } else {
+      mask.style.display = 'none';
+    }
+    // 状态栏（模型名、费用）若上移进画面：从这一行盖到窗口底。
+    var status = findLast(L, 'Cost $');
+    var ms = T.$('mask-status');
+    if (status >= 0) {
+      var s0 = span(L, status, status).top;
+      ms.style.display = s0 < CLIP_H ? 'block' : 'none';
+      ms.style.top = s0 + 'px';
+      ms.style.height = Math.max(0, CLIP_H - s0) + 'px';
+    } else {
+      ms.style.display = 'none';
+    }
+    BOXES.forEach(function (q) {
+      var i0 = find(L, q.from);
+      var box = T.$(q.box);
+      if (i0 < 0) { box.style.opacity = 0; return; }
+      box.style.opacity = 1;
+      var i1 = q.to ? find(L, q.to, i0) : i0;
+      if (i1 < 0) i1 = i0;
+      var s = span(L, i0, i1);
+      // 上下各放出 3px：单行框贴着字太紧。
+      box.style.top = (s.top - 3) + 'px';
+      box.style.height = (s.bottom - s.top + 6) + 'px';
+      // 黄色只给当前这一个；下一个亮起后，这个降成淡奶白框（讲过了）。
+      var on = T.ease(T.p(t, q.at, 0.35));
+      var next = q.next === undefined ? 0 : T.ease(T.p(t, q.next, 0.35));
+      var g = on * (1 - next);
+      box.style.borderColor = next > 0 ? T.mix([245, 207, 74], [120, 118, 112], next) : 'rgba(245,207,74,' + g + ')';
+      box.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.45 * g) + '), inset 0 0 24px rgba(245,207,74,' + (0.25 * g) + ')';
+    });
+  }
+
+  Stage({
+    duration: PLAY + HOLD,
+    init: function () {
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS['02-sp-writing-plans'] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      return T.fonts('实录倍速');
+    },
+    render: function (t) {
+      T.enter(T.$('spd'), T.p(t, 0, 0.4), -12);
+      var castTime = Math.min(CAST_START + t * SPEED, CAST_END);
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位遮罩和框。
+      return Promise.resolve(player.seek(castTime))
+        .then(function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); })
+        .then(function () { overlays(t); });
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!doctype html>
+<!-- S23 · 标题卡（收束）· script 84–85「这样四个文档都从同一份纪要来，拷问之后就不用再回头去改了。示例项目这次就是这么写的，四个文档之间，没发现互相矛盾的地方。」
+     - 84 句：左边「纪要 → 四个文档」；下面大字「四个文档都从同一份纪要来 → 拷问后不用回改」；右边回贴 S20a 那几条虚线（同五个节点），念到「不用再回头去改」时划掉。
+     - 85 句：下面一行实录小字：示例项目四个文档之间，没发现互相矛盾（review/main-spec-check.md:222「冲突：未发现」），标「实录 · 示例项目」。
+     - 时刻按录音实测（frame-times.py，2026-10-19），集中在下面的 CUE 常量里。
+     内容整体在 y 940 以上，避开字幕带。
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排。第 85 句去掉「的主线」（短 3 字，约 0.8 秒）：画面小字「主线」改「示例项目」（「主线」是内部用语）；
+       「没发现互相矛盾」出处的时刻 12.0 → 11.2，duration 18 → 17。右侧被划掉的旧流程标签改成与 S20a 一致的「改没改全？无法核对」。 -->
+<html lang="zh-CN" data-frame-id="S23">
+<head>
+<meta charset="utf-8">
+<title>S23 · 四个文档都从同一份纪要来</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #memo { left: 330px; top: 130px; width: 360px; height: 110px; padding: 0; display: flex; align-items: center; justify-content: center;
+          font-family: var(--display); font-weight: 800; font-size: 58px; }
+  .doc { top: 350px; width: 190px; padding: 10px 0; text-align: center; font-size: 36px; }
+  #d0 { left: 90px; } #d1 { left: 300px; } #d2 { left: 510px; } #d3 { left: 720px; }
+  #wires { left: 0; top: 0; width: 1100px; height: 420px; }
+
+  /* 右：S20a 那几条虚线的回贴 */
+  #mesh { left: 1050px; top: 90px; width: 800px; height: 400px; }
+  .mn { width: 200px; padding: 10px 0; text-align: center; font-size: 34px; }
+  #m0 { left: 1090px; top: 190px; } #m1 { left: 1340px; top: 190px; } #m2 { left: 1590px; top: 190px; }
+  #m3 { left: 1210px; top: 350px; } #m4 { left: 1470px; top: 350px; }
+  #lines { left: 1050px; top: 90px; width: 800px; height: 400px; }
+  #why { left: 1210px; top: 96px; }
+  #cross { left: 1050px; top: 90px; width: 800px; height: 400px; }
+
+  #sum { left: 120px; top: 540px; width: 1400px; height: 240px; padding: 24px 56px; }
+  #sum .big { font-size: 82px; line-height: 1.2; color: var(--cream); white-space: nowrap; }
+  #sum .big .ar { color: var(--yellow); margin-right: 16px; }
+  #sum .big.l2 { color: var(--blue-soft); }
+
+  #proof { left: 440px; top: 830px; }
+  #pf { left: 1230px; top: 838px; font-family: var(--mono); font-size: 28px; padding: 8px 20px; }
+  #real { left: 120px; top: 838px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 左：纪要 → 四个文档 -->
+  <div class="card os" id="memo">纪要</div>
+  <svg class="abs" id="wires" viewBox="0 0 1100 420" aria-hidden="true">
+    <path d="M510 250 V300 M185 300 H815 M185 300 V340 M395 300 V340 M605 300 V340 M815 300 V340 M510 300 V300" fill="none" stroke="#161616" stroke-width="7" stroke-linejoin="round"/>
+    <polygon points="185,350 173,328 197,328" fill="#161616"/>
+    <polygon points="395,350 383,328 407,328" fill="#161616"/>
+    <polygon points="605,350 593,328 617,328" fill="#161616"/>
+    <polygon points="815,350 803,328 827,328" fill="#161616"/>
+  </svg>
+  <div class="chip doc" id="d0">proposal</div>
+  <div class="chip doc" id="d1">design</div>
+  <div class="chip doc" id="d2">specs</div>
+  <div class="chip doc" id="d3">tasks</div>
+
+  <!-- 右：旧的虚线，划掉 -->
+  <div id="meshWrap">
+    <svg class="abs" id="lines" viewBox="0 0 800 400" aria-hidden="true"></svg>
+    <div class="chip mn" id="m0">proposal</div>
+    <div class="chip mn" id="m1">design</div>
+    <div class="chip mn" id="m2">specs</div>
+    <div class="chip mn" id="m3">tasks</div>
+    <div class="chip mn" id="m4">术语表</div>
+    <div class="tag" id="why">改没改全？无法核对</div>
+  </div>
+  <svg class="abs" id="cross" viewBox="0 0 800 400" aria-hidden="true">
+    <path id="crossLine" d="M30 40 L770 370" fill="none" stroke="#161616" stroke-width="16" stroke-linecap="round"/>
+  </svg>
+
+  <!-- 收束 -->
+  <div class="card dark" id="sum">
+    <div class="big" id="s1">四个文档都从同一份纪要来</div>
+    <div class="big l2" id="s2"><span class="ar">→</span>拷问后不用回改</div>
+  </div>
+
+  <!-- 实录小字 -->
+  <div class="tag" id="real">实录 · 示例项目</div>
+  <div class="chip" id="proof">示例项目四个文档之间，没发现互相矛盾</div>
+  <div class="tag" id="pf">main-spec-check.md:222</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。按录音实测（frame-times.py，2026-10-19）。注释写的是对应全稿第几句。
+  var CUE = {
+    memo: 0.0,        // 84 句「四个文档都从同一份纪要来」：纪要
+    docs: [0.5, 0.8, 1.1, 1.4],  // 84 句，四个文档（连线随第一个出现）
+    s1: 1.4,          // 84 句，大字第一行
+    mesh: 3.4,        // 84 句「拷问之后」：回贴 S20a 那几条虚线和节点
+    s2: 4.4,          // 84 句「就不用再回头去改了」：大字第二行
+    cross: 4.6,       // 84 句「不用再回头去改」：划掉
+    proof: 7.0,       // 85 句「示例项目这次就是这么写的」：实录小字（先标「实录 · 示例项目」）
+    pf: 11.5          // 85 句「没发现互相矛盾」：出处
+  };
+  // 虚线：五个节点中心（相对 mesh 左上角 1050,90）
+  var C = [[240, 130], [490, 130], [740, 130], [360, 290], [620, 290]];
+  var PAIRS = [[0, 2], [1, 3], [2, 4], [0, 4], [1, 4], [0, 3]];
+  var NS = 'http://www.w3.org/2000/svg';
+  (function () {
+    var svg = T.$('lines');
+    PAIRS.forEach(function (p, i) {
+      var l = document.createElementNS(NS, 'line');
+      l.setAttribute('x1', C[p[0]][0]); l.setAttribute('y1', C[p[0]][1]);
+      l.setAttribute('x2', C[p[1]][0]); l.setAttribute('y2', C[p[1]][1]);
+      l.setAttribute('stroke', '#161616'); l.setAttribute('stroke-width', '6');
+      l.setAttribute('stroke-dasharray', '16 12'); l.setAttribute('stroke-linecap', 'round');
+      l.setAttribute('id', 'ln' + i);
+      svg.appendChild(l);
+    });
+  })();
+
+  Stage({
+    duration: 13.6,
+    init: function () { return T.fonts('纪要四个文档都从同一份来拷问后不用回改实录示例项目之间没发现互相矛盾术语表改没全？无法核对，·'); },
+    render: function (t) {
+      T.enter(T.$('memo'), T.p(t, CUE.memo, 0.5), 18);
+      T.$('wires').style.opacity = T.ease(T.p(t, CUE.docs[0] - 0.2, 0.4));
+      for (var i = 0; i < 4; i++) T.enter(T.$('d' + i), T.p(t, CUE.docs[i], 0.4), 14);
+      T.enter(T.$('sum'), T.p(t, CUE.s1 - 0.2, 0.5), 18);
+      T.$('s1').style.opacity = T.ease(T.p(t, CUE.s1, 0.4));
+      T.$('s2').style.opacity = T.ease(T.p(t, CUE.s2, 0.4));
+
+      // 回贴的旧虚线：先出现，再整体变淡并被划掉
+      var gone = T.ease(T.p(t, CUE.cross, 0.5));
+      var meshOp = 0.45 + 0.55 * (1 - gone);
+      for (var m = 0; m < 5; m++) { T.enter(T.$('m' + m), T.p(t, CUE.mesh + m * 0.12, 0.4), 12); }
+      T.enter(T.$('why'), T.p(t, CUE.mesh + 0.7, 0.4), 10);
+      T.$('lines').style.opacity = T.ease(T.p(t, CUE.mesh + 0.3, 0.4)) * meshOp;
+      for (var k = 0; k < 5; k++) { var e = T.$('m' + k); e.style.opacity = parseFloat(e.style.opacity || 0) * meshOp; }
+      T.$('why').style.opacity = parseFloat(T.$('why').style.opacity || 0) * meshOp;
+      var cp = T.p(t, CUE.cross, 0.5);
+      T.$('cross').style.opacity = cp > 0 ? 1 : 0;
+      T.wipe(T.$('cross'), cp, 'x');
+
+      T.enter(T.$('real'), T.p(t, CUE.proof - 0.2, 0.4), 12);
+      T.enter(T.$('proof'), T.p(t, CUE.proof, 0.45), 12);
+      T.enter(T.$('pf'), T.p(t, CUE.pf, 0.4), 10);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<!-- S12 · 机制动画 · script 79–92「几路评审都跑完了，报上来的有真有假，怎么办？……另一个模型和主会话意见不一样的，也不悄悄按哪一边算，AI 给出推荐，两边的说法都交给人来判断。」
+     版式（作者 10-24 定）：大流程「合并 → 核引用 → 裁决」先在正中，上面一行是输入「几路评审」；约 3 秒后缩小移到上方当标题行；
+     下面三栏对齐三格，栏与栏之间一道竖虚线，随口播逐段填，填上的内容留到页末。依据 sdflow-spec-review/SKILL.md:377-400。
+     文件名、行号都是示意用的占位，不是真实报告里的值。示意画面不加角标。
+     10-24 作者意见：①没讲到的不先放出来（visual-v4 4.8）：裁决栏等后面的内容不再以淡色空壳提前出现，讲到才出现；开头正中的是第一句讲到的大流程和几路评审；
+       ②三个阶段之间用竖虚线分开，栏内卡片和字整体缩小，栏间留空；③删去自加小字「合成一条」「脚本逐格核」「只说明引的是真的」，页面不挤；
+       「会真的发生吗？」保留（它是第 88 句的问句，也让裁决栏在第 88 句有内容）。
+     10-24 按一页一层：不再有「前面整体淡出换成分歧」；分歧是裁决栏的最后一条。最后一帧：标题行 + 三栏全在，黄框在最后一条。
+     - 第 79 句：大流程三格 0.15 秒起在正中，几路评审的小贴纸一个个落下；约 3.2 秒起缩小移到上方（到约 3.9 秒）；两道竖虚线随后从上往下擦出。
+     - 第 80 句：合并栏「重复的合并」落下并当前，「记下几路都报了」落下。
+     - 第 81 句：下面一张大一档的贴纸「几路都报 → 更可信」落下并当前（奶白 / 墨，没有固定意思）。
+     - 第 82 句（10-25 加）：合并栏里放齐四路：工程审、Go 领域审、对抗 A、对抗 B（r3 报告第 106 行 plan-eng、backend-go、对抗 A、对抗 B）；对抗用粉，其余奶白；四路一起当前。
+     - 第 83 句：核引用栏「每条发现都带」落下，「文件 / 行号 / 原文」三格念到时依次落下并当前。
+     - 第 84 句：文件格出勾、行号格出叉，三格依次当前。
+     - 第 85 句：「核不过 → 裁掉」落下并当前。第 86 句：「核过 ≠ 说得对」落下并当前。
+     - 第 87 句：裁决栏「会真的发生吗？」落下并当前。第 88 句：采纳、裁掉、留给人拍板三张卡依次落下并当前。
+     - 第 89 句：「留给人」下「查来历」落下并当前。第 90 句：「推荐要验过」落下并当前。第 91 句：「裁掉」下「写理由 → 人复核」落下并当前。
+     - 第 92 句：最后一条「另一个模型 ≠ 主会话 → 两边都交给人」落下并当前，留到页末。
+     - 版面（10-25）：左栏、中栏下半原来空着：贴纸放大，中栏三格和两张卡放大、间距拉开，三栏底边约 790 / 820 / 904。
+     - 勾 = 奶白圆片 + 墨色勾，叉 = 墨底圆片 + 奶白叉（同第 2 期 S29 的 .ok）。红、绿只留给测试失败 / 通过，这里是引用核对，不用。
+     配色（2026-10-24）：蓝 = 规格一侧：裁决格、留给人拍板（拍板）；紫 = 另一个模型：输入里的「另一个模型」和最后一条；粉 = 对抗审（对抗审的小贴纸）；
+       灰 = 作废：裁掉、核不过 → 裁掉；其余奶白 / 墨；黄 = 当前，同一时刻只有一个。
+     - 口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。第 79 句 0 秒，80 句 5.28，81 句 9.84，82 句 15.68，83 句 20.32，84 句 26.24，85 句 33.28，86 句 36.16，87 句 41.76，88 句 49.44，89 句 55.84，90 句 66.24，91 句 71.52，92 句 76.88；
+       页长 85.84 秒。内容整体在 y 920 以上，避开字幕带。 -->
+<html lang="zh-CN" data-frame-id="S12">
+<head>
+<meta charset="utf-8">
+<title>S12 · 怎么筛：合并、先核引用，再裁决，分歧交给人</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 三栏：x = 60 / 690 / 1320，宽 540，栏间 90；虚线在栏间正中 x = 645 / 1275。栏内卡片左缩进 30、宽 480 */
+  /* 标题行：输入一行 + 大流程。位置、大小由脚本按进度写入（正中大 → 上方小） */
+  #inp { left: 60px; width: 1800px; display: flex; align-items: center; gap: 16px; }
+  #inp .lb { padding: 6px 22px; border-radius: 8px; background: var(--ink); color: #fff; font-family: var(--display); font-weight: 800; font-size: 32px; white-space: nowrap; }
+  #inp .chip { position: static; padding: 6px 18px; font-size: 30px; border-width: 3px; box-shadow: 5px 5px 0 var(--ink); }
+  #pk { background: var(--pink-soft); } #vi { background: var(--violet-soft); }
+  .fl { width: 540px; padding: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; }
+  #f1 { left: 60px; } #f2 { left: 690px; } #f3 { left: 1320px; background: var(--blue-soft); }
+  .fa { width: 90px; text-align: center; font-family: var(--display); font-weight: 800; line-height: 1; color: var(--ink); }
+  #g1 { left: 600px; } #g2 { left: 1230px; }
+  .dv { width: 0; height: 690px; top: 245px; border-left: 4px dashed var(--ink); opacity: .75; }
+  #d1 { left: 643px; } #d2 { left: 1273px; }
+
+  /* 合并栏 x=60 */
+  #c1 { left: 90px; top: 290px; width: 480px; height: 96px; padding: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 42px; }
+  #mrow { left: 90px; top: 664px; width: 480px; padding: 12px; margin: -12px; box-sizing: content-box; display: flex; flex-wrap: wrap; gap: 20px; border-radius: 12px; }
+  #mrow .chip { position: static; font-size: 34px; padding: 8px 22px; }
+  #m3, #m6 { background: var(--pink-soft); }
+  #m4 { left: 90px; top: 412px; font-size: 32px; }
+  #m5 { left: 90px; top: 510px; font-size: 44px; padding: 14px 28px; }
+
+  /* 核引用栏 x=690 */
+  #c2t { left: 720px; top: 296px; font-size: 36px; padding: 4px 20px; }
+  .cell { position: absolute; top: 380px; width: 150px; height: 130px; box-sizing: border-box; padding: 10px 12px; }
+  .cell .lb { font-weight: 700; font-size: 32px; }
+  .cell .v { margin-top: 8px; font-family: var(--mono); font-weight: 500; font-size: 26px; white-space: nowrap; }
+  #k1 { left: 720px; } #k2 { left: 885px; } #k3 { left: 1050px; }
+  .cell { border-width: 4px; box-shadow: 6px 6px 0 var(--ink); padding: 8px 10px; }
+  .mk { position: absolute; right: -14px; top: -16px; width: 40px; height: 40px; opacity: 0; }
+  #x1 { left: 720px; top: 580px; width: 480px; height: 100px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--cream-dim); font-family: var(--display); font-weight: 800; font-size: 44px; }
+  #x2 { left: 720px; top: 720px; width: 480px; height: 100px; padding: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 44px; }
+
+  /* 裁决栏 x=1320 */
+  #q3 { left: 1350px; top: 272px; font-size: 30px; }
+  .bk { left: 1350px; width: 480px; height: 70px; padding: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 40px; white-space: nowrap; }
+  #u1 { top: 350px; } #u2 { top: 450px; background: var(--cream-dim); } #u3 { top: 632px; background: var(--blue-soft); }
+  #n3 { left: 1350px; top: 540px; font-size: 28px; }
+  #n1 { left: 1350px; top: 722px; font-size: 28px; } #n2 { left: 1530px; top: 722px; font-size: 28px; }
+  #fin { left: 1350px; top: 812px; width: 480px; height: 92px; padding: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+         background: var(--violet-soft); font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1.2; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="okm"><circle cx="22" cy="22" r="19" fill="#f2efe6" stroke="#161616" stroke-width="4"/><path d="M12 23 L19 30 L32 14" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g id="xm"><circle cx="22" cy="22" r="19" fill="#161616" stroke="#161616" stroke-width="4"/><path d="M14 14 L30 30 M30 14 L14 30" fill="none" stroke="#f2efe6" stroke-width="5" stroke-linecap="round"/></g>
+    </defs>
+  </svg>
+
+  <!-- 标题行：输入 + 大流程（80 句） -->
+  <div class="abs" id="inp"><span class="lb" data-r="-1">几路评审</span><span class="chip" data-r="-1">CEO 审</span><span class="chip" data-r="1">工程审</span><span class="chip" data-r="-1">代码审</span><span class="chip" data-r="1">领域审</span><span class="chip" id="pk" data-r="-1">对抗审</span><span class="chip" id="vi" data-r="1">另一个模型</span></div>
+  <div class="card fl" id="f1" data-r="-0.6">合并</div>
+  <div class="abs fa" id="g1">→</div>
+  <div class="card fl" id="f2" data-r="0.6">核引用</div>
+  <div class="abs fa" id="g2">→</div>
+  <div class="card fl" id="f3" data-r="-0.6">裁决</div>
+  <div class="abs dv" id="d1"></div>
+  <div class="abs dv" id="d2"></div>
+
+  <!-- 合并栏（80 句；四路在 82 句） -->
+  <div class="card" id="c1" data-r="-0.6">重复的合并</div>
+  <div class="abs" id="mrow"><span class="chip" id="m1" data-r="-1.5">工程审</span><span class="chip" id="m2" data-r="1.5">Go 领域审</span><span class="chip" id="m3" data-r="1.2">对抗 A</span><span class="chip" id="m6" data-r="-1.2">对抗 B</span></div>
+  <div class="tag" id="m4" data-r="2">记下几路都报了</div>
+  <!-- 81 句 -->
+  <div class="tag" id="m5" data-r="-2">几路都报 → 更可信</div>
+
+  <!-- 核引用栏（83–86 句） -->
+  <div class="tab" id="c2t" data-r="-2">每条发现都带</div>
+  <div class="card cell" id="k1" data-r="-1"><div class="lb">文件</div><div class="v">send.go</div><svg class="mk" viewBox="0 0 44 44"><use href="#okm"/></svg></div>
+  <div class="card cell" id="k2" data-r="1"><div class="lb">行号</div><div class="v">:87</div><svg class="mk" viewBox="0 0 44 44"><use href="#xm"/></svg></div>
+  <div class="card cell" id="k3" data-r="-1"><div class="lb">原文</div><div class="v">……</div></div>
+  <div class="card" id="x1" data-r="-0.5">核不过 → 裁掉</div>
+  <div class="card" id="x2" data-r="0.5">核过 ≠ 说得对</div>
+
+  <!-- 裁决栏（87–92 句） -->
+  <div class="tag" id="q3" data-r="-2">会真的发生吗？</div>
+  <div class="card bk" id="u1" data-r="-0.6">采纳</div>
+  <div class="card bk" id="u2" data-r="0.6">裁掉</div>
+  <div class="tag" id="n3" data-r="2">写理由 → 人复核</div>
+  <div class="card bk" id="u3" data-r="-0.6">留给人拍板</div>
+  <div class="tag" id="n1" data-r="-2">查来历</div>
+  <div class="tag" id="n2" data-r="2">推荐要验过</div>
+  <div class="card" id="fin" data-r="0.6">另一个模型 ≠ 主会话<br>→ 两边都交给人</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒；注释写的是本页第几句（全稿 79–92）。
+  var CUE = {
+    hd: 0.15, chips: 0.25,              // 79 句：大流程三格；几路评审的小贴纸每隔 0.25 秒落一个
+    hold: 2.4, move: 0.7,               // 79 句：正中停到约 2.4 秒（原 3.2 按句长 4.08/5.2 缩放），0.7 秒缩小移到上方
+    dv: 3.1,                            // 落位后：两道竖虚线擦出
+    c1: 5.08, c1End: 9.64,              // 80 句：合并栏落下并当前
+    m4: 7.0,                            // 80 句：念到「记下哪几路都报了」
+    m5: 12.04, m5End: 15.48,            // 81 句：「几路都报 → 更可信」落下并当前
+    m: [17.88, 18.18, 18.48, 18.78], mEnd: 20.12,   // 82 句：念到「四路都报了」，工程审、Go 领域审、对抗 A、对抗 B 依次落下，四路一起当前
+    c2t: 21.72, c2tEnd: 23.24,          // 83 句：「每条发现都带」落下并当前
+    cells: [23.24, 23.72, 24.36], cellsEnd: 26.04,   // 83 句：念到文件、行号、原文，三格依次落下并当前
+    ck: [27.72, 28.6, 29.96], ckEnd: 33.08,          // 84 句：文件、行号、原文逐格当前；文件出勾、行号出叉
+    x1: 33.08, x1End: 35.96,            // 85 句：核不过 → 裁掉
+    x2: 35.96, x2End: 41.56,            // 86 句：核过 ≠ 说得对
+    q3: 46.76, q3End: 49.24,            // 87 句：会真的发生吗？（念到「会不会真的发生」）
+    u: [49.96, 51.72, 53.64], uEnd: 55.64,  // 88 句：采纳、裁掉、留给人依次落下并当前
+    n1: 58.2, n1End: 66.04,             // 89 句：查来历
+    n2: 66.2, n2End: 71.32,             // 90 句：推荐要验过
+    n3: 73.64, n3End: 76.68,            // 91 句：裁掉 → 写理由 → 人复核
+    fin: 77.48                          // 92 句：另一个模型 ≠ 主会话，留到页末
+  };
+  // 标题行：起点（正中，大）→ 终点（上方，小）
+  var HD = { inpTop: [390, 36], flTop: [480, 116], flH: [190, 96], flFont: [78, 46], gFont: [78, 46] };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+  function lerp(pair, k) { return pair[0] + (pair[1] - pair[0]) * k; }
+
+  Stage({
+    duration: 85.84,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 79 句：标题行（几路评审的小贴纸逐个落下；大流程三格在正中，再缩到上方）
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move));
+      var inp = T.$('inp');
+      inp.style.top = lerp(HD.inpTop, mv) + 'px';
+      T.all('#inp > span').forEach(function (s, i) { T.enter(s, T.p(t, CUE.hd + i * CUE.chips, 0.45), -14); });
+      var fTop = lerp(HD.flTop, mv), fH = lerp(HD.flH, mv), fF = lerp(HD.flFont, mv);
+      ['f1', 'f2', 'f3'].forEach(function (id, i) {
+        var f = T.$(id);
+        T.enter(f, T.p(t, CUE.hd + i * 0.1, 0.45), 16);
+        f.style.top = fTop + 'px'; f.style.height = fH + 'px'; f.style.fontSize = fF + 'px';
+      });
+      ['g1', 'g2'].forEach(function (id, i) {
+        var g = T.$(id);
+        g.style.top = (fTop + fH / 2 - lerp(HD.gFont, mv) / 2) + 'px'; g.style.fontSize = lerp(HD.gFont, mv) + 'px';
+        g.style.opacity = T.ease(T.p(t, CUE.hd + 0.2 + i * 0.1, 0.45));
+      });
+      // 栏间竖虚线：从上往下擦出
+      ['d1', 'd2'].forEach(function (id, i) { T.wipe(T.$(id), T.p(t, CUE.dv + i * 0.15, 0.8), 'y'); });
+
+      // 80 句：合并栏（讲到才出现）
+      T.enter(T.$('c1'), T.p(t, CUE.c1, 0.45), 18);
+      cur(T.$('c1'), on(t, CUE.c1, CUE.c1End), 10);
+      T.enter(T.$('m4'), T.p(t, CUE.m4, 0.45), 10);
+      // 82 句：四路都报了（工程审、Go 领域审、对抗 A、对抗 B）
+      ['m1', 'm2', 'm3', 'm6'].forEach(function (id, i) { T.enter(T.$(id), T.p(t, CUE.m[i], 0.45), -12); });
+      var mg = on(t, CUE.m[0], CUE.mEnd);
+      cur(T.$('mrow'), mg, 0.001);
+      if (mg === 0) T.$('mrow').style.boxShadow = 'none';   // 没有硬投影的容器：不当前时不留 0.001px 的残影
+
+      // 81 句：贴纸「几路都报 → 更可信」
+      T.enter(T.$('m5'), T.p(t, CUE.m5, 0.45), 10);
+      cur(T.$('m5'), on(t, CUE.m5, CUE.m5End), 0.001);
+
+      // 83–86 句：核引用栏
+      T.enter(T.$('c2t'), T.p(t, CUE.c2t, 0.45), -10);
+      cur(T.$('c2t'), on(t, CUE.c2t, CUE.c2tEnd), 7);
+      ['k1', 'k2', 'k3'].forEach(function (id, i) {
+        var c = T.$(id);
+        T.enter(c, T.p(t, CUE.cells[i], 0.45), 14);
+        var g = Math.max(
+          on(t, CUE.cells[i], i < 2 ? CUE.cells[i + 1] : CUE.cellsEnd),
+          on(t, CUE.ck[i], i < 2 ? CUE.ck[i + 1] : CUE.ckEnd));
+        cur(c, Math.min(g, 1), 6);
+      });
+      T.all('.cell .mk').forEach(function (m, i) { m.style.opacity = T.ease(T.p(t, CUE.ck[i] + 0.5, 0.3)); });
+      T.enter(T.$('x1'), T.p(t, CUE.x1, 0.45), 14);
+      cur(T.$('x1'), on(t, CUE.x1, CUE.x1End), 10);
+      T.enter(T.$('x2'), T.p(t, CUE.x2, 0.45), 14);
+      cur(T.$('x2'), on(t, CUE.x2, CUE.x2End), 10);
+
+      // 87–92 句：裁决栏
+      T.enter(T.$('q3'), T.p(t, CUE.q3, 0.45), -10);
+      cur(T.$('q3'), on(t, CUE.q3, CUE.q3End), 0.001);
+      ['u1', 'u2', 'u3'].forEach(function (id, i) { T.enter(T.$(id), T.p(t, CUE.u[i], 0.45), 18); });
+      cur(T.$('u1'), on(t, CUE.u[0], CUE.u[1]), 10);
+      cur(T.$('u2'), on(t, CUE.u[1], CUE.u[2]), 10);
+      cur(T.$('u3'), on(t, CUE.u[2], CUE.uEnd), 10);
+      T.enter(T.$('n1'), T.p(t, CUE.n1, 0.45), 10);
+      cur(T.$('n1'), on(t, CUE.n1, CUE.n1End), 0.001);
+      T.enter(T.$('n2'), T.p(t, CUE.n2, 0.45), 10);
+      cur(T.$('n2'), on(t, CUE.n2, CUE.n2End), 0.001);
+      T.enter(T.$('n3'), T.p(t, CUE.n3, 0.45), 10);
+      cur(T.$('n3'), on(t, CUE.n3, CUE.n3End), 0.001);
+      T.enter(T.$('fin'), T.p(t, CUE.fin, 0.5), 16);
+      cur(T.$('fin'), on(t, CUE.fin, 999), 10);
+    }
+  });
+</script>
+</body>
+</html>

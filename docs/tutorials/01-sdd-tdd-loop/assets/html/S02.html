@@ -1,0 +1,85 @@
+<!doctype html>
+<!-- S02 · 机制动画 · script 9–11「还有一种。……你自己一跑，不对。」
+     示意画面（右上角「示意」）：沿用 S01 的通用对话框，只留「AI」一方。
+     - AI 的回复「做完了，测试全通过」照分镜原文（中文）。这句是它说的，不是测试结果，所以不上绿。
+     - 右边终端 = 你自己跑。命令和输出用灰条表示（不编命令），只有结果条写示意的 FAIL，
+       红色 = 测试失败，这一帧唯一的颜色。
+     - 终端窗口不倾斜，标签倾斜；「你自己跑」用奶白 .tab，不用 .tab.ink（.ink 表示实录）。 -->
+<html lang="zh-CN" data-frame-id="S02">
+<head>
+<meta charset="utf-8">
+<title>S02 · 你自己一跑</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .chat { left: 150px; top: 300px; width: 720px; height: 440px; padding: 0; }
+  .chat .tab { font-size: 40px; }
+  .who {
+    position: absolute; width: 96px; height: 96px; box-sizing: border-box; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--display); font-weight: 800; font-size: 42px;
+    background: var(--ink); color: #fff; border: 5px solid var(--cream); box-shadow: 6px 6px 0 #000;
+  }
+  .bubble {
+    position: absolute; padding: 22px 36px; border-radius: 10px; white-space: nowrap;
+    background: var(--cream); color: var(--ink); border: 5px solid var(--ink); box-shadow: 8px 8px 0 #000;
+    font-family: var(--display); font-weight: 800; font-size: 60px; line-height: 1.15;
+  }
+
+  .window { left: 1060px; top: 260px; width: 760px; height: 560px; padding: 70px 50px 40px; overflow: visible; }
+  .window .tab { left: -14px; top: -44px; }
+  .prompt { display: flex; align-items: center; gap: 22px; margin-bottom: 34px; }
+  .prompt .p { font-family: var(--mono); font-weight: 700; font-size: 40px; color: var(--unlit); }
+  .bar { height: 18px; border-radius: 9px; background: var(--cream-dim); }
+  .out { margin: 0 0 30px 0; }
+  /* 结果条：测试失败 = 红。墨字在红底上对比 ≥4.5:1。 */
+  .result {
+    position: absolute; left: 50px; right: 50px; bottom: 50px; height: 120px; box-sizing: border-box;
+    display: flex; align-items: center; padding: 0 34px; border-radius: 8px;
+    background: var(--fail); color: var(--ink); border: 5px solid var(--ink);
+    font-family: var(--mono); font-weight: 800; font-size: 60px; letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="mock">示意</div>
+
+  <div class="card dark chat" id="chat" data-shadow="10">
+    <div class="tab" style="font-size:40px">对话</div>
+    <div class="who" id="ai" style="left:44px;top:120px">AI</div>
+    <div class="bubble" id="say" data-r="-1.5" style="left:176px;top:110px">做完了，<br>测试全通过</div>
+  </div>
+
+  <div class="window" id="term" data-shadow="16">
+    <div class="tab" data-r="2" id="ttab">你自己跑</div>
+    <div class="prompt"><span class="p">$</span><div class="bar ln" style="width:300px"></div></div>
+    <div class="bar out ln" style="width:540px"></div>
+    <div class="bar out ln" style="width:420px"></div>
+    <div class="bar out ln" style="width:600px"></div>
+    <div class="result" id="fail">FAIL</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 8.8,
+    init: function () { return T.fonts('对话做完了，测试全通过你自己跑'); },
+    render: function (t) {
+      // 时刻按实测（2026-10-06，frame-times.py），画面内秒数；括号里是对应的口播。
+      // 1. AI：做完了，测试全通过。对话框 0.00（9 句开口）；AI 圆片 2.00（10 句开口「AI 跟你说」）；气泡 2.64（念到「做完了」的「做」）。
+      T.enter(T.$('chat'), T.p(t, 0.0, 0.4), 20);
+      T.enter(T.$('ai'), T.p(t, 2.0, 0.4), 10);
+      T.enter(T.$('say'), T.p(t, 2.64, 0.5), 16);
+
+      // 2. 你自己跑：命令、输出，结果是红色 FAIL。终端 6.72（11 句开口「结果你自己一跑」）；标签 6.96（「你」）；
+      //    输出行 7.44（「跑」），行间隔照旧 0.2；FAIL 8.32（念到「不对」的「不」）。
+      T.enter(T.$('term'), T.p(t, 6.72, 0.4), 16);
+      T.enter(T.$('ttab'), T.p(t, 6.96, 0.4), 10);
+      T.all('.ln').forEach(function (el, i) { T.wipe(el, T.p(t, 7.44 + i * 0.2, 0.25), 'x'); });
+      T.enter(T.$('fail'), T.p(t, 8.32, 0.35), 12);
+    }
+  });
+</script>
+</body>
+</html>

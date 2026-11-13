@@ -1,0 +1,173 @@
+<!doctype html>
+<!-- S11c · 录屏证据（实录 · 示例项目）· script 75–78「这一次，两处都报了同一条。……后来规格补上了：errcode 缺失或者为空，都算失败。」
+     10-24 按一页一层从原 S11a 拆出：S11b 只放另一个模型的说明，本页放例子。
+     事实来源：r3 报告（示例仓 2e84aeb 的 openspec/changes/alarm-notify/spec-review-report.md），原文照抄，只去掉 ** 与反引号：
+       第 51–52 行两处另一个模型的锚：site="design-voice"、site="hr-tg"，都是 runner="codex"、findings="2"；
+       第 105 行 D1：问题列「缺 errcode 会被判成功（design-voice、hr-tg、对抗 B）。普通 int 解码时……」，处置列「design 第 8 条与 NTF-05：errcode 解码为 *int，必须非 nil 且为 0。……」。
+       分镜备注「另有对抗 B；领域审没报」不上屏，屏上只有第 105 行原文。
+     第 1 句两处的锚：51–52 两行算一个重点，一个黄框框住，里面 site 两处紫色加粗、runner / findings 加粗；锚行字号 22px（一行放下整条原文），不另放大
+       （作者 10-24 规则下的判断：D1 卡和修订卡已占满窗口下方，锚行再加一张放不下，也不能一次一张，所以锚行不放大；要不要补，待作者定）。
+     第 2 句起第 105 行追加进窗口（不替换锚行），D1 问题列黄框 + 放大卡；第 3 句放大卡里「之后冷却生效，后续提醒也被抑制」加粗加下划线；
+     末句处置列里「errcode 解码为 *int，必须非 nil 且为 0」黄框，修订放大卡长出。
+     放大卡（visual-v4 4.7，10-24 新规则）：D1 卡和修订卡放得下，所以共存，都留到页末，不一次一张：两张并排放在窗口下方，
+       D1 卡左（x 60–1100）、修订卡右（x 1120–1860），y 500 起，底边都不过 930，卡里等宽字 30px，卡与卡不重叠，不压窗口。
+       D1 黄框讲到处置时淡出，D1 卡和它的引线留着，引线仍连在 D1 原来黄框的位置。
+     引线：每张卡一根，用 T.lead() 画黄色细线（2px，不加箭头），从黄框离卡最近的角连到卡离黄框最近的角，随卡展开从黄框一端擦出；
+       线在 #leads 层（theme.js 新建，z-index 20），在报告窗口和压暗层之上、放大卡（z-index 30）之下。
+       黄框和卡的矩形在 init 里按终态量一次（窗口此时没有位移），卡的终点矩形直接用 ZD1_END、ZFIX_END。
+     最后一帧：窗口里锚行两行、D1 两行；黄框在修订那半句；D1 卡和修订卡并排在窗口下方，各有一根黄线连到原文。
+     配色：另一个模型一律紫：design-voice、hr-tg 两个名字浅紫加粗；对抗 B 用粉字（本期对抗审）；窗口深色终端底，「实录」标签墨底；放大卡不加色边；
+       黄只给「当前」，同一时刻一个；不用红绿。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。句起点：
+       75 句 t0.0：报告窗口落下（第 51–52 行）；t0.44 两行加黄框（「两处」）。
+       76 句 t3.68：t3.48 第 105 行追加进窗口；t3.78 D1 问题列黄框，t4.18 放大卡长出（0.6 秒，相对 D1 追加时刻不变）。
+       77 句 t12.16：念到「后面的提醒还会被冷却压住」（t16.44）放大卡里那一句加粗加下划线。
+       78 句 t19.83：念到「errcode 缺失或者为空」（t21.71）处置列黄框，D1 黄框淡出（D1 卡留着）；t22.11 修订放大卡长出，留到页末。
+       念完 t24.47；时长 25.59 秒。内容都在 y 940 以上。 -->
+<html lang="zh-CN" data-frame-id="S11c">
+<head>
+<meta charset="utf-8">
+<title>S11c · 另一个模型报的一条</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .window, #zD1, #zFix { font-variant-ligatures: none; }
+  /* 报告窗口（实录） */
+  .window { left: 60px; top: 110px; width: 1800px; overflow: visible; }
+  .window .tab { top: -60px; font-size: 34px; padding: 4px 22px; }
+  .window .bar0 { height: 46px; display: flex; align-items: center; padding: 0 26px; box-sizing: border-box;
+                  background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 8px 8px 0 0;
+                  font-family: var(--mono); font-size: 24px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  .window .bd { padding: 10px 24px 16px; font-family: var(--mono); font-size: 23px; line-height: 35px; color: #e4e0d6; }
+  .cap { display: block; font-size: 22px; color: var(--unlit); margin: 6px 0 2px; }
+  .ln { display: flex; gap: 14px; }
+  .ln > i { flex: none; width: 44px; text-align: right; font-style: normal; color: var(--unlit); }
+  .ln > span { flex: 1; min-width: 0; }
+  .anc { font-size: 22px; white-space: nowrap; }
+  .anc b { color: #fff; font-weight: 700; }
+  .anc .vv { color: var(--violet-soft); font-weight: 800; }
+  .ln .vv { color: var(--violet-soft); font-weight: 700; }
+  .ln .pk { color: var(--pink-soft); }
+  .ln .t1 { color: #fff; font-weight: 700; }
+  #dim { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 8px; background: #000; opacity: 0; pointer-events: none; }
+  .fb { position: absolute; box-sizing: border-box; border: 6px solid transparent; border-radius: 8px; opacity: 0; pointer-events: none; }
+
+  /* 放大卡：位置和尺寸由脚本从黄框插值到终点；内容按终点尺寸排版，起点处被裁掉 */
+  .zoom { position: absolute; box-sizing: border-box; overflow: hidden; opacity: 0;
+          z-index: 30; padding: 20px 36px; background: var(--term); border: 5px solid var(--ink); border-radius: 10px; box-shadow: 8px 8px 0 var(--ink); }
+  .zoom .en { font-family: var(--mono); font-size: 30px; line-height: 46px; color: #cfcbc2; }
+  .zoom .en .id { color: var(--unlit); margin-right: 14px; }
+  .zoom .en b, .zoom .en .u.on { color: var(--cream); font-weight: 800; text-decoration: underline; text-decoration-color: var(--cream); text-decoration-thickness: 3px; text-underline-offset: 7px; }
+  .zoom .en .vv { color: var(--violet-soft); font-weight: 800; }
+  .zoom .en .pk { color: var(--pink-soft); }
+  .zoom .zh { margin-top: 10px; font-family: var(--body); font-weight: 600; font-size: 28px; line-height: 40px; color: var(--cream); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="bar0">alarm-notify/spec-review-report.md（r3）</div>
+    <div class="bd">
+      <span class="cap">§ outside-voice（跨模型第二意见）</span>
+      <div id="sAnc">
+        <div class="ln anc"><i>51</i><span>&lt;!-- sdflow:outside-voice v1 <span class="vv">site="design-voice"</span> host="claude" <b>runner="codex"</b> reason_code="ok" <b>findings="2"</b> truncated="false" --&gt;</span></div>
+        <div class="ln anc"><i>52</i><span>&lt;!-- sdflow:outside-voice v1 <span class="vv">site="hr-tg"</span> host="claude" <b>runner="codex"</b> reason_code="ok" <b>findings="2"</b> truncated="false" --&gt;</span></div>
+      </div>
+      <div id="blkD1">
+        <span class="cap">§ [自动决策]</span>
+        <div class="ln"><i>105</i><span><span id="sD1">| D1 | <span class="t1">缺 errcode 会被判成功</span>（<span class="vv">design-voice</span>、<span class="vv">hr-tg</span>、<span class="pk">对抗 B</span>）。普通 int 解码时，{}、{"errcode":null} 都留零值，被当成推送成功；之后冷却生效，后续提醒也被抑制。主 session 按 Go encoding/json 语义核实成立。</span></span></div>
+        <div class="ln"><i></i><span>| design 第 8 条与 NTF-05：<span id="sFix">errcode 解码为 *int，必须非 nil 且为 0</span>。新增场景「响应缺 errcode」，tasks 3.4、3.5 补对应用例。 | 高 |</span></div>
+      </div>
+    </div>
+    <div id="dim"></div>
+    <div class="tab ink">实录 · 示例项目</div>
+  </div>
+  <div class="fb" id="fAnc"></div>
+  <div class="fb" id="fD1"></div>
+  <div class="fb" id="fFix"></div>
+
+  <div class="zoom" id="zD1">
+    <div class="en"><span class="id">D1</span><b>缺 errcode 会被判成功</b>（<span class="vv">design-voice</span>、<span class="vv">hr-tg</span>、<span class="pk">对抗 B</span>）。</div>
+    <div class="en">普通 int 解码时，{}、{"errcode":null} 都留零值，<br>被当成推送成功；</div>
+    <div class="en"><span class="u" id="zCool">之后冷却生效，后续提醒也被抑制</span>。</div>
+    <div class="zh">白话：返回里没有 errcode（或是 null），Go 解出来是 0，当成发送成功；之后进了冷却，后面的提醒也发不出去。</div>
+  </div>
+  <div class="zoom" id="zFix">
+    <div class="en"><span class="id">处置</span>design 第 8 条与 NTF-05：<br><b>errcode 解码为 *int，<br>必须非 nil 且为 0</b>。</div>
+    <div class="zh">白话：用指针接 errcode；字段缺失或者为 null 时是 nil，算失败；只有明确返回 0 才算成功。</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒；注释写全稿句号。
+  var CUE = {
+    win: 0.0,                             // 75 句：报告窗口（第 51–52 行）
+    anc: 0.44, ancEnd: 3.18,               // 75 句：两处的锚一个黄框
+    d1: 3.48, d1Box: 3.78, zD1: 4.18,       // 76 句：第 105 行追加，D1 黄框，放大卡长出
+    cool: 16.44,                          // 77 句「后面的提醒还会被冷却压住」：那一句加粗加下划线
+    fix: 21.71, zFix: 22.11                // 78 句「errcode 缺失或者为空」：处置列黄框，修订放大卡长出，留到页末
+  };
+  var ZD1_END = { x: 60, y: 500, w: 1040, h: 335 };    // 左，底边 835
+  var ZFIX_END = { x: 1120, y: 500, w: 740, h: 275 };  // 右，底边 775
+  var LEAD1 = null, LEAD2 = null;                      // 两张卡的引线，init 里建
+  var YELLOW = '245,207,74';
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.3)) * (1 - T.ease(T.p(t, b, 0.3))); }
+  function rect(el) {
+    var st = T.$('stage').getBoundingClientRect(), k = st.width / 1920, r = el.getBoundingClientRect();
+    return { x: (r.left - st.left) / k, y: (r.top - st.top) / k, w: r.width / k, h: r.height / k };
+  }
+  function frame(box, target, g) {
+    var r = rect(target);
+    box.style.left = (r.x - 8) + 'px'; box.style.top = (r.y - 4) + 'px';
+    box.style.width = (r.w + 16) + 'px'; box.style.height = (r.h + 8) + 'px';
+    box.style.opacity = g > 0.001 ? 1 : 0;
+    box.style.borderColor = 'rgba(' + YELLOW + ',' + g + ')';
+    box.style.boxShadow = '0 0 36px rgba(' + YELLOW + ',' + (0.45 * g) + ')';
+  }
+  function grow(zm, from, end, z) {
+    if (z <= 0.001) { zm.style.opacity = 0; return; }
+    zm.style.left = (from.x + (end.x - from.x) * z) + 'px';
+    zm.style.top = (from.y + (end.y - from.y) * z) + 'px';
+    zm.style.width = (from.w + (end.w - from.w) * z) + 'px';
+    zm.style.height = (from.h + (end.h - from.h) * z) + 'px';
+    zm.style.opacity = Math.min(1, z * 4);
+  }
+
+  Stage({
+    duration: 25.59,
+    init: function () {
+      return T.fonts(document.body.textContent).then(function () {
+        // 黄框的矩形 = 原文外扩（左右 8px、上下 4px），同 frame()；窗口还没做进场位移，现在量的就是终态
+        function box(el) { var r = T.rect(el); return { x: r.x - 8, y: r.y - 4, w: r.w + 16, h: r.h + 8 }; }
+        LEAD1 = T.lead(box(T.$('sD1')), ZD1_END);
+        LEAD2 = T.lead(box(T.$('sFix')), ZFIX_END);
+      });
+    },
+    render: function (t) {
+      T.enter(T.$('win'), T.p(t, CUE.win, 0.45), 14);
+      // 76 句：第 105 行追加进窗口
+      T.$('blkD1').style.display = t >= CUE.d1 ? 'block' : 'none';
+      T.$('blkD1').style.opacity = T.ease(T.p(t, CUE.d1, 0.4));
+
+      // 黄框：同一时刻一处
+      frame(T.$('fAnc'), T.$('sAnc'), on(t, CUE.anc, CUE.ancEnd));
+      if (t >= CUE.d1) {
+        frame(T.$('fD1'), T.$('sD1'), on(t, CUE.d1Box, CUE.fix - 0.3));
+        frame(T.$('fFix'), T.$('sFix'), on(t, CUE.fix, 999));
+      } else { T.$('fD1').style.opacity = 0; T.$('fFix').style.opacity = 0; }
+
+      // 放大卡：D1 卡从 D1 黄框长出，修订卡从处置黄框长出，两张都留到页末（并排放得下）。实录其余压暗 0.35。引线随卡展开
+      var z1 = t >= CUE.d1 ? T.ease(T.p(t, CUE.zD1, 0.6)) : 0;
+      grow(T.$('zD1'), t >= CUE.d1 ? rect(T.$('sD1')) : ZD1_END, ZD1_END, z1);
+      T.leadDraw(LEAD1, z1);
+      var z2 = t >= CUE.d1 ? T.ease(T.p(t, CUE.zFix, 0.6)) : 0;
+      grow(T.$('zFix'), t >= CUE.d1 ? rect(T.$('sFix')) : ZFIX_END, ZFIX_END, z2);
+      T.leadDraw(LEAD2, z2);
+      T.$('dim').style.opacity = 0.35 * T.ease(T.p(t, CUE.zD1, 0.4));
+      T.$('zCool').classList.toggle('on', t >= CUE.cool);
+    }
+  });
+</script>
+</body>
+</html>

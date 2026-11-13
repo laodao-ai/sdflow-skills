@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- S10 · 机制动画 · script 38–44「文件里写三样东西。……输入 80，不报警。」
+     概念示意：一份文档分三栏（为什么做 / 做什么 / 做到什么样算对）。不是真实文件，不标「实录」；
+     分镜没写「示意」，也不标。前两栏的内容用灰条（不编内容），第三栏展开两个场景：
+     81.2 → 报警，80.0 → 不报警（逐字稿原文）。
+     - 念到哪一栏，哪一栏是当前（黄色描边 + 外发光）；第三栏亮起后一直保持到结束。
+     - 「报警 / 不报警」是程序该有的行为，不是测试结果，不用红 / 绿。
+     - 还没讲到工具：不用蓝 / 琥珀。栏是定下来的东西，倾角 ±1°。 -->
+<html lang="zh-CN" data-frame-id="S10">
+<head>
+<meta charset="utf-8">
+<title>S10 · 文档三栏</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .file { left: 90px; top: 200px; width: 1740px; height: 700px; padding: 0; box-shadow: 16px 16px 0 var(--ink); border-width: 6px; }
+  .file .tab { font-size: 44px; }
+  .col { position: absolute; top: 90px; height: 560px; padding: 30px 32px; box-shadow: 8px 8px 0 var(--ink); border-width: 4px; }
+  .head { display: flex; align-items: center; gap: 18px; white-space: nowrap;
+    font-family: var(--display); font-weight: 800; font-size: 50px; line-height: 1.1; }
+  .bar { height: 16px; border-radius: 8px; background: #c9c5bb; margin-top: 30px; }
+  .how { margin-top: 26px; font-weight: 600; font-size: 36px; color: #4a4843; }
+  .case { display: flex; align-items: center; gap: 26px; margin-top: 40px; }
+  .in { padding: 14px 26px; border-radius: 8px; background: #fff; border: 4px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+    font-weight: 600; font-size: 40px; white-space: nowrap; }
+  .in code { font-family: var(--mono); font-weight: 700; font-size: 48px; }
+  .case svg { width: 90px; height: 40px; flex: none; }
+  .out { font-family: var(--display); font-weight: 800; font-size: 56px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card file" id="file" data-r="-0.5" data-shadow="16">
+    <div class="tab ink">一份文档</div>
+
+    <div class="card col" id="c1" data-r="-1" data-shadow="8" style="left:36px;width:420px">
+      <div class="head"><span class="num">1</span>为什么做</div>
+      <div class="bar b1" style="width:90%"></div><div class="bar b1" style="width:72%"></div><div class="bar b1" style="width:84%"></div>
+    </div>
+    <div class="card col" id="c2" data-r="1" data-shadow="8" style="left:486px;width:420px">
+      <div class="head"><span class="num">2</span>做什么</div>
+      <div class="bar b2" style="width:86%"></div><div class="bar b2" style="width:94%"></div><div class="bar b2" style="width:60%"></div>
+    </div>
+    <div class="card col" id="c3" data-r="-0.8" data-shadow="8" style="left:936px;width:760px">
+      <div class="head"><span class="num">3</span>做到什么样算对</div>
+      <div class="how" id="how">用具体的场景写</div>
+      <div class="case" id="s1">
+        <div class="in">输入 <code>81.2</code></div>
+        <svg viewBox="0 0 90 40"><path d="M4 20 H66" stroke="#161616" stroke-width="8" stroke-linecap="round"/><polygon points="60,4 88,20 60,36" fill="#161616"/></svg>
+        <div class="out">报警</div>
+      </div>
+      <div class="case" id="s2">
+        <div class="in">输入 <code>80.0</code></div>
+        <svg viewBox="0 0 90 40"><path d="M4 20 H66" stroke="#161616" stroke-width="8" stroke-linecap="round"/><polygon points="60,4 88,20 60,36" fill="#161616"/></svg>
+        <div class="out">不报警</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 17,
+    init: function () { return T.fonts('一份文档为什么做做到什么样算对用具体的场景写输入报警不'); },
+    render: function (t) {
+      // 1. 一份文档。
+      T.enter(T.$('file'), T.p(t, 0.0, 0.6), 24);
+
+      // 2. 三栏依次出现，念到哪栏哪栏是当前。时刻按实测（2026-10-06，frame-times.py）：
+      //    39 句开口 3.12「为什么做」、40 句开口 4.56「做什么」、41 句念到「做到什么样才算对」的「做」6.72。
+      T.enter(T.$('c1'), T.p(t, 3.12, 0.4), 16);
+      T.all('.b1').forEach(function (el, i) { T.wipe(el, T.p(t, 3.32 + i * 0.12, 0.25), 'x'); });
+      T.current(T.$('c1'), T.ease(T.p(t, 3.12, 0.3)) * (1 - T.ease(T.p(t, 4.56, 0.3))));
+
+      T.enter(T.$('c2'), T.p(t, 4.56, 0.4), 16);
+      T.all('.b2').forEach(function (el, i) { T.wipe(el, T.p(t, 4.76 + i * 0.12, 0.25), 'x'); });
+      T.current(T.$('c2'), T.ease(T.p(t, 4.56, 0.3)) * (1 - T.ease(T.p(t, 6.72, 0.3))));
+
+      T.enter(T.$('c3'), T.p(t, 6.72, 0.4), 16);
+      T.current(T.$('c3'), T.ease(T.p(t, 6.72, 0.3)));
+
+      // 3. 第三栏用场景写：81.2 → 报警，80.0 → 不报警。
+      //    42 句念到「用具体的场景来写」的「用」10.48；43 句开口 12.96「比如输入 81.2」；44 句开口 16.24「输入 80」。
+      T.enter(T.$('how'), T.p(t, 10.48, 0.4), 10);
+      T.enter(T.$('s1'), T.p(t, 12.96, 0.45), 16);
+      T.enter(T.$('s2'), T.p(t, 16.24, 0.45), 16);
+    }
+  });
+</script>
+</body>
+</html>

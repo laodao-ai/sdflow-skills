@@ -1,0 +1,125 @@
+<!doctype html>
+<!-- S11 · 机制动画（对比卡）· script 56–64「那这五路代码评审，具体是怎么做的呢？……所以除了读代码，还能用工具来扫描问题，还能跑起来验证。」
+     对比卡「规格评审 vs 代码评审」，示意（不加角标）。
+     句子（本画面内第 N 句，估算起点，每分钟 220 字；录音后用 frame-times.py 对齐）：
+       1 句 0.0：问题贴纸「规格评审 vs 代码评审」正中放大停约 1 秒缩到左上；2.2 秒起上方灰字卡「一样的：……」（第 1–3 句内），标「讲规格评审时说过」。
+       2 句 4.6：两个列头：规格评审（蓝，规格一侧）、代码评审（琥珀，执行一侧）。
+       3 句 12.0：灰字卡黄描边（念「新的 agent、分角度审、换个模型再审……」）。
+       4 句 21.4：没有新元素（「不同的地方有两个」）。
+       5 句 23.8：行 ① 标签「事实从哪来」，规格评审格「审文档」。
+       6 句 27.0：规格评审格补第二行「文档里写的代码现状，要派一个 agent 去代码里核对」。
+       7 句 34.6：代码评审格「审代码，代码就是事实」。
+       8 句 40.4：行 ② 标签「能不能跑」；9 句 42.0 规格评审格「只能读」，42.9 代码评审格「能读 · 能扫 · 能跑」，「扫」「跑」黄色。
+     颜色：蓝 = 规格一侧，琥珀 = 执行一侧（列头）；灰字卡用炭灰底 + cream-dim 字（被留下、已讲过）；「扫」「跑」黄字在炭灰格上。不用红绿。内容都在 y 930 以内。 -->
+<html lang="zh-CN" data-frame-id="S11">
+<head>
+<meta charset="utf-8">
+<title>S11 · 规格评审 vs 代码评审</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 56px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+
+  /* 上方灰字卡 */
+  #same { left: 60px; top: 226px; width: 1800px; padding: 22px 36px 24px; background: var(--charcoal); color: var(--cream-dim); }
+  #same .tab { left: -14px; top: -42px; font-size: 32px; padding: 4px 22px; }
+  #same span { display: block; font-weight: 600; font-size: 42px; line-height: 1.25; }
+
+  /* 列头 */
+  .hd { position: absolute; top: 374px; box-sizing: border-box; height: 66px; display: flex; align-items: center; justify-content: center;
+        border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--ink); }
+  #hs { left: 450px; width: 630px; background: var(--blue); }
+  #hc { left: 1130px; width: 730px; background: var(--amber); }
+
+  /* 行标签 */
+  .lb { font-size: 40px; }
+  #l1 { left: 60px; top: 548px; }
+  #l2 { left: 60px; top: 790px; }
+
+  /* 格子 */
+  .ce { position: absolute; box-sizing: border-box; padding: 14px 26px; background: var(--cream); color: var(--ink);
+        border: 4px solid var(--ink); border-radius: 8px; display: flex; flex-direction: column; justify-content: center;
+        font-weight: 600; font-size: 40px; line-height: 1.3; }
+  .ce b { font-family: var(--display); font-weight: 800; font-size: 46px; }
+  .ce .sub { font-size: 36px; }
+  #cs1 { left: 450px; top: 458px; width: 630px; height: 230px; }
+  #cc1 { left: 1130px; top: 458px; width: 730px; height: 230px; }
+  #cs2 { left: 450px; top: 724px; width: 630px; height: 160px; }
+  #cc2 { left: 1130px; top: 724px; width: 730px; height: 160px; background: var(--charcoal); color: #fff; }
+  #cc2 em { font-style: normal; color: var(--yellow); font-weight: 800; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">规格评审 vs 代码评审</div></div>
+
+  <div class="card" id="same" data-r="1"><div class="tab" data-r="-2">讲规格评审时说过</div><span>一样的：新的 agent · 分角度 · 换模型</span></div>
+
+  <div class="hd" id="hs">规格评审</div>
+  <div class="hd" id="hc">代码评审</div>
+
+  <div class="chip lb" id="l1" data-r="-1.5">① 事实从哪来</div>
+  <div class="ce" id="cs1"><b>审文档</b><span class="sub" id="cs1b">文档里写的代码现状，要派一个 agent 去代码里核对</span></div>
+  <div class="ce" id="cc1"><b>审代码，代码就是事实</b></div>
+
+  <div class="chip lb" id="l2" data-r="1.5">② 能不能跑</div>
+  <div class="ce" id="cs2"><b>只能读</b></div>
+  <div class="ce" id="cc2"><b>能读 · 能<em>扫</em> · 能<em>跑</em></b></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按口播字数估算，还没有录音。注释写本画面第几句。
+  var CUE = {
+    hold: 0.71, move: 0.5,        // 1 句：问题贴纸正中停到 0.8 秒，0.5 秒缩到左上
+    same: 1.951,                   // 1–3 句：灰字卡
+    hd: 4.08,                     // 2 句：两个列头
+    sameOn: 10.4, sameOff: 20.48, // 3 句：灰字卡黄描边
+    l1: 22.64, cs1: 22.963,         // 5 句：行 ① 标签、规格评审格「审文档」
+    cs1b: 26.08,                  // 6 句：核对那一行
+    cc1: 32.4,                   // 7 句：代码评审格
+    l2: 37.28,                    // 8 句：行 ② 标签
+    cs2: 39.36, cc2: 40.053         // 9 句：只能读 / 能读 能扫 能跑
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function fade(id, t, a) {
+    var e = T.ease(T.p(t, a, 0.4)), el = T.$(id);
+    el.style.opacity = e; el.style.transform = 'translateY(' + ((1 - e) * 8) + 'px)';
+  }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 45.520,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：问题贴纸
+      T.enter(T.$('hdr'), T.p(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move)), S = 1.5, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      show('same', t, CUE.same, 14);
+      T.current(T.$('same'), on(t, CUE.sameOn, CUE.sameOff), 10);
+
+      show('hs', t, CUE.hd, 10); show('hc', t, CUE.hd + 0.3, 10);
+
+      show('l1', t, CUE.l1, 10);
+      show('cs1', t, CUE.cs1, 10);
+      fade('cs1b', t, CUE.cs1b);
+      show('cc1', t, CUE.cc1, 10);
+      T.current(T.$('cs1'), on(t, CUE.cs1, CUE.cc1), 5);
+      T.current(T.$('cc1'), on(t, CUE.cc1, CUE.l2), 5);
+
+      show('l2', t, CUE.l2, 10);
+      show('cs2', t, CUE.cs2, 10);
+      show('cc2', t, CUE.cc2, 10);
+      T.current(T.$('cc2'), on(t, CUE.cc2, 999), 5);
+    }
+  });
+</script>
+</body>
+</html>

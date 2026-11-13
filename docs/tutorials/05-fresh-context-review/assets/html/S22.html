@@ -1,0 +1,104 @@
+<!doctype html>
+<!-- S22 · 第 13 轮（2026-11-09），口播 128–134。
+     两栏对照卡「Claude Code 团队 vs SDFlow · 审出问题以后」，每行先左后右，随口播亮（版式同 S15）：
+     ①第 2–3 句「每个问题」：修掉，或写明理由关掉 ｜ 也一样：逐条裁决，修不了的进问题池；
+     ②第 4–5 句「同类错误」：发现一个，查别处有没有同样的 ｜ 让 agent 按情况决定怎么查，不标好坏；
+     ③第 6–7 句「人管什么」：定做不做、往哪做 ｜ 设计门定目标，代码评审不要人批，看评审报告。
+     出处 Anthropic 2026-10-15，原文已核（script.md 来源与限定 CC:88、CC:154、CC:169）。
+     动画节点按口播估算（每分钟 220 字），录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S22">
+<head>
+<meta charset="utf-8">
+<title>S22 · Claude Code 团队 vs SDFlow · 审出问题以后</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 问题贴纸：正中放大，再移到左上 */
+  #hw { left: 60px; top: 70px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 44px; padding: 10px 28px; }
+
+  /* 出处卡 */
+  #src { left: 1250px; top: 78px; width: 610px; padding: 12px 24px 14px; }
+  #src .tab { left: -14px; top: -44px; font-size: 30px; padding: 4px 20px; }
+  #src b { display: block; font-family: var(--display); font-weight: 800; font-size: 29px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  #src span { display: block; margin-top: 4px; font-family: var(--mono); font-weight: 600; font-size: 24px; color: rgba(22,22,22,.8); }
+
+  /* 对比表：同 S15 */
+  #tb { position: absolute; left: 60px; top: 236px; width: 1800px; display: grid; grid-template-columns: 190px 790px 790px; column-gap: 15px; row-gap: 22px; align-items: stretch; }
+  .hd { box-sizing: border-box; height: 62px; display: flex; align-items: center; justify-content: center; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--ink); }
+  #h1 { background: var(--charcoal); color: var(--cream); } #h2 { background: var(--amber); }
+  .lb { box-sizing: border-box; display: flex; align-items: center; padding: 4px 6px; font-weight: 800; font-size: 34px; line-height: 1.2; color: var(--ink); }
+  .ce { box-sizing: border-box; padding: 8px 18px; background: var(--cream); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px;
+        font-weight: 600; font-size: 34px; line-height: 1.3; min-height: 150px; display: flex; flex-direction: column; justify-content: center; }
+  .qt { display: block; margin-top: 4px; font-style: italic; font-weight: 600; font-size: 26px; line-height: 1.3; color: rgba(22,22,22,.8); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">审出问题以后：Claude Code 团队 vs SDFlow</div></div>
+
+  <div class="card" id="src" data-r="1"><div class="tab ink" data-r="-2">实录 · 原文摘要</div><b>How the Claude Code team does code review</b><span>Anthropic · 2026-10-15</span></div>
+
+  <div id="tb">
+    <div></div><div class="hd" id="h1">Claude Code 团队</div><div class="hd" id="h2">SDFlow</div>
+
+    <div class="lb" id="l1">每个问题</div>
+    <div class="ce" id="c1"><div>修掉，或写明理由关掉</div><i class="qt">You either fix it or resolve the thread with a reason.</i></div>
+    <div class="ce" id="d1">也一样：逐条裁决，修不了的进问题池</div>
+
+    <div class="lb" id="l2">同类错误</div>
+    <div class="ce" id="c2"><div>发现一个，查别处有没有同样的</div><i class="qt">Flag the class of bug</i></div>
+    <div class="ce" id="d2">让 agent 按情况决定怎么查</div>
+
+    <div class="lb" id="l3">人管什么</div>
+    <div class="ce" id="c3"><div>定这个功能做不做、往哪个方向做</div><i class="qt">Deciding whether to build it.</i></div>
+    <div class="ce" id="d3">人在设计门定目标<br>代码评审不要人批，看评审报告</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按口播字数估算，还没有录音。注释写本画面第几句。
+  var CUE = {
+    hold: 0.796, move: 0.5,          // 1 句：问题贴纸
+    h: 1.393, src: 1.99,              // 1 句：列头、出处卡
+    c1: 4.08, d1: 9.967,             // 2、3 句：每个问题
+    c2: 15.76, d2: 22.031,            // 4、5 句：同类错误
+    c3: 25.76, d3: 32.434             // 6、7 句：人管什么
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function fade(id, t, a) {
+    var e = T.ease(T.p(t, a, 0.35)), el = T.$(id);
+    el.style.opacity = e; el.style.transform = 'translateY(' + ((1 - e) * 10) + 'px)';
+  }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 39.840,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：问题贴纸正中放大 → 左上；列头、出处卡
+      T.enter(T.$('hdr'), T.p(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move)), S = 1.4, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 70;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+      fade('h1', t, CUE.h); fade('h2', t, CUE.h + 0.3);
+      show('src', t, CUE.src, 14);
+
+      // 2–7 句：每行先左后右，当前格黄描边
+      var rows = [['c1', 'd1'], ['c2', 'd2'], ['c3', 'd3']];
+      var next = [CUE.d1, CUE.c2, CUE.d2, CUE.c3, CUE.d3, 999];
+      rows.forEach(function (r, i) {
+        fade('l' + (i + 1), t, CUE[r[0]]);
+        fade(r[0], t, CUE[r[0]]); fade(r[1], t, CUE[r[1]]);
+        T.current(T.$(r[0]), on(t, CUE[r[0]], next[i * 2]), 5);
+        T.current(T.$(r[1]), on(t, CUE[r[1]], next[i * 2 + 1]), 5);
+      });
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- S17 · 第 10 轮（2026-11-08），口播 99–102。
+     实录结果为主画面：放大现有 report-ledger.png 的修复／defer 台账，按口播框出修复两项、T48、首轮复审结束三处，每处配带黄色引线的放大卡。主卡明确刚讲的密钥问题已修、真机冒烟尚未执行、这次一轮复审结束；不要同时叠规则卡与多方案流程。来源：示例项目 code-review-report.md:141–149。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S17">
+<head>
+<meta charset="utf-8">
+<title>S17 · 先看这次实际处理了什么</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+#ledger > .tab {z-index:3;top:-48px}
+.frame-title {left:60px;top:48px;font-family:var(--display);font-size:48px;font-weight:800}
+.cue {opacity:0}
+.card {font-size:36px;line-height:1.45}
+.card h2 {font-family:var(--display);font-size:46px;margin:0 0 18px;line-height:1.2}
+.card p {margin:10px 0 0}
+.card small {display:block;font-size:27px;line-height:1.4;margin-top:12px}
+.label {display:inline-block;padding:4px 14px;border:3px solid var(--ink);border-radius:5px;background:var(--cream);font-size:30px;font-weight:700;margin-bottom:14px}
+.label.blue {background:var(--blue)} .label.amber {background:var(--amber)}
+.label.violet {background:var(--violet)}
+.arrow {position:absolute;color:var(--ink);font-size:68px;font-weight:800;text-align:center}
+.source {font-family:var(--mono);font-size:26px;line-height:1.4}
+.code {background:var(--term);color:var(--cream);font-family:var(--mono);font-size:38px;padding:15px 22px;border-radius:8px;white-space:pre-wrap}
+.underline {text-decoration:underline;text-decoration-color:var(--yellow);text-decoration-thickness:5px;text-underline-offset:6px}
+.crop{position:absolute;width:1028px;height:438px;overflow:hidden;border-radius:7px}.crop img{position:absolute;width:2304px;height:1296px;left:-374.4px;top:-93.6px}.hl{position:absolute;border:4px solid var(--yellow);border-radius:5px;box-sizing:border-box}#dim{position:absolute;inset:0;background:rgba(22,22,22,.35)}#z1,#z2,#z3{z-index:2;font-family:var(--mono)}#z1 h2,#z2 h2,#z3 h2{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+.card{padding:20px 28px;font-size:34px;line-height:1.35}.card h2{font-size:40px;margin-bottom:12px}.card p{margin-top:8px}.card small{font-size:28px;line-height:1.3;margin-top:10px}.label{font-size:26px;padding:3px 12px;margin-bottom:10px}.chip.cue{box-sizing:border-box}.source{font-size:26px}#z1,#z2,#z3{padding:16px 24px}#z1{top:210px!important}#z2{top:470px!important}#z3{top:710px!important}#scope{top:770px!important;padding:14px 22px}</style>
+</head>
+<body>
+<div id="stage">
+<div class="chip cue frame-title" data-at="0">先看这次实际处理了什么</div>
+<div id="ledger" class="window cue" data-at="1.652" style="left:60px;top:240px;width:1040px;height:450px;overflow:visible">
+<div class="tab ink" style="font-size:32px">实录 · 示例项目 · 修复 / defer 台账</div>
+<div class="crop">
+<img src="img/report-ledger.png" alt="评审报告修复和递延台账">
+<div id="dim">
+</div>
+<div class="hl" id="h1">
+</div>
+<div class="hl" id="h2">
+</div>
+<div class="hl" id="h3">
+</div>
+</div>
+</div>
+<svg id="leads" viewBox="0 0 1920 1080" style="position:absolute;inset:0;width:1920px;height:1080px;pointer-events:none">
+</svg>
+<div id="z1" class="card cue" data-at="3.12" style="left:1230px;top:210px;width:610px;">
+<h2>自动修复 2 项</h2>
+<p>密钥脱敏 ＋ 响应处理</p>
+<small>补测试，旧代码失败<br>报告 :141–143</small>
+</div>
+<div id="z2" class="card cue" data-at="13.04" style="left:1230px;top:460px;width:610px;">
+<h2>T48：仍未完成</h2>
+<p>真机冒烟 → 问题池</p>
+<small>交给人继续验证 · :149</small>
+</div>
+<div id="z3" class="card cue" data-at="21.6" style="left:1230px;top:710px;width:610px;">
+<h2>首轮复审结束</h2>
+<p>修复改动未再发现问题</p>
+<small>这次到此结束 · :145</small>
+</div>
+<div id="scope" class="card cue" data-at="21.6" style="left:70px;top:770px;width:1000px;">本次结果：修复、验证、留下待办<small>自动流程结束 ≠ 真机验证已经完成</small>
+</div>
+</div>
+<script src="lib/stage.js">
+</script>
+<script src="theme.js">
+</script>
+<script>
+var SENTENCE_STARTS=[0, 3.12, 13.04, 21.6];
+// 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({duration: 29.440,init:function(){return Promise.all([T.fonts(T.$('stage').textContent),...Array.from(document.images).map(function(im){return im.decode?im.decode():Promise.resolve();})]).then(function(){
+// 引线按最终静止布局量；放大动画不保留 theme.js 自动加的倾角。
+T.$('ledger').style.transform='none';
+window.HB=[[320,124,721,143],[321,368,1152,431],[464,264,1071,284]];window.GEO=[];HB.forEach(function(r,i){var h=T.$('h'+(i+1)),z=T.$('z'+(i+1));z.style.transform='none';h.style.left=(r[0]-312)*1.2+'px';h.style.top=(r[1]-78)*1.2+'px';h.style.width=(r[2]-r[0])*1.2+'px';h.style.height=(r[3]-r[1])*1.2+'px';var box=T.rect(h),card=T.rect(z);GEO.push({line:T.lead(box,card),dx:box.x+box.w/2-card.x-card.w/2,dy:box.y+box.h/2-card.y-card.h/2});});});},render:function(t){
+T.tilt();
+var heading=document.querySelector('.frame-title');
+var move=T.ease(T.p(t,1,.6));var scale=1.35-.35*move;heading.style.left=(60+(960-heading.offsetWidth*1.35/2-60)*(1-move))+'px';heading.style.top=(48+(470-heading.offsetHeight*1.35/2-48)*(1-move))+'px';heading.style.transformOrigin='0 0';
+document.querySelectorAll('.cue').forEach(function(el){T.enter(el,T.p(t,Number(el.dataset.at),.45),12);if(el===heading)el.style.transform+=' scale('+scale+')';});
+[1,2,3].forEach(function(i){var start=SENTENCE_STARTS[i];var p=T.ease(T.p(t,start,.4));T.$('h'+i).style.opacity=p;var k=T.ease(T.p(t,start+.4,.6)),g=GEO[i-1],z=T.$('z'+i);z.style.opacity=k;z.style.transform='translate('+((1-k)*g.dx)+'px,'+((1-k)*g.dy)+'px) scale('+(.3+.7*k)+')';T.leadDraw(g.line,k);});
+}});
+</script>
+</body>
+</html>

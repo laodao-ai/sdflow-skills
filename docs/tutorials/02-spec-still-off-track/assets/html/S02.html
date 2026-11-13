@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- S02 · 标题卡 · script 6–7「大家好，我是老刀Cheney。……这三件事我自己踩过坑，做法也改过好几轮，今天就把我的思路和做法一起聊聊。」
+     布局、字体、颜色照首期 S04（作者 2026-10-17 定）：
+     - 左上奶白署名卡：logo 圆片 + 「老刀Cheney」，尺寸、位置同首期 S04。
+     - 下面三张奶白卡并排：卡头墨底标签「第一件 / 第二件 / 第三件」，卡里大字「怎么问 / 怎么写 / 写成什么样」。
+       三张卡等宽，左右各留 140 边距，卡间距 40；上下错开 20，倾角一左一右（定下来的东西，±1.5–2°，同首期 S04）。
+     - 不接 S01 的三张贴纸（作者 2026-10-18 定：切页时 S01 的灰色画面消失，剩下的贴纸像残留）。S01 不改。
+     - 首期卡下面的工具贴纸这一页不放：口播没提到对应的东西。
+     - 不用蓝 / 琥珀：还没落到工具上。
+     动画节点（作者 2026-10-18 定；照首期 S04：署名在第 1 句开口落下，卡在念到它们时依次落下，间隔 0.32）：
+     - 6 句开口 0.0「大家好」：署名卡落下；三张卡同时以淡空壳出现（卡框 + 卡头标签，不透明度 0.35，大字不出）。
+       空壳是按 visual-v4 §4.8「不留空屏」加的（2026-10-18）：只出署名卡时，画面只有标题的状态要撑到「这三件事」开口，超过 3 秒上限。
+     - 7 句开口 2.88「这三件事」：三张卡依次点亮（2.88 / 3.20 / 3.52）：卡变实，大字落下。
+     口播时刻按录音实测（frame-times.py，2026-10-19），集中写在 AT 里。
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排。原第 7 句「今天就跟你聊聊，Spec 到底怎么写，AI 才不跑偏。」删去（约 5.2 秒），
+       原第 8 句（现第 7 句）开口 8.30 → 3.10，三张卡落下的时刻同步前移 5.2 秒，duration 19 → 13（念完约 12.6）。 -->
+<html lang="zh-CN" data-frame-id="S02">
+<head>
+<meta charset="utf-8">
+<title>S02 · 署名与三件事</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .sign { left: 150px; top: 80px; width: 640px; height: 170px; display: flex; align-items: center; gap: 28px; padding: 0 36px; }
+  .sign img { width: 108px; height: 108px; flex: none; }
+  .sign .big { font-size: 84px; white-space: nowrap; }
+  .pair { width: 520px; height: 270px; display: flex; align-items: center; padding: 30px 50px 0; }
+  .pair .big { font-size: 80px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card sign" id="sign" data-r="-1">
+    <img src="../../../shared/logo.svg" alt="">
+    <div class="big">老刀Cheney</div>
+  </div>
+
+  <!-- 卡头标签的倾角同首期 S04（第一件用 .tab 默认的 -3°，第二件 2°）；写 data-r 是为了不让 theme.js 再自动算。 -->
+  <div class="card pair" id="c1" data-r="-2" style="left:140px;top:460px">
+    <div class="tab ink" data-r="-3">第一件</div>
+    <div class="big">怎么问</div>
+  </div>
+  <div class="card pair" id="c2" data-r="1.5" style="left:700px;top:480px">
+    <div class="tab ink" data-r="2">第二件</div>
+    <div class="big">怎么写</div>
+  </div>
+  <div class="card pair" id="c3" data-r="-1.5" style="left:1260px;top:460px">
+    <div class="tab ink" data-r="-3">第三件</div>
+    <div class="big">写成什么样</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按录音实测 frame-times.py，2026-10-19）。
+  var AT = {
+    sign: 0.0,   // 6 句开口「大家好」：署名卡落下
+    c1: 2.88,    // 7 句开口「这三件事」：第一件
+    c2: 3.20,    // 第二件（间隔照首期 S04 的 0.32）
+    c3: 3.52     // 第三件
+  };
+  var SHELL = 0.35;  // 卡点亮前的空壳不透明度（visual-v4 §4.8「不留空屏」）
+
+  Stage({
+    duration: 11,
+    init: function () { return T.fonts('老刀第一件二三怎么问写成什么样'); },
+    render: function (t) {
+      T.tilt();   // 卡头标签手写了 data-r、不做进场动画，先按 data-r 摆好倾角
+      T.enter(T.$('sign'), T.p(t, AT.sign, 0.6), 30);
+      // 三张卡：0 秒起空壳（落下后停在 SHELL 不透明度，大字隐藏），念到时点亮：卡变实，大字落下。
+      [AT.c1, AT.c2, AT.c3].forEach(function (t0, i) {
+        var card = T.$('c' + (i + 1)), lit = T.ease(T.p(t, t0, 0.6));
+        T.enter(card, T.p(t, AT.sign, 0.6), 30);
+        card.style.opacity = parseFloat(card.style.opacity) * (SHELL + (1 - SHELL) * lit);
+        T.enter(card.querySelector('.big'), T.p(t, t0, 0.6), 20);
+      });
+    }
+  });
+</script>
+</body>
+</html>

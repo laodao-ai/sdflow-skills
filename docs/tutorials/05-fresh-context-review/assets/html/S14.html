@@ -1,0 +1,128 @@
+<!doctype html>
+<!-- S14 · 机制动画（引文卡）· script 86–89「谷歌的代码评审指南里有一句：测试不会自己测自己。……自动修完以后，下一步收尾验证会按项目配的测试命令，把改过的部分再测一遍。」
+     引文卡：Google《What to look for in a code review》，原文 “Tests do not test themselves.”（script.md「来源与限定」，https://google.github.io/eng-practices/review/reviewer/looking-for.html ）。出处用卡顶角标，没有作者与日期可标（脚本里没给）。
+     右下两张小卡：SDFlow 做法（示意，不加角标）、实录 · 示例项目（只上画面，不配口播）。
+     实录数字照 script.md 画面提示：268 passed（code-review-report.md:143）；第 6 期收尾验证 unit 252、integration 16（第 6 期 verify-report.md:84-96）。
+     句子（本画面内第 N 句，估算起点，每分钟 220 字；录音后用 frame-times.py 对齐）：
+       1 句 0.0：引文卡「Tests do not test themselves.」+ 中文「测试不会自己测自己」，角标 Google · What to look for in a code review。
+       2 句 6.3：一排五个绿色测试，第四个本身写错了（墨色标签「写错了」），旁注「测试写错了，全绿也不说明代码对」。
+       3 句 13.1：右下 SDFlow 小卡第一行「评审时跑不跑：规则没写，agent 自己判断」。
+       4 句 19.7：第二行「自动修完：收尾验证按项目配的测试命令，重测改过的部分」，24.8 旁注「没配测试命令就不跑」；20.5 起旁边实录小卡。
+     颜色：绿 = 测试通过（一排测试）；其余奶白 / 墨 / 炭灰；黄 = 当前。内容都在 y 930 以内。 -->
+<html lang="zh-CN" data-frame-id="S14">
+<head>
+<meta charset="utf-8">
+<title>S14 · 测试不会自己测自己</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 引文卡 */
+  #q { left: 60px; top: 110px; width: 1800px; padding: 26px 40px 30px; text-align: center; }
+  #q .tab { left: -14px; top: -44px; font-size: 32px; padding: 4px 22px; }
+  #q .en { font-family: var(--display); font-weight: 800; font-size: 88px; line-height: 1.1; color: var(--ink); }
+  #q .zh { margin-top: 10px; font-family: var(--display); font-weight: 800; font-size: 52px; line-height: 1.15; color: rgba(22,22,22,.85); }
+
+  /* 一排测试 */
+  .ts { top: 540px; width: 130px; height: 96px; padding: 0; display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 34px; color: var(--ink); }
+  .ts .wr { position: absolute; left: -8px; top: -46px; padding: 2px 14px; border: 4px solid var(--ink); border-radius: 6px; background: var(--ink); color: #fff;
+            font-size: 28px; font-weight: 800; white-space: nowrap; }
+  #an { left: 60px; top: 700px; }
+
+  /* 右下两张小卡 */
+  #mk { left: 810px; top: 420px; width: 1050px; padding: 24px 36px 26px; }
+  #mk .tab { left: -14px; top: -44px; font-size: 32px; padding: 4px 22px; }
+  #mk p { margin: 0; font-weight: 600; font-size: 36px; line-height: 1.3; color: var(--ink); }
+  #mk p + p { margin-top: 12px; }
+  #mk b { font-weight: 800; }
+  #nt { left: 1480px; top: 600px; font-size: 30px; }
+
+  #rec { left: 810px; top: 700px; width: 1050px; padding: 24px 36px 26px; }
+  #rec .tab { left: -14px; top: -44px; font-size: 32px; padding: 4px 22px; }
+  #rec p { margin: 0; font-weight: 600; font-size: 34px; line-height: 1.35; color: var(--ink); }
+  #rec p + p { margin-top: 8px; }
+  #rec code { display: inline-block; white-space: nowrap; font-family: var(--mono); font-weight: 700; font-size: 30px; }
+  .sr { position: absolute; padding: 4px 14px; border: 3px solid var(--ink); border-radius: 6px; background: var(--cream); color: var(--ink);
+        font-family: var(--mono); font-weight: 600; font-size: 26px; line-height: 1.2; white-space: nowrap; }
+  #sr1 { left: 1370px; top: 676px; }
+  #sr2 { left: 1330px; top: 880px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="q" data-r="-1"><div class="tab ink" data-r="-2">Google · What to look for in a code review</div>
+    <div class="en">Tests do not test themselves.</div>
+    <div class="zh">测试不会自己测自己</div></div>
+
+  <div class="card ts" id="ts1" style="left:60px" data-r="-1">✓ 测试</div>
+  <div class="card ts" id="ts2" style="left:204px" data-r="1">✓ 测试</div>
+  <div class="card ts" id="ts3" style="left:348px" data-r="-1">✓ 测试</div>
+  <div class="card ts" id="ts4" style="left:492px" data-r="1">✓ 测试<span class="tab ink wr" data-r="-3">写错了</span></div>
+  <div class="card ts" id="ts5" style="left:636px" data-r="-1">✓ 测试</div>
+  <div class="tag" id="an" data-r="-3">测试写错了，全绿也不说明代码对</div>
+
+  <div class="card" id="mk" data-r="1"><div class="tab ink" data-r="-2">SDFlow 的规则</div>
+    <p id="m1"><b>评审时跑不跑：</b>规则没写，agent 自己判断</p>
+    <p id="m2"><b>自动修完：</b>收尾验证按项目配的测试命令，重测改过的部分</p></div>
+  <div class="tag" id="nt" data-r="3">没配测试命令就不跑</div>
+
+  <div class="card" id="rec" data-r="-1"><div class="tab ink" data-r="-2">实录 · 示例项目</div>
+    <p>这次：修完自己跑了 <code>go test -race</code> 和 <span style="white-space:nowrap"><code>scripts/test.sh all</code>，</span>268 passed</p>
+    <p>第 6 期收尾验证又重跑：unit 252、integration 16</p></div>
+  <div class="sr" id="sr1" data-r="2">code-review-report.md:143</div>
+  <div class="sr" id="sr2" data-r="-2">第 6 期 verify-report.md:84-96</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按口播字数估算，还没有录音。注释写本画面第几句。
+  var CUE = {
+    q: 0,                              // 1 句：引文卡
+    ts: 5.52, tsGap: 0.25, wr: 6.896, an: 8.181,   // 2 句：一排测试、第四个写错了、旁注
+    m1: 11.76,                            // 3 句
+    m2: 18.64, rec: 19.166, nt: 21.99        // 4 句
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function fade(id, t, a) {
+    var e = T.ease(T.p(t, a, 0.4)), el = T.$(id);
+    el.style.opacity = e; el.style.transform = 'translateY(' + ((1 - e) * 8) + 'px)';
+  }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 26.720,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：引文卡
+      show('q', t, CUE.q, -14);
+
+      // 2 句：一排绿色测试，第四个写错了
+      for (var i = 1; i <= 5; i++) {
+        var id = 'ts' + i, a = CUE.ts + (i - 1) * CUE.tsGap;
+        show(id, t, a, 12);
+        T.fill(T.$(id), [76, 195, 138], T.p(t, a + 0.3, 0.4));
+      }
+      var wr = T.$('ts4').querySelector('.wr'), we = T.ease(T.p(t, CUE.wr, 0.4));
+      wr.style.opacity = we;
+      T.current(T.$('ts4'), on(t, CUE.wr, CUE.m1), 6);
+      show('an', t, CUE.an, 8);
+
+      // 3、4 句：SDFlow 小卡两行
+      var mk = T.$('mk'), me = T.ease(T.p(t, CUE.m1, 0.45));
+      mk.style.opacity = me;
+      mk.style.transform = 'translateY(' + ((1 - me) * 14) + 'px) rotate(' + (1 + (1 - me) * 2) + 'deg)';
+      fade('m1', t, CUE.m1 + 0.1);
+      fade('m2', t, CUE.m2);
+      T.current(mk, on(t, CUE.m1, CUE.nt + 2), 10);
+      show('nt', t, CUE.nt, 8);
+
+      // 实录小卡（只上画面）
+      show('rec', t, CUE.rec, 14);
+      show('sr1', t, CUE.rec + 0.3, 8);
+      show('sr2', t, CUE.rec + 0.6, 8);
+    }
+  });
+</script>
+</body>
+</html>

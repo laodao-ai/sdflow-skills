@@ -1,0 +1,164 @@
+<!doctype html>
+<!-- S01 · 机制动画 · script 1–5「Spec 怎么写，AI 才不会跑偏呢？……所以光有规格还不够，想拿到一份靠得住的规格，还得管住三件事：怎么问，怎么写，写成什么样。」
+     示意画面（右上角「示意」）。
+     - 片头：开头盖一层主封面（assets/cover/，和封面同一份组件，接法照首期 S01；作者 2026-10-17 定：片头就是主封面）。
+       时间按 visual-v4.md「片头」：0–2.0 秒全显，2.0–2.2 秒淡出，2.2–2.5 秒主卡进场。第 1 句没念完画面就先动起来（作者 2026-10-11 定，试行）。
+       封面和主卡不交叉淡化：封面层透明，主卡早出现会透到标题后面。mp4 没播放时停在第 0 帧，所以第 0 帧就是封面。
+       「示意」角标和封面 logo 同在右上，封面走完（2.2 秒）才淡入。
+     - 主卡：一份规格文档（蓝标签 = 规格一侧），底部署名栏写「AI」。
+     - 第 2 句念到「也是 AI 写的」：署名栏加黄框。
+     - 第 3 句两张贴纸依次贴上：只问它想到的 / 同一个需求，方案每次不一样，旁边缩略四个方案卡（同一个需求，四张不一样的卡）。
+     - 第 4 句文档上打一个问号。
+     - 第 5 句开口（25.6）后画面保持第 4 句结尾的样子不动（作者 2026-10-20 改：原来一开口就缩）；念「怎么问」前 0.5 秒（31.5，「怎」实测 32.00）
+       前面的画面（规格文档、问号、两张现象贴纸、四张方案卡）才不退场地整体缩到 0.6 移到上半部（x 488–1432，y 70–502），
+       同时调灰（grayscale + brightness .66：奶白卡变成 --cream-dim 那种灰，灰 = 已过去，visual-v4 第二节），0.5 秒缩完，32.0 紧接贴出「怎么问」；
+       下方一行依次贴上三张贴纸：怎么问 / 怎么写 / 写成什么样，中心 x 400 / 960 / 1520，和 S02 三张卡的中心对齐
+       （作者 2026-10-18 定：问题和三件事同框）。S02 开头的三张贴纸就是这里的终帧，位置与 data-r 两页一致。
+     - 缩放靠外层 #past（宽高 0，只做 transform），里面的卡照常用 left / top 定位、照常倾斜。
+     - 蓝只用在文档标签；黄框只标「当前」；不用红 / 绿 / 琥珀。
+     - 内容都在 y 920 以上，避开字幕带。
+     口播时刻按录音实测（frame-times.py，2026-10-19；画面内秒数）：见下面 AT 数组。 -->
+<html lang="zh-CN" data-frame-id="S01">
+<head>
+<meta charset="utf-8">
+<title>S01 · 规格也是 AI 写的</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../../assets/cover/cover.css">
+<style>
+  .doc { left: 110px; top: 140px; width: 760px; height: 720px; padding: 0; }
+  .doc .tab { font-size: 44px; }
+  .doc .bar { position: absolute; left: 44px; height: 22px; border-radius: 11px; background: var(--cream-dim); }
+  .doc .bar.h { height: 34px; border-radius: 17px; background: var(--ink); }
+  /* 署名栏：和正文隔开的一个方框，被讲到时加黄框。 */
+  .sig { position: absolute; left: 44px; top: 580px; width: 672px; height: 100px; box-sizing: border-box;
+         border: 4px solid var(--ink); border-radius: 8px; display: flex; align-items: center; gap: 24px; padding: 0 24px;
+         font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--ink); }
+  .sig .who { width: 76px; height: 60px; border-radius: 8px; background: var(--ink); color: #fff;
+              display: flex; align-items: center; justify-content: center; font-size: 44px; }
+  .ask { left: 700px; top: 150px; width: 190px; height: 190px; box-sizing: border-box; border-radius: 50%;
+         background: var(--cream); border: 6px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+         display: flex; align-items: center; justify-content: center;
+         font-family: var(--display); font-weight: 800; font-size: 150px; color: var(--ink); }
+
+  .ph { font-size: 48px; padding: 14px 30px; }
+  .plan { width: 150px; height: 120px; padding: 0; box-shadow: 6px 6px 0 var(--ink); }
+  .plan i { position: absolute; left: 18px; height: 12px; border-radius: 6px; background: var(--cream-dim); }
+  .plan i.h { height: 16px; background: var(--ink); }
+  .three { font-size: 60px; padding: 16px 34px; top: 620px; }
+  /* 第 5 句缩小调灰的那一组：本身不占面积，只做 transform（里面的卡用 left / top 定位）。 */
+  #past { left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="mock" id="mock">示意</div>
+
+  <!-- 第 1–4 句的画面：第 5 句整体缩小上移、调灰 -->
+  <div class="abs" id="past">
+  <div class="card doc" id="doc" data-r="-1">
+    <div class="tab os" data-r="-2">规格文档</div>
+    <div class="bar h" style="top:90px;width:300px"></div>
+    <div class="bar" style="top:160px;width:560px"></div>
+    <div class="bar" style="top:208px;width:620px"></div>
+    <div class="bar" style="top:256px;width:480px"></div>
+    <div class="bar" style="top:324px;width:590px"></div>
+    <div class="bar" style="top:372px;width:540px"></div>
+    <div class="bar" style="top:420px;width:400px"></div>
+    <div class="bar" style="top:488px;width:600px"></div>
+    <div class="sig" id="sig" data-shadow="0"><span>署名</span><span class="who">AI</span></div>
+  </div>
+  <div class="abs ask" id="ask" data-r="8">?</div>
+
+  <!-- 第 3 句两个现象 -->
+  <div class="chip ph" id="a1" data-r="-1.5" style="left:1000px;top:170px">只问它想到的</div>
+  <div class="chip ph" id="a2" data-r="1.5" style="left:1000px;top:320px">同一个需求，方案每次不一样</div>
+  <div class="card plan" id="p1" data-r="-2" style="left:1000px;top:470px">
+    <i class="h" style="top:22px;width:60px"></i><i style="top:54px;width:100px"></i><i style="top:76px;width:80px"></i><i style="top:98px;width:90px"></i></div>
+  <div class="card plan" id="p2" data-r="1.5" style="left:1176px;top:470px">
+    <i class="h" style="top:22px;width:90px"></i><i style="top:54px;width:70px"></i><i style="top:76px;width:104px"></i><i style="top:98px;width:60px"></i></div>
+  <div class="card plan" id="p3" data-r="-1" style="left:1352px;top:470px">
+    <i class="h" style="top:22px;width:50px"></i><i style="top:54px;width:96px"></i><i style="top:76px;width:60px"></i><i style="top:98px;width:84px"></i></div>
+  <div class="card plan" id="p4" data-r="2" style="left:1528px;top:470px">
+    <i class="h" style="top:22px;width:76px"></i><i style="top:54px;width:60px"></i><i style="top:76px;width:100px"></i><i style="top:98px;width:72px"></i></div>
+  </div>
+
+  <!-- 第 5 句三件事，下方一行（S02 里 data-r 与位置的起点要和这里一致；中心 x 400 / 960 / 1520 = S02 三张卡的中心） -->
+  <div class="chip three" id="b1" data-r="-1.5" style="left:272px">怎么问</div>
+  <div class="chip three" id="b2" data-r="1.5" style="left:832px">怎么写</div>
+  <div class="chip three" id="b3" data-r="-1" style="left:1332px">写成什么样</div>
+
+  <!-- 片头封面，盖在最上层。 -->
+  <div id="cover"></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script src="../../assets/cover/cover.js"></script>
+<script>
+  // 每个动画节点对应的口播（秒，画面内，按录音实测 frame-times.py，2026-10-19）。
+  var AT = {
+    coverEnd: 2.0,   // 片头：封面全显到 2.0 秒，2.0–2.2 淡出，2.2–2.5 主卡进场（visual-v4.md「片头」，不等第 1 句念完）
+    sig: 9.4,        // 第 2 句「也是 AI 写的」：署名栏加黄框
+    a1: 12.7,        // 第 3 句「只问它想到的」
+    a2: 15.0,        // 第 3 句「同一个需求，每次方案都不一样」
+    plans: 15.8,     // 同句收尾：四个方案卡依次出现
+    ask: 20.2,       // 第 4 句「可问没问到」：文档上打问号
+    shrink: 31.5,    // 第 5 句念「怎么问」前 0.5 秒（「怎」32.00）：前面的画面整体缩小上移、调灰，0.5 秒缩完（SHRINK_DUR）；之前保持第 4 句结尾的样子
+    b1: 32.0,        // 第 5 句「怎么问」
+    b2: 32.8,        // 「怎么写」
+    b3: 33.7         // 「写成什么样」
+  };
+
+  // 第 5 句缩小后的位置：原来的外框 x 110–1684、y 140–860，缩到 0.6 后水平居中、顶边 70。
+  // brightness .66：奶白 #f2efe6 压到约 #a09d97（--cream-dim，灰 = 已过去）。
+  var PAST = { s: 0.6, tx: 422, ty: -14, dim: 0.66 };
+  var SHRINK_DUR = 0.5;   // 缩小上移调灰的时长：31.5 起，32.0 缩完，正好接「怎么问」
+
+  // 黄色描边 = 当前。署名栏在文档卡里面，T.current 的底色环会在奶白卡上露出灰边，所以这里只画黄色描边加外发光。
+  function frame(el, g) {
+    el.style.outline = '7px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '8px';
+    el.style.boxShadow = '0 0 50px rgba(245,207,74,' + (0.5 * g) + ')';
+  }
+
+  Stage({
+    duration: 35.6,
+    // 两层路径对 assets/html/ 和重渲时的 render/tmp/ 都成立（都在一期目录下两层），同首期 S01。
+    init: function () {
+      return Promise.all([
+        T.fonts('规格文档署名示意只问它想到的同一个需求，方案每次不一样怎么写成什么样'),
+        Cover(T.$('cover'), { mode: 'main', base: '../../assets/cover/', brand: '../../../shared/logo.svg' })
+      ]);
+    },
+    render: function (t) {
+      // 0. 片头封面：0–2.0 秒全显，2.0–2.2 秒淡出。「示意」等封面走完再淡入（2.2–2.4），
+      //    同时淡入会和封面 logo 叠在一起。
+      T.$('cover').style.opacity = 1 - T.p(t, AT.coverEnd, 0.2);
+      T.$('mock').style.opacity = T.p(t, AT.coverEnd + 0.2, 0.2);
+
+      // 主卡：封面走完后进场（2.2–2.5），两层不交叉淡化。
+      T.enter(T.$('doc'), T.p(t, AT.coverEnd + 0.2, 0.3), 20);
+
+      // 第 2 句：署名栏加黄框，到第 3 句开口前保持，之后淡出。
+      frame(T.$('sig'), T.ease(T.p(t, AT.sig, 0.3)) * (1 - T.ease(T.p(t, AT.a1, 0.4))));
+
+      // 第 3 句：两张贴纸，四个方案卡。
+      T.enter(T.$('a1'), T.p(t, AT.a1, 0.5), 20);
+      T.enter(T.$('a2'), T.p(t, AT.a2, 0.5), 20);
+      for (var i = 1; i <= 4; i++) T.enter(T.$('p' + i), T.p(t, AT.plans + (i - 1) * 0.3, 0.4), 16);
+
+      // 第 4 句：问号。
+      T.enter(T.$('ask'), T.p(t, AT.ask, 0.4), -16);
+
+      // 第 5 句念到「怎么问」前 0.5 秒：前面的画面整体缩到 0.6、移到上半部（x 488–1432，y 70–502），同时调灰；缩完三张贴纸依次贴上。
+      var m = T.ease(T.p(t, AT.shrink, SHRINK_DUR));
+      var s = 1 + (PAST.s - 1) * m;
+      T.$('past').style.transform = m === 0 ? '' : 'translate(' + (PAST.tx * m) + 'px,' + (PAST.ty * m) + 'px) scale(' + s + ')';
+      T.$('past').style.filter = m === 0 ? '' : 'grayscale(' + m + ') brightness(' + (1 - (1 - PAST.dim) * m) + ')';
+      T.enter(T.$('b1'), T.p(t, AT.b1, 0.45), 20);
+      T.enter(T.$('b2'), T.p(t, AT.b2, 0.45), 20);
+      T.enter(T.$('b3'), T.p(t, AT.b3, 0.45), 20);
+    }
+  });
+</script>
+</body>
+</html>

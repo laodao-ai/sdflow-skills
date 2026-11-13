@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- S03 · 标题卡 · script 6–8「大家好，我是老刀Cheney。……觉得有用的话，麻烦一键三连，再加个关注，后面几期接着看。」
+     署名卡：logo + 「老刀Cheney」（炭灰卡，照第 3 期 S04）；logo 用 channel/brand/logo/logo.svg 原样，相对路径引用（img/logo.svg，复制自品牌目录，不改）。
+     三句画面不变：署名卡第 1 句一开口就落下，居中放，留到页末。
+     B站 第 3 句的互动卡片是平台侧加的（voice.md §八「开场互动」），不在画面里。
+     颜色：不上蓝 / 琥珀 / 黄；定下来的东西倾角 1–2°（theme.js 自动算）。内容整体在 y 790 以上。
+     口播时刻（估算，每分钟 220 字，还没录音，录音后按 frame-times.py 对齐）：第 6 句 0.0，第 7 句 3.1，第 8 句 7.2，念完 14.6，全页 14.8。 -->
+<html lang="zh-CN" data-frame-id="S03">
+<head>
+<meta charset="utf-8">
+<title>S03 · 署名</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .sig { left: 480px; top: 400px; width: 960px; height: 280px; padding: 0 40px; display: flex; align-items: center; justify-content: center; gap: 44px; }
+  .sig img { width: 190px; height: 190px; flex: none; }
+  .sig .big { font-size: 124px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card dark sig" id="sig" data-r="-1"><img src="img/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播时刻（秒，画面内，估算）。
+  var AT = { sig: 0.0 };
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 11.620,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.tilt();
+      T.enter(T.$('sig'), T.p(t, AT.sig, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

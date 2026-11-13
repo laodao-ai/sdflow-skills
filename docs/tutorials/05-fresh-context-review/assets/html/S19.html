@@ -1,0 +1,149 @@
+<!doctype html>
+<!-- S19 · 第 12 轮（2026-11-09），口播 112–114。
+     S16 的三行规则卡（第 12 轮删「两轮还在的」一行），②那一行放大。第 2 句左「Claude Code 团队」：三个标签「Important · Nit · Pre-existing」，Pre-existing 加框，附中文「不是这次引入的」；第 3 句右「SDFlow」：「既有 → 不修 · 记进问题池 · 报告单列」，②标墨色勾（红绿只表示测试）。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S19">
+<head>
+<meta charset="utf-8">
+<title>S19 · 原来就有的 bug</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 规则卡：同 S16 的组件，紧凑版与 S17 同尺寸同位置 */
+  .rtitle { font-family: var(--display); font-weight: 800; }
+  .rrow { padding: 0; }
+  .rrow .num { position: absolute; }
+  .rcond { position: absolute; color: var(--ink); font-weight: 700; white-space: nowrap; }
+  .rarr { position: absolute; font-family: var(--display); font-weight: 800; color: var(--ink); line-height: 1; }
+  .ract { position: absolute; font-family: var(--display); font-weight: 800; display: flex; align-items: center; }
+  .ract.fix { background: var(--amber-soft); }
+  .ract.stop { background: var(--charcoal); color: var(--cream); }
+  .who { flex: none; display: inline-block; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--cream); position: relative; }
+  .who::after { content: ""; position: absolute; left: 50%; top: 50%; width: 40%; height: 40%; border-radius: 50%; background: var(--cream); transform: translate(-50%, -50%); }
+  #rt { left: 40px; top: 146px; font-size: 36px; padding: 4px 20px; }
+  #rules .rrow { left: 40px; width: 500px; height: 104px; box-shadow: 7px 7px 0 var(--ink); border-width: 4px; }
+  #r1 { top: 220px; } #r2 { top: 340px; } #r3 { top: 460px; }
+  #rules .num { left: 14px; top: 12px; width: 44px; height: 44px; border-width: 4px; font-size: 26px; }
+  #rules .rcond { left: 70px; top: 12px; font-size: 28px; line-height: 1.3; }
+  #rules .rarr { left: 72px; top: 60px; font-size: 30px; }
+  #rules .ract { left: 112px; top: 52px; font-size: 28px; padding: 1px 14px; gap: 8px; border-width: 3px; box-shadow: 4px 4px 0 var(--ink); }
+  #rules .who { width: 28px; height: 28px; border-width: 3px; }
+  .mk { position: absolute; left: 554px; width: 58px; height: 58px; }
+  #m2, #m2ok { transform-origin: 50% 50%; z-index: 5; }
+
+  /* 列头：同 S15 */
+  .hd { position: absolute; box-sizing: border-box; height: 62px; display: flex; align-items: center; justify-content: center; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 42px; color: var(--ink); }
+  #hc { left: 690px; top: 150px; width: 540px; background: var(--charcoal); color: var(--cream); }
+  #hs { left: 1290px; top: 150px; width: 570px; background: var(--amber); }
+
+  /* 左栏：Claude Code 团队 */
+  #cc { left: 690px; top: 290px; width: 540px; height: 500px; padding: 0; }
+  #cc .tab { font-size: 30px; padding: 3px 18px; top: -30px; }
+  .lab { position: absolute; left: 40px; font-family: var(--display); font-weight: 800; font-size: 50px; padding: 4px 24px; }
+  #t1 { top: 46px; } #t2 { top: 142px; } #t3 { top: 238px; }
+  #t3.hit { border-width: 7px; }
+  #pz { left: 40px; top: 348px; font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--ink); white-space: nowrap; }
+  #ccs { position: absolute; left: 40px; bottom: 20px; font-family: var(--mono); font-weight: 600; font-size: 26px; color: rgba(22,22,22,.8); }
+
+  /* 右栏：SDFlow */
+  #now { left: 1290px; top: 290px; width: 570px; height: 500px; padding: 0; }
+  #nowA { position: absolute; left: 40px; top: 40px; font-family: var(--display); font-weight: 800; font-size: 50px; color: var(--ink); white-space: nowrap; }
+  .it { left: 64px; font-family: var(--display); font-weight: 800; font-size: 46px; padding: 4px 24px; }
+  #i1 { top: 150px; } #i2 { top: 260px; } #i3 { top: 370px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="okm"><circle cx="29" cy="29" r="25" fill="#f2efe6" stroke="#161616" stroke-width="5"/><path d="M16 30 L25 39 L42 19" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g id="qm"><circle cx="29" cy="29" r="25" fill="#f2efe6" stroke="#161616" stroke-width="4" stroke-dasharray="7 5"/><text x="29" y="41" text-anchor="middle" font-family="Avenir Next Condensed, sans-serif" font-weight="800" font-size="36" fill="#161616">?</text></g>
+    </defs>
+  </svg>
+
+  <!-- 左：处理规则（紧凑版，同 S16，三行） -->
+  <div class="chip rtitle" id="rt" data-r="-1.5">处理规则</div>
+  <div id="rules">
+    <div class="card rrow" id="r1" data-r="-0.6"><span class="num">1</span><span class="rcond">影响这次目标的</span><span class="rarr">→</span><div class="chip ract fix" data-r="1.5">马上修</div></div>
+    <div class="card rrow" id="r2" data-r="0.6"><span class="num">2</span><span class="rcond">不重要的、无关旧问题</span><span class="rarr">→</span><div class="chip ract" data-r="-1.5">记下来</div></div>
+    <div class="card rrow" id="r3" data-r="-0.6"><span class="num">3</span><span class="rcond">实现阶段：做不下去</span><span class="rarr">→</span><div class="chip ract stop" data-r="-1.5"><i class="who"></i>停，等人</div></div>
+  </div>
+  <svg class="mk" id="m1" style="top:243px" viewBox="0 0 58 58"><use href="#okm"/></svg>
+  <svg class="mk" id="m2" style="top:363px" viewBox="0 0 58 58"><use href="#qm"/></svg>
+  <svg class="mk" id="m2ok" style="top:363px" viewBox="0 0 58 58"><use href="#okm"/></svg>
+  <svg class="mk" id="m3" style="top:483px" viewBox="0 0 58 58"><use href="#okm"/></svg>
+
+  <!-- 中：Claude Code 团队 -->
+  <div class="hd" id="hc">Claude Code 团队</div>
+  <div class="card" id="cc" data-r="-0.6">
+    <div class="tab ink" data-r="-2">实录 · 原文摘要</div>
+    <div class="chip lab" id="t1" data-r="-1.5">Important</div>
+    <div class="chip lab" id="t2" data-r="1.5">Nit</div>
+    <div class="chip lab" id="t3" data-r="-1.5">Pre-existing</div>
+    <div class="abs" id="pz">不是这次引入的</div>
+    <div id="ccs">Anthropic · 2026-10-15</div>
+  </div>
+
+  <!-- 右：SDFlow -->
+  <div class="hd" id="hs">SDFlow</div>
+  <div class="card" id="now" data-r="0.6">
+    <div id="nowA">既有 →</div>
+    <div class="chip it" id="i1" data-r="-1.5">不修</div>
+    <div class="chip it" id="i2" data-r="1.5">记进问题池</div>
+    <div class="chip it" id="i3" data-r="-1.5">报告单列</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：按每分钟 220 字估，录音后按实测改。注释写本画面第几句。
+  var CUE = {
+    big: 0.24,                                     // 1 句：② 行黄框、问号放大
+    hc: 4.32, t: [3.864, 4.135, 4.413], hit: 7.292, pz: 8.736,   // 2 句：Claude Code 团队
+    hs: 9.84, now: 9.943, nowA: 10.252, i: [10.052, 10.583, 12.069], ok: 15.506   // 3 句：SDFlow
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function fade(id, t, a) { var e = T.ease(T.p(t, a, 0.4)), el = T.$(id); el.style.opacity = e; el.style.transform = 'translateY(' + ((1 - e) * 10) + 'px)'; }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 17.360,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 左：规则卡一开始就在（同 S17 末尾），① ③ ④ 已打勾
+      show('rt', t, 0, 10);
+      ['r1', 'r2', 'r3'].forEach(function (id, i) { show(id, t, 0.06 * i, 10); });
+      ['m1', 'm3'].forEach(function (id) { T.$(id).style.opacity = T.ease(T.p(t, 0.2, 0.3)); });
+
+      // ② 行：问号先放大，第 3 句末换成勾并缩回
+      // 黄框同一时刻一处：第 1 句在 ② 行，第 2 句在 Pre-existing，第 3 句在 SDFlow 卡，问号换成勾时回到 ② 行
+      T.current(T.$('r2'), Math.max(on(t, CUE.big, CUE.hc), T.ease(T.p(t, CUE.ok, 0.4))), 7);
+      var up = T.ease(T.p(t, CUE.big, 0.5)), sw = T.ease(T.p(t, CUE.ok, 0.4));
+      var s = 1 + 0.8 * up - 0.8 * sw;
+      T.$('m2').style.opacity = 1 - sw;
+      T.$('m2').style.transform = 'scale(' + s + ')';
+      T.$('m2ok').style.opacity = sw;
+      T.$('m2ok').style.transform = 'scale(' + (s + 0.3 * (1 - sw)) + ')';
+
+      // 2 句：Claude Code 团队
+      fade('hc', t, CUE.hc);
+      show('cc', t, CUE.hc + 0.1, 14);
+      CUE.t.forEach(function (a, i) { show('t' + (i + 1), t, a, 8); });
+      var t3 = T.$('t3');
+      if (t >= CUE.hit) t3.classList.add('hit'); else t3.classList.remove('hit');
+      T.current(t3, on(t, CUE.hit, CUE.hs), 7);
+      fade('pz', t, CUE.pz);
+
+      // 3 句：SDFlow
+      fade('hs', t, CUE.hs);
+      show('now', t, CUE.now, 14);
+      fade('nowA', t, CUE.nowA);
+      CUE.i.forEach(function (a, i) { show('i' + (i + 1), t, a, 8); });
+      T.current(T.$('now'), on(t, CUE.now, CUE.ok), 10);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!doctype html>
+<!-- S08 · 标题卡 · 系列流程卡（第二级：新流程缩小 + 三张大卡兼目录） · script 27–30「这套流程想优化的，就是开头说的三件事。……第三，写成什么样：按需求涉及的领域，带上规格检查清单和设计图表，把该有的内容都带上。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     复制自 channel/design/templates/series-flow.html（data-level="2"，data-current="1,2"）。S06–S08 是同一张卡：
+     开头就是 S07 的终帧（旧路线顶行 y 196–260、新流程大图），位置与倾角都不变。下一页 S08a 是角色图，新开一页，不接像素。
+     - 第 27 句：新流程整体缩小上移（比例 0.6，形状和颜色同 S07），落在 x 48–1128、y 290–620；缩到位后 /sdflow-spec 分组框淡入
+       （淡墨虚线，中性，左上角 .tab 写 /sdflow-spec；explore 在框外）。旧路线顶行不动。
+       下方出三张大卡：1 怎么问 / 2 怎么写 / 3 写成什么样，开场三张贴纸（S01）从右侧飞回落到卡上（贴纸在卡里水平居中）。
+       编号用 1、2、3，和口播「第一、第二、第三」一致（作者 2026-10-18 定；章节标签页 S14、S20、S24 仍是 ②–④，那是章节序号）。
+     - 第 28–30 句：三张卡依次亮起（没讲到 → 讲过 + 当前），卡上写它包含的节点和一句改了什么：
+       explore · 澄清 · 拷问｜答案由你给；纪要 → 一次写成｜不用回改；领域定制的规格要求｜该有的都带上。
+       哪张卡亮，缩小的流程图里对应的节点就加「当前」描边：怎么问 = explore、澄清、拷问；怎么写 = 纪要和「一次写成」那条箭头；写成什么样 = 规格。
+       下一张亮时上一张的描边淡出；第 30 句念完前最后一张的描边淡出。
+     - 封面右栏那两张图（作者 2026-10-18 定）：放在第 3 张卡上方、流程虚线框右边的空处（x 1163–1830，y 262–604），不放进卡里；
+       设计图网格在后（右上）、清单塔在前（左下），错位叠放，第 30 句念到「规格检查清单和设计图表」时落下。
+       画法照 assets/cover/cover.js、cover.css 的 .cv-grid / .cv-tower，按 0.7 倍在本页重画，不引封面文件；
+       塔里写字（Go · ESP32 · React / 后端 · 嵌入式 · 前端 / 通用），字号 27px，不低于标签下限 26px。第 3 张卡的字和另两张一样居中。
+     - 三张卡不另配颜色，不上蓝 / 琥珀（visual-v4 4.9 导航画面）。新流程图里的蓝是文档本身的颜色，小图里的蓝是封面图本身的颜色，不是导航色。
+     - 不再有 S07 的「OpenSpec 按领域定制」角标（作者 2026-10-18 删去对应口播），本页不用淡出它。
+     - 「新流程图」共用块（标记、样式、脚本）和 S07、S29 是同一份，改一处几页一起改。
+     - 和 S07 共有的元素手写 data-r（不走自动倾角）：自动倾角按帧 ID 算，各页不同，切页时会跳。
+     - 动画节点（按录音实测，frame-times.py，2026-10-19；集中在「S08 的时间轴」S8.T 里，每个时刻对应的句子写在那里）。 -->
+<html lang="zh-CN" data-frame-id="S08" data-level="2" data-done="" data-current="1,2">
+<head>
+<meta charset="utf-8">
+<title>S08 · 系列流程卡 · 三件事</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* ===== 模版共用：复制后不改 ===== */
+  /* 纸底（2026-10-20 作者定：只有章节标签页用深色底，其余页面都是纸底）。
+     「没讲到」= 墨色 65% 不透明度，叠在渲染后的纸底 #8b949e 上约 #3f4246，对比度 3.28:1；CSS 写 --notyet，JS 里同值写 NOTYET。
+     透明底的空框（.off）不带硬投影，否则框外会露出一块实心的墨色。 */
+  :root { --notyet: rgba(22,22,22,.65); }
+  .sf-step.off, .node.off, .act.off, .big3.off { box-shadow: none; }
+
+  /* 第一级：六步一行。 */
+  .sf-step { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px; }
+  .sf-step .big { white-space: nowrap; }
+  html[data-level="1"] .sf-step { width: 280px; height: 104px; }
+  html[data-level="1"] .sf-step .big { font-size: 44px; }
+  html[data-level="1"] .sf-step .num { width: 58px; height: 58px; font-size: 30px; }
+  html[data-level="2"] .sf-step { width: 236px; height: 64px; border-width: 4px; padding: 0 12px; gap: 10px; }
+  html[data-level="2"] .sf-step .big { font-size: 36px; }
+  html[data-level="2"] .sf-step .num { width: 44px; height: 44px; font-size: 26px; border-width: 4px; }
+  .sf-step.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .sf-step.off .num { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  /* 期号：括线 + 「第 N 期」。本期那一组用墨，其余用「没讲到」的淡墨。 */
+  .sf-ep { position: absolute; text-align: center; white-space: nowrap; color: var(--notyet);
+           font-family: var(--display); font-weight: 800; }
+  .sf-ep::before { content: ''; display: block; box-sizing: border-box; border: 4px solid currentColor; border-top: none;
+                   border-radius: 0 0 8px 8px; height: 14px; margin: 0 10px 4px; }
+  html[data-level="1"] .sf-ep { font-size: 34px; }
+  html[data-level="2"] .sf-ep { font-size: 26px; line-height: 1.1; }
+  html[data-level="2"] .sf-ep::before { height: 8px; border-width: 3px; margin-bottom: 2px; }
+  .sf-ep.now { color: var(--ink); }
+  #sf-fan { position: absolute; left: 0; top: 0; width: 1920px; height: 200px; }
+  #sf-frame { position: absolute; left: 40px; top: 172px; width: 1840px; height: 754px; box-sizing: border-box;
+              border: 3px solid rgba(22,22,22,.4); border-radius: 16px; }
+  #sf-fan, #sf-frame, .sf-step, .sf-ep { opacity: 0; }
+  html[data-level="1"] #sf-fan, html[data-level="1"] #sf-frame, html[data-level="1"] #l2 { display: none; }
+
+  /* 第二级的件。 */
+  /* 只铺到字幕带上沿：里面的元素用画布坐标，高度不到 940（渲染前的越界检查会量容器本身）。 */
+  #l2 { position: absolute; left: 0; top: 0; width: 1920px; height: 930px; }
+  .node { display: flex; align-items: center; justify-content: center; padding: 0 22px; white-space: nowrap;
+          font-family: var(--display); font-weight: 800; font-size: 44px; }
+  .node.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .node.past { background: var(--cream-dim); }
+  .lane { font-family: var(--display); font-weight: 800; }
+  .lane.past { background: var(--cream-dim); }
+  .arr { position: absolute; height: 6px; border-radius: 3px; background: currentColor; color: var(--ink); }
+  .arr::after { content: ''; position: absolute; right: -18px; top: -9px;
+                border-left: 20px solid currentColor; border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+  .seg { position: absolute; height: 24px; box-sizing: border-box; border: 5px solid var(--notyet); border-top: none;
+         border-radius: 0 0 12px 12px; }
+  .pdot { position: absolute; width: 58px; height: 58px; box-sizing: border-box; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--mono); font-weight: 700; font-size: 26px;
+          border: 4px solid var(--notyet); color: var(--notyet); background: transparent; }
+  .pdot.done { background: var(--cream-dim); color: var(--ink); border-color: var(--cream-dim); }
+  .pdot.now { background: var(--cream); color: var(--ink); border-color: var(--ink); }
+  /* ===== 模版共用到此 ===== */
+
+  /* ===== 新流程图（S07、S08、S29 共用，作者 2026-10-17 手绘图） =====
+     动作（explore、澄清、拷问）= 奶白圆角卡；文档（纪要、ADR、术语表、规格）= 带折角的文档形，蓝区底 + 蓝边 + 奶白字（蓝 = 写下来的约定）。
+     整张图放在 #nf 里，坐标是 S07 的大图；S08 起整体 scale 缩小，形状和颜色不变。 */
+  /* #nf 本身不占面积（宽高 0），里面的元素照常按画布坐标摆；箭头层只铺箭头所在的那一块。
+     这样缩小上移后，容器和箭头层的外框不会越出画布（渲染前的越界检查会量容器本身）。 */
+  #nf { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  #nfa { position: absolute; left: 500px; top: 440px; width: 1240px; height: 350px; overflow: visible; }
+  #nfa g { color: var(--notyet); }
+  .act { display: flex; align-items: center; justify-content: center; padding: 0; white-space: nowrap;
+         font-family: var(--display); font-weight: 800; font-size: 48px; }
+  .act.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .doc { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+         font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--notyet); }
+  .doc .dsh { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible;
+              filter: drop-shadow(10px 10px 0 var(--ink)); }
+  .doc .dsh path { stroke-width: 5; stroke-linejoin: round; }
+  .doc .dt { position: relative; white-space: nowrap; text-align: center; line-height: 1.05; }
+  .doc .dt small { display: block; font-family: var(--mono); font-weight: 700; font-size: 30px; }
+  .nlab { position: absolute; white-space: nowrap; color: var(--ink); font-family: var(--body); font-weight: 600; font-size: 28px; }
+  /* /sdflow-spec 分组框：中性，淡墨虚线（visual-v4 第五节：分组框不借蓝 / 琥珀）。S07 不出。 */
+  #nfbox { position: absolute; box-sizing: border-box; border: 5px dashed var(--notyet); border-radius: 22px; opacity: 0; }
+  #nfbox .tab { font-family: var(--mono); font-weight: 700; font-size: 38px; box-shadow: 7px 7px 0 var(--ink); }
+  /* ===== S08 的画面 ===== */
+  /* 旧路线（S07 缩小后的样子）。步骤名的排法同 S07 的旧流程卡（绝对定位居中），两页的字才对得齐。 */
+  .ow { top: 196px; height: 64px; border-width: 4px; }
+  .old { display: block; padding: 0; }
+  .old .ttl { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; white-space: nowrap;
+              font-family: var(--display); font-weight: 800; font-size: 34px; }
+  /* 三张大卡：1 怎么问 / 2 怎么写 / 3 写成什么样（编号同口播「第一、第二、第三」）。导航画面不上蓝 / 琥珀（visual-v4 4.9）。 */
+  .big3 { top: 650px; width: 560px; height: 260px; padding: 0; }
+  .big3.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .big3 .num { position: absolute; left: -26px; top: -26px; }
+  .big3.off .num { background: rgb(139,148,158); }   /* 纸底渲染后约 #8b949e，把圆片填实，免得卡的描边从数字后面穿过 */
+  .big3 .cn, .big3 .cc { position: absolute; left: 0; right: 0; text-align: center; white-space: nowrap; opacity: 0; }
+  .big3 .cn { top: 146px; font-family: var(--body); font-weight: 600; font-size: 30px; }
+  .big3 .cc { top: 188px; font-family: var(--display); font-weight: 800; font-size: 40px; }
+  /* 贴纸落在编号圆片下方：从右侧飞回时不压过后面两张卡的编号。 */
+  .three { font-family: var(--display); font-weight: 800; font-size: 44px; top: 692px; }
+  /* 封面右栏两张图（画法照 assets/cover/cover.js、cover.css 的 .cv-grid / .cv-tower，按 0.7 倍在本页重画）：
+     放在第 3 张卡上方、流程虚线框右边。设计图网格在后（右上），清单塔在前（左下），错位叠放。 */
+  .mini { padding: 0; border-width: 4px; opacity: 0; }
+  .mini .tab { left: -10px; top: -30px; padding: 2px 16px; font-size: 30px; border-width: 4px; box-shadow: 5px 5px 0 var(--ink); }
+  #mGrid { left: 1440px; top: 290px; width: 378px; height: 210px; }
+  #mTower { left: 1170px; top: 380px; width: 413px; height: 214px; }
+  #mTower .tab { background: var(--cream); color: var(--ink); }
+  .m-tiles { position: absolute; left: 19px; top: 36px; display: grid; grid-template-columns: repeat(5, 62px); gap: 7px 6px; }
+  .m-dg { width: 62px; height: 43px; box-sizing: border-box; padding: 4px; border-radius: 4px;
+          background: var(--cream); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
+          display: flex; align-items: center; justify-content: center; }
+  .m-dg svg { width: 53px; height: 25px; overflow: visible; }
+  .m-dg .s { fill: none; stroke: #161616; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
+  .m-dg .b { fill: #f2efe6; stroke: #161616; stroke-width: 9; stroke-linejoin: round; }
+  .m-dg .k { fill: #161616; }
+  .m-dg .d { fill: none; stroke: #161616; stroke-width: 8; stroke-dasharray: 12 9; }
+  .m-dg .a { fill: none; stroke: #161616; stroke-width: 9; stroke-linecap: round; }
+  .m-dg .os { fill: #43a0ed; stroke: #161616; stroke-width: 9; stroke-linejoin: round; }
+  .m-stack { position: absolute; left: 18px; top: 35px; width: 370px; height: 157px; }
+  .m-blk { position: absolute; width: 115px; height: 45px; box-sizing: border-box; border-radius: 6px;
+           display: flex; align-items: center; justify-content: center; white-space: nowrap;
+           background: var(--cream); color: var(--ink); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
+           font-family: var(--display); font-weight: 800; font-size: 27px; line-height: 1; }
+  .m-blk.mid { background: var(--blue-soft); }
+  .m-blk.base { width: 370px; background: var(--blue); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ===== 模版共用：第一级，由下面的脚本按 <html> 属性填 ===== -->
+  <svg id="sf-fan" viewBox="0 0 1920 200" aria-hidden="true"></svg>
+  <div id="sf-frame"></div>
+  <div id="sf"></div>
+
+  <div id="l2">
+    <!-- 旧路线（S07 终帧） -->
+    <div id="oldg">
+      <div class="chip lane past" id="laneO" data-r="-2" style="left:60px;top:196px;font-size:34px">原来的流程</div>
+      <div class="card node old past ow" id="o1" data-r="-1.2" style="left:320px;width:200px"><span class="ttl">探索</span></div>
+      <div class="arr" id="oa1"></div>
+      <div class="card node old past ow" id="o2" data-r="1.4" style="left:580px;width:250px"><span class="ttl">生成四个文档</span></div>
+      <div class="arr" id="oa2"></div>
+      <div class="card node old past ow" id="o3" data-r="-1.5" style="left:900px;width:120px"><span class="ttl">拷问</span></div>
+      <div class="arr" id="oa3"></div>
+      <div class="card node old past ow" id="o4" data-r="1.1" style="left:1090px;width:250px"><span class="ttl">回改四个文档</span></div>
+    </div>
+    <!-- 新流程图（共用块，坐标是 S07 的大图） -->
+    <div id="nf">
+      <div id="nfbox" style="left:566px;top:330px;width:1288px;height:520px"><div class="tab" data-r="-3" style="top:-44px">/sdflow-spec</div></div>
+      <svg id="nfa" viewBox="500 440 1240 350" aria-hidden="true">
+        <g id="a1"><path/><polygon/></g><g id="a2"><path/><polygon/></g>
+        <g id="a3"><path/><polygon/></g><g id="a4"><path/><polygon/></g><g id="a5"><path/><polygon/></g>
+        <g id="a6"><path/><polygon/></g><g id="a7"><path/><polygon/></g>
+        <g id="a8"><path/><polygon/></g><g id="a9"><path/><polygon/></g>
+      </svg>
+      <div class="chip lane" id="laneN" data-r="1.5" style="left:60px;top:422px;font-family:var(--mono);font-weight:700;font-size:40px">SDFlow</div>
+      <div class="card act off" id="n1" data-r="1.2" style="left:280px;top:400px;width:230px;height:120px">explore</div>
+      <div class="card act off" id="n2" data-r="-1.4" style="left:590px;top:400px;width:180px;height:120px">澄清</div>
+      <div class="doc" id="d1" data-r="-1.1" data-shadow="0" style="left:850px;top:390px;width:330px;height:140px"><span class="dt">临时决策纪要</span></div>
+      <div class="chip" id="draft" data-r="-4" style="left:1108px;top:498px;font-size:26px;padding:4px 14px">草稿</div>
+      <div class="card act off" id="n3" data-r="1.3" style="left:915px;top:650px;width:200px;height:120px">拷问</div>
+      <div class="nlab" id="lbF" style="left:1070px;top:572px">逐条填写</div>
+      <div class="nlab" id="lbW" style="left:1291px;top:410px;width:140px;text-align:center">一次写成</div>
+      <div class="doc" id="d4" data-r="1.5" data-shadow="0" style="left:1540px;top:390px;width:290px;height:140px"><span class="dt"><small>OpenSpec</small>规格</span></div>
+      <div class="nlab" id="keep" style="left:1256px;top:528px">长期留存</div>
+      <div class="abs" id="adrg" data-shadow="0" style="left:1250px;top:600px;width:200px;height:220px;border-radius:12px"></div>
+      <div class="doc" id="d2" data-r="1.4" data-shadow="0" style="left:1250px;top:600px;width:200px;height:96px;font-size:40px"><span class="dt">ADR</span></div>
+      <div class="doc" id="d3" data-r="-1.2" data-shadow="0" style="left:1250px;top:724px;width:200px;height:96px;font-size:40px"><span class="dt">术语表</span></div>
+      <div class="abs" id="hlW" data-shadow="0" style="left:1214px;top:404px;width:296px;height:80px;border-radius:12px"></div>
+    </div>
+    <!-- 三张大卡与开场三张贴纸（S01） -->
+    <div id="cg">
+      <div class="card big3 off" id="c1" data-r="-1" style="left:60px"><span class="num">1</span>
+        <span class="cn" id="cn1">explore · 澄清 · 拷问</span><span class="cc" id="cc1">答案由你给</span></div>
+      <div class="card big3 off" id="c2" data-r="1" style="left:680px"><span class="num">2</span>
+        <span class="cn" id="cn2">纪要 → 一次写成</span><span class="cc" id="cc2">不用回改</span></div>
+      <div class="card big3 off" id="c3" data-r="-1.2" style="left:1300px"><span class="num">3</span>
+        <span class="cn" id="cn3">领域定制的规格要求</span><span class="cc" id="cc3">该有的都带上</span></div>
+      <div class="chip three" id="k1" data-r="-2.5" style="left:246px">怎么问</div>
+      <div class="chip three" id="k2" data-r="2" style="left:866px">怎么写</div>
+      <div class="chip three" id="k3" data-r="-2" style="left:1442px">写成什么样</div>
+      <!-- 第 3 张卡上方的两张图：设计图网格（后）、清单塔（前）。网格的 13 个缩略图由下面的脚本填。 -->
+      <div class="card mini" id="mGrid" data-r="2.5"><div class="tab ink" data-r="2">设计图</div><div class="m-tiles" id="mTiles"></div></div>
+      <div class="card dark mini" id="mTower" data-r="-2"><div class="tab" data-r="-2">领域清单</div>
+        <div class="m-stack">
+          <div class="m-blk" style="left:0;top:0">Go</div><div class="m-blk" style="left:127px;top:0">ESP32</div><div class="m-blk" style="left:255px;top:0">React</div>
+          <div class="m-blk mid" style="left:0;top:56px">后端</div><div class="m-blk mid" style="left:127px;top:56px">嵌入式</div><div class="m-blk mid" style="left:255px;top:56px">前端</div>
+          <div class="m-blk base" style="left:0;top:112px">通用</div>
+        </div></div>
+    </div>
+  </div>
+</div>
+<script>
+  // ===== 模版共用：按 <html> 属性搭第一级。要在 theme.js 之前跑：自动倾角只认加载时已有的元素。 =====
+  (function () {
+    var STEPS = ['需求明确', '规格编写', '规格评审', '代码实现', '代码评审', '收尾归档'];
+    var EP = [2, 2, 3, 4, 5, 6];   // 每步对应第几期（visual-v4 4.9）
+    var root = document.documentElement;
+    var level = root.getAttribute('data-level') === '2' ? 2 : 1;
+    function list(name) {
+      return (root.getAttribute(name) || '').split(',').map(function (s) { return Number(s.trim()); }).filter(Boolean);
+    }
+    var done = list('data-done'), cur = list('data-current');
+    // 第一级的几何：level 1 放大居中偏上，level 2 缩到顶部一行。两种都左右对称（中心 x 960）。
+    var G = level === 1
+      ? { left: 55, top: 330, w: 280, h: 104, gap: 26, epGap: 26 }
+      : { left: 187, top: 24, w: 236, h: 64, gap: 26, epGap: 24 };
+    var sf = document.getElementById('sf');
+    var html = '';
+    for (var i = 0; i < 6; i++) {
+      var n = i + 1;
+      var st = cur.indexOf(n) >= 0 ? 'now' : done.indexOf(n) >= 0 ? 'done' : 'off';
+      html += '<div class="card sf-step ' + st + '" id="sf' + n + '" data-shadow="' + (level === 1 ? 10 : 7) + '" style="left:' +
+        (G.left + i * (G.w + G.gap)) + 'px;top:' + G.top + 'px"><span class="num">' + n + '</span><span class="big">' + STEPS[i] + '</span></div>';
+    }
+    // 期号：同一期相邻的几步合成一个括线。
+    var a = 0, curL = 9999, curR = 0;
+    while (a < 6) {
+      var b = a;
+      while (b + 1 < 6 && EP[b + 1] === EP[a]) b++;
+      var isNow = false;
+      for (var k = a; k <= b; k++) if (cur.indexOf(k + 1) >= 0) isNow = true;
+      var l = G.left + a * (G.w + G.gap), r = G.left + b * (G.w + G.gap) + G.w;
+      if (isNow) { curL = Math.min(curL, l); curR = Math.max(curR, r); }
+      html += '<div class="sf-ep' + (isNow ? ' now' : '') + '" id="sfe' + EP[a] + '" style="left:' + l + 'px;width:' + (r - l) +
+        'px;top:' + (G.top + G.h + G.epGap) + 'px">第 ' + EP[a] + ' 期</div>';
+      a = b + 1;
+    }
+    sf.innerHTML = html;
+    // 第二级：从「当前」那组的期号括线下沿，两条线连到外框上沿两角。
+    if (level === 2 && curR > 0) {
+      var y0 = G.top + G.h + G.epGap + 32;
+      document.getElementById('sf-fan').innerHTML =
+        '<path d="M' + (curL + 10) + ' ' + y0 + ' L48 174 M' + (curR - 10) + ' ' + y0 + ' L1872 174" fill="none" ' +
+        'stroke="rgba(22,22,22,.4)" stroke-width="3" stroke-linecap="round"/>';
+    }
+    window.SF_LEVEL = level;
+  })();
+</script>
+<script>
+  // 文档形：按每个 .doc 的宽高画折角页（右上角折角，同首期 S22a 的文件图标），要在 theme.js 之前插进去。
+  (function () {
+    var F = 30;
+    Array.prototype.slice.call(document.querySelectorAll('.doc')).forEach(function (el) {
+      var w = parseFloat(el.style.width), h = parseFloat(el.style.height), e = 2.5;
+      var body = 'M' + e + ' ' + e + ' H' + (w - F) + ' L' + (w - e) + ' ' + F + ' V' + (h - e) + ' H' + e + ' Z';
+      var fold = 'M' + (w - F) + ' ' + e + ' V' + F + ' H' + (w - e);
+      el.insertAdjacentHTML('afterbegin', '<svg class="dsh" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true">' +
+        '<path class="body" d="' + body + '"/><path class="fold" d="' + fold + '" fill="none"/></svg>');
+    });
+  })();
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // ===== 模版共用：动画小工具 =====
+  var SF = (function () {
+    var DIM = [160, 157, 151], INK = [22, 22, 22], CREAM = [242, 239, 230], NOTYET = [63, 66, 70];
+    // 没讲到 → 讲过：透明底淡墨描边淡墨字 → 奶白底墨描边墨字（同目录页 S05）。里面的 .num 跟着变。
+    function lit(el, p) {
+      var c = T.mix(NOTYET, INK, p);
+      [el].concat(Array.prototype.slice.call(el.querySelectorAll('.num'))).forEach(function (e) {
+        e.style.background = 'rgba(242,239,230,' + p + ')';
+        e.style.borderColor = c;
+        e.style.color = c;
+      });
+    }
+    // 讲过 → 被留下：奶白 → 灰实心。
+    function gray(el, p) { el.style.background = T.mix(CREAM, DIM, p); }
+    // 「当前」描边。a = 硬投影的不透明度（不传 = 1）：透明底的空框传它的点亮进度，免得没讲到时露出实心投影。
+    function cur(el, g, s, a) {
+      // s 传 0 = 不要硬投影（进度点）；不传就读 data-shadow，再没有用 10。
+      T.current(el, g, s != null ? s : parseFloat(el.getAttribute('data-shadow') || '10'));
+      // 浏览器读回来的颜色是 rgb(22, 22, 22) 不是 #161616，两种写法都要认。
+      if (a != null) el.style.boxShadow = el.style.boxShadow.replace(/#161616|rgb\(22, 22, 22\)/g, 'rgba(22,22,22,' + a + ')');
+    }
+    // 横箭头：从 x1 到 x2（箭头尖），竖直中心 y。
+    function arrow(el, x1, x2, y) {
+      el.style.left = x1 + 'px';
+      el.style.width = Math.max(0, x2 - x1 - 18) + 'px';
+      el.style.top = (y - 3) + 'px';
+    }
+    function lerp(a, b, p) { return a + (b - a) * p; }
+    // 第一级进场：tIn 起六步依次落下、期号和外框淡入；tCur 起「当前」那几步加黄框。
+    function l1(t, tIn, tCur) {
+      for (var i = 1; i <= 6; i++) {
+        var el = T.$('sf' + i);
+        T.enter(el, T.p(t, tIn + (i - 1) * 0.08, 0.5), window.SF_LEVEL === 1 ? 20 : 12);
+        if (el.classList.contains('now')) cur(el, T.ease(T.p(t, tCur, 0.4)));
+      }
+      var e = T.ease(T.p(t, tIn + 0.3, 0.6));
+      T.all('.sf-ep').forEach(function (x) { x.style.opacity = e; });
+      T.$('sf-fan').style.opacity = e;
+      T.$('sf-frame').style.opacity = e;
+    }
+    return { lit: lit, gray: gray, cur: cur, arrow: arrow, lerp: lerp, l1: l1 };
+  })();
+  // ===== 模版共用到此 =====
+
+  // ===== 新流程图（共用块）=====
+  // NF.show(t)：S07 的点亮时间轴（t = S07 的本页时刻）。S08、S29 调 NF.show(999) 得到 S07 终帧的样子，再缩放。
+  var NF = (function () {
+    var NOTYET = [63, 66, 70], INK = [22, 22, 22], CREAM = [242, 239, 230], BLUE = [67, 160, 237];
+    // S07 的时刻（秒）。对应的句子见 S07 文件头注释。按录音实测（frame-times.py，2026-10-19）。
+    // 2026-10-18：原第 29 句（角标）删去，NOTE 改名 END = 第 26 句念完前规格的「当前」淡出。
+    var C = { NEWIN: 1.6, SDF: 2.9, EXP: 5.5, CLR: 11.6, MEMO: 15.6, GRILL: 17.9, FILL: 23.5,
+              ADR: 25.9, ADR2: 29.5, WRITE: 32.7, SPEC: 34.5, END: 35.6 };
+    // 箭头：起点 → 箭头尖（画布坐标，S07 大图）。
+    var A = {
+      a1: [518, 460, 576, 460],   // explore → 澄清（箭头尖离目标 14px：目标标「当前」时，描边外圈只压住箭头尖一点）
+      a2: [778, 460, 836, 460],   // 澄清 → 纪要
+      a3: [975, 540, 975, 636],   // 纪要 ↓ 拷问：拷问读纪要
+      a4: [1055, 642, 1055, 544], // 拷问 ↑ 纪要：每定一条写回纪要
+      a5: [1190, 460, 1526, 460], // 纪要 → 规格：一次写成
+      a6: [1123, 690, 1236, 655], // 拷问 → ADR
+      a7: [1123, 730, 1236, 766], // 拷问 → 术语表
+      a8: [1458, 640, 1617, 546], // ADR → 规格
+      a9: [1458, 770, 1716, 546]  // 术语表 → 规格
+    };
+    function geom() {
+      Object.keys(A).forEach(function (id) {
+        var a = A[id], dx = a[2] - a[0], dy = a[3] - a[1], L = Math.sqrt(dx * dx + dy * dy), ux = dx / L, uy = dy / L;
+        var bx = a[2] - ux * 20, by = a[3] - uy * 20;   // 箭头底边中点
+        var g = T.$(id);
+        var p = g.querySelector('path');
+        p.setAttribute('d', 'M' + a[0] + ' ' + a[1] + ' L' + (a[2] - ux * 16) + ' ' + (a[3] - uy * 16));
+        p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '6'); p.setAttribute('stroke-linecap', 'round');
+        g.querySelector('polygon').setAttribute('points', a[2] + ',' + a[3] + ' ' + (bx - uy * 12) + ',' + (by + ux * 12) + ' ' + (bx + uy * 12) + ',' + (by - ux * 12));
+        g.querySelector('polygon').setAttribute('fill', 'currentColor');
+      });
+    }
+    // 文档：没讲到（淡墨描边、淡墨字）→ 讲过（蓝区底、蓝边、奶白字）。硬投影随点亮显出来。
+    function docLit(el, p) {
+      var st = T.mix(NOTYET, BLUE, p);
+      el.querySelector('.dsh').style.filter = 'drop-shadow(10px 10px 0 rgba(22,22,22,' + p + '))';
+      var b = el.querySelector('.body'), f = el.querySelector('.fold');
+      b.style.fill = 'rgba(30,51,73,' + p + ')'; b.style.stroke = st; f.style.stroke = st;
+      el.style.color = T.mix(NOTYET, CREAM, p);
+    }
+    function aLit(id, p) { T.$(id).style.color = T.mix(NOTYET, INK, p); }
+    function span(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.3))); }
+    function act(el, t, t0, g) { var p = T.ease(T.p(t, t0, 0.4)); SF.lit(el, p); SF.cur(el, g, 10, p); }
+    function doc(el, t, t0, g) { docLit(el, T.ease(T.p(t, t0, 0.4))); SF.cur(el, g, 0); }
+
+    function show(t) {
+      geom();
+      var c = C;
+      // 整张图暗着进场（动作卡、文档的描边和箭头都是淡墨）。
+      ['n1', 'n2', 'd1', 'n3', 'd2', 'd3', 'd4'].forEach(function (id, i) { T.enter(T.$(id), T.p(t, c.NEWIN + i * 0.1, 0.5), 14); });
+      Object.keys(A).forEach(function (id, k) { T.$(id).style.opacity = T.ease(T.p(t, c.NEWIN + 0.2 + k * 0.06, 0.4)); aLit(id, 0); });
+      T.enter(T.$('laneN'), T.p(t, c.SDF, 0.5), 14);
+
+      act(T.$('n1'), t, c.EXP, span(t, c.EXP, c.CLR));
+      act(T.$('n2'), t, c.CLR, span(t, c.CLR, c.MEMO));
+      aLit('a1', T.ease(T.p(t, c.CLR, 0.4)));
+      doc(T.$('d1'), t, c.MEMO, Math.max(span(t, c.MEMO, c.GRILL), span(t, c.WRITE, c.SPEC)));
+      aLit('a2', T.ease(T.p(t, c.MEMO, 0.4)));
+      T.enter(T.$('draft'), T.p(t, c.MEMO + 0.3, 0.4), 10);
+      act(T.$('n3'), t, c.GRILL, span(t, c.GRILL, c.ADR2));
+      aLit('a3', T.ease(T.p(t, c.GRILL, 0.4)));
+      aLit('a4', T.ease(T.p(t, c.FILL, 0.4)));
+      T.$('lbF').style.opacity = T.ease(T.p(t, c.FILL, 0.4));
+
+      // ADR · 术语表：拷问分出两条箭头，两份文档亮，一起标「当前」。
+      aLit('a6', T.ease(T.p(t, c.ADR, 0.4)));
+      aLit('a7', T.ease(T.p(t, c.ADR + 0.15, 0.4)));
+      doc(T.$('d2'), t, c.ADR2, 0);
+      doc(T.$('d3'), t, c.ADR2 + 0.15, 0);
+      SF.cur(T.$('adrg'), span(t, c.ADR2, c.WRITE), 0);
+      T.$('keep').style.opacity = T.ease(T.p(t, c.ADR2 + 0.4, 0.4));
+
+      // 纪要 → 一次写成规格；ADR、术语表指向规格的箭头同时出。
+      aLit('a5', T.ease(T.p(t, c.WRITE, 0.4)));
+      aLit('a8', T.ease(T.p(t, c.WRITE + 0.2, 0.4)));
+      aLit('a9', T.ease(T.p(t, c.WRITE + 0.3, 0.4)));
+      T.$('lbW').style.opacity = T.ease(T.p(t, c.WRITE, 0.4));
+      doc(T.$('d4'), t, c.SPEC, span(t, c.SPEC, c.END));
+      SF.cur(T.$('hlW'), 0, 0);
+    }
+    // 整张图缩放：s = 比例，(tx, ty) = 平移。比例 1、不平移时不写 transform，和 S07 逐像素一致。
+    function place(s, tx, ty) {
+      T.$('nf').style.transform = (s === 1 && tx === 0 && ty === 0) ? '' : 'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')';
+    }
+    return { C: C, show: show, place: place, span: span };
+  })();
+
+  // ===== S08 的时间轴 =====
+  // S8.show(t)：t = S08 的本页时刻。
+  var S8 = (function () {
+    // 时刻（秒，S08 本页起算；按录音实测，frame-times.py，2026-10-19）：
+    // SHR 0.0 第 27 句开口：新流程缩小上移；BOX 1.2 缩到位后（SHR + 1.2）/sdflow-spec 分组框淡入；CIN 0.8 三张卡暗着进场（比原值早 0.2，随 SHR 平移）；
+    // FLY 1.4 三张贴纸从右侧飞回落到卡上（同样平移）；B1 4.3 第 28 句「第一，怎么问」（「第」4.32）；T1 10.5 念到「答案由你来给」（「答」10.56）；
+    // B2 12.7 第 29 句「第二」（12.72）；T2 19.1 念到「不用回头去改」（「不」19.12）；B3 21.2 第 30 句「第三」（21.20）；
+    // PIC 25.9 念到「规格检查清单和设计图表」（「规」25.92）：第 3 张卡上方出两张图；
+    // T3 28.5 念到「该有的内容都带上」（「该」28.56）；END 29.8 第 30 句念完（30.08）前「当前」淡出。
+    var T8 = { SHR: 0.0, BOX: 1.2, CIN: 0.8, FLY: 1.4, B1: 4.3, T1: 10.5, B2: 12.7, T2: 19.1, B3: 21.2, PIC: 25.9, T3: 28.5, END: 29.8 };
+    // 缩小后的位置：比例 0.6，平移 (24, 110)。整张图落在 x 48–1128、y 290–620，下面留给三张大卡。
+    var S = 0.6, TX = 24, TY = 110;
+    // 设计图网格的 13 个缩略图：图形照抄 assets/cover/cover.js 的 DIAGRAMS（顺序同 S25a），线宽在本页 CSS 里加粗。
+    var DIAGRAMS = [
+      '<circle class="b" cx="32" cy="36" r="13"/><path class="s" d="M12 86 Q32 50 52 86 Z"/><rect class="os" x="92" y="30" width="80" height="58" rx="6"/><rect class="b" x="204" y="38" width="46" height="42" rx="5" stroke-dasharray="7 6"/><line class="a" x1="58" y1="60" x2="88" y2="60"/><line class="a" x1="176" y1="59" x2="200" y2="59"/>',
+      '<rect class="d" x="6" y="6" width="248" height="108" rx="8"/><rect class="b" x="22" y="36" width="58" height="44" rx="5"/><rect class="b" x="106" y="36" width="58" height="44" rx="5"/><path class="b" d="M190 34 v44 a20 7 0 0 0 40 0 v-44"/><ellipse class="b" cx="210" cy="34" rx="20" ry="7"/><line class="a" x1="82" y1="58" x2="102" y2="58"/><line class="a" x1="166" y1="58" x2="186" y2="58"/>',
+      '<rect class="b" x="10" y="6" width="240" height="108" rx="8"/><rect class="os" x="30" y="22" width="70" height="32" rx="4"/><rect class="b" x="160" y="22" width="70" height="32" rx="4"/><rect class="b" x="30" y="70" width="70" height="32" rx="4"/><rect class="b" x="160" y="70" width="70" height="32" rx="4"/><line class="a" x1="102" y1="38" x2="156" y2="38"/><line class="a" x1="102" y1="86" x2="156" y2="86"/>',
+      '<rect class="os" x="10" y="44" width="56" height="32" rx="4"/><rect class="b" x="102" y="8" width="56" height="32" rx="4"/><rect class="b" x="102" y="80" width="56" height="32" rx="4"/><rect class="b" x="194" y="44" width="56" height="32" rx="4"/><line class="a" x1="66" y1="52" x2="98" y2="32"/><line class="a" x1="66" y1="68" x2="98" y2="88"/><line class="a" x1="158" y1="32" x2="190" y2="52"/><line class="a" x1="158" y1="88" x2="190" y2="68"/>',
+      '<rect class="b" x="14" y="24" width="80" height="78"/><rect class="os" x="30" y="46" width="48" height="32" rx="3"/><rect class="b" x="166" y="24" width="80" height="78"/><rect class="b" x="182" y="46" width="48" height="32" rx="3"/><line class="s" x1="96" y1="63" x2="164" y2="63"/>',
+      '<circle class="k" cx="12" cy="66" r="8"/><circle class="b" cx="62" cy="66" r="24"/><circle class="os" cx="140" cy="66" r="24"/><circle class="b" cx="218" cy="66" r="24"/><line class="a" x1="88" y1="66" x2="112" y2="66"/><line class="a" x1="166" y1="66" x2="190" y2="66"/><path class="a" d="M206 44 Q140 -4 74 44"/>',
+      '<rect class="b" x="6" y="22" width="56" height="40" rx="4"/><circle class="os" cx="130" cy="42" r="26"/><rect class="b" x="198" y="22" width="56" height="40" rx="4"/><line class="a" x1="64" y1="42" x2="98" y2="42"/><line class="a" x1="158" y1="42" x2="194" y2="42"/><path class="s" d="M96 96 h68 M96 116 h68"/>',
+      '<path class="os" d="M130 8 L170 46 L130 84 L90 46 Z"/><rect class="b" x="6" y="80" width="62" height="34" rx="4"/><rect class="b" x="192" y="80" width="62" height="34" rx="4"/><path class="a" d="M90 46 H37 V76"/><path class="a" d="M170 46 H223 V76"/>',
+      '<rect class="b" x="12" y="2" width="56" height="24" rx="3"/><rect class="os" x="102" y="2" width="56" height="24" rx="3"/><rect class="b" x="192" y="2" width="56" height="24" rx="3"/><line class="d" x1="40" y1="28" x2="40" y2="118"/><line class="d" x1="130" y1="28" x2="130" y2="118"/><line class="d" x1="220" y1="28" x2="220" y2="118"/><line class="a" x1="40" y1="48" x2="124" y2="48"/><line class="a" x1="130" y1="72" x2="214" y2="72"/><line class="a" x1="220" y1="98" x2="46" y2="98"/>',
+      '<rect class="b" x="6" y="2" width="56" height="24" rx="3"/><rect class="os" x="102" y="2" width="56" height="24" rx="3"/><rect class="b" x="198" y="2" width="56" height="24" rx="3"/><line class="d" x1="34" y1="28" x2="34" y2="118"/><line class="d" x1="226" y1="28" x2="226" y2="118"/><rect class="b" x="122" y="40" width="16" height="74"/><line class="a" x1="34" y1="54" x2="116" y2="54"/><line class="a" x1="226" y1="62" x2="144" y2="62"/>',
+      '<rect class="b" x="6" y="6" width="70" height="26" rx="3"/><rect class="b" x="6" y="47" width="70" height="26" rx="3"/><rect class="b" x="6" y="88" width="70" height="26" rx="3"/><rect class="os" x="184" y="10" width="70" height="26" rx="13"/><rect class="b" x="184" y="84" width="70" height="26" rx="13"/><line class="a" x1="78" y1="19" x2="180" y2="23"/><line class="a" x1="78" y1="60" x2="180" y2="27"/><line class="a" x1="78" y1="101" x2="180" y2="97"/>',
+      '<rect class="b" x="6" y="6" width="248" height="108" rx="4"/><rect class="os" x="6" y="6" width="248" height="30" rx="4"/><path class="s" d="M6 72 H254 M84 6 V114 M170 6 V114"/>',
+      '<circle class="b" cx="40" cy="20" r="16"/><circle class="b" cx="40" cy="60" r="16"/><circle class="b" cx="40" cy="100" r="16"/><circle class="os" cx="214" cy="60" r="20"/><line class="a" x1="58" y1="24" x2="190" y2="54"/><line class="a" x1="58" y1="60" x2="188" y2="60"/><line class="a" x1="58" y1="96" x2="190" y2="66"/>'
+    ];
+    T.$('mTiles').innerHTML = DIAGRAMS.map(function (d) {
+      return '<div class="m-dg"><svg viewBox="0 0 260 120">' + d + '</svg></div>';
+    }).join('');
+    function show(t) {
+      var c = T8, span = NF.span;
+      SF.arrow(T.$('oa1'), 528, 572, 228); SF.arrow(T.$('oa2'), 838, 892, 228); SF.arrow(T.$('oa3'), 1028, 1082, 228);
+      ['oa1', 'oa2', 'oa3'].forEach(function (id) { T.$(id).style.color = 'rgb(63,66,70)'; });   // 旧路线是被留下的：淡墨（同 S07 终帧）
+
+      // 第 27 句：新流程缩小上移，分组框随即淡入。
+      NF.show(999);
+      var m = T.ease(T.p(t, c.SHR, 1.2));
+      NF.place(SF.lerp(1, S, m), SF.lerp(0, TX, m), SF.lerp(0, TY, m));
+      T.$('nfbox').style.opacity = T.ease(T.p(t, c.BOX, 0.5));
+
+      // 三张卡暗着进场，贴纸飞回落到卡上；第 28–30 句依次亮起。
+      var B = [c.B1, c.B2, c.B3], TT = [c.T1, c.T2, c.T3], NEXT = [c.B2, c.B3, c.END];
+      for (var i = 0; i < 3; i++) {
+        var card = T.$('c' + (i + 1));
+        T.enter(card, T.p(t, c.CIN + i * 0.15, 0.5), 16);
+        var lit = T.ease(T.p(t, B[i], 0.4));
+        SF.lit(card, lit);
+        card.querySelector('.num').style.background = T.mix([139, 148, 158], [242, 239, 230], lit);
+        SF.cur(card, span(t, B[i], NEXT[i]), 10, lit);
+        T.$('cn' + (i + 1)).style.opacity = T.ease(T.p(t, B[i] + 0.3, 0.4));
+        T.$('cc' + (i + 1)).style.opacity = T.ease(T.p(t, TT[i], 0.4));
+        T.enter(T.$('k' + (i + 1)), T.p(t, c.FLY + i * 0.25, 0.7), 0, 700);
+      }
+      // 哪张卡亮，缩小的流程图里对应的节点加「当前」：怎么问 = explore、澄清、拷问；怎么写 = 纪要和「一次写成」那条箭头；写成什么样 = 规格。
+      var g1 = span(t, c.B1, c.B2), g2 = span(t, c.B2, c.B3), g3 = span(t, c.B3, c.END);
+      ['n1', 'n2', 'n3'].forEach(function (id) { SF.cur(T.$(id), g1, 10); });
+      SF.cur(T.$('d1'), g2, 0);
+      SF.cur(T.$('hlW'), g2, 0);
+      SF.cur(T.$('d4'), g3, 0);
+      // 第 30 句念到「规格检查清单和设计图表」：后面的网格先落，前面的清单塔跟着落。
+      T.enter(T.$('mGrid'), T.p(t, c.PIC, 0.5), 14);
+      T.enter(T.$('mTower'), T.p(t, c.PIC + 0.3, 0.5), 14);
+    }
+    return { T: T8, show: show, S: S, TX: TX, TY: TY };
+  })();
+
+  // ===== 本页：帧脚本 =====
+  Stage({
+    duration: 31.3,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.tilt();   // 手写了 data-r、又不做进场动画的元素，先按 data-r 摆好倾角（theme.js 只给自动算角的元素摆）
+      S8.show(t);
+    }
+  });
+</script>
+</body>
+</html>

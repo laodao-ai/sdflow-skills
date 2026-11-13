@@ -1,0 +1,165 @@
+<!doctype html>
+<!-- S30 · 角色图 · script 123–127「这三件事里，一直有一条线：人在里面起什么作用。……拷问这一步，也是 sdflow 里最需要你参与的地方。」
+     角色图：人、Agent、仓库文件三个角色（图形照 visual-v4 §五，写法照首期 S07）。分镜只列这三个，运行环境本页没有出场，不画。
+     - 123 句（0.00）：人、Agent、仓库文件依次进场。
+     - 124 句（5.84）：人头上出气泡「完整需求的预期」，人为当前。
+     - 125 句（10.48）：Agent 为当前，发出「问题」箭头给人；人给「回答」箭头；念到「找出来、写下来」时 Agent 旁标「找出来、写下来」；
+       回答落进仓库文件（「写成纪要」箭头）；念到「不是替你定」时人旁标「定」，人为当前。
+     - 126 句（17.04）：下方只留一条：心里没预期 + 都按推荐答 → AI 的方案，不是你的（2026-10-19 第六轮改稿删去「答的不一样 → 另一个方案」分支；第七轮口播加前提「如果心里没有预期」，画面跟着加）。
+     - 127 句（25.04）：最下一行小字「拷问 = 你参与最多」，念到「你」时「你」加黄框（当前）。
+     所有节点时刻集中在 CUE，按录音实测（frame-times.py，2026-10-19）。
+     内容整体在 y 920 以上，避开字幕带。
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排。第 126 句改成「如果心里没有预期，每一问都按推荐答，……」（多 7 字，约 1.9 秒）：
+       第 127 句开口 27.87 → 29.8，foot 28.2 → 30.1，you 31.4 → 33.3，duration 34 → 36。 -->
+<html lang="zh-CN" data-frame-id="S30">
+<head>
+<meta charset="utf-8">
+<title>S30 · 人在里面起什么作用</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .tile {
+    position: absolute; width: 290px; height: 270px; box-sizing: border-box;
+    border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+    box-shadow: 12px 12px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .tile svg { width: 120px; height: 120px; margin-top: -30px; }
+  .name {
+    position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+    padding: 8px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+    border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1;
+  }
+  .arrow { position: absolute; width: 380px; height: 60px; }
+  .dot { position: absolute; box-sizing: border-box; border-radius: 50%; border: 4px dashed rgba(22,22,22,.75); }
+  .bubble { border-radius: 44px; font-size: 40px; }
+  .note { font-size: 40px; }
+  .branch { height: 104px; display: flex; align-items: center; padding: 0 40px; font-family: var(--display); font-weight: 800; font-size: 50px; color: var(--ink); white-space: nowrap; }
+  .branch .go { margin: 0 22px; color: var(--ink); }
+  .foot { position: absolute; left: 150px; top: 852px; white-space: nowrap; font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.2; color: var(--ink); }
+  /* 「你」：行内文字的「当前」只用黄描边加光晕，不加 T.current 的外环。 */
+  #foot-you { display: inline-block; padding: 0 8px; margin: 0 12px 0 8px; border-radius: 6px; outline-offset: 4px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 三个角色 -->
+  <div class="tile" id="human" data-r="-1.5" style="left:110px;top:230px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8">
+      <circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:-3deg">人</div>
+  </div>
+  <div class="tile" id="agent" data-r="1.5" style="left:810px;top:230px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round">
+      <polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/>
+      <polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:2deg">Agent</div>
+  </div>
+  <div class="tile" id="repo" data-r="2" style="left:1510px;top:230px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round">
+      <path d="M34 22 H78 L98 42 V102 H34 Z"/><path d="M78 22 V42 H98"/>
+      <path d="M22 34 V112 H84"/><line x1="48" y1="62" x2="84" y2="62"/><line x1="48" y1="80" x2="76" y2="80"/>
+    </svg>
+    <div class="name" style="--r:-2deg">仓库文件</div>
+  </div>
+
+  <!-- 人头上的气泡 -->
+  <div class="dot" id="d1" style="left:215px;top:166px;width:30px;height:30px"></div>
+  <div class="dot" id="d2" style="left:190px;top:200px;width:18px;height:18px"></div>
+  <div class="chip bubble" id="bubble" data-r="-2" style="left:110px;top:80px">完整需求的预期</div>
+
+  <!-- 问题 / 回答 / 纪要 三条箭头（主箭头：奶白，尾部圆环）。问题箭头水平翻转，指向人。 -->
+  <svg class="arrow" id="aq" viewBox="0 0 380 60" style="left:420px;top:270px;transform:scaleX(-1)">
+    <path d="M28 36 Q 190 20 340 32" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="20" cy="36" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    <polygon points="330,12 378,33 332,54" fill="#f2efe6"/>
+  </svg>
+  <div class="chip note" id="cq" data-r="-2" style="left:540px;top:190px">问题</div>
+  <svg class="arrow" id="aa" viewBox="0 0 380 60" style="left:420px;top:400px">
+    <path d="M28 36 Q 190 20 340 32" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="20" cy="36" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    <polygon points="330,12 378,33 332,54" fill="#f2efe6"/>
+  </svg>
+  <div class="chip note" id="ca" data-r="2" style="left:540px;top:456px">回答</div>
+  <svg class="arrow" id="am" viewBox="0 0 380 60" style="left:1120px;top:330px">
+    <path d="M28 36 Q 190 20 340 32" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="20" cy="36" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    <polygon points="330,12 378,33 332,54" fill="#f2efe6"/>
+  </svg>
+  <div class="chip note" id="cm" data-r="-2" style="left:1220px;top:250px">写成纪要</div>
+
+  <!-- 角色旁的标注 -->
+  <div class="chip note" id="nagent" data-r="2" style="left:770px;top:570px">找出来、写下来</div>
+  <div class="chip note" id="nhuman" data-r="-2" style="left:225px;top:570px;font-size:52px;font-family:var(--display);font-weight:800">定</div>
+
+  <!-- 第 126 句：只留一条 -->
+  <div class="card branch" id="b1" data-r="-1" style="left:140px;top:715px">心里没预期 + 都按推荐答<span class="go">→</span>AI 的方案，不是你的</div>
+  <!-- 第 127 句：最下一行小字 -->
+  <div class="foot" id="foot">拷问 = <span id="foot-you">你</span>参与最多</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按录音实测（frame-times.py，2026-10-19）。
+  //   roles   123 句开口后：人 0.0（开头 0.5 秒内要有主体）、Agent 2.2、仓库文件 3.4
+  //   bubble  124 句开口（5.84）：气泡，人为当前
+  //   ask     125 句开口（10.48）；answer 念到「帮你」（11.68）：Agent 为当前，问题箭头；回答箭头紧随
+  //   find    125 句「找出来」（12.88）：Agent 旁标注
+  //   memo    125 句「写下来」（14.08）：回答落进仓库文件
+  //   decide  125 句「不是替你定」（15.12）：人旁标「定」，人为当前
+  //   b1      126 句「如果心里没有预期，每一问都按推荐答」：下方一条
+  //   foot    127 句开口（25.04）：最下一行小字；you 念到「你」（28.48）：「你」加黄框
+  var CUE = {
+    human: 0.0, agent: 2.2, repo: 3.4,
+    bubble: 5.84, bubbleEnd: 10.48,
+    ask: 10.48, answer: 11.68, find: 12.88, memo: 14.08,
+    decide: 15.12, decideEnd: 17.04,
+    b1: 17.04, foot: 25.04, you: 28.48
+  };
+  var P = T.p, E = T.ease;
+
+  Stage({
+    duration: 30.7,
+    init: function () { return T.fonts('人你完整需求的预期问题回答写成纪要找出来下来定心里没都按推荐答方案不是的拷问参与最多仓库文件+→='); },
+    render: function (t) {
+      T.enter(T.$('human'), P(t, CUE.human, 0.6), 30);
+      T.enter(T.$('agent'), P(t, CUE.agent, 0.6), 30);
+      T.enter(T.$('repo'), P(t, CUE.repo, 0.6), 30);
+
+      // 气泡
+      var bp = E(P(t, CUE.bubble, 0.5));
+      T.$('d1').style.opacity = bp; T.$('d2').style.opacity = bp;
+      T.enter(T.$('bubble'), P(t, CUE.bubble, 0.5), -16);
+
+      // 问题 -> 回答 -> 纪要
+      T.wipe(T.$('aq'), P(t, CUE.ask, 0.7));
+      T.enter(T.$('cq'), P(t, CUE.ask + 0.3, 0.4), 12);
+      T.wipe(T.$('aa'), P(t, CUE.answer, 0.7));
+      T.enter(T.$('ca'), P(t, CUE.answer + 0.3, 0.4), 12);
+      T.wipe(T.$('am'), P(t, CUE.memo, 0.7));
+      T.enter(T.$('cm'), P(t, CUE.memo + 0.3, 0.4), 12);
+
+      T.enter(T.$('nagent'), P(t, CUE.find, 0.4), 12);
+      T.enter(T.$('nhuman'), P(t, CUE.decide, 0.4), 12);
+
+      // 当前：人（气泡）-> Agent（拷问）-> 人（定）；仓库文件在写下来时亮一下
+      var gHuman = Math.max(E(P(t, CUE.bubble, 0.4)) * (1 - E(P(t, CUE.bubbleEnd, 0.4))),
+                            E(P(t, CUE.decide, 0.4)) * (1 - E(P(t, CUE.decideEnd, 0.4))));
+      T.current(T.$('human'), gHuman, 12);
+      T.current(T.$('agent'), E(P(t, CUE.ask, 0.4)) * (1 - E(P(t, CUE.memo, 0.4))), 12);
+      T.current(T.$('repo'), E(P(t, CUE.memo, 0.4)) * (1 - E(P(t, CUE.decide, 0.4))), 12);
+
+      // 第 126 句：只留一条。第 127 句：小字出来后，b1 的当前让给「你」。
+      T.enter(T.$('b1'), P(t, CUE.b1, 0.5), 20);
+      T.current(T.$('b1'), E(P(t, CUE.b1, 0.4)) * (1 - E(P(t, CUE.foot, 0.4))), 10);
+      T.enter(T.$('foot'), P(t, CUE.foot, 0.5), 16);
+      var gy = E(P(t, CUE.you, 0.3)), you = T.$('foot-you');
+      you.style.outline = '6px solid rgba(245,207,74,' + gy + ')';
+      you.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.5 * gy) + ')';
+    }
+  });
+</script>
+</body>
+</html>

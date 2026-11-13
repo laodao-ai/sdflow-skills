@@ -1,0 +1,134 @@
+<!doctype html>
+<!-- S01 · 机制动画 · script 1–8「你让 AI 加一个超温告警。……它没问你，自己定了。」
+     示意画面（右上角「示意」）：通用对话框，只有「你」和「AI」两方，不仿任何真实产品界面。
+     - AI 出的代码用灰条表示：这里要说的是「它直接开写」，不是代码内容，不编代码。
+     - 三个问题是没定的东西，倾角 ±3–5°；奶白贴纸 = 问题本身。
+     - 黄色实底「猜」贴纸只用于 AI 的猜（S07 定下的），落在三个问题上 = 它自己定了。
+     - 还没讲到工具：不用蓝 / 琥珀；没有测试：不用红 / 绿。
+     对话框本身不倾斜（当窗口看），里面的气泡和问题才倾斜。
+     片头：0–4.4 秒盖一层主封面（assets/cover/，和封面同一份组件；作者 2026-10-07 定：片头和封面一致，以文字为主），
+     留到第 1 句（1.20–4.32「用 AI 写代码的时候……」，和封面标题是同一个问题）念完。
+     4.4–4.6 秒封面淡出，4.6–4.9 秒对话框进场，接 5.36 的「你」。封面和对话框不同时出现。
+     mp4 没播放时停在第 0 帧，所以第 0 帧就是封面。「示意」角标和封面 logo 同在右上，封面走完才淡入。 -->
+<html lang="zh-CN" data-frame-id="S01">
+<head>
+<meta charset="utf-8">
+<title>S01 · 它自己定了</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../../assets/cover/cover.css">
+<style>
+  .chat { left: 110px; top: 130px; width: 900px; height: 800px; padding: 60px 44px 40px; }
+  .chat .tab { font-size: 40px; }
+  /* 说话方：圆片，「你」奶白、「AI」墨底，只区分两方，不画人。 */
+  .who {
+    position: absolute; width: 96px; height: 96px; box-sizing: border-box; border-radius: 50%;
+    border: 5px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--display); font-weight: 800; font-size: 42px;
+  }
+  .who.me { background: var(--cream); color: var(--ink); }
+  .who.ai { background: var(--ink); color: #fff; border-color: var(--cream); box-shadow: 6px 6px 0 #000; }
+  .bubble {
+    position: absolute; padding: 18px 32px; border-radius: 10px; white-space: nowrap;
+    background: var(--cream); color: var(--ink); border: 5px solid var(--ink); box-shadow: 8px 8px 0 #000;
+    font-family: var(--display); font-weight: 800; font-size: 52px; line-height: 1.15;
+  }
+  /* AI 直接开写：代码区，灰条 = 一行行代码。代码区不倾斜。 */
+  .code {
+    position: absolute; left: 190px; top: 330px; width: 640px; height: 420px; box-sizing: border-box;
+    padding: 34px 34px; background: var(--term); border: 5px solid var(--ink); border-radius: 10px;
+    box-shadow: 8px 8px 0 #000;
+  }
+  .bar { height: 18px; border-radius: 9px; background: var(--cream-dim); margin-bottom: 26px; }
+
+  .q { font-size: 44px; padding: 14px 30px; }
+  .q .guess { left: auto; right: -34px; top: -40px; font-size: 38px; padding: 6px 18px; }
+  .q .guess b { margin: 0; }
+  .decided { left: 1130px; top: 760px; padding: 26px 44px; }
+  .decided .big { font-size: 72px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="mock" id="mock">示意</div>
+
+  <div class="card dark chat" id="chat" data-shadow="10">
+    <div class="tab ink" style="background:var(--cream);color:var(--ink)">对话</div>
+    <div class="who me" id="me" style="left:44px;top:80px">你</div>
+    <div class="bubble" id="ask" data-r="-1.5" style="left:180px;top:82px">加一个超温告警</div>
+    <div class="who ai" id="ai" style="left:44px;top:330px">AI</div>
+    <div class="code" id="code">
+      <div class="bar ln" style="width:58%"></div>
+      <div class="bar ln" style="width:82%;margin-left:40px"></div>
+      <div class="bar ln" style="width:64%;margin-left:40px"></div>
+      <div class="bar ln" style="width:74%;margin-left:80px"></div>
+      <div class="bar ln" style="width:46%;margin-left:80px"></div>
+      <div class="bar ln" style="width:70%;margin-left:40px"></div>
+      <div class="bar ln" style="width:22%"></div>
+    </div>
+  </div>
+
+  <!-- 三个它没问的问题：从代码区浮到右边。 -->
+  <div class="chip q" id="q1" data-r="-4" style="left:1150px;top:220px">告警发到哪？
+    <div class="guess" id="g1" data-r="6"><b>猜</b></div></div>
+  <div class="chip q" id="q2" data-r="3.5" style="left:1270px;top:410px">多少度算超温？
+    <div class="guess" id="g2" data-r="-5"><b>猜</b></div></div>
+  <div class="chip q" id="q3" data-r="-3" style="left:1150px;top:600px">正好 80 度算不算？
+    <div class="guess" id="g3" data-r="5"><b>猜</b></div></div>
+
+  <div class="card decided" id="decided" data-r="-2" data-shadow="10">
+    <div class="big">它自己定了</div>
+  </div>
+
+  <!-- 片头封面，盖在最上层。 -->
+  <div id="cover"></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script src="../../assets/cover/cover.js"></script>
+<script>
+  Stage({
+    duration: 28.8,
+    // 两层路径对 assets/html/ 和重渲时的 render/tmp/ 都成立（都在一期目录下两层）。
+    init: function () {
+      return Promise.all([
+        T.fonts('对话你加一个超温告警告警发到哪？多少度算超温？正好80度算不算猜它自己定了'),
+        Cover(T.$('cover'), { mode: 'main', base: '../../assets/cover/', brand: '../../../shared/logo.svg' })
+      ]);
+    },
+    render: function (t) {
+      // 时刻按实测（2026-10-06，frame-times.py），画面内秒数；括号里是对应的口播。
+      // 0. 片头封面：0–4.4 秒全显（第 1 句念完），4.4–4.6 秒淡出。「示意」等封面走完再淡入（4.6–4.8），
+      //    同时淡入会和封面 logo 叠在一起。
+      T.$('cover').style.opacity = 1 - T.p(t, 4.4, 0.2);
+      T.$('mock').style.opacity = T.p(t, 4.6, 0.2);
+
+      // 1. 你：一句话。第 0 帧是封面（2026-10-07 作者看成片：mp4 打开时第一帧只有纸底）。
+      //    封面 4.4–4.6 秒淡出，走完后对话框再进场（4.6–4.9），两段不重叠（作者 2026-10-07：不要交叉淡化）。
+      //    封面层透明，对话框早出现会透到标题后面。
+      //    「你」圆片 5.36（2 句开口）；气泡 6.64（念到「加一个超温告警」的「加」）。
+      T.enter(T.$('chat'), T.p(t, 4.6, 0.3), 20);
+      T.enter(T.$('me'), T.p(t, 5.36, 0.4), 10);
+      T.enter(T.$('ask'), T.p(t, 6.64, 0.5), 16);
+
+      // 2. AI 不问，直接开写：一行行代码很快冒出来。3 句开口 8.80（「它很快就写完了」）；AI 圆片、代码区、代码行三者间隔照旧（0.2）。
+      T.enter(T.$('ai'), T.p(t, 8.8, 0.4), 10);
+      T.enter(T.$('code'), T.p(t, 9.0, 0.4), 10);
+      T.all('.ln').forEach(function (el, i) { T.wipe(el, T.p(t, 9.2 + i * 0.22, 0.25), 'x'); });
+
+      // 3. 三个它没问的问题，从代码区往右浮出：5 句开口 18.00「告警该发到哪」、6 句开口 20.16「多少度算超温」、7 句开口 22.88「正好 80 度」。
+      [18.0, 20.16, 22.88].forEach(function (at, i) {
+        T.enter(T.$(['q1', 'q2', 'q3'][i]), T.p(t, at, 0.6), 0, -160);
+      });
+
+      // 4. 它没问你：每个问题上落一张「猜」（8 句开口 26.24「这些它一个都没问你」，三张间隔照旧 0.3）；
+      //    最后叠一行「它自己定了」（念到「全是自己定的」的「全」27.76）。
+      ['g1', 'g2', 'g3'].forEach(function (id, i) {
+        T.enter(T.$(id), T.p(t, 26.24 + i * 0.3, 0.35), -20);
+      });
+      T.enter(T.$('decided'), T.p(t, 27.76, 0.5), 24);
+    }
+  });
+</script>
+</body>
+</html>

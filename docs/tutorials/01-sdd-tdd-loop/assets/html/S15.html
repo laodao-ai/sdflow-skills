@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- S15 · 标题卡 · script 60–63「先简单介绍一下 OpenSpec。……OpenSpec 是一个命令行工具。……主要在 AI 的对话框里用。」
+     命令卡两行（装、初始化），命令原样不改。卡上沿蓝色标签 = OpenSpec。
+     命令卡是终端样式，不倾斜；旁注是贴纸，轻倾斜。 -->
+<html lang="zh-CN" data-frame-id="S15">
+<head>
+<meta charset="utf-8">
+<title>S15 · 装 OpenSpec</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #cmd { left: 180px; top: 380px; width: 1260px; }
+  #cmd .tab { font-size: 40px; }
+  #note { left: 760px; top: 650px; font-size: 44px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="cmd" id="cmd" data-r="0"><div class="tab os">OpenSpec</div><span class="p">$ </span>npm install -g @fission-ai/openspec@latest
+<span class="p">$ </span>openspec init</div>
+  <div class="chip" id="note" data-r="2">之后在 AI 对话框里用</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 13.28,
+    init: function () { return T.fonts('之后在对话框里用OpenSpec'); },
+    render: function (t) {
+      T.enter(T.$('cmd'), T.p(t, 0.0, 0.6), 30);
+      T.enter(T.$('note'), T.p(t, 12.40, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

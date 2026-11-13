@@ -1,0 +1,129 @@
+<!doctype html>
+<!-- S21 · 标题卡 · script 139–148「这么多 agent 一起跑，到底花多少？……审规格也一样，同一份规格，每次审出来的都不一样。」
+     第 6 章「值不值得」第 1 页（10-24 合并原「为什么这么审」「成本怎么控」后，花费挪到开头）。实录加引用的研究。
+     - 第 139 句：问题贴纸「到底花多少？」先在屏幕正中放大，停约 1 秒，再约 0.6 秒缩小移到左上（visual-v4 4.8）；
+       落位后、第 140 句开口前，右上角出「实录 · 示例项目」标签（奶白 / 墨，4.7），避免只有贴纸超过 3 秒。
+     - 第 140 句：实录卡「这一套：约 17 分钟 · 约 1541 万 token（九成多是缓存读取）」。
+       数字出处 recording/04-独立评审与批准.md「r3 索引」花费一行：05:23:39 敲下 /sdflow-spec-review → 05:40:49 出口，约 17 分钟（17 分 10 秒）；
+       到出口 Claude token 合计 15,407,196（主会话加 8 个镜，按 message.id 去重），其中缓存读取 14,335,995（93%）。不写美元费用。
+     - 第 141 句：贴纸「值吗？」落在第一张贴纸右边。
+     - 第 142 句：只有口播「为的是两件事」，画面不变。第 143 句：目的卡 ①「减少大模型的不确定性」；第 144 句：目的卡 ②「越早发现，越早改，越便宜」。
+       两张目的卡竖排在左列，① 在上；② 讲到第二件事（下一页 S24）时才展开，本页只当目录。
+     - 第 145 句「先说不确定性」：① 当前（黄描边），留到第 147 句小卡出现时淡出。第 146 句：只有 ① 当前，不加新内容。
+     - 第 147 句：右下小卡「temperature = 0 · 同一句话 · 1000 次 → 80 种回答」，三段随口播逐段出现；角上出处「Thinking Machines Lab · 2025-09」，小字「Qwen3 开源模型」。
+       第 146 句是泛泛的体会，没有对应的画面元素，不提前放小卡（4.8「没讲到的不先放出来」）。
+     - 第 148 句：小卡下一行「审规格也一样」。
+     一页一层：卡出现后都留到页末，静态看得懂（花费 + 两个目的 + 第一个的例子）。
+     配色：「实录」标签奶白 / 墨；本页不涉及规格 / 执行一侧、测试结果、对抗审或另一个模型，所以不用蓝 / 琥珀 / 红 / 绿 / 粉 / 紫；
+       花费卡与目的卡奶白，「80 种回答」是这一页最重的块（墨底奶白字）；黄只给「当前」。
+     句子起点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒）：139 句 0，140 句 3.68，141 句 12.32，142 句 17.12，143 句 19.92，144 句 23.20，145 句 29.28，146 句 31.92，147 句 38.56，148 句 45.52，念完 49.44；
+       页内时长 50.72。
+     内容整体在 y 900 以内，避开底部字幕带（y ≥ 930）。  -->
+<html lang="zh-CN" data-frame-id="S21">
+<head>
+<meta charset="utf-8">
+<title>S21 · 到底花多少，值吗</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #q { left: 70px; top: 24px; font-size: 42px; }
+  #q2 { left: 440px; top: 24px; font-size: 42px; }
+  #real { left: auto; right: 70px; top: 40px; font-size: 34px; background: var(--cream); color: var(--ink); }
+
+  /* 实录卡：一行花费，主数字用展示字体 */
+  #rec { left: 60px; top: 170px; width: 1800px; height: 130px; padding: 0 40px; display: flex; align-items: center; white-space: nowrap; }
+  #rec .m { font-family: var(--display); font-weight: 800; font-size: 56px; }
+  #rec .n { font-weight: 600; font-size: 38px; margin-left: 22px; color: #55524c; }
+
+  /* 左列：两张目的卡竖排 */
+  .goal { left: 60px; width: 880px; height: 170px; padding: 0 36px; display: flex; align-items: center; gap: 24px; }
+  #g1 { top: 390px; } #g2 { top: 610px; }
+  .goal .txt { font-family: var(--display); font-weight: 800; font-size: 54px; white-space: nowrap; }
+
+  /* 右下：temperature = 0 小卡与末行 */
+  #sm { left: 980px; top: 470px; width: 880px; height: 240px; padding: 26px 36px 0; }
+  #sm .l1 { font-weight: 600; font-size: 42px; line-height: 60px; white-space: nowrap; }
+  #sm .l2 { margin-top: 10px; font-family: var(--display); font-weight: 800; font-size: 76px; line-height: 96px; white-space: nowrap; }
+  #src { right: 24px; top: -56px; font-size: 30px; padding: 4px 16px; }
+  #qw { right: 30px; bottom: 16px; font-weight: 600; font-size: 30px; color: #55524c; white-space: nowrap; }
+  #big80 { display: inline-block; padding: 0 20px; border-radius: 8px; background: var(--ink); color: var(--cream); }
+
+  #end { left: 980px; top: 770px; font-family: var(--display); font-weight: 800; font-size: 64px; padding: 10px 34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="q" data-r="-3.5">到底花多少？</div>
+  <div class="chip" id="q2" data-r="3">值吗？</div>
+  <div class="tab" id="real" data-r="3">实录 · 示例项目</div>
+
+  <div class="card" id="rec" data-r="-0.6"><span class="m">这一套：约 17 分钟 · 约 1541 万 token</span><span class="n">（九成多是缓存读取）</span></div>
+
+  <div class="card goal" id="g1" data-r="-1"><span class="num">1</span><span class="txt">减少大模型的不确定性</span></div>
+  <div class="card goal" id="g2" data-r="1"><span class="num">2</span><span class="txt">越早发现，越早改，越便宜</span></div>
+
+  <div class="card" id="sm" data-r="1">
+    <div class="tag" id="src" data-r="3">Thinking Machines Lab · 2025-09</div>
+    <div class="l1"><span class="sg" data-i="0">temperature = 0</span><span class="sg" data-i="1"> · 同一句话</span><span class="sg" data-i="2"> · 1000 次</span></div>
+    <div class="l2 sg" data-i="3">→ <span id="big80">80 种回答</span></div>
+    <div class="abs" id="qw">Qwen3 开源模型</div>
+  </div>
+
+  <div class="chip" id="end" data-r="-2">审规格也一样</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），取词首字实测开始时间减 0.2 秒。
+  var CUE = {
+    hold: 1.4, move: 0.6,           // 139 句：贴纸出现 0.4 秒后在正中停约 1 秒，再 0.6 秒移到左上，2.0 落位
+    real: 2.2,                      // 落位后：「实录 · 示例项目」标签
+    rec: 3.48,                      // 140 句开口：实录卡
+    q2: 12.12,                      // 141 句开口：「值吗？」
+    g1: 19.72, g2: 23.0,            // 143、144 句：两张目的卡
+    cur: 29.08, curEnd: 38.36,       // 145 句开口：① 当前，147 句开口淡出
+    sm: 40.52,                      // 147 句念到「同一句话跑 1000 次」：小卡（10-25 删去「temperature 参数调到 0，」，口播里不再念，temperature = 0 跟小卡一起出）（含出处、Qwen3）
+    seg: [40.72, 40.92, 41.88, 43.24], // temperature = 0 / 同一句话 / 1000 次 / → 80 种回答
+    end: 45.32                      // 148 句开口：末行
+  };
+  var P = T.p, E = T.ease;
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function gate(t, from, to) { return E(P(t, from, 0.4)) * (1 - E(P(t, to, 0.4))); }
+
+  Stage({
+    duration: 50.72,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 139 句：问题贴纸，正中放大 -> 缩小移到左上
+      var q = T.$('q'), r = parseFloat(q.getAttribute('data-r'));
+      var fx = 70 + q.offsetWidth / 2, fy = 24 + q.offsetHeight / 2;
+      var a = E(P(t, 0, 0.4));
+      var m = E(P(t, CUE.hold, CUE.move));
+      q.style.opacity = a;
+      q.style.transform = 'translate(' + ((960 - fx) * (1 - m)) + 'px,' + ((460 - fy) * (1 - m)) + 'px) scale(' + lerp(1.7, 1, m) + ') rotate(' + (r * (1 + (1 - a))) + 'deg)';
+
+      // 落位后：实录标签；140 句：实录卡；141 句：「值吗？」
+      T.enter(T.$('real'), P(t, CUE.real, 0.45), -12);
+      T.enter(T.$('rec'), P(t, CUE.rec, 0.5), 16);
+      T.enter(T.$('q2'), P(t, CUE.q2, 0.45), -16);
+
+      // 143–144 句：两张目的卡
+      T.enter(T.$('g1'), P(t, CUE.g1, 0.5), 16);
+      T.enter(T.$('g2'), P(t, CUE.g2, 0.5), 16);
+
+      // 145–146 句：① 当前
+      T.current(T.$('g1'), gate(t, CUE.cur, CUE.curEnd), 10);
+
+      // 147 句：小卡，三段逐段出现
+      T.enter(T.$('sm'), P(t, CUE.sm, 0.45), 14);
+      var segs = T.all('.sg');
+      for (var i = 0; i < segs.length; i++) {
+        segs[i].style.opacity = E(P(t, CUE.seg[parseInt(segs[i].getAttribute('data-i'), 10)], 0.4));
+      }
+
+      // 148 句：末行
+      T.enter(T.$('end'), P(t, CUE.end, 0.45), 14);
+    }
+  });
+</script>
+</body>
+</html>

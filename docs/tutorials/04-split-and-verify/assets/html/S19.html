@@ -1,0 +1,190 @@
+<!doctype html>
+<!-- S19 · 机制动画（示意，右下提交标签是实录）· script 124–136「测试也有很多种，那一个 ticket，需要测哪些呢？……双轴审都过了，主会话才打勾、提交。」
+     三列：左 分层三层 + devenv 小卡（示意）；中 一个 ticket 跑哪些测试（示意）；右 双轴审与打勾、提交（示意，提交标签用示例项目 ticket 5 的实录）。
+     中列为什么是示意（作者 2026-10-31 第 187 条）：示例项目里没有「只跑一部分集成测试」的记录。ticket 5 依赖 4，4 依赖 1、2、3，所有模块都在它的依赖链上，
+       16 个集成测试全跑了（impl-reports/task5-e2e-and-conventions.md:15）；ticket 1–4 没跑连库的集成测试（task4-cooldown-wiring.md:7「未跑连库」）；项目没有 e2e 层。
+       所以原来的「ticket 5 · Blocked-by: 4 → ticket 4 的集成测试」不再用。规则出处：sdflow-implement/SKILL.md:749-753（单元 + 本票声明的 e2e + 本票 Blocked-by 链上模块的集成测试），口播按作者说法「跟改动相关的」。
+     - 第 1 句：顶上问题贴纸「一个 ticket，需要测哪些？」。
+     - 第 2 句：三层标题落下（单元测试、集成测试、e2e 测试）。第 3 句：各层说明随口播补出（不碰真网络和数据库 / 接真服务 / 真浏览器、真进程、真设备）。
+     - 第 4 句：左下小卡「用什么工具 · 环境怎么搭 → /sdflow-devenv，以后专门聊」。
+     - 第 5 句：「拆的时候就写在 ticket 上了」，中间 ticket 卡落下（只有标题）。
+     - 第 6 句：「单元 · 每个都跑」亮起，连到单元层（单元层当前）。
+     - 第 7 句：「集成 · 只跑改动相关的」亮起，连到集成层（集成层当前）。
+     - 第 8 句：卡下出例子一行「例：改推送 → 跑推送的集成测试」（奶白，不划掉）；集成层仍当前。
+     - 第 9 句：「[e2e] 标了才跑」亮起，连到 e2e 层（e2e 层当前）。
+     - 第 10 句：例子下面两行无关的测试变灰，标「不跑」。
+     - 第 11 句：右列标题「双轴审」，两个审查 agent 上下排：规格轴「验收项、需求编号」，规范轴「规范 + 领域清单」，规范轴旁叠起来的清单卡片只露标题，不展开条目（第 11 句末出）。
+     - 第 12 句：规范轴旁出 S18b 的指纹小卡 tdd-order:impl-before-test，标「前面的跑偏，就是这里查出来的」。
+     - 第 13 句：两个都「通过」，主会话打勾，出提交标签 6876486 checkpoint(alarm-notify:task5-e2e-and-conventions)。
+     配色：规格一侧蓝（规格轴）、执行一侧琥珀（规范轴）；三层保持奶白；通过用奶白底墨色对勾，不用绿（绿只表示测试通过）；黄只作「当前」描边，同一时刻只亮一层。
+     内容都在 y 920 以内，避开字幕带。
+     口播时刻按每分钟 220 字估算（还没录音；2026-10-31 按第 12 轮口播重估），录音后用 frame-times.py 对齐。 -->
+<html lang="zh-CN" data-frame-id="S19">
+<head>
+<meta charset="utf-8">
+<title>S19 · 一个 ticket 测哪几层</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #q { left: 60px; top: 35px; font-size: 38px; }
+
+  .ly { width: 640px; height: 125px; padding: 14px 30px; }
+  .ly .h { font-family: var(--display); font-weight: 800; font-size: 48px; line-height: 1.15; }
+  .ly .d { font-size: 34px; font-weight: 600; line-height: 1.3; }
+  #l1 { left: 60px; top: 175px; } #l2 { left: 80px; top: 320px; } #l3 { left: 100px; top: 465px; }
+
+  #dv { left: 60px; top: 690px; width: 640px; height: 175px; padding: 22px 30px; }
+  #dv .tab { font-size: 34px; padding: 4px 22px; background: var(--ink); color: #fff; }
+  #dv .a { font-size: 34px; font-weight: 600; line-height: 1.35; }
+  #dv .c { font-family: var(--mono); font-weight: 700; font-size: 32px; margin-top: 6px; }
+
+  #tk { left: 850px; top: 110px; width: 440px; height: 510px; padding: 0; }
+  #tk .t { position: absolute; left: 30px; top: 18px; font-family: var(--display); font-weight: 800; font-size: 46px; }
+  #tk .tab { font-size: 34px; padding: 2px 20px; }
+  .rw { position: absolute; left: 24px; right: 24px; height: 80px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center;
+        border: 4px solid var(--ink); border-radius: 8px; background: var(--cream); font-size: 34px; font-weight: 600; box-shadow: 5px 5px 0 var(--ink); }
+  #ru { top: 87px; } #rd { top: 232px; } #re { top: 377px; }
+  #re b { font-family: var(--mono); font-weight: 700; margin-right: 12px; }
+  .nr { position: absolute; left: 850px; width: 440px; height: 56px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 8px;
+        background: #b9b6ae; color: var(--ink); font-size: 32px; font-weight: 600; display: flex; align-items: center; padding: 0 16px; }
+  .nr s { text-decoration-thickness: 3px; margin-right: 12px; }
+  #n1 { top: 665px; background: var(--cream); font-size: 27px; padding: 0 14px; box-shadow: 4px 4px 0 var(--ink); } #n2 { top: 730px; } #n3 { top: 795px; }
+
+  /* 右列：双轴审 */
+  #rv { left: 1370px; top: 100px; font-size: 40px; }
+  .ag { width: 490px; padding: 22px 28px; }
+  .ag .tab { font-size: 34px; padding: 4px 22px; }
+  .ag .tx { font-size: 34px; font-weight: 600; line-height: 1.3; margin-top: 2px; }
+  #g1 { left: 1370px; top: 215px; height: 150px; } #g1 .tab { background: var(--blue); }
+  #g2 { left: 1370px; top: 405px; height: 110px; } #g2 .tab { background: var(--amber); }
+  .ok { position: absolute; right: 18px; bottom: -30px; font-size: 34px; padding: 4px 18px; font-weight: 800; font-family: var(--display); }
+  #sheets { position: absolute; left: 1370px; top: 535px; width: 490px; height: 130px; }
+  .sh { position: absolute; width: 330px; height: 70px; box-sizing: border-box; padding: 0 20px; display: flex; align-items: center; border: 4px solid var(--ink); border-radius: 8px;
+        background: var(--cream); color: var(--ink); font-size: 32px; font-weight: 700; box-shadow: 4px 4px 0 var(--ink); }
+  #sh1 { left: 20px; top: 40px; } #sh2 { left: 36px; top: 24px; } #sh3 { left: 52px; top: 8px; }
+  #fp { left: 1370px; top: 668px; font-family: var(--mono); font-weight: 700; font-size: 25px; padding: 6px 18px; }
+  #more { left: 1370px; top: 722px; font-size: 30px; padding: 4px 16px; }
+  #mn { left: 1370px; top: 796px; width: 490px; height: 64px; padding: 0 28px; display: flex; align-items: center; font-size: 36px; font-weight: 700; }
+  #cp { position: absolute; right: 60px; top: 860px; box-sizing: border-box; padding: 10px 24px; background: var(--term); color: var(--cream);
+        border: 5px solid var(--ink); border-radius: 12px; box-shadow: 8px 8px 0 var(--ink); font-family: var(--mono); font-weight: 700; font-size: 25px; white-space: nowrap; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div class="chip" id="q" data-r="-2">一个 ticket，需要测哪些？</div>
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="w1" d="M852 277 H712"/>
+      <path id="w2" d="M852 422 H734"/>
+      <path id="w3" d="M852 567 H754"/>
+    </g>
+  </svg>
+
+  <div class="card ly" id="l1" data-r="-1"><div class="h">单元测试</div><div class="d" id="d1">不碰真的网络、真的数据库</div></div>
+  <div class="card ly" id="l2" data-r="1"><div class="h">集成测试</div><div class="d" id="d2">接真的服务、真的数据库</div></div>
+  <div class="card ly" id="l3" data-r="-0.8"><div class="h">e2e 测试</div><div class="d" id="d3">真浏览器、真进程、真设备</div></div>
+
+  <div class="card" id="dv" data-r="1.2"><div class="tab" data-r="-3">以后专门聊一期</div>
+    <div class="a">用什么工具 · 环境怎么搭 →</div><div class="c">/sdflow-devenv</div></div>
+
+  <div class="card" id="tk" data-r="0.8"><div class="t">一个 ticket</div>
+    <div class="rw" id="ru">单元 · 每个都跑</div>
+    <div class="rw" id="rd">集成 · 只跑改动相关的</div>
+    <div class="rw" id="re"><span><b>[e2e]</b>标了才跑</span></div>
+  </div>
+  <div class="nr" id="n1" data-r="0">例：改推送 → 跑推送的集成测试</div>
+  <div class="nr" id="n2" data-r="0"><s>存储相关的测试</s>不跑</div>
+  <div class="nr" id="n3" data-r="0"><s>配置相关的测试</s>不跑</div>
+
+  <div class="chip" id="rv" data-r="2">双轴审</div>
+  <div class="card ag" id="g1" data-r="-1"><div class="tab" data-r="-3">规格轴 · agent</div><div class="tx">对着规格<br>验收项、需求编号</div><div class="chip ok" id="ok1" data-r="3">✓ 通过</div></div>
+  <div class="card ag" id="g2" data-r="1"><div class="tab" data-r="2">规范轴 · agent</div><div class="tx">对着规范 + 领域清单</div><div class="chip ok" id="ok2" data-r="-3">✓ 通过</div></div>
+  <div id="sheets">
+    <div class="sh" id="sh3" data-r="0"></div><div class="sh" id="sh2" data-r="0"></div><div class="sh" id="sh1" data-r="0">领域清单</div>
+  </div>
+  <div class="chip" id="fp" data-r="-1">tdd-order:impl-before-test</div>
+  <div class="tag" id="more" data-r="2">前面的跑偏，就是这里查出来的</div>
+  <div class="card" id="mn" data-r="0.8">主会话：☑ 打勾</div>
+  <div id="cp" data-r="0">6876486 checkpoint(alarm-notify:task5-e2e-and-conventions)</div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    base: 0.0,    // 第 1 句：问题贴纸
+    ly: 4.88,      // 第 2 句：三层标题
+    d1: 8.48,     // 第 3 句：单元测试说明（集成测试、e2e 测试说明按句内顺序 +3.4、+7.0）
+    dv: 18.88,     // 第 4 句：devenv 小卡
+    tk: 26.56,     // 第 5 句：ticket 卡落下
+    s6: 31.28,     // 第 6 句：单元 · 每个都跑
+    s7: 34.8,     // 第 7 句：集成 · 只跑改动相关的
+    s8: 39.84,     // 第 8 句：例子一行
+    s9: 45.04,     // 第 9 句：[e2e] → e2e
+    s10: 48.96,    // 第 10 句：无关的测试变灰
+    s11: 53.84,    // 第 11 句：双轴审、两个 agent、清单卡片
+    s12: 61.6,    // 第 12 句：指纹小卡「前面的跑偏，就是这里查出来的」
+    s13: 66.0     // 第 13 句：通过、打勾、提交
+  };
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = p >= 0.99 ? 'url(#ah)' : 'none';
+  }
+  function pop(id, p, dy) { T.enter(T.$(id), p, dy === undefined ? 12 : dy); }
+  // 同一时刻只亮一层：g 是这一层的亮度
+  function lit(id, from, to, t) { return T.ease(T.p(t, from, 0.4)) * (1 - T.ease(T.p(t, to, 0.4))); }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 70.900,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句
+      pop('q', P(t, AT.base, 0.5), 16);
+
+      // 第 2 句：三层标题；第 3 句：说明随口播出现
+      pop('l1', P(t, AT.ly, 0.45), 16); pop('l2', P(t, AT.ly + 1.0, 0.45), 16); pop('l3', P(t, AT.ly + 2.0, 0.45), 16);
+      pop('d1', P(t, AT.d1, 0.4), 8); pop('d2', P(t, AT.d1 + 3.4, 0.4), 8); pop('d3', P(t, AT.d1 + 7.0, 0.4), 8);
+
+      // 第 4 句：devenv
+      pop('dv', P(t, AT.dv, 0.5), 14);
+
+      // 第 5 句：ticket 卡落下；第 6、7、9 句：一行一行亮，连到各层
+      pop('tk', P(t, AT.tk, 0.5), 14);
+      pop('ru', P(t, AT.s6, 0.4)); wire(T.$('w1'), E(P(t, AT.s6 + 0.3, 0.4)));
+      pop('rd', P(t, AT.s7, 0.4)); wire(T.$('w2'), E(P(t, AT.s7 + 0.3, 0.4)));
+      pop('re', P(t, AT.s9, 0.4)); wire(T.$('w3'), E(P(t, AT.s9 + 0.3, 0.4)));
+      T.current(T.$('l1'), lit('l1', AT.s6, AT.s7, t), 10);
+      T.current(T.$('l2'), lit('l2', AT.s7, AT.s9, t), 10);
+      T.current(T.$('l3'), lit('l3', AT.s9, AT.s10, t), 10);
+
+      // 第 8 句：例子一行
+      pop('n1', P(t, AT.s8 + 0.4, 0.4), 8);
+      // 第 10 句：无关的测试变灰
+      pop('n2', P(t, AT.s10, 0.35), 8); pop('n3', P(t, AT.s10 + 0.5, 0.35), 8);
+
+      // 第 11 句：双轴审
+      pop('rv', P(t, AT.s11 + 1.2, 0.45), 14);
+      pop('g1', P(t, AT.s11 + 4.0, 0.5), 14); pop('g2', P(t, AT.s11 + 5.5, 0.5), 14);
+      // 第 11 句末：叠起来的清单卡片，只露标题
+      ['sh3', 'sh2', 'sh1'].forEach(function (id, i) { pop(id, P(t, AT.s11 + 5.66 + i * 0.2, 0.4), 10); });
+      // 第 12 句：指纹小卡，标「前面的跑偏，就是这里查出来的」
+      pop('fp', P(t, AT.s12 + 0.3, 0.45), 10);
+      pop('more', P(t, AT.s12 + 0.9, 0.4), -8);
+      // 第 13 句：通过，打勾，提交
+      pop('ok1', P(t, AT.s13, 0.35), -8); pop('ok2', P(t, AT.s13 + 0.4, 0.35), -8);
+      pop('mn', P(t, AT.s13 + 1.2, 0.45), 12); pop('cp', P(t, AT.s13 + 2.2, 0.45), 12);
+    }
+  });
+</script>
+</body>
+</html>

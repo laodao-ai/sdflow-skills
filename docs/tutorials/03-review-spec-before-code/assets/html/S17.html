@@ -1,0 +1,271 @@
+<!doctype html>
+<!-- S17 · 录屏证据（实录 · 浏览器录屏 r3）· script 119–125「SDFlow 也是这种做法：评审完，也会出一个网页版的报告。……人要做的，就是答这三个问题，再看它主次判得对不对。」（7 句）
+     录像 assets/video/20261024-052237-main-review-review.mp4（OBS 整段，终端与浏览器两个场景；不进 git，页面用 ../../assets/video/ 找它）。
+     时间换算（2026-10-24 抽帧核实）：录像比 cast 早开约 48 秒，不是 53 秒。依据：粘回意见回车在录像 1877.0 秒、cast 1828.8 秒；
+       「复制意见」对话框在录像 1826.5 秒弹出，对上评审页记的 05:52:59。墙钟 = 05:23:21 + (录像秒 − 48)。
+     用到的录像段（评审页第 1 版，05:40:25 首次生成）：
+       - 停帧 1150 秒（05:40:23 后约 20 秒，页顶「生成于 2026-10-24T05:40:25-07:00 · 第 1 版」）
+       - 快进 1173.6–1256.7 秒，4 倍速，只取页面在动的段（10 fps 逐帧比对，前后各留 0.1 秒），作者停下读的地方剪掉：共 26.3 秒，放 6.6 秒；
+         滚过 fan-out、outside-voice、机械引用核，停在 1257 秒：决策登记区 · 拍板三问整表（报告第 65–75 行）
+       - 快进 1263.6–1311.1 秒，同样只取在动的段：共 11.6 秒，放 2.9 秒；停在 1311 秒：[需拍板] Q1 整块（报告第 77–92 行），这一帧一直静止到 1324 秒
+     裁切：源画面 x 300–1170、y 90–1048（页面正文一栏，去掉左边目录和右边意见栏），缩到 0.86。黄框坐标按源画面量（v1258、v1316 两帧），换算到裁切框里。
+     黄框与放大卡（visual-v4 4.7）：黄框先出现，0.4 秒后放大卡从黄框处长出到右侧；卡用页面的浅底。
+       黄框讲到下一处就淡出；卡和引线留着，放得下就一起留，放不下时新卡出来前先收最早的，只让出新卡要的位置。
+       页头：2.32 秒起页头随录像滚走，卡和引线 2.32–2.67 秒一起收起（原文滚出窗口的卡一起收起）。
+       三问：三张卡在右侧上下叠开（y 120 / 313 / 506），一起留到 15.08 秒；15.08 秒录像再滚，三问滚走，三张一起收起。
+       Q1（18.06 秒起录像静止到页末）：右侧 y 40–911 只放得下三张。选项 A、B 在 y 40，第 81 行在 y 441，第 86 行在 y 684，三张共存；
+         23.48 秒三镜（高 544）要上面两张的位置，收起选项 A、B 和第 81 行，第 86 行留着；
+         30.04 秒主次判定（高 321）要的位置得避开 34.84 秒出现的末句一行（10-25 移到 y 700 起、右下），收起最早的第 86 行还不够，三镜也收起；主次判定在 y 150，留到页末。
+       压暗：独立一层（#dim），在录像之上、黄框之下，洞跟着当前黄框，黄框淡出后洞也压暗；有卡在画面上就一直压暗约 0.35。
+       放大卡文字照页面（= r3 报告 2e84aeb）原文，长句不截。对应报告行：页头 → 第 71、72、73 行三问 → 第 82–90 行选项 A、B（一张卡）
+       → 第 81 行（D10 当初的拍板理由，旁标「查来历」）→ 第 86 行（「推荐未亲验」，旁标「推荐要验过」）→ 第 83–85 行三镜 → 第 91 行主次判定。
+     句子与动画节点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒；
+       句起点：119 句 0，120 句 6.24，121 句 15.28，122 句 18.32，123 句 23.68，124 句 30.24，125 句 34.88，页时长 40.56）：
+       119 句 页顶停帧，页头加黄框，放大卡「第 1 版」；2.32 秒起快进往下滚（「4 倍速」贴纸只在快进时显示）
+       120 句 快进 9.32 秒前停在拍板三问；念到「范围认不认」「依赖和顺序认不认」「风险和对策认不认」三问依次加黄框放大（9.32 / 10.52 / 12.28 秒），三张卡叠开留着
+       121 句 15.08 秒起再快进到 Q1，18.06 秒停住（Q1 标题不单独放大，作者 10-24 定）
+       122 句 18.12 秒选项 A、B（第 82–90 行）一个黄框一张卡；19.72 秒第 81 行；21.88 秒第 86 行；三张卡共存
+       123 句 23.48 秒起选项 A 的三镜三行加黄框放大
+       124 句 30.04 秒起主次判定加黄框放大，黄框和卡留到页末
+       125 句 34.84 秒起右下一行「人：答三问 · 判主次」
+     配色：录屏原样；「实录」标签墨底；放大卡奶白底墨字，不加色边，重点加粗加下划线；「查来历」「推荐要验过」两个小标签用蓝（规格一侧的评审规则）；黄只给当前（黄框和它的引线）。
+     一页一层：窗口从头到尾在，只有录像滚动、黄框移动、放大卡按上面的规则留和收；最后一帧是 Q1 整块 + 主次判定的黄框、引线与放大卡 + 末句一行。
+     10-25 版面：末句标签 54px 移到右半下方（y 700），主次判定卡字号 42px、下移到 y 230，右半上下平衡，标签不进字幕带。
+     窗口不倾斜，标签和倍速贴纸倾斜。内容整体在 y 920 以内，避开底部字幕带。
+     引线（visual-v4 4.7，10-24 起）：每张放大卡一根，用 theme.js 的 T.lead，画在 #leads 层（窗口和压暗之上、放大卡之下）。
+       黄色 2px，黄框离卡最近的角 → 卡离黄框最近的角；随卡展开从黄框一端擦出，卡收起时一起缩回黄框。layout() 在卡没有位移和缩放时量矩形。 -->
+<html lang="zh-CN" data-frame-id="S17">
+<head>
+<meta charset="utf-8">
+<title>S17 · 网页版报告：三问与需拍板（r3 录屏）</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 录像窗口：内尺寸 748 x 824（源 870 x 958 缩 0.86） */
+  #win { left: 56px; top: 76px; width: 760px; height: 836px; overflow: visible; background: #fff; }
+  #win .tab { top: -50px; font-size: 34px; padding: 4px 22px; }
+  #win .tab .m { font-family: var(--mono); font-weight: 500; font-size: 28px; margin-left: 14px; }
+  #spd { right: -34px; top: -36px; opacity: 0; }
+  .clip { position: absolute; left: 0; top: 0; width: 748px; height: 824px; overflow: hidden; border-radius: 8px; }
+  #rec { position: absolute; left: -258px; top: -77.4px; width: 1651.2px; height: 928.8px; }
+  .hl { position: absolute; box-sizing: border-box; border: 5px solid rgba(245,207,74,0); border-radius: 6px; opacity: 0; }
+  /* 压暗层：洞跟着当前黄框，3000px 阴影压暗洞外，裁切框 overflow 裁掉 */
+  #dim { position: absolute; border-radius: 6px; }
+
+  /* 放大卡：右侧空处，页面浅底，不加色边 */
+  .zc { position: absolute; left: 880px; top: 150px; width: 990px; box-sizing: border-box; padding: 24px 32px 26px; background: var(--cream); color: var(--ink);
+        border: 5px solid var(--ink); border-radius: 10px; box-shadow: 10px 10px 0 var(--ink); opacity: 0; z-index: 8; }
+  .zc .l { font-weight: 600; font-size: 36px; line-height: 1.45; }
+  .zc .l + .l { margin-top: 12px; }
+  .zc .s { font-weight: 600; font-size: 30px; line-height: 1.4; color: #555; }
+  .zc code { font-family: var(--mono); font-weight: 600; font-size: 32px; }
+  .zc b { font-weight: 800; }
+  .zc .k { font-weight: 800; text-decoration: underline; text-decoration-thickness: 4px; text-underline-offset: 7px; }
+  .zc .yn { font-family: var(--mono); font-weight: 600; font-size: 34px; }
+  .zc .lb { display: inline-block; margin-bottom: 12px; padding: 2px 16px; border: 4px solid var(--ink); border-radius: 8px; background: var(--blue);
+            font-family: var(--display); font-weight: 800; font-size: 32px; line-height: 1.2; }
+  .zc .pl { padding-left: 28px; }
+  /* 卡的位置：共存的卡上下叠开，不重叠，不进 y 930 以下 */
+  #z1 { top: 120px; } #z2 { top: 313px; } #z3 { top: 506px; }
+  #z5 { top: 40px; } #z6 { top: 441px; } #z7 { top: 684px; } #z8 { top: 40px; } #z9 { top: 230px; }
+  #z9 .l { font-size: 42px; line-height: 1.5; } #z9 code { font-size: 38px; }
+
+  #tag { left: 1290px; top: 700px; font-family: var(--display); font-weight: 800; font-size: 54px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip" id="clip">
+      <video id="rec" src="../../assets/video/20261024-052237-main-review-review.mp4" muted preload="auto" playsinline></video>
+      <div id="dim"></div>
+      <div class="hl" id="b0"></div>
+      <div class="hl" id="b1"></div><div class="hl" id="b2"></div><div class="hl" id="b3"></div>
+      <div class="hl" id="b5"></div><div class="hl" id="b6"></div>
+      <div class="hl" id="b7"></div><div class="hl" id="b8"></div><div class="hl" id="b9"></div>
+    </div>
+    <div class="tab ink">实录<span class="m">评审页 design-gate.html</span></div>
+    <div class="speed" id="spd">4 倍速</div>
+  </div>
+
+  <!-- 引线（visual-v4 4.7）：每张卡一根，T.lead 画进这一层；z-index 7，在窗口之上、放大卡（8）之下 -->
+  <svg class="abs" id="leads" viewBox="0 0 1920 1080" aria-hidden="true" style="left:0;top:0;width:1920px;height:1080px;z-index:7"></svg>
+
+  <!-- 放大卡：放得下就留着，放不下先收最早的（见页头注释），文字照页面原文 -->
+  <div class="zc" id="z0" data-r="0">
+    <div class="l"><b>设计门评审 · alarm-notify</b></div>
+    <div class="s">生成于 2026-10-24T05:40:25-07:00 · <span class="k">第 1 版</span></div>
+  </div>
+  <div class="zc" id="z1" data-r="0">
+    <div class="l"><b>Q-scope</b> <span class="k">范围划界认不认？</span></div>
+    <div class="l yn">[ ] 认  [ ] 不认</div>
+  </div>
+  <div class="zc" id="z2" data-r="0">
+    <div class="l"><b>Q-deps</b> <span class="k">依赖 / 顺序认不认？</span></div>
+    <div class="l yn">[ ] 认  [ ] 不认</div>
+  </div>
+  <div class="zc" id="z3" data-r="0">
+    <div class="l"><b>Q-risk</b> <span class="k">风险赌注与对策认不认？</span></div>
+    <div class="l yn">[ ] 认  [ ] 不认</div>
+  </div>
+  <div class="zc" id="z5" data-r="0">
+    <div class="l"><span class="k">选项 A（推荐）</span>：下限定为 <code>1m</code>。RUN-03 的冷却非法条件改为「不是合法 Go duration，或小于 1 分钟」，报错文案同步说明下限。</div>
+    <div class="l"><span class="k">选项 B</span>：维持「大于 0」，只把 NFR 表改成如实描述（已按此临时改写 design NFR 行），并把「冷却配得过小会撞限流」记为接受的风险。</div>
+  </div>
+  <div class="zc" id="z6" data-r="0">
+    <div class="lb">查来历</div>
+    <div class="l"><span class="k">D10 当初拒绝「冷却为 0」的理由</span>是「每条都推必撞限流」，同一理由对 <code>1ns</code> 一样成立。</div>
+  </div>
+  <div class="zc" id="z7" data-r="0">
+    <div class="lb">推荐要验过</div>
+    <div class="l">可行性：与 <code>config.Load</code> 现有阈值校验同构，一个比较加一条哨兵错误。<span class="k">推荐未亲验。</span></div>
+  </div>
+  <div class="zc" id="z8" data-r="0">
+    <div class="s">选项 A（推荐）</div>
+    <div class="l pl"><span class="k">系统镜</span>：单设备最多每分钟 1 条，与 20 条每分钟的限流同一量级；同一设备同时在途永远不超过 1 个，NFR 可以写成确定上界。</div>
+    <div class="l pl"><span class="k">用户镜</span>：值班的人不会被同一设备刷屏。演示时若想看到「冷却过后再推」，最短也要等 1 分钟。</div>
+    <div class="l pl"><span class="k">开发循环镜</span>：<code>TM_NOTIFY_COOLDOWN=90s</code> 等场景照旧可用；需要短冷却的测试本来就在 <code>notify</code> 包内用注入时钟做，不受影响。</div>
+  </div>
+  <div class="zc" id="z9" data-r="0">
+    <div class="l"><b>主次判定</b>：<span class="k">用户镜与系统镜为主。</span>误配一次的代价是整个群被刷屏、后续推送因限流全部失败，而选项 A 的代价只是演示时多等几十秒 ⇒ 推荐 A。下限具体取 <code>1m</code> 还是更短（如 <code>10s</code>），取决于你演示时想不想用短冷却，这一点只有你知道。</div>
+  </div>
+
+  <div class="tag" id="tag" data-r="3">人：答三问 · 判主次</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 录像怎么放：at 是页内秒。hold = 停在源画面第几秒；play = 依次放这些段，speed 倍速，放完停在最后一段的末尾。
+  var TRACK = [
+    { at: 0, hold: 1150 },
+    { at: 2.32, speed: 4, play: [[1173.6, 1174.8], [1175.2, 1175.6], [1176.4, 1177.6], [1178.9, 1179.4], [1180.7, 1181.5], [1184.7, 1187.5],
+                                [1190.6, 1191.8], [1193.5, 1194.2], [1199.6, 1205.7], [1207.1, 1207.4], [1215.7, 1216.5], [1217.2, 1218.9],
+                                [1225.2, 1226.9], [1231.2, 1232.3], [1236.4, 1237.4], [1249.0, 1252.5], [1254.8, 1255.7], [1256.3, 1257.0]] },
+    { at: 15.08, speed: 4, play: [[1263.6, 1264.4], [1273.4, 1275.5], [1275.9, 1276.5], [1277.7, 1278.1], [1279.9, 1280.4], [1282.0, 1282.5],
+                                 [1288.1, 1290.2], [1298.6, 1299.5], [1299.9, 1300.8], [1307.4, 1308.1], [1308.6, 1310.4], [1310.8, 1311.4]] }
+  ];
+  // 源画面裁切：x 300 起、y 90 起，缩 0.86
+  var X0 = 300, Y0 = 90, S = 0.86;
+  // 黄框（源画面坐标 x1, y1, x2, y2）与放大卡、时段（页内秒）。boxEnd 是黄框淡出（讲到下一处），to 是卡和引线收起（收起动画在 to 前 0.35 秒开始），null 留到页末。
+  var KEYS = [
+    { b: 'b0', z: 'z0', r: [314, 108, 622, 178],   from: 0.2,  boxEnd: 2.32, to: 2.67 },  // 119 句：页头「第 1 版」（1150 帧）；2.32 秒起页头滚走，卡随之收起
+    { b: 'b1', z: 'z1', r: [321, 531, 1152, 642],  from: 9.32, boxEnd: 10.52, to: 15.08 },  // 120 句「范围认不认」（1257 帧）；15.08 秒三问滚走
+    { b: 'b2', z: 'z2', r: [321, 643, 1152, 754],  from: 10.52, boxEnd: 12.28, to: 15.08 },  // 「依赖和顺序认不认」
+    { b: 'b3', z: 'z3', r: [321, 755, 1152, 866],  from: 12.28, to: 15.08 },               // 「风险和对策认不认」
+    { b: 'b5', z: 'z5', r: [354, 295, 1154, 646],  from: 18.12, boxEnd: 19.72, to: 23.48 },  // 122 句：选项 A、B（第 82–90 行），一张卡（1316 帧）；三镜要位置时收起
+    { b: 'b6', z: 'z6', r: [464, 265, 1100, 296],  from: 19.72, boxEnd: 21.88, to: 23.48 },  // 第 81 行：D10 当初的理由；同上
+    { b: 'b7', z: 'z7', r: [394, 484, 1024, 512],  from: 21.88, boxEnd: 23.48, to: 30.04 },  // 第 86 行：推荐未亲验；主次判定要位置时收起
+    { b: 'b8', z: 'z8', r: [394, 349, 1154, 484],  from: 23.48, to: 30.04 },               // 123 句：三镜；同上
+    { b: 'b9', z: 'z9', r: [354, 647, 1154, 729],  from: 30.04, to: null }                // 124 句：主次判定，留到页末
+  ];
+  var ON = [];   // 每个黄框当前的亮度，dim() 用
+  var CUE = { tag: 34.84 };   // 125 句：末句一行
+  var P = T.p, E = T.ease;
+  var video = T.$('rec');
+
+  function srcAt(t) {
+    var e = TRACK[0];
+    for (var i = 0; i < TRACK.length; i++) if (TRACK[i].at <= t) e = TRACK[i];
+    if (e.hold !== undefined) return { src: e.hold, fast: false };
+    var left = (t - e.at) * e.speed;
+    for (var j = 0; j < e.play.length; j++) {
+      var a = e.play[j][0], b = e.play[j][1];
+      if (left <= b - a) return { src: a + left, fast: true };
+      left -= b - a;
+    }
+    return { src: e.play[e.play.length - 1][1], fast: false };
+  }
+  // 定位到 sec 秒，等 seeked 再等一帧，确保这一帧已经画到屏上（同 frames/screen.html）
+
+  // Public copy: map source timestamps to the exported excerpts.
+  function publicVideoTime(sec) {
+    var ranges = [[1150.0, 1150.0666666666666, 0], [1173.6, 1174.8666666666666, 0.066667], [1175.2, 1175.6666666666667, 1.333334], [1176.4, 1177.6666666666667, 1.800001], [1178.9, 1179.4666666666667, 3.066668], [1180.7, 1181.5666666666666, 3.6333349999999998], [1184.7, 1187.5666666666666, 4.500001999999999], [1190.6, 1191.8666666666666, 7.366669], [1193.5, 1194.2666666666667, 8.633336], [1199.6, 1205.7666666666667, 9.400003], [1207.1, 1207.4666666666667, 15.56667], [1215.7, 1216.5666666666666, 15.933337], [1217.2, 1218.9666666666667, 16.800004], [1225.2, 1226.9666666666667, 18.566671], [1231.2, 1232.3666666666666, 20.333337999999998], [1236.4, 1237.4666666666667, 21.500004999999998], [1249.0, 1252.5666666666666, 22.566671999999997], [1254.8, 1255.7666666666667, 26.133338999999996], [1256.3, 1257.0666666666666, 27.100005999999997], [1263.6, 1264.4666666666667, 27.866673], [1273.4, 1275.5666666666666, 28.73334], [1275.9, 1276.5666666666666, 30.900007], [1277.7, 1278.1666666666667, 31.566674], [1279.9, 1280.4666666666667, 32.033341], [1282.0, 1282.5666666666666, 32.600008], [1288.1, 1290.2666666666667, 33.166675000000005], [1298.6, 1299.5666666666666, 35.333342], [1299.9, 1300.8666666666666, 36.300009], [1307.4, 1308.1666666666667, 37.266676000000004], [1308.6, 1310.4666666666667, 38.033343], [1310.8, 1311.4666666666667, 39.90001], [1364.0, 1371.0666666666666, 40.566677], [1666.0, 1673.5666666666666, 47.633344], [1822.0, 1830.0666666666666, 55.200011], [1871.0, 1879.0666666666666, 63.266678000000006], [1884.0, 1884.0666666666666, 71.33334500000001], [1902.0, 1905.5666666666666, 71.400012], [1908.5, 1909.5666666666666, 74.966679], [1915.5, 1916.6666666666667, 76.033346], [2121.0, 2121.0666666666666, 77.200013], [2204.2, 2208.266666666667, 77.26668], [2229.0, 2232.0666666666666, 81.33334699999999]];
+    for (var i=0;i<ranges.length;i++) { var r=ranges[i]; if(sec>=r[0]-0.001 && sec<=r[1]+0.001) return r[2]+sec-r[0]; }
+    throw new Error("Unexported video time: "+sec);
+  }
+
+  function seekVideo(sec) {
+    sec = publicVideoTime(sec);
+    return new Promise(function (resolve) {
+      // 两帧：seeked 之后视频帧要再过一个合成周期才画到屏上（10-25 加一帧，防截图拿到上一帧）
+      function painted() { requestAnimationFrame(function () { requestAnimationFrame(function () { resolve(); }); }); }
+      if (Math.abs(video.currentTime - sec) < 0.001 && video.readyState >= 2) { painted(); return; }
+      video.addEventListener('seeked', painted, { once: true });
+      video.currentTime = sec;
+    });
+  }
+  function loaded() {
+    return new Promise(function (resolve) {
+      if (video.readyState >= 1) { resolve(); return; }
+      video.addEventListener('loadedmetadata', function () { resolve(); }, { once: true });
+    });
+  }
+
+  // 黄框摆到裁切框里；放大卡记下从黄框中心长出的位移；每张卡配一根引线（T.lead）
+  var GEO = [];
+  function layout() {
+    KEYS.forEach(function (c, i) {
+      var b = T.$(c.b), r = c.r, pad = 6;
+      b.style.left = ((r[0] - X0) * S - pad) + 'px';
+      b.style.top = ((r[1] - Y0) * S - pad) + 'px';
+      b.style.width = ((r[2] - r[0]) * S + 2 * pad) + 'px';
+      b.style.height = ((r[3] - r[1]) * S + 2 * pad) + 'px';
+      var z = T.$(c.z); z.style.transform = 'none';   // 卡没有位移和缩放时量
+      var box = T.rect(b), card = T.rect(z);
+      GEO[i] = { dx: (box.x + box.w / 2) - (card.x + card.w / 2), dy: (box.y + box.h / 2) - (card.y + card.h / 2), lead: T.lead(box, card) };
+    });
+  }
+  // 压暗的时段：卡在画面上的时段并起来（相隔不到 0.5 秒的也并上），交接时压暗不断
+  var SPANS = [];
+  KEYS.forEach(function (c) {
+    var last = SPANS[SPANS.length - 1];
+    if (last && (last.to === null || c.from - last.to < 0.5)) last.to = (last.to === null || c.to === null) ? null : Math.max(last.to, c.to);
+    else SPANS.push({ from: c.from, to: c.to });
+  });
+  function dim(t) {
+    var d = 0, cur = 0;
+    SPANS.forEach(function (s) {
+      d = Math.max(d, E(P(t, s.from + 0.4, 0.6)) * (s.to === null ? 1 : 1 - E(P(t, s.to - 0.35, 0.3))));
+    });
+    for (var i = 0; i < KEYS.length; i++) if (KEYS[i].from <= t) cur = i;
+    var b = T.$(KEYS[cur].b), m = T.$('dim');   // 洞放在当前黄框的位置
+    m.style.left = b.style.left; m.style.top = b.style.top; m.style.width = b.style.width; m.style.height = b.style.height;
+    m.style.boxShadow = '0 0 0 3000px rgba(22,22,22,' + (0.35 * d) + ')';
+    m.style.background = 'rgba(22,22,22,' + (0.35 * d * (1 - ON[cur])) + ')';   // 黄框淡出后，洞里也压暗
+  }
+  function key(i, t) {
+    var c = KEYS[i], g = GEO[i];
+    var out = c.to === null ? 0 : E(P(t, c.to - 0.35, 0.3));
+    var boxOut = c.boxEnd === undefined ? out : E(P(t, c.boxEnd - 0.3, 0.3));
+    var on = E(P(t, c.from, 0.3)) * (1 - boxOut);
+    var inn = E(P(t, c.from + 0.4, 0.6)), k = inn * (1 - out);
+    var b = T.$(c.b);
+    ON[i] = on;
+    b.style.opacity = on > 0.01 ? 1 : 0;
+    b.style.borderColor = 'rgba(245,207,74,' + on + ')';
+    b.style.boxShadow = '0 0 24px rgba(245,207,74,' + (0.6 * on) + ')';   // 压暗在 #dim 层，见 dim()
+    var z = T.$(c.z), s = 0.3 + 0.7 * inn;
+    z.style.opacity = k;
+    z.style.transform = 'translate(' + ((1 - inn) * g.dx) + 'px,' + ((1 - inn) * g.dy) + 'px) scale(' + s + ')';
+    // 引线：和卡同步展开，卡收起时一起缩回黄框
+    T.leadDraw(g.lead, k);
+  }
+
+  Stage({
+    duration: 40.56,
+    init: function () {
+      return Promise.all([loaded(), T.fonts('实录评审页倍速设计门第版生成于范围划界认不依赖顺序风险赌注与对策要设下限来源对抗镜簇置信中选项推荐定为冷却非法条件改是合法或小分钟报错文案同步说明维持大只把表成如实描述已按此临时写行并配得过会撞限流记接受的查历当初拒绝理由每条都必一样立可行性现有阈值校验同构个比较加哨兵错误未亲验要验过系统用户开发循环单设备最多量级同时在途永远超确界值班人被刷屏演示若想看到后再短也等场景照旧需测试本就包内注入钟做影响主次判误配一代价整群续全部失败而只多几十秒具体取还更如决你这点有知道答判')])
+        .then(layout);
+    },
+    render: function (t) {
+      T.enter(T.$('win'), P(t, 0, 0.4), 14);
+      var s = srcAt(t);
+      T.$('spd').style.opacity = s.fast ? 1 : 0;
+      for (var i = 0; i < KEYS.length; i++) key(i, t);
+      dim(t);
+      T.enter(T.$('tag'), P(t, CUE.tag, 0.45), -12);
+      return seekVideo(s.src);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!doctype html>
+<!-- S44c · 终端 · script 221–222「再敲 `/opsx:archive` 命令，它问要不要把这次的规格并进主规格，我选了推荐的那项。……以后谁再改这一块代码，都照这份规格来核对。」
+     cast 04-openspec-verify-archive 回放秒 70.6–100.3，4 倍速（标「4 倍速」），中途在 81.5 停帧 2.55 秒，放完停在最后一帧（停 4.045 秒，总长 14.02 秒，画面时长按实测）。
+     区间按回放核准（2026-10-06）：作者实际发的是「commit this and archive the change」（62.75 敲、67.75 发出），
+     AI 先提交 tasks.md，70 载入 Skill(/opsx:archive)；81.5「All checks pass—4/4 artifacts done and 6/6 tasks complete.」
+     和提问「Sync the delta spec into main specs before archiving?」，光标在「1. Sync now (Recommended)」；
+     85.25 选了 Sync now；92.5 建 openspec/specs/over-temperature-alert/spec.md 并严格校验；96 移到 archive；
+     99.5「Archive Complete」。100.75 起作者在输入框敲「push it to origin」（本帧不发），画面停在 100.3，不让它出现。
+     - 起点取 70.6：70.0–70.5 屏上展开着 AI 的提交命令，里面有「Co-Authored-By: Claude …」带模型名，70.5 收成「Ran 1 shell command」。
+       这时「❯ commit this and archive the change」和「Skill(/opsx:archive)」都已在屏上。
+     - 停帧（倍速角标未另标）：同步提问只在 81.5–85.25 在屏上，4 倍速下不到 1 秒；81.5 停 2.55 秒，盖住「它问……我选了推荐的那项」。
+     - 底部状态栏：按行文字找（Cost $ / Context / Usage），从那一行盖到底。提问框弹出时状态栏被提问框顶掉，屏上没有。
+     - 输入框：本区间输入框是空的，不用盖。
+     - 框（黄色只给当前一个，下一个亮起后降成淡灰框）：
+       ① 「Skill(/opsx:archive)」（第 221 句「再敲 /opsx:archive」）
+       ② 「All checks pass—4/4 artifacts done and 6/6 tasks complete.」（只框这几个字）
+       ③ 同步提问到「1. Sync now (Recommended)」（「它问要不要……我选了推荐的那项」）；选完后提问收成一行
+          「Sync the delta spec into main specs before archiving? → Sync now (Recommended)」，框跟着落到这一行
+       ④ 「Archive Complete」到「Specs: ✓ Synced to main specs. The new openspec/specs/over-temperature-alert/spec.md …
+          passes openspec validate --specs --strict.」（第 222 句，留到结尾）
+     框的出现时间按实测（2026-10-06，frame-times.py）：取口播开口秒和这些行在回放里出现的秒，两者里晚的那个。
+       ① 0.00（再敲 archive：口播 0.00，Skill 行从第 0 秒就在屏上）
+       ② 没有对应口播（口播没提「All checks pass」），时刻原样留着（2.8 / 3.6），待主会话定；
+          这行和③的提问同在 2.7 秒出现
+       ③ 2.7（它问要不要……：口播「它问」1.52，提问 2.7 才出现）
+       ④ 9.75（第 222 句：口播 7.20，Archive Complete 9.75 才出现）
+     窗口本身不倾斜，只让标签倾斜（终端要能读）。 -->
+<html lang="zh-CN" data-frame-id="S44c">
+<head>
+<meta charset="utf-8">
+<title>S44c · 归档</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 让出底部字幕带（y ≥ 940，visual-v4 §4.1）：窗口上移、整体缩到 0.947，30 行都留着。 */
+  .window { left: 150px; top: 72px; width: 1620px; height: 908px; padding: 18px 20px; overflow: visible; transform: scale(0.947); transform-origin: 50% 0; }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 872px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: 0; width: 1580px; height: 1004px; }
+  /* 播放器暂停时会画播放按钮和加载圈；画面不可交互，全部藏掉。 */
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  /* 终端底色跟随主题，盖过 cast 自带的底色。 */
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  .mask { position: absolute; right: 0; background: #1b1b1d; display: none; }
+  .qbox { position: absolute; left: 6px; width: 1568px; box-sizing: border-box; border: 5px solid transparent; border-radius: 8px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .window .speed { right: -30px; top: -34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip" id="clip">
+      <div id="term"></div>
+      <div class="qbox" id="b1"></div>
+      <div class="qbox" id="b3"></div>
+      <div class="qbox" id="b4"></div>
+    </div>
+    <div class="speed" id="spd">4 倍速</div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+  </div>
+</div>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/04-openspec-verify-archive.js"></script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 画面秒 → 回放秒的分段表：相邻两点之间线性插值；回放秒相同 = 停帧，画面秒相同 = 剪接。
+  var KEYS = [[0, 70.6], [2.725, 81.5], [5.275, 81.5], [6.2125, 85.25], [9.775, 99.5], [9.975, 100.3]];
+  var HOLD = 4.045;   // 总长 = 画面时长 14.02 秒（时间轴，实测）。
+  var DURATION = KEYS[KEYS.length - 1][0] + HOLD;
+  var INPUT_MASK = false;   // 本区间输入框是空的；push it to origin 在 100.75 才出现，本帧到 100.3 为止。
+  var player;
+
+  var YELLOW = [245, 207, 74], RED = [229, 83, 75], GREEN = [76, 195, 138], DIM = [120, 118, 112];
+  // 每个框：alt 是候选 [起始行文字, 结束行文字或 null, 结束行找不到时往下多框几行]，按顺序取第一个找得到的。
+  // cols：只框起始行里从第一段文字开头到第二段文字结尾的那几个字（同一行里有两个要分开框的地方）。
+  // 「All checks pass」那行旁白没念，不框（2026-10-06 作者定）。
+  var BOXES = [
+    { box: 'b1', c: YELLOW, at: 0.0, next: 2.7, alt: [['Skill(/opsx:archive)', null, 0]] },
+    { box: 'b3', c: YELLOW, at: 2.7, next: 9.75, alt: [['Sync the delta spec into main specs before archiving?', '1. Sync now (Recommended)', 0]] },
+    { box: 'b4', c: YELLOW, at: 9.75, alt: [['Archive Complete', '--specs --strict', 0]] }
+  ];
+
+  function castAt(t) {
+    var c = KEYS[0][1];
+    for (var i = 1; i < KEYS.length; i++) {
+      var a = KEYS[i - 1], b = KEYS[i];
+      if (t >= b[0]) { c = b[1]; continue; }
+      if (b[0] > a[0]) c = a[1] + (b[1] - a[1]) * (t - a[0]) / (b[0] - a[0]);
+      break;
+    }
+    return c;
+  }
+
+  function lines() { return T.all('#term .ap-line'); }
+  function find(L, text, after) {
+    for (var i = after || 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 行在 .clip 里的上下沿（px，按 1920 宽的舞台坐标）。
+  function span(L, i0, i1) {
+    var clip = T.$('clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { top: (L[i0].getBoundingClientRect().top - clip.top) / k, bottom: (L[i1].getBoundingClientRect().bottom - clip.top) / k };
+  }
+  // 行里第 idx 个字在屏上的矩形：顺着文字节点数到第 idx 个字，用 Range 量。
+  function charRect(el, idx) {
+    var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), n, left = idx;
+    while ((n = w.nextNode())) {
+      if (left < n.length) {
+        var r = document.createRange();
+        r.setStart(n, left);
+        r.setEnd(n, left + 1);
+        return r.getBoundingClientRect();
+      }
+      left -= n.length;
+    }
+    return null;
+  }
+  // 一行里从 a 开头到 b 结尾的横向范围（px，.clip 坐标）。
+  function hspan(el, a, b) {
+    var s = el.textContent, i = s.indexOf(a), j = s.indexOf(b, i);
+    if (i < 0 || j < 0) return null;
+    var r0 = charRect(el, i), r1 = charRect(el, j + b.length - 1);
+    if (!r0 || !r1) return null;
+    var clip = T.$('clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { left: (r0.left - clip.left) / k, right: (r1.right - clip.left) / k };
+  }
+
+  // 要盖住的行：[起始行, 结束行, 左边留几个字符]。
+  function maskRows(L) {
+    var out = [];
+    for (var i = 0; i < L.length; i++) {
+      var s = L[i].textContent;
+      // 启动头：版本号、模型名和套餐、目录。
+      if (/Claude Code v\d/.test(s)) { out.push([Math.max(i - 1, 0), Math.min(i + 2, L.length - 1), 0]); }
+      else if (s.indexOf('· Claude Pro') >= 0) { out.push([i, Math.min(i + 1, L.length - 1), 0]); }
+    }
+    // 底部状态栏：从模型名 / 费用那一行盖到底。
+    for (var j = 0; j < L.length; j++) {
+      if (/Cost \$|Context\s+\d+%|Usage\s+\d+%/.test(L[j].textContent)) { out.push([j, L.length - 1, 0]); break; }
+    }
+    // 输入框里提前打好、当时还没发出去的字：留下「❯」，盖住后面的字。
+    if (INPUT_MASK) {
+      for (var k = L.length - 1; k > 0; k--) {
+        var t = L[k].textContent;
+        if (t.charAt(0) === '❯' && L[k - 1].textContent.indexOf('────') >= 0) {
+          if (t.slice(1).trim() && t.indexOf('Message @') < 0) out.push([k, k, 2]);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  function overlays(t) {
+    var L = lines();
+    var clip = T.$('clip');
+    var rows = maskRows(L);
+    var cw = 1580 / 120;
+    var masks = T.all('#clip .mask');
+    while (masks.length < rows.length) {
+      var d = document.createElement('div');
+      d.className = 'mask';
+      clip.insertBefore(d, T.$('b1'));
+      masks.push(d);
+    }
+    masks.forEach(function (m, n) {
+      if (n >= rows.length) { m.style.display = 'none'; return; }
+      var s = span(L, rows[n][0], rows[n][1]);
+      m.style.display = 'block';
+      m.style.left = (rows[n][2] * cw) + 'px';
+      m.style.top = s.top + 'px';
+      m.style.height = (s.bottom - s.top) + 'px';
+    });
+
+    BOXES.forEach(function (q) {
+      var box = T.$(q.box);
+      var i0 = -1, i1 = -1;
+      for (var a = 0; a < q.alt.length && i0 < 0; a++) {
+        i0 = find(L, q.alt[a][0]);
+        if (i0 < 0) continue;
+        i1 = q.alt[a][1] ? find(L, q.alt[a][1], i0) : -1;
+        if (i1 < 0) i1 = Math.min(i0 + q.alt[a][2], L.length - 1);
+      }
+      var h = (i0 >= 0 && q.cols) ? hspan(L[i0], q.cols[0], q.cols[1]) : null;
+      if (i0 < 0 || t < q.at || (q.cols && !h)) { box.style.opacity = 0; return; }
+      box.style.opacity = 1;
+      var s = span(L, i0, i1);
+      // 上下各留 4px，框线不压字；只框几个字时左右各留 10px。
+      box.style.top = (s.top - 4) + 'px';
+      box.style.height = (s.bottom - s.top + 8) + 'px';
+      if (h) {
+        box.style.left = (h.left - 10) + 'px';
+        box.style.width = (h.right - h.left + 20) + 'px';
+      }
+      // 当前这一个用自己的颜色；下一个亮起后降成淡灰框（讲过了）。
+      var on = T.ease(T.p(t, q.at, 0.35));
+      var next = q.next === undefined ? 0 : T.ease(T.p(t, q.next, 0.35));
+      var g = on * (1 - next);
+      var rgb = q.c.join(',');
+      box.style.borderColor = next > 0 ? T.mix(q.c, DIM, next) : 'rgba(' + rgb + ',' + g + ')';
+      box.style.boxShadow = '0 0 40px rgba(' + rgb + ',' + (0.45 * g) + '), inset 0 0 24px rgba(' + rgb + ',' + (0.25 * g) + ')';
+    });
+  }
+
+  Stage({
+    duration: DURATION,
+    init: function () {
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS['04-openspec-verify-archive'] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      return T.fonts('实录倍速');
+    },
+    render: function (t) {
+      T.enter(T.$('spd'), T.p(t, 0, 0.4), -12);
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位遮罩和框。
+      return Promise.resolve(player.seek(castAt(t)))
+        .then(function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); })
+        .then(function () { overlays(t); });
+    }
+  });
+</script>
+</body>
+</html>

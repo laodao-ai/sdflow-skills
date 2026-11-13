@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- S20 · 录屏证据 · script 78–80「聊完，它问我要不要先记成一个 change。……还是没写代码。」
+     OBS 录像 assets/video/01-openspec-explore-ff.mp4，实际秒 185–221，4 倍速，播 9 秒，放完停在最后一帧。
+     区间按回放核准（2026-10-04）：185 秒作者刚敲下「yes, capture it as a change」；
+     221 秒 proposal 与 spec 都写完，AI 汇报「建了 change，没写代码也没写任务」。
+     分镜原写 188–210 秒 3 倍速：210 秒时 spec 还没写，所以改了区间，倍速随之到 4（上限内）。
+     - 裁掉 Ghostty 的标签栏和底部状态栏（模型名、用量），只留对话区和输入框。
+     - 窗口不倾斜，标签和倍速贴纸倾斜。 -->
+<html lang="zh-CN" data-frame-id="S20">
+<head>
+<meta charset="utf-8">
+<title>S20 · capture change</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 让出底部字幕带（y ≥ 940，visual-v4 §4.1）：窗口上移、整体缩到 0.947，30 行都留着。 */
+  .window { left: 240px; top: 72px; width: 1440px; height: 902px; overflow: visible; transform: scale(0.947); transform-origin: 50% 0; }
+  /* 源画面裁切框：源 1920×1080 中 x 290–1630、y 100–925，放大 1400/1340。 */
+  .clip { position: absolute; left: 14px; top: 14px; width: 1400px; height: 862px; overflow: hidden; border-radius: 6px; }
+  #rec { position: absolute; left: -303px; top: -104px; width: 2006px; height: 1128px; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .window .speed { right: -30px; top: -34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip"><video id="rec" src="../../assets/video/01-openspec-explore-ff.mp4" muted preload="auto" playsinline></video></div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+    <div class="speed" id="spd">4 倍速</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var REC_START = 0, REC_END = 36, SPEED = 4;
+  var video = T.$('rec');
+
+  // 定位到 sec 秒，等 seeked 再等一帧，确保这一帧已经画到屏上。
+  function seekVideo(sec) {
+    return new Promise(function (resolve) {
+      function painted() { requestAnimationFrame(function () { resolve(); }); }
+      if (Math.abs(video.currentTime - sec) < 0.001 && video.readyState >= 2) { painted(); return; }
+      video.addEventListener('seeked', painted, { once: true });
+      video.currentTime = sec;
+    });
+  }
+  function loaded() {
+    return new Promise(function (resolve) {
+      if (video.readyState >= 1) { resolve(); return; }
+      video.addEventListener('loadedmetadata', function () { resolve(); }, { once: true });
+    });
+  }
+
+  Stage({
+    duration: (REC_END - REC_START) / SPEED,
+    init: function () { return Promise.all([loaded(), T.fonts('实录倍速')]); },
+    render: function (t) {
+      T.enter(T.$('spd'), T.p(t, 0, 0.4), -12);
+      return seekVideo(Math.min(REC_START + t * SPEED, REC_END));
+    }
+  });
+</script>
+</body>
+</html>

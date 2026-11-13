@@ -1,0 +1,474 @@
+<!doctype html>
+<!-- S26 · 机制动画 · script 108–114「我们看示例项目这次生成的设计。……判漏了怎么兜，下一期我们会聊规格评审，到时候详细讨论。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排（原 111–123 句 → 108–114 句）；原 113–118 句逐张一句用途、逐张放大、
+     任务依赖「前三个任务一组 → 第四个」动画删去，压成新 109 句；秒数按每字约 0.27 秒重估，duration 63。
+     实录 · 示例项目：demo-temp-monitor 提交 fd14628，openspec/changes/alarm-notify/ 下三个文档里的八张 ASCII 图，
+     按原文结构重新排版（框、箭头、文字照原文，只精简排版，不加原文没有的节点），每张角标写「文件:行号」。
+     - 前半（108–109 句）：八张缩略图按文件分三组排开（蓝区 = 规格文档）：proposal 1 张 / design 5 张 / tasks 2 张。不放大。
+       · 108 句：页角「实录 · 示例项目」和三个文件区进场，八张缩略图进场。
+       · 109 句：念到哪个图名，对应缩略图加「当前」黄描边，念到下一个时移走：模块关系图（proposal.md:37-50）→
+         改动前后的组件图（design.md:30-49）→ 时序（:51-71）→ 决策（:88-109）→ 测试覆盖（tasks.md:42-59）→
+         「两张任务依赖」两张一起亮（design.md:277-281、tasks.md:61-67）。竞态时序图这句不亮。
+     - 后半（110–114 句）：念到「剩下那张」竞态时序图（design.md:73-86）放大成主画面，居中铺开，就用原图（文字照原样，含「冷却」），
+       只在原图上叠标识（作者 2026-10-18 定，不另起卡片）：
+       · 110 句：不加标识。
+       · 111 句「并发场景」：图左上角小标签「并发 → 多画一张」。
+       · 112 句「两条消息同时来了」：两条进来的请求箭头描黄（当前），A 那条线旁贴「先到 → 放行」，B 那条线旁贴「后到 → 被压下」；
+         「只推一次」：结果行（原图：只有 A 触发一次 Send）加黄框，旁标「只推一次」。
+       · 113–114 句：黄框淡出，右下角一张小卡「AI 判的，也会漏 → 下一期」。
+     - 颜色：蓝区只表示「规格文档」；其余墨色；黄 = 当前。不用红 / 绿。
+     - 所有动画节点集中在 AT、THUMB_CUR 和 ZOOM 里，按录音实测（frame-times.py，2026-10-19）。 -->
+<html lang="zh-CN" data-frame-id="S26">
+<head>
+<meta charset="utf-8">
+<title>S26 · 示例项目的八张图与竞态时序图</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 页角：整页都是示例项目的实录 */
+  #ptab { left: 60px; top: 40px; z-index: 30; }
+  #ptab .m { font-family: var(--mono); font-weight: 500; font-size: 28px; margin-left: 14px; }
+  #path { left: 610px; top: 56px; font-family: var(--mono); font-size: 30px; color: var(--ink); }
+
+  /* 三个文件区：蓝 = 规格文档 */
+  .grp { position: absolute; top: 200px; height: 610px; box-sizing: border-box;
+         background: var(--blue-fill); border: 6px solid var(--ink); border-radius: 12px; box-shadow: 16px 16px 0 var(--ink); }
+  .grp .tab { font-family: var(--mono); font-weight: 700; font-size: 38px; }
+  .cap { position: absolute; width: 310px; }
+  .cap .n { font-weight: 600; font-size: 30px; line-height: 36px; color: var(--cream); white-space: nowrap; }
+  .cap .r { font-family: var(--mono); font-size: 26px; line-height: 32px; color: var(--blue-soft); white-space: nowrap; }
+
+  /* 八张图：全尺寸 1440×760 画好，缩略 / 放大都靠 transform 缩放。数据图卡，不倾斜。 */
+  .fig { position: absolute; left: 0; top: 0; width: 1440px; height: 760px; box-sizing: border-box; transform-origin: 0 0;
+         background: var(--cream); border: 6px solid var(--ink); border-radius: 12px; box-shadow: 16px 16px 0 var(--ink); color: var(--ink); }
+  .fig .fh { position: absolute; left: 30px; top: 20px; font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 52px; white-space: nowrap; }
+  .fig .fh .sub { font-family: var(--body); font-weight: 600; font-size: 30px; margin-left: 10px; }
+  .fig .fr { position: absolute; right: 22px; top: 22px; padding: 4px 14px; border-radius: 6px;
+             background: var(--ink); color: var(--cream); font-family: var(--mono); font-weight: 600; font-size: 30px; }
+  .fig svg { position: absolute; left: 0; top: 92px; width: 1428px; height: 650px; overflow: visible; }
+  .fig text { font-family: var(--mono); font-size: 28px; fill: var(--ink); }
+  .fig svg.s26 text { font-size: 26px; }
+  .fig text.b { font-family: var(--body); font-weight: 600; }
+  .fig text.h { font-family: var(--display); font-weight: 800; }
+  .fig text.halo, .fig .halo text { paint-order: stroke; stroke: var(--cream); stroke-width: 10px; stroke-linejoin: round; }
+  .fig .bx { fill: var(--cream); stroke: var(--ink); stroke-width: 4; }
+  .fig .ln { fill: none; stroke: var(--ink); stroke-width: 4; }
+  .fig .ar { fill: none; stroke: var(--ink); stroke-width: 4; marker-end: url(#ah); }
+  .fig .ret { stroke-dasharray: 10 7; }
+  .fig .ll { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 8 8; opacity: .75; }
+  .inkf { fill: var(--ink); }
+
+  /* 测试覆盖图：原文是三列表格 */
+  .cov { position: absolute; left: 22px; top: 96px; width: 1384px; border-collapse: collapse; white-space: nowrap; }
+  .cov th { text-align: left; font-family: var(--body); font-weight: 600; font-size: 28px; padding: 0 8px 6px; border-bottom: 4px solid var(--ink); }
+  .cov td { font-family: var(--mono); font-size: 26px; line-height: 30px; padding: 3px 8px 2px; border-bottom: 2px dashed rgba(22,22,22,.35); vertical-align: top; }
+
+  /* 后半：竞态时序图（原图）上叠的标识。小标签 28px，贴近原图线条；位置由脚本按图内坐标算 */
+  .lab { z-index: 20; font-size: 28px; line-height: 36px; padding: 8px 18px; }
+  #lbConc { text-align: center; }
+  #corner { z-index: 20; font-size: 30px; line-height: 40px; padding: 10px 22px; }
+  #hiA, #hiB { fill: none; stroke: var(--yellow); stroke-width: 18; stroke-linecap: round; mix-blend-mode: multiply; opacity: 0; }
+  #hiRes { fill: none; stroke: var(--yellow); stroke-width: 8; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 共用箭头头 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <marker id="ah" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="18" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto"><path d="M1,1 L11,6 L1,11 z" class="inkf"/></marker>
+    <marker id="ahL" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="30" markerHeight="30" markerUnits="userSpaceOnUse" orient="auto"><path d="M1,1 L11,6 L1,11 z" class="inkf"/></marker>
+  </defs></svg>
+
+  <div class="tab ink" id="ptab">实录 · 示例项目<span class="m">fd14628</span></div>
+  <div class="abs" id="path">openspec/changes/alarm-notify/</div>
+
+  <!-- ===== 前半：三个文件区 + 八张缩略图的说明 ===== -->
+  <div class="grp" id="g0" style="left:75px;width:350px"><div class="tab os">proposal.md</div></div>
+  <div class="grp" id="g1" style="left:445px;width:1030px"><div class="tab os">design.md</div></div>
+  <div class="grp" id="g2" style="left:1495px;width:350px"><div class="tab os">tasks.md</div></div>
+
+  <div class="cap" id="c-fMod"><div class="n">模块关系图</div><div class="r">proposal.md:37-50</div></div>
+  <div class="cap" id="c-fComp"><div class="n">组件图 · 变更前后</div><div class="r">design.md:30-49</div></div>
+  <div class="cap" id="c-fPush"><div class="n">时序图 · 推送放行</div><div class="r">design.md:51-71</div></div>
+  <div class="cap" id="c-fRace"><div class="n">竞态时序图</div><div class="r">design.md:73-86</div></div>
+  <div class="cap" id="c-fDec"><div class="n">决策图 · 是否推送</div><div class="r">design.md:88-109</div></div>
+  <div class="cap" id="c-fSlice"><div class="n">任务依赖图</div><div class="r">design.md:277-281</div></div>
+  <div class="cap" id="c-fCov"><div class="n">测试覆盖图</div><div class="r">tasks.md:42-59</div></div>
+  <div class="cap" id="c-fDep"><div class="n">任务依赖图</div><div class="r">tasks.md:61-67</div></div>
+
+  <!-- 1. 模块关系图 proposal.md:37-50 -->
+  <div class="fig" id="fMod">
+    <div class="fh">模块关系图<span class="sub">（箭头 = 依赖方向）</span></div><div class="fr">proposal.md:37-50</div>
+    <svg viewBox="0 0 1428 650">
+      <rect class="bx" x="20" y="180" width="320" height="64"/><text x="36" y="222">cmd/temp-monitor</text>
+      <path class="ln" d="M340 212 H400 M400 32 V400"/>
+      <path class="ar" d="M400 32 H466"/><rect class="bx" x="470" y="0" width="300" height="64"/><text x="486" y="42">internal/config</text><text class="b" x="790" y="42">新键 + 校验</text>
+      <path class="ar" d="M400 124 H466"/><rect class="bx" x="470" y="92" width="300" height="64"/><text x="486" y="134">internal/redact</text><text class="b" x="790" y="134">多密钥脱敏</text>
+      <path class="ar" d="M400 216 H466"/><rect class="bx" x="470" y="184" width="300" height="64"/><text x="486" y="226">internal/notify</text><text class="b" x="790" y="226">新：钉钉适配器 + 冷却</text>
+      <path class="ar" d="M400 308 H466"/><rect class="bx" x="470" y="276" width="300" height="64"/><text x="486" y="318">internal/service</text><text class="b" x="790" y="318">超温时调用 notify 接口</text>
+      <path class="ar" d="M400 400 H466"/><rect class="bx" x="470" y="368" width="300" height="64"/><text x="486" y="410">internal/httpapi</text><text class="b" x="790" y="410">不变</text>
+      <path class="ar" d="M730 276 V252"/>
+      <path class="ar" d="M1112 216 C1140 216 1152 196 1178 160"/>
+      <rect class="bx" x="1150" y="92" width="250" height="64"/><text x="1166" y="134">钉钉 webhook</text>
+      <text class="b" x="1210" y="210" style="font-size:26px">公网 HTTPS</text>
+      <rect class="bx" x="20" y="470" width="300" height="64"/><text x="36" y="512">internal/testdb</text>
+      <path class="ar" d="M320 502 H396"/>
+      <rect class="bx" x="400" y="470" width="300" height="64"/><text x="416" y="512">internal/config</text><text class="b" x="720" y="512">allowed keys 提示</text>
+      <rect class="bx" x="20" y="560" width="430" height="64"/><text x="36" y="602">scripts/lib/local_env.sh</text><text class="b" x="470" y="602">脚本侧已知键，与 config 同一文法</text>
+    </svg>
+  </div>
+
+  <!-- 2. 组件 / 依赖图（变更前后）design.md:30-49 -->
+  <div class="fig" id="fComp">
+    <div class="fh">组件 / 依赖图（变更前后）</div><div class="fr">design.md:30-49</div>
+    <svg class="s26" viewBox="0 0 1428 650">
+      <text class="h" x="20" y="34" style="font-size:34px">变更前</text>
+      <rect class="bx" x="20" y="60" width="100" height="56"/><text x="38" y="97">main</text>
+      <path class="ar" d="M120 88 H156"/>
+      <rect class="bx" x="160" y="52" width="290" height="128"/>
+      <text x="176" y="88">config · redact</text><text x="176" y="124">service · httpapi</text><text x="176" y="160">pgstore</text>
+      <rect class="bx" x="20" y="240" width="150" height="56"/><text x="36" y="277">httpapi</text>
+      <path class="ar" d="M95 296 V336"/>
+      <rect class="bx" x="20" y="340" width="150" height="56"/><text x="36" y="377">service</text>
+      <path class="ar" d="M170 368 H216"/>
+      <rect class="bx" x="220" y="340" width="110" height="56"/><text x="236" y="377">store</text>
+      <path class="ar" d="M95 396 V436"/>
+      <rect class="bx" x="20" y="440" width="210" height="56"/><text x="36" y="477">slog (WARN)</text>
+
+      <path class="ll" d="M470 10 V640"/>
+
+      <text class="h" x="500" y="34" style="font-size:34px">变更后</text>
+      <rect class="bx" x="500" y="60" width="100" height="56"/><text x="518" y="97">main</text>
+      <path class="ar" d="M600 88 H636"/>
+      <rect class="bx" x="640" y="52" width="780" height="92"/>
+      <text x="656" y="88">config (+3 键) · redact (+多密钥) · notify (新)</text><text x="656" y="124">service · httpapi · pgstore</text>
+      <rect class="bx" x="500" y="200" width="150" height="56"/><text x="516" y="237">httpapi</text>
+      <path class="ar" d="M575 256 V296"/>
+      <rect class="bx" x="500" y="300" width="150" height="56"/><text x="516" y="337">service</text>
+      <path class="ar" d="M650 316 C690 316 690 228 726 228"/>
+      <rect class="bx" x="730" y="200" width="110" height="56"/><text x="746" y="237">store</text>
+      <path class="ar" d="M650 328 H726"/>
+      <rect class="bx" x="730" y="300" width="290" height="56"/><text x="746" y="337">slog (WARN, 不变)</text>
+      <path class="ar" d="M650 340 C690 340 690 428 726 428"/>
+      <rect class="bx" x="730" y="400" width="360" height="56"/><text x="746" y="437">notify.Notifier (接口)</text>
+      <path class="ar ret" d="M640 540 L800 462"/><path class="ar ret" d="M935 540 L912 462"/>
+      <text class="b" x="760" y="512">实现</text>
+      <rect class="bx" x="520" y="540" width="220" height="90"/><text x="536" y="577">notify.Nop</text><text class="b" x="536" y="615">未配置</text>
+      <rect class="bx" x="790" y="540" width="290" height="90"/><text x="806" y="577">notify.Throttled</text><text class="b" x="806" y="615">冷却表 + mutex</text>
+      <path class="ar" d="M1080 585 H1146"/><text class="halo" x="1036" y="528">go, 5s ctx</text>
+      <rect class="bx" x="1150" y="540" width="270" height="90"/><text x="1166" y="577">notify.DingTalk</text><text class="b" x="1166" y="615">Sender 实现</text>
+      <path class="ar" d="M1285 540 V460"/><text x="1300" y="508">HTTPS</text>
+      <rect class="bx" x="1150" y="400" width="270" height="56"/><text x="1166" y="437">钉钉 webhook</text>
+    </svg>
+  </div>
+
+  <!-- 3. 序列图：一条超温读数（推送放行）design.md:51-71。消息行由下方 PUSH 表生成，顺序照原图 -->
+  <div class="fig" id="fPush">
+    <div class="fh">序列图：一条超温读数（推送放行）</div><div class="fr">design.md:51-71</div>
+    <svg class="s26" id="pushSvg" viewBox="0 0 1428 650"></svg>
+  </div>
+
+  <!-- 4. 序列图：同一设备两条超温读数并发（TG-26 竞态）design.md:73-86（静态版，放大后换成下方的动画版） -->
+  <div class="fig" id="fRace">
+    <div class="fh">序列图：同一设备两条超温读数并发（TG-26 竞态）</div><div class="fr">design.md:73-86</div>
+    <svg viewBox="0 0 1428 650" style="font-size:30px">
+      <rect class="bx" x="70" y="0" width="260" height="52"/><text x="200" y="37" text-anchor="middle">req A (55.0)</text>
+      <rect class="bx" x="544" y="0" width="340" height="52"/><text x="714" y="37" text-anchor="middle">Throttled (mutex)</text>
+      <rect class="bx" x="1098" y="0" width="260" height="52"/><text x="1228" y="37" text-anchor="middle">req B (56.0)</text>
+      <path class="ll" d="M200 52 V450 M714 52 V450 M1228 52 V450"/>
+      <g class="halo">
+        <path class="ar" d="M200 110 H708"/><text x="457" y="98" text-anchor="middle">Notify(sensor-01)</text><text x="730" y="120">lock</text>
+        <text x="714" y="172" text-anchor="middle">last 不存在 -&gt; 放行, last=t0</text>
+        <text x="714" y="218" text-anchor="middle">unlock</text>
+        <path class="ar" d="M1228 268 H720"/><text x="973" y="256" text-anchor="middle">Notify(sensor-01)</text>
+        <text x="714" y="318" text-anchor="middle">lock</text>
+        <text x="714" y="366" text-anchor="middle">t0 距今 &lt; 冷却 -&gt; 抑制 (DEBUG)</text>
+        <text x="714" y="412" text-anchor="middle">unlock</text>
+      </g>
+      <text class="b" id="rText" x="30" y="530" style="font-size:30px">结果：只有 A 触发一次 Send；A、B 各自的 WARN 日志照写 (ALM-04)</text>
+      <!-- 叠层：黄 = 当前（箭头描黄 / 结果行加框），位置照上面原图的坐标 -->
+      <path id="hiA" d="M200 110 H700"/>
+      <path id="hiB" d="M1228 268 H728"/>
+      <rect id="hiRes" x="14" y="498" width="10" height="10" rx="8"/>
+    </svg>
+  </div>
+
+  <!-- 5. 决策图：是否推送（TG-12）design.md:88-109 -->
+  <div class="fig" id="fDec">
+    <div class="fh">决策图：是否推送（TG-12）</div><div class="fr">design.md:88-109</div>
+    <svg class="s26" viewBox="0 0 1428 650">
+      <polygon class="bx" points="122,0 638,0 660,28 638,56 122,56 100,28"/><text x="380" y="37" text-anchor="middle">Report 成功 &amp;&amp; temp &gt; threshold ?</text>
+      <path class="ar" d="M660 28 H896"/><text class="b" x="700" y="18">no</text>
+      <rect class="bx" x="900" y="0" width="400" height="56"/><text x="916" y="37">结束 (无日志, 无推送)</text>
+      <path class="ar" d="M380 56 V84"/><text class="b" x="394" y="78">yes</text>
+
+      <rect class="bx" x="180" y="88" width="400" height="56"/><text x="380" y="125" text-anchor="middle">写 WARN 日志 (ALM-01)</text>
+      <path class="ar" d="M380 144 V172"/>
+
+      <polygon class="bx" points="132,176 628,176 650,204 628,232 132,232 110,204"/><text x="380" y="213" text-anchor="middle">notifier 是 Nop (未配置 webhook) ?</text>
+      <path class="ar" d="M650 204 H896"/><text class="b" x="690" y="194">yes</text>
+      <rect class="bx" x="900" y="176" width="140" height="56"/><text x="970" y="213" text-anchor="middle">结束</text>
+      <path class="ar" d="M380 232 V260"/><text class="b" x="394" y="254">no</text>
+
+      <polygon class="bx" points="42,264 718,264 740,292 718,320 42,320 20,292"/><text x="380" y="301" text-anchor="middle">lock; 该设备 last 存在且 now-last &lt; cooldown ?</text>
+      <path class="ar" d="M740 292 H856"/><text class="b" x="768" y="282">yes</text>
+      <rect class="bx" x="860" y="264" width="520" height="56"/><text x="876" y="301">unlock, DEBUG suppressed, 结束</text>
+      <path class="ar" d="M380 320 V348"/><text class="b" x="394" y="342">no</text>
+
+      <rect class="bx" x="130" y="352" width="500" height="56"/><text x="380" y="389" text-anchor="middle">last = now; unlock; go Send</text>
+      <path class="ar" d="M380 408 V436"/>
+
+      <polygon class="bx" points="162,440 598,440 620,468 598,496 162,496 140,468"/><text x="380" y="477" text-anchor="middle">HTTP 2xx 且 errcode == 0 ?</text>
+      <path class="ar" d="M620 468 H856"/><text class="b" x="650" y="458">yes</text>
+      <rect class="bx" x="860" y="440" width="500" height="56"/><text x="876" y="477">INFO "alarm notification sent"</text>
+      <path class="ar" d="M380 496 V548"/>
+      <text class="b" x="396" y="530">no（含网络错 / 超时 / 非 2xx / JSON 解析失败 / errcode != 0）</text>
+
+      <rect class="bx" x="60" y="552" width="640" height="90"/><text x="80" y="588">ERROR "alarm notification failed"</text><text class="b" x="80" y="626">(不重试; last 不回滚)</text>
+    </svg>
+  </div>
+
+  <!-- 6. 切片建议的依赖图 design.md:277-281 -->
+  <div class="fig" id="fSlice">
+    <div class="fh">切片建议</div><div class="fr">design.md:277-281</div>
+    <svg viewBox="0 0 1428 650">
+      <rect class="bx" x="200" y="10" width="240" height="150"/><text class="h" x="320" y="108" text-anchor="middle" style="font-size:72px">T1</text>
+      <rect class="bx" x="200" y="250" width="240" height="150"/><text class="h" x="320" y="348" text-anchor="middle" style="font-size:72px">T2</text>
+      <rect class="bx" x="200" y="490" width="240" height="150"/><text class="h" x="320" y="588" text-anchor="middle" style="font-size:72px">T3</text>
+      <path class="ln" d="M440 85 C500 85 520 325 560 325 M440 325 H560 M440 565 C500 565 520 325 560 325"/>
+      <path class="ar" d="M560 325 H636"/>
+      <rect class="bx" x="640" y="250" width="240" height="150"/><text class="h" x="760" y="348" text-anchor="middle" style="font-size:72px">T4</text>
+      <path class="ar" d="M880 325 H1016"/>
+      <rect class="bx" x="1020" y="250" width="240" height="150"/><text class="h" x="1140" y="348" text-anchor="middle" style="font-size:72px">T5</text>
+    </svg>
+  </div>
+
+  <!-- 7. 测试覆盖图 tasks.md:42-59 -->
+  <div class="fig" id="fCov">
+    <div class="fh">测试覆盖图</div><div class="fr">tasks.md:42-59</div>
+    <table class="cov">
+      <tr><th>代码路径</th><th>测试类型</th><th>需求</th></tr>
+      <tr><td>config.Load 新键 / 缺省 / 校验 / 不回显</td><td>单元 config_test</td><td>RUN-01 RUN-03</td></tr>
+      <tr><td>main.configHint, testdb.configFailure 文案</td><td>单元 main_test/testdb</td><td>RUN-01 RUN-03</td></tr>
+      <tr><td>scripts/lib/local_env.sh 新键 + allowed keys</td><td>单元(Go 调 bash)</td><td>RUN-01</td></tr>
+      <tr><td>config/example.env 内容</td><td>单元(读文件断言)</td><td>RUN-05</td></tr>
+      <tr><td>redact.Handler 额外密钥</td><td>单元 redact_test</td><td>RUN-04</td></tr>
+      <tr><td>notify.DingTalk 消息体 / 加签 / 成功判定</td><td>单元 httptest</td><td>NTF-01 NTF-04<br>NTF-05</td></tr>
+      <tr><td>notify.DingTalk *url.Error 不带 token</td><td>单元 httptest</td><td>RUN-04</td></tr>
+      <tr><td>notify.Throttled 冷却 / 并发 / 非阻塞</td><td>单元 假 Sender + -race</td><td>NTF-02 NTF-03</td></tr>
+      <tr><td>service.Report -&gt; Notifier</td><td>单元 假 Notifier</td><td>NTF-01 NTF-07</td></tr>
+      <tr><td>main.run 装配 / 启动日志 / 隔离 / 脱敏</td><td>单元 假 open + httptest</td><td>NTF-02 NTF-05<br>NTF-06 NTF-07<br>RUN-04</td></tr>
+      <tr><td>HTTP -&gt; PG -&gt; 推送 端到端</td><td>集成 TestIntegration...</td><td>NTF-01 NTF-02</td></tr>
+      <tr><td>与真钉钉的加签、关键词、@所有人</td><td>人工真机冒烟</td><td>NTF-01 NTF-04<br>NTF-05</td></tr>
+    </table>
+  </div>
+
+  <!-- 8. 依赖顺序 tasks.md:61-67 -->
+  <div class="fig" id="fDep">
+    <div class="fh">依赖顺序</div><div class="fr">tasks.md:61-67</div>
+    <svg viewBox="0 0 1428 650">
+      <rect class="bx" x="200" y="10" width="240" height="150"/><text class="h" x="320" y="80" text-anchor="middle" style="font-size:64px">1</text><text class="b" x="320" y="136" text-anchor="middle" style="font-size:44px">配置</text>
+      <rect class="bx" x="200" y="250" width="240" height="150"/><text class="h" x="320" y="320" text-anchor="middle" style="font-size:64px">2</text><text class="b" x="320" y="376" text-anchor="middle" style="font-size:44px">脱敏</text>
+      <rect class="bx" x="200" y="490" width="240" height="150"/><text class="h" x="320" y="560" text-anchor="middle" style="font-size:64px">3</text><text class="b" x="320" y="616" text-anchor="middle" style="font-size:44px">发送方</text>
+      <path class="ln" d="M440 85 C500 85 520 325 560 325 M440 325 H560 M440 565 C500 565 520 325 560 325"/>
+      <path class="ar" d="M560 325 H636"/>
+      <rect class="bx" x="640" y="250" width="300" height="150"/><text class="h" x="790" y="320" text-anchor="middle" style="font-size:64px">4</text><text class="b" x="790" y="376" text-anchor="middle" style="font-size:44px">冷却与接入</text>
+      <path class="ar" d="M940 325 H1016"/>
+      <rect class="bx" x="1020" y="250" width="380" height="150"/><text class="h" x="1210" y="320" text-anchor="middle" style="font-size:64px">5</text><text class="b" x="1210" y="376" text-anchor="middle" style="font-size:44px">端到端/约定/冒烟</text>
+    </svg>
+  </div>
+
+  <!-- ===== 后半：在竞态时序图（design.md:73-86）原图上叠的小标签 ===== -->
+  <div class="chip lab" id="lbConc">并发 →<br>多画一张</div>
+  <div class="chip lab" id="lbA">先到 → 放行</div>
+  <div class="chip lab" id="lbB">后到 → 被压下</div>
+  <div class="chip lab" id="lbOnce">只推一次</div>
+  <div class="chip" id="corner">AI 判的，也会漏<br>→ 下一期</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // ---------- 推送放行时序图的消息行（design.md:51-71，顺序照原图；ret = 原图里的返回 / 回调箭头） ----------
+  var PUSH_LANES = [['client', 75, 130], ['httpapi', 245, 150], ['service', 415, 150], ['store', 585, 120],
+                    ['slog', 755, 110], ['Throttled', 935, 170], ['DingTalk', 1125, 160], ['钉钉', 1320, 110]];
+  var PUSH = [
+    ['client', 'httpapi', 'POST'],
+    ['httpapi', 'service', 'Report(ctx5s)'],
+    ['service', 'store', 'AddReading'],
+    ['store', 'service', 'ok', 'ret'],
+    ['service', 'slog', 'Warn(alarm)'],
+    ['service', 'Throttled', 'Notify(alarm)'],
+    ['Throttled', null, 'lock; allow?'],
+    ['Throttled', null, 'yes, last=now'],
+    ['Throttled', 'DingTalk', 'unlock; go', '', 'Send(bg ctx 5s)'],
+    ['Throttled', 'service', '立即返回', 'ret'],
+    ['DingTalk', '钉钉', 'POST json'],
+    ['service', 'httpapi', 'reading', 'ret'],
+    ['httpapi', 'client', '201', 'ret'],
+    ['钉钉', 'DingTalk', '200 errcode', 'ret'],
+    ['DingTalk', 'slog', 'Info sent / Error failed', 'ret']
+  ];
+  (function buildPush() {
+    var x = {}, s = '';
+    PUSH_LANES.forEach(function (l) {
+      x[l[0]] = l[1];
+      s += '<rect class="bx" x="' + (l[1] - l[2] / 2) + '" y="0" width="' + l[2] + '" height="48"/>' +
+           '<text x="' + l[1] + '" y="34" text-anchor="middle">' + l[0] + '</text>' +
+           '<path class="ll" d="M' + l[1] + ' 48 V640"/>';
+    });
+    PUSH.forEach(function (m, i) {
+      var y = 90 + i * 36 + (i >= 8 ? 14 : 0), a = x[m[0]];   // 第 8 行前多留 14px，免得和上面两行注记叠在一起
+      if (m[1] === null) { s += '<text class="halo" x="' + (a + 12) + '" y="' + (y + 6) + '">' + m[2] + '</text>'; return; }
+      var b = x[m[1]], dir = b > a ? 1 : -1;
+      s += '<path class="ar' + (m[3] === 'ret' ? ' ret' : '') + '" d="M' + a + ' ' + y + ' H' + (b - dir * 6) + '"/>' +
+           '<text class="halo" x="' + ((a + b) / 2) + '" y="' + (y - 8) + '" text-anchor="middle">' + m[2] + '</text>';
+      if (m[4]) s += '<text class="halo" x="' + (b + 12) + '" y="' + (y + 6) + '">' + m[4] + '</text>';
+    });
+    document.getElementById('pushSvg').innerHTML = s;
+  })();
+
+  // ---------- 动画节点（按录音实测，frame-times.py，2026-10-19；取该词第一个字的开始时间，可提前至多 0.2 秒） ----------
+  // 句子开口：108 句 0.0 / 109 句 3.76 / 110 句 14.08 / 111 句 22.32 / 112 句 31.04 / 113 句 39.2 / 114 句 47.36，52.56 念完。
+  var AT = {
+    tab: 0.2,        // 108 句开口：页角「实录 · 示例项目」
+    groups: 0.2,     // 108 句：三个文件区进场（每个隔 0.2；开头 0.5 秒内要有主体内容）
+    thumbs: 0.5,     // 108 句：八张缩略图进场（每张隔 0.12）
+    raceIn: 15.2,    // 110 句「剩下那张」放大后（ZOOM.at + 1.2）：其余缩略图淡出，竞态时序图留在中间
+    conc: 26.9,      // 111 句「并发场景」（并 27.04）：图左上角小标签「并发 → 多画一张」
+    arrows: 34.3,    // 112 句「两条消息同时来了」（两 34.40）：两条进来的请求箭头描黄
+    early: 34.7,     // 112 句：A 那条线旁小标签「先到 → 放行」
+    late: 35.1,      // 112 句：B 那条线旁小标签「后到 → 被压下」
+    once: 35.8,      // 112 句「只推一次」（只 35.92）：结果行加黄框 + 小标签「只推一次」，箭头描黄收掉
+    onceEnd: 39.2,   // 113 句开口（当 39.20）：黄框淡出
+    corner: 42.6     // 113 句「AI 根据语义自己判的」（AI 42.72）：右下角小卡「AI 判的，也会漏 → 下一期」
+  };
+  // 109 句报图名：缩略图「当前」黄描边 [亮, 灭)；念到下一个图名时移走。fRace 这句不亮。
+  var THUMB_CUR = [
+    { figs: ['fMod'], on: 6.0, off: 7.1 },            // 「模块关系」（模 6.16）
+    { figs: ['fComp'], on: 7.1, off: 8.5 },           // 「改动前后的组件」（改 7.28）
+    { figs: ['fPush'], on: 8.5, off: 9.4 },           // 「时序」（时 8.64）
+    { figs: ['fDec'], on: 9.4, off: 10.2 },           // 「决策」（决 9.60）
+    { figs: ['fCov'], on: 10.2, off: 12.0 },          // 「测试覆盖」（测 10.40）
+    { figs: ['fSlice', 'fDep'], on: 12.0, off: 14.0 } // 「任务依赖」两张一起（任 12.16），110 句开口前移走
+  ];
+  // 放大：只有竞态时序图（110 句「剩下那张」放大成主画面，居中，不缩回）。
+  var ZOOM = [
+    { figs: ['fRace'], at: 14.0, out: null }   // 110 句「剩下那张」（剩 14.08）
+  ];
+  var FOCUS = { x: 211, y: 125, s: 1.04 };   // 竞态时序图主画面：1498×790，居中，下沿 915 在字幕带之上
+
+  // 缩略图槽位（左上角）：proposal 一列；design 三列两行；tasks 一列两行。
+  var THUMB_W = 310, S0 = THUMB_W / 1440;
+  var SLOT = {
+    fMod: [95, 250], fComp: [465, 250], fPush: [805, 250], fRace: [1145, 250],
+    fDec: [465, 540], fSlice: [805, 540], fCov: [1515, 250], fDep: [1515, 540]
+  };
+  var ORDER = ['fMod', 'fComp', 'fPush', 'fRace', 'fDec', 'fSlice', 'fCov', 'fDep'];
+  ORDER.forEach(function (id) {
+    var c = T.$('c-' + id);
+    c.style.left = SLOT[id][0] + 'px';
+    c.style.top = (SLOT[id][1] + 760 * S0 + 12) + 'px';
+  });
+
+  var DIM = [160, 157, 151];
+  function lerp(a, b, k) { return a + (b - a) * k; }
+  function zoomOf(z, t) {
+    var k = T.ease(T.p(t, z.at, 0.6));
+    if (z.out !== null) k *= 1 - T.ease(T.p(t, z.out, 0.5));
+    return k;
+  }
+  // 当前（黄框）在 [on, off) 之间亮着，前后各渐变 0.3 / 0.4 秒。
+  function cur(t, on, off) { return T.ease(T.p(t, on, 0.3)) * (1 - T.ease(T.p(t, off, 0.4))); }
+  // 箭头擦出：A 从左往右，B 从右往左（从起点出发）。
+  function wipeL(el, p) { el.style.clipPath = 'inset(0 0 0 ' + ((1 - T.ease(p)) * 100) + '%)'; }
+  function show(el, p, dy) { T.enter(el, p, dy); }
+  // 行内「当前」：黄色描边贴近文字，不带硬投影（T.current 的留空和投影是给整张卡用的，照首期 S21 的 mark）。
+  function mark(el, g) {
+    el.style.outline = '5px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '4px';
+    el.style.boxShadow = '0 0 30px rgba(245,207,74,' + (0.55 * g) + ')';
+  }
+
+  // 缩略图「当前」：fig 缩放到 S0，描边宽度和偏移按 1/S0 放大，缩放后约 5px / 5px，不压到下方图名。
+  function thumbMark(el, g) {
+    el.style.outline = '22px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '24px';
+    el.style.boxShadow = '16px 16px 0 #161616, 0 0 220px rgba(245,207,74,' + (0.55 * g) + ')';
+  }
+
+  Stage({
+    duration: 53,
+    init: function () { return T.fonts('实录示例项目三个文件区模块关系图组件变更前后时序推送放行竞态决策是否任务依赖测试覆盖箭头方向新键校验多密钥脱敏钉钉适配器冷却超温调用接口不公网脚本侧已知与同一文法提示未配置表实现日志无写结束该设备存在且不重试回滚含网络错时非解析失败代码路径类型需求单元调读断言额外消息体加签成功判定带假阻塞装启动隔离端到集成真关键词所有人工机冒烟切片建议顺序发送方入约定读数两条并沉默上次间分钟内再拿锁记下距被压下只触一次空闲持有命中靠判会漏下期规格评审共享可变状态今作列制原告容显案省缺警交互抑结果各自的照立即返回：；（）「」·→'); },
+    render: function (t) {
+      // ---- 页角 ----
+      show(T.$('ptab'), T.p(t, AT.tab, 0.4), -14);
+
+      // ---- 放大状态：每组的放大量，以及「别的组」最大放大量（用来压暗其余缩略图） ----
+      var zs = ZOOM.map(function (z) { return zoomOf(z, t); });
+      var ovOut = T.ease(T.p(t, AT.raceIn, 0.6));          // 前半整体淡出
+      var zAny = Math.max.apply(null, zs);
+      var dim = (1 - 0.75 * zAny) * (1 - ovOut);
+
+      T.$('path').style.opacity = T.ease(T.p(t, AT.tab + 0.2, 0.4)) * dim;
+
+      // 三个文件区：进场
+      for (var g = 0; g < 3; g++) {
+        var ge = T.ease(T.p(t, AT.groups + g * 0.2, 0.5));
+        var gel = T.$('g' + g);
+        gel.style.opacity = ge * dim;
+        gel.style.transform = 'translateY(' + ((1 - ge) * 24) + 'px)';
+      }
+
+      // 八张图：缩略（109 句逐张当前） ↔ 竞态图放大
+      ORDER.forEach(function (id, i) {
+        var el = T.$(id);
+        var e = T.ease(T.p(t, AT.thumbs + i * 0.12, 0.4));
+        var own = 0, others = 0;
+        ZOOM.forEach(function (z, k) {
+          if (z.figs.indexOf(id) >= 0) own = zs[k]; else others = Math.max(others, zs[k]);
+        });
+        var to = FOCUS;
+        var x = lerp(SLOT[id][0], to.x, own), y = lerp(SLOT[id][1], to.y, own) + (1 - e) * 14, s = lerp(S0, to.s, own);
+        el.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + s + ')';
+        el.style.opacity = e * (1 - 0.75 * others) * (id === 'fRace' ? 1 : 1 - ovOut);   // 竞态图是主画面，不随前半淡出
+        el.style.zIndex = own > 0 ? 10 : 2;
+        T.$('c-' + id).style.opacity = e * dim;
+        var g = 0;
+        THUMB_CUR.forEach(function (c) { if (c.figs.indexOf(id) >= 0) g = cur(t, c.on, c.off); });
+        thumbMark(el, g);
+      });
+
+      // ---- 后半：在竞态时序图原图上叠标识 ----
+      // 标签位置按图内（svg 视图框）坐标算：图放大后的位置 = FOCUS 偏移 + (边框 6 + svg 偏移) × 缩放
+      function at(el, u, v) {
+        el.style.left = (FOCUS.x + (6 + u) * FOCUS.s) + 'px';
+        el.style.top = (FOCUS.y + (6 + 92 + v) * FOCUS.s) + 'px';
+      }
+      at(T.$('lbConc'), 6, 66);        // 图左上，req A 框下方、A 生命线左侧
+      at(T.$('lbA'), 214, 128);        // A 那条线下方
+      at(T.$('lbB'), 984, 282);        // B 那条线下方
+      at(T.$('lbOnce'), 30, 566);      // 结果行下方
+      at(T.$('corner'), 1090, 520);    // 图的右下角空白处
+
+      // 111 句：并发 → 多画一张
+      show(T.$('lbConc'), T.p(t, AT.conc, 0.4), 12);
+
+      // 112 句「两条消息同时来了，只推一次」：两条进来的请求箭头描黄；先到 / 后到各贴一个小标签；只推一次加框
+      var ga = cur(t, AT.arrows, AT.once);
+      T.$('hiA').style.opacity = ga;
+      T.$('hiB').style.opacity = ga;
+      show(T.$('lbA'), T.p(t, AT.early, 0.4), 12);
+      show(T.$('lbB'), T.p(t, AT.late, 0.4), 12);
+      show(T.$('lbOnce'), T.p(t, AT.once, 0.4), 12);
+      // 结果行加黄框（框的大小取原图结果文字的实际宽度；113 句开口淡出）
+      var rb = T.$('rText').getBBox(), hr = T.$('hiRes');
+      hr.setAttribute('x', rb.x - 14); hr.setAttribute('y', rb.y - 8);
+      hr.setAttribute('width', rb.width + 28); hr.setAttribute('height', rb.height + 16);
+      hr.style.opacity = cur(t, AT.once, AT.onceEnd);
+
+      // 113–114 句：AI 判的，也会漏 → 下一期
+      show(T.$('corner'), T.p(t, AT.corner, 0.5), 14);
+    }
+  });
+</script>
+</body>
+</html>

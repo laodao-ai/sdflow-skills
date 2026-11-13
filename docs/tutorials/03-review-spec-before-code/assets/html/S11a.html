@@ -1,0 +1,260 @@
+<!doctype html>
+<!-- S11a · 机制动画（含实录 · 示例项目）· script 63–71「我们看一条对抗审查出来的。……后来规格补上了：推送里的 panic 要 recover 住，记一条错误日志，服务照常跑。」
+     10-24 按一页一层从 S11 拆出：S11 只放对抗审的说明，本页放例子。
+     左：实录 · 示例项目，r3 报告（示例仓 2e84aeb 的 openspec/changes/alarm-notify/spec-review-report.md）第 106 行 D2 原文
+       （去掉 ** 与反引号）：问题列「推送 goroutine panic 会让整个服务退出（plan-eng P-3、backend-go F1、对抗 B F5、对抗 A F5）。
+       推送 goroutine 不在 net/http 的 handler recover 范围内。」，处置列全文，严重度「高」。
+       放大卡：问题列，标题一句加粗加下划线，后面附理由一句；原文已是中文，不另加中文行。
+       报出这一条的评审：窗口上方一排小卡，按口播用说法：对抗 B F5 · 对抗 A F5 · 工程审 P-3（= plan-eng），Go 领域 F1（= backend-go，GO-04，S10 那一条）；
+       放大卡里对应的原文名字同时提亮。
+       引线（visual-v4 4.7，10-24 新规则）：本页只有这一张放大卡，不存在共存还是一次一张。卡长出时用 T.lead() 画一根黄色细线（2px，不加箭头），
+       从黄框离卡最近的角连到卡离黄框最近的角，随卡展开从黄框一端擦出；线在 #leads 层（theme.js 新建，z-index 20），在报告窗口和压暗层之上、放大卡（z-index 30）之下。
+       黄框和卡的矩形在 init 里按终态量一次（窗口此时没有位移），卡的终点矩形直接用 ZOOM_END。
+     右：机制动画（示意）：设备上报 → 超温 → 另起推送 goroutine（上报照常返回）→ 推送里 panic → 整个进程框变灰退出，上报也停了。
+     末句：右下「补上 recover」卡：记错误日志，服务照常跑；修订落点「design 第 5 条 · NTF-05」（第 106 行处置列）。
+     最后一帧：左边 D2 黄框 + 一根黄线 + 放大卡、四个评审名字与「清单里本来就有 · GO-04」；右边进程框灰、上报划掉、panic；右下补 recover 卡。内容都留到页末。
+     颜色：对抗审一律粉（本期记号）：标题贴纸粉、对抗 A / B 浅粉，工程审、Go 领域奶白；进程一侧琥珀（执行一侧），退出变灰（被留下），不用红；
+       panic 墨底标签；补 recover 浅蓝（规格补上的）；报告窗口深色终端底，「实录」标签墨底，放大卡不加色边；黄 = 当前，本页只有 D2 那个黄框。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。句起点：
+       63 句 t0.0：标题贴纸「对抗审查出来的一条」正中放大，停到 1.2 秒，0.6 秒缩到左上（visual-v4 4.8 问题贴纸）。
+       64 句 t3.6：进程框与「设备上报」（t3.4），「超温」（t4.44），旁注「钉钉群通知值班的人」（t5.08）。
+       65 句 t8.16：念到「goroutine」（t9.32）另起推送 goroutine；「不会拖慢温度上报」（t10.76）旁注「上报照常返回」。
+       66 句 t13.68：报告窗口进场（t13.48）；念到「崩了」（t17.0）推送旁落下 panic。
+       67 句 t19.52：t19.32 D2 一行黄框，t19.72 放大卡长出（0.6 秒），留到页末；念到「整个进程都会退出」（t23.56）进程框变灰。
+       68 句 t26.48：念到「温度也报不上来了」（t29.4）上报划掉，旁注改成「上报也停了」。
+       69 句 t31.92：「报出这一条的评审」（t31.72）；「三个对抗审里两个报了」（t33.8、35.08）对抗 B F5、对抗 A F5；「工程审也报了」（t35.88）工程审 P-3。
+       70 句 t38.24：Go 领域 F1（t38.04）；「清单里本来就有」（t40.04）旁注「清单里本来就有 · GO-04」。
+       71 句 t42.88：右下补 recover 卡连同第一行「补上 recover」落下（t42.68），修订落点（t43.6，按句长比例），第二行「记错误日志，服务照常跑」（t46.76）。
+       念完 t49.04；时长 50.16 秒。内容整体在 y 940 以上。 -->
+<html lang="zh-CN" data-frame-id="S11a">
+<head>
+<meta charset="utf-8">
+<title>S11a · 对抗审：一条例子</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 56px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; background: var(--pink); }
+
+  /* 左上：报出这一条的评审 */
+  #lensL { left: 60px; top: 170px; font-size: 28px; padding: 6px 18px; }
+  #lens { position: absolute; left: 60px; top: 236px; display: flex; gap: 18px; }
+  #lens .chip { position: relative; font-size: 32px; padding: 8px 18px; }
+  #lA, #lB { background: var(--pink-soft); }
+  #nGo { left: 470px; top: 318px; font-size: 28px; padding: 6px 18px; }
+
+  /* 左：报告原文窗口（黑底、等宽、不倾斜） */
+  #rep { left: 60px; top: 412px; width: 860px; padding: 0 0 8px; overflow: visible; white-space: normal; font-size: 22px; line-height: 32px;
+         font-variant-ligatures: none; }
+  #rep .tab { left: -12px; top: -58px; font-size: 32px; padding: 4px 20px; }
+  #rep .bar0 { height: 44px; display: flex; align-items: center; padding: 0 22px; box-sizing: border-box;
+               background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0;
+               font-size: 22px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #rep .bd { padding: 10px 22px 4px; }
+  #rep .ln { display: flex; gap: 12px; margin-bottom: 6px; color: #e4e0d6; }
+  #rep .ln > i { flex: none; width: 40px; font-style: normal; color: var(--unlit); }
+  #rep .ln.dim { color: var(--cream-dim); }
+  #rep .ln b { font-weight: 700; color: #fff; }
+  #found { border-radius: 4px; }
+  #rdim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 7px; background: #000; opacity: 0; }
+  #qb { position: absolute; box-sizing: border-box; border: 6px solid transparent; border-radius: 8px; opacity: 0; pointer-events: none; }
+
+  /* 放大卡：从黄框处长出，终点在窗口下方 */
+  #zoom { position: absolute; z-index: 30; left: 60px; top: 694px; width: 880px; height: 216px; box-sizing: border-box; overflow: hidden; opacity: 0;
+          padding: 12px 26px; background: var(--term); border: 5px solid var(--ink); border-radius: 10px; box-shadow: 8px 8px 0 var(--ink);
+          font-variant-ligatures: none; }
+  #zoom .en { font-family: var(--mono); font-size: 28px; line-height: 36px; color: #cfcbc2; }
+  #zoom .en .id { color: var(--unlit); margin-right: 10px; }
+  #zoom .en b { color: var(--cream); font-weight: 800; text-decoration: underline; text-decoration-color: var(--cream); text-decoration-thickness: 3px; text-underline-offset: 6px; }
+  #zoom .en .nm { color: var(--cream-dim); white-space: nowrap; }
+  #zoom .en .nm.on { color: var(--cream); font-weight: 800; }
+  #zoom .why { margin-top: 6px; color: var(--cream); }
+
+  /* 右：机制动画（示意） */
+  #proc { left: 980px; top: 200px; width: 880px; height: 470px; box-sizing: border-box; border: 5px solid var(--ink); border-radius: 16px; background: rgba(242,239,230,.22); }
+  #procTab { left: 1006px; top: 158px; font-size: 38px; padding: 4px 22px; background: var(--amber); }
+  .bx { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 0;
+        font-weight: 700; font-size: 40px; white-space: nowrap; background: var(--amber-soft); }
+  #bA { left: 1020px; top: 316px; width: 220px; height: 90px; }
+  #bB { left: 1360px; top: 316px; width: 190px; height: 90px; }
+  #bC { left: 1290px; top: 490px; width: 330px; height: 100px; font-size: 38px; }
+  /* 「设备上报」划掉：只画在文字上的删除线，不再用一条横穿到箭头的长线（长线看上去像箭头从卡中心起笔） */
+  #bA span { text-decoration: line-through; text-decoration-thickness: 6px; text-decoration-color: rgba(22,22,22,0); }
+  #nD { left: 1010px; top: 226px; font-size: 32px; }
+  #nA { left: 1010px; top: 574px; font-size: 34px; }
+  #nB { left: 1286px; top: 418px; font-size: 32px; }
+  #panic { left: 1650px; top: 512px; padding: 4px 22px; font-size: 40px; }
+  #arrows { position: absolute; left: 0; top: 0; width: 1920px; height: 940px; overflow: visible; }
+
+  #fix { left: 980px; top: 708px; width: 880px; height: 200px; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+         white-space: nowrap; background: var(--blue-soft); }
+  #fix span { line-height: 1.25; }
+  #fix .f1 { font-family: var(--display); font-weight: 800; font-size: 50px; }
+  #fix .f2 { font-family: var(--display); font-weight: 800; font-size: 44px; }
+  #fix .f3 { font-family: var(--body); font-weight: 600; font-size: 28px; color: rgba(22,22,22,.75); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">对抗审查出来的一条</div></div>
+
+  <!-- 左上：报出这一条的评审 -->
+  <div class="tag" id="lensL" data-r="-3">报出这一条的评审</div>
+  <div id="lens">
+    <div class="chip" id="lB" data-r="-1.5">对抗 B F5</div>
+    <div class="chip" id="lA" data-r="1.5">对抗 A F5</div>
+    <div class="chip" id="lE" data-r="-1.2">工程审 P-3</div>
+    <div class="chip" id="lG" data-r="1.2">Go 领域 F1</div>
+  </div>
+  <div class="tag" id="nGo" data-r="2">清单里本来就有 · GO-04</div>
+
+  <!-- 左：报告原文（实录 · 示例项目） -->
+  <div class="cmd" id="rep">
+    <div class="tab ink" data-r="-2">实录 · 示例项目</div>
+    <div class="bar0">alarm-notify/spec-review-report.md（r3）</div>
+    <div class="bd">
+      <div class="ln"><i>106</i><span id="found">| D2 | <b>推送 goroutine panic 会让整个服务退出</b>（plan-eng P-3、backend-go F1、对抗 B F5、对抗 A F5）。推送 goroutine 不在 net/http 的 handler recover 范围内。</span></div>
+      <div class="ln dim"><i></i><span>| design 第 5 条加 defer recover，panic 记为 ERROR；Failure Modes 加一行；NTF-05 加「panic 不使进程退出」与对应场景；tasks 4.1、4.2 补实现与测试。 | 高 |</span></div>
+    </div>
+    <div id="rdim"></div>
+  </div>
+  <div id="qb"></div>
+  <div id="zoom">
+    <div class="en"><span class="id">D2</span><b>推送 goroutine panic 会让整个服务退出</b>（<span class="nm" id="zE">plan-eng P-3</span>、<span class="nm" id="zG">backend-go F1</span>、<span class="nm" id="zB">对抗 B F5</span>、<span class="nm" id="zA">对抗 A F5</span>）。</div>
+    <div class="en why">推送 goroutine 不在 net/http 的 handler recover 范围内。</div>
+  </div>
+
+  <!-- 右：机制动画（示意） -->
+  <div class="abs" id="proc"></div>
+  <div class="tab" id="procTab" data-r="-2">Go 服务进程</div>
+  <svg id="arrows" viewBox="0 0 1920 940" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path class="ar" id="ar1" d="M1256 361 H1344 M1326 342 L1346 361 L1326 380"/>
+      <path class="ar" id="ar2" d="M1455 412 V480 M1437 462 L1455 482 L1473 462"/>
+      <path class="ar" id="ar3" d="M1130 412 V560 M1112 542 L1130 562 L1148 542"/>
+    </g>
+  </svg>
+  <div class="tag" id="nD" data-r="-3">钉钉群通知值班的人</div>
+  <div class="card bx" id="bA" data-r="-1.2"><span>设备上报</span></div>
+  <div class="card bx" id="bB" data-r="1.2">超温</div>
+  <div class="card bx" id="bC" data-r="-0.8">推送 goroutine</div>
+  <div class="tag" id="nA" data-r="-3">上报照常返回</div>
+  <div class="tag" id="nB" data-r="3">另起</div>
+  <div class="tab ink" id="panic" data-r="4">panic</div>
+
+  <div class="card" id="fix" data-r="-0.4"><span class="f1">补上 recover</span><span class="f2">记错误日志，服务照常跑</span><span class="f3">修订：design 第 5 条 · NTF-05</span></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，画面内）。按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒。注释写全稿句号（10-25 删旧第 63 句后整体减 1）。
+  var AT = {
+    head: 0.0,                                          // 63 句：标题贴纸
+    a: 3.4, b: 4.44, d: 5.08,                            // 64 句：设备上报 → 超温，旁注钉钉群
+    c: 9.32, rep: 10.76,                                // 65 句：另起推送 goroutine；上报照常返回
+    win: 13.48, panic: 17.0,                            // 66 句：报告窗口进场；念到「崩了」落下 panic
+    found: 19.32, zoom: 19.72,                           // 67 句：D2 加黄框，约 0.4 秒后放大卡长出（0.6 秒），都留到页末
+    exit: 23.56,                                        // 67 句「整个进程都会退出」：进程框变灰
+    stop: 29.4,                                        // 68 句「温度也报不上来了」：上报划掉
+    lensL: 31.72, lB: 33.8, lA: 35.08, lE: 35.88,         // 69 句：对抗 B、对抗 A、工程审
+    lG: 38.04, nGo: 40.04,                               // 70 句：Go 领域；「清单里本来就有」
+    fix: 42.68, f1: 42.68, f3: 43.6, f2: 46.76            // 71 句：补上 recover（卡和第一行同时出，不放空卡）
+  };
+  var ZOOM_END = { x: 60, y: 694, w: 880, h: 216 };     // 底边 910，加投影不过 918；字号 28px（10-25）
+  var AMBER_SOFT = [247, 192, 143], AMBER = [242, 155, 80], DIM = [160, 157, 151], YELLOW = '245,207,74';
+
+  var LEAD = null;   // 放大卡的引线，init 里建
+
+  function overlays(t) {
+    var row = T.$('found'), qb = T.$('qb'), zm = T.$('zoom');
+    var rr = row.getBoundingClientRect();
+    var st = T.$('stage').getBoundingClientRect(), kk = st.width / 1920;
+    // 黄框在舞台层，按舞台坐标贴在 D2 那一行外面
+    qb.style.left = ((rr.left - st.left) / kk - 8) + 'px';
+    qb.style.top = ((rr.top - st.top) / kk - 4) + 'px';
+    qb.style.width = (rr.width / kk + 16) + 'px';
+    qb.style.height = (rr.height / kk + 8) + 'px';
+    var g = T.ease(T.p(t, AT.found, 0.3));
+    qb.style.opacity = g > 0 ? 1 : 0;
+    qb.style.borderColor = 'rgba(' + YELLOW + ',' + g + ')';
+    qb.style.boxShadow = '0 0 40px rgba(' + YELLOW + ',' + (0.45 * g) + '), inset 0 0 24px rgba(' + YELLOW + ',' + (0.25 * g) + ')';
+
+    // 放大卡：起点 = 黄框此刻的位置和尺寸，插值到终点；留到页尾；窗口其余压暗 0.35
+    var z = T.ease(T.p(t, AT.zoom, 0.6));
+    T.$('rdim').style.opacity = 0.35 * z;
+    T.leadDraw(LEAD, z);
+    if (z <= 0.001) { zm.style.opacity = 0; return; }
+    var br = qb.getBoundingClientRect();
+    var x0 = (br.left - st.left) / kk, y0 = (br.top - st.top) / kk, w0 = br.width / kk, h0 = br.height / kk;
+    zm.style.left = (x0 + (ZOOM_END.x - x0) * z) + 'px';
+    zm.style.top = (y0 + (ZOOM_END.y - y0) * z) + 'px';
+    zm.style.width = (w0 + (ZOOM_END.w - w0) * z) + 'px';
+    zm.style.height = (h0 + (ZOOM_END.h - h0) * z) + 'px';
+    zm.style.opacity = Math.min(1, z * 4);
+  }
+
+  Stage({
+    duration: 50.16,
+    init: function () {
+      return T.fonts(document.body.textContent + '已退出上报也停了').then(function () {
+        // 黄框的矩形 = D2 那一行外扩（左右 8px、上下 4px）；窗口还没做进场位移，现在量的就是终态
+        var r = T.rect(T.$('found'));
+        LEAD = T.lead({ x: r.x - 8, y: r.y - 4, w: r.w + 16, h: r.h + 8 }, ZOOM_END);
+      });
+    },
+    render: function (t) {
+      // 63 句：标题贴纸正中放大，停到 1.2 秒，0.6 秒缩到左上（visual-v4 4.8 问题贴纸）
+      T.enter(T.$('hdr'), T.p(t, AT.head, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, 1.2, 0.6)), S = 1.5, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // 左：报告窗口；70–70 句评审名字随口播进场，放大卡里对应的原文名字同时提亮
+      T.enter(T.$('rep'), T.p(t, AT.win, 0.45), 14);
+      T.enter(T.$('lensL'), T.p(t, AT.lensL, 0.45), -8);
+      [['lB', 'zB'], ['lA', 'zA'], ['lE', 'zE'], ['lG', 'zG']].forEach(function (p) {
+        T.enter(T.$(p[0]), T.p(t, AT[p[0]], 0.45), 12);
+        T.$(p[1]).classList.toggle('on', t >= AT[p[0]]);
+      });
+      T.enter(T.$('nGo'), T.p(t, AT.nGo, 0.45), -8);
+
+      // 右：进程框，随第一块内容（设备上报）进场
+      var exit = T.ease(T.p(t, AT.exit, 0.6));
+      T.enter(T.$('procTab'), T.p(t, AT.a - 0.2, 0.45), -10);
+      T.$('procTab').textContent = exit > 0.5 ? 'Go 服务进程 · 已退出' : 'Go 服务进程';
+      var proc = T.$('proc');
+      proc.style.opacity = T.ease(T.p(t, AT.a - 0.2, 0.5)) * 0.9;
+      proc.style.background = 'rgba(' + [247 - 87 * exit, 192 - 35 * exit, 143 + 8 * exit].map(Math.round).join(',') + ',' + (0.22 + 0.5 * exit) + ')';
+
+      T.enter(T.$('bA'), T.p(t, AT.a, 0.45), 14);
+      T.enter(T.$('bB'), T.p(t, AT.b, 0.45), 14);
+      T.$('ar1').style.opacity = T.ease(T.p(t, AT.b, 0.4));
+      T.enter(T.$('nD'), T.p(t, AT.d, 0.45), -8);
+      T.enter(T.$('bC'), T.p(t, AT.c, 0.45), 14);
+      T.enter(T.$('nB'), T.p(t, AT.c + 0.2, 0.45), -8);
+      T.$('ar2').style.opacity = T.ease(T.p(t, AT.c + 0.1, 0.4));
+      T.$('ar3').style.opacity = T.ease(T.p(t, AT.rep, 0.4));
+      T.enter(T.$('nA'), T.p(t, AT.rep + 0.2, 0.45), 10);
+      T.$('nA').textContent = t >= AT.stop ? '上报也停了' : '上报照常返回';
+
+      // panic 墨底标签落在推送旁边；进程退出用灰（不用红）
+      T.enter(T.$('panic'), T.p(t, AT.panic, 0.4), -18);
+      T.$('bC').style.background = T.mix(AMBER_SOFT, DIM, exit);
+      T.$('bB').style.background = T.mix(AMBER_SOFT, DIM, exit);
+      T.$('bA').style.background = T.mix(AMBER_SOFT, DIM, T.ease(T.p(t, AT.stop, 0.6)));
+      T.$('procTab').style.background = T.mix(AMBER, DIM, exit);
+      T.$('bA').querySelector('span').style.textDecorationColor = 'rgba(22,22,22,' + T.ease(T.p(t, AT.stop, 0.5)) + ')';
+
+      // 71 句：补上 recover
+      T.enter(T.$('fix'), T.p(t, AT.fix, 0.5), 16);
+      var fx = T.$('fix');
+      fx.querySelector('.f1').style.opacity = T.ease(T.p(t, AT.f1, 0.4));
+      fx.querySelector('.f3').style.opacity = T.ease(T.p(t, AT.f3, 0.4));
+      fx.querySelector('.f2').style.opacity = T.ease(T.p(t, AT.f2, 0.4));
+
+      return overlays(t);
+    }
+  });
+</script>
+</body>
+</html>

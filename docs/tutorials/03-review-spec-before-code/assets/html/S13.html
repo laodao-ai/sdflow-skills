@@ -1,0 +1,218 @@
+<!doctype html>
+<!-- S13 · 录屏证据（实录 · 示例项目）· script 93–102「这一次，几路评审加起来报了 50 条，合并重复以后是 28 条。……一个会真发生，一个这次走不到，差别都写在理由里。」
+     版式取自 video-lib 录屏模版 screen.html（窗口 + 墨底「实录」标签）；这一页没有录像，报告原文做成文字，窗口不倾斜。
+     事实来源：r3 报告（示例仓 2e84aeb 的 openspec/changes/alarm-notify/spec-review-report.md），原文照抄，只去掉 ** 与反引号：
+       「第三步 · 机械引用核」一节第 59 行（合并池 50 条 hit，去重 28 簇）、第 60 行（pass 35、uncheckable 11、fail 4）；
+       「已裁掉」区第 132 行 X5 [ref-check]（line-out-of-bounds，decision-memo.md:415 超出文件行数）、第 134 行 X7（对抗 B F8 与裁掉理由）。
+       第 61 行（fail 里另 3 条只差反引号、问题保留）不上屏。
+     放大卡（visual-v4 4.7）五张：第 59 行 → X5 → X7 原始发现 → X7 理由前半 → X7 理由后半；第 60 行只加黄框不放大（停约 1.5 秒）。
+       窗口底边约 551，到字幕带（y 930）有一块空地，分左右两栏放卡（左栏 x 60–930，右栏 x 960–1830，顶边 558），每栏一张，卡宽最多 870、字 29px 折成两行，高约 154–194。
+       一栏放不下两张，所以新卡要哪一栏，才收起占那一栏的卡（约 0.3 秒交接），另一栏的留着；小卡 D2、X7（y 734–906）出现时，留着的两张底边不过 722，不压。
+         第 59 行 左（0.6 起）→ X5 右（8.96 起）→ X7 原始发现 右（12.2 起，收 X5）→ 理由前半 左（26.76 起，收第 59 行）→ 理由后半 右（31.96 起，收 X7 原始发现）；
+         理由前半、理由后半留到页末。
+       每张卡停留：第 59 行约 26 秒（0.6–27.1），X5 约 3 秒（8.96–12.5），X7 原始发现约 20 秒（12.2–32.3），理由前半、理由后半留到页末（约 19 秒、13 秒）。
+       共存：第 59 行与 X5（8.96–12.5）、第 59 行与 X7 原始发现（12.2–27.1）、X7 原始发现与理由前半（26.76–32.3）、理由前半与理由后半（31.96 起到页末）。压暗有卡时一直在。
+     引线（4.7，10-24 起）：每张卡一根，T.lead，黄色 2px，从黄框离卡最近的角连到卡离黄框最近的角；随卡展开擦出，卡收起时缩回。
+       引线层 #leads（z-index 5）在窗口、压暗之上，放大卡（z-index 8）之下。位置按引线不穿黄框、不穿卡排：左栏卡（第 59 行）引线从黄框左下角斜向左下，绕过后面各行的黄框；
+       X7 原始发现、X5 的引线从黄框右下角到右栏卡上沿；理由前半、后半的引线短。
+     窗口里在 X5、X7 行内插了换行（只换行，不改字），让每个加框的片段各占一行。X5、X7 两行讲到才出现；X7 的裁掉理由第 98 句「裁掉了」才出现（visual-v4 4.8 没讲到的不先放出来）。
+     第 101–102 句窗口下方并排两张小卡：D2「推送 goroutine 没人兜 → 服务退出：会真发生」/ X7「没有这样记 URL 的路径：这次走不到」。小结 10-24 拆到 S13a。
+     最后一帧：窗口四段原文；黄框在 X7 理由「脱敏回归由 tasks 2.2 的 handler 级用例证明」，对应放大卡；下面两张小卡。内容都留到页末。
+     配色：报告窗口深色终端底，「实录」标签墨底；条数 50、28 浅蓝（规格评审的结果）；pass / fail 不用红绿（引用核不是测试）；
+       D2「采纳」浅蓝卡配蓝标签（规格补上的）；X7「裁掉」灰卡配灰标签（被留下）；放大卡不加色边；黄 = 当前，同一时刻一个。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒；节点对应整句开口的，取该句起点减 0.2 秒。句起点：
+       93 句 t0.0：窗口与第 59、60 行；t0.2 第 59 行黄框，t0.6 放大卡长出。
+       94 句 t6.24：t6.04 第 60 行黄框（第 59 行那张放大卡留着）；念到「有一条引的行号超出了文件」（t8.36）X5 一行出现，t8.56 黄框，t8.96 放大卡。
+       95 句 t11.6：t11.4 X7 原始发现一行出现；t11.8 黄框，t12.2 放大卡。
+       96 句 t14.32、97 句 t21.44：不换内容。
+       98 句 t23.76：「裁掉了」（t24.28）X7 裁掉理由出现。
+       99 句 t26.56：t26.36 理由前半「本 change 没有以非 error 的 KindAny 记录 URL 的代码路径」黄框，t26.76 放大卡。
+       100 句 t31.76：t31.56 理由后半「脱敏回归由 tasks 2.2 的 handler 级用例证明」黄框，t31.96 放大卡，留到页末。
+       101 句 t35.6：t35.4 左边小卡 D2 落下。
+       102 句 t40.24：念到「一个这次走不到」（t41.24）右边小卡 X7 落下。
+       念完 t44.24；时长 45.36 秒。内容整体在 y 940 以上。 -->
+<html lang="zh-CN" data-frame-id="S13">
+<head>
+<meta charset="utf-8">
+<title>S13 · 报告：条数、引用核、被裁掉的一条</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .window, .zoom { font-variant-ligatures: none; }
+  /* 录屏证据窗口：墨底、等宽、不倾斜；标签倾斜 */
+  .window { left: 60px; top: 100px; width: 1800px; overflow: visible; }
+  .window .tab { top: -60px; font-size: 34px; padding: 4px 22px; }
+  .window .bar0 { height: 44px; display: flex; align-items: center; padding: 0 26px; box-sizing: border-box;
+                  background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 8px 8px 0 0;
+                  font-family: var(--mono); font-size: 22px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  .window .bd { padding: 6px 24px 12px; font-family: var(--mono); font-size: 22px; line-height: 32px; color: #e4e0d6; }
+  .cap { display: block; font-size: 21px; color: var(--unlit); margin: 6px 0 0; }
+  .ln { display: flex; gap: 14px; }
+  .ln > i { flex: none; width: 44px; text-align: right; font-style: normal; color: var(--unlit); }
+  .ln > span { flex: 1; min-width: 0; }
+  .ln .n { color: var(--blue-soft); font-weight: 700; }
+  .ln b { color: #fff; font-weight: 700; }
+  .ln .dm { color: var(--unlit); }
+  #dim { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 8px; background: #000; opacity: 0; pointer-events: none; }
+  .fb { position: absolute; box-sizing: border-box; border: 5px solid transparent; border-radius: 6px; opacity: 0; pointer-events: none; }
+
+  /* 放大卡：位置和尺寸由脚本从黄框插值到终点（终点按内容算，见 measure）；内容按终点尺寸排版，起点处被裁掉 */
+  .zoom { max-width: 870px; position: absolute; box-sizing: border-box; overflow: hidden; opacity: 0; z-index: 8;
+          padding: 14px 34px; background: var(--term); border: 5px solid var(--ink); border-radius: 10px; box-shadow: 8px 8px 0 var(--ink); }
+  .zoom .en { font-family: var(--mono); font-size: 29px; line-height: 38px; color: #cfcbc2; }
+  .zoom .en b { color: var(--cream); font-weight: 800; text-decoration: underline; text-decoration-color: var(--cream); text-decoration-thickness: 3px; text-underline-offset: 7px; }
+  .zoom .zh { margin-top: 4px; font-family: var(--body); font-weight: 600; font-size: 28px; line-height: 36px; color: var(--cream); }
+
+  .pc { top: 770px; width: 880px; height: 136px; padding: 0 24px; display: flex; align-items: center; justify-content: center; text-align: center;
+        font-weight: 700; font-size: 38px; line-height: 1.25; }
+  .pc .tab { font-size: 34px; padding: 2px 20px; top: -36px; }
+  #pD { left: 60px; background: var(--blue-soft); } #pX { left: 980px; background: var(--cream-dim); }
+  #pD .tab { background: var(--blue); } #pX .tab { background: var(--cream-dim); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="bar0">alarm-notify/spec-review-report.md（r3）</div>
+    <div class="bd">
+      <span class="cap">§ 第三步 · 机械引用核</span>
+      <div class="ln"><i>59</i><span>- <span id="s59">合并池共 <span class="n">50</span> 条 hit，按问题去重为 <span class="n">28</span> 簇</span>。调用 findings_ref_check.py，result=ok，没有降级。</span></div>
+      <div class="ln"><i>60</i><span>- 结果：<span id="s60"><b>pass 35、uncheckable 11、fail 4</b></span>。</span></div>
+      <div id="bX">
+        <span class="cap">§ [已裁掉]（原始发现 + 裁掉理由，供设计门复核）</span>
+        <div class="ln" id="x5"><i>132</i><span>| <b>X5 [ref-check]</b> | strategy S-6：TG-24 不命中只写在纪要末尾。 |<br><span id="s132">findings_ref_check.py 判 fail（reason=line-out-of-bounds）：引用的 decision-memo.md:415 超出文件行数</span>（该句实际在第 68 行）。同簇没有其它 hit。主 session 附注：内容本身也不影响实现，钉钉机器人不计费。 |</span></div>
+        <div class="ln" id="x7"><i>134</i><span>| <b>X7</b> | <span id="s134a">对抗 B F8：KindAny 类型的非 error 值（如 *url.URL）不经脱敏</span>；e2e 用无人监听端口的用例抓不到脱敏回归。 |<span id="x7r"><br>RUN-04 场景明确列出的替换面是消息、字符串字段、分组字段、error 值，<br><span id="s134b">本 change 没有以非 error 的 KindAny 记录 URL 的代码路径</span>。<br><span id="s134c">脱敏回归由 tasks 2.2 的 handler 级用例证明</span>，端到端用例只做兜底，本来就不承担这个职责。响应体关闭的部分已并入 D6。 |</span></span></div>
+      </div>
+    </div>
+    <div id="dim"></div>
+    <div class="tab ink">实录 · 示例项目</div>
+  </div>
+  <div class="fb" id="f59"></div><div class="fb" id="f60"></div><div class="fb" id="f132"></div>
+  <div class="fb" id="f134a"></div><div class="fb" id="f134b"></div><div class="fb" id="f134c"></div>
+
+  <!-- 引线层：在窗口与压暗之上、放大卡之下（T.lead 把每张卡的引线画进这一层） -->
+  <svg class="abs" id="leads" viewBox="0 0 1920 1080" aria-hidden="true" style="left:0;top:0;width:1920px;height:1080px;z-index:5;pointer-events:none"></svg>
+
+  <div class="zoom" id="z59">
+    <div class="en">合并池共 <b>50 条 hit</b>，按问题去重为 <b>28 簇</b>。</div>
+    <div class="zh">白话：几路评审一共报了 50 条，同一个问题合并以后是 28 条。</div>
+  </div>
+  <div class="zoom" id="z132">
+    <div class="en">findings_ref_check.py 判 fail（reason=<b>line-out-of-bounds</b>）：引用的 <b>decision-memo.md:415 超出文件行数</b></div>
+    <div class="zh">白话：引的行号比文件总行数还大，核不过；这一簇只有这一条，整簇裁掉。</div>
+  </div>
+  <div class="zoom" id="z134a">
+    <div class="en">对抗 B F8：<b>KindAny 类型的非 error 值（如 *url.URL）不经脱敏</b></div>
+    <div class="zh">白话：日志里直接记一个 URL 对象（不是 error），里面的内容不会被脱敏。</div>
+  </div>
+  <div class="zoom" id="z134b">
+    <div class="en"><b>本 change 没有以非 error 的 KindAny 记录 URL 的代码路径</b></div>
+    <div class="zh">白话：这次的改动里，没有哪一处会这样记 URL。</div>
+  </div>
+  <div class="zoom" id="z134c">
+    <div class="en"><b>脱敏回归由 tasks 2.2 的 handler 级用例证明</b>，端到端用例只做兜底</div>
+    <div class="zh">白话：脱敏对不对，另有任务 2.2 的专门测试兜着。</div>
+  </div>
+
+  <div class="card pc" id="pD" data-r="-0.7"><div class="tab">D2 · 采纳</div>推送 goroutine 没人兜 → 服务退出：会真发生</div>
+  <div class="card pc" id="pX" data-r="0.7"><div class="tab">X7 · 裁掉</div>没有这样记 URL 的路径：这次走不到</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒；注释写全稿句号。
+  var CUE = {
+    win: 0.0,
+    // 黄框：[原文片段, 黄框起, 放大卡起（null = 不放大）, 卡所在栏（L 左 R 右）, 卡收起（null = 留到页末）]
+    // 黄框在下一处黄框起时淡出；卡收起的时刻 = 新卡要占它那一栏的时刻
+    marks: [['s59', 0.2, 0.6, 'L', 26.76], ['s60', 6.04, null], ['s132', 8.56, 8.96, 'R', 12.2], ['s134a', 11.8, 12.2, 'R', 31.96],
+            ['s134b', 26.36, 26.76, 'L', null], ['s134c', 31.56, 31.96, 'R', null]],
+    x5: 8.36,                           // 94 句「有一条引的行号超出了文件」：X5 一行出现
+    x7: 11.4,                          // 95 句：X7 原始发现一行出现
+    x7r: 24.28,                         // 98 句「裁掉了」：X7 裁掉理由出现
+    pD: 35.4,                          // 101 句：左边小卡 D2
+    pX: 41.24                           // 102 句「一个这次走不到」：右边小卡 X7
+  };
+  // 窗口最长时底边约 551（含投影）；放大卡分左右两栏，顶边都在 558，宽不超过 870：左栏 x 60–930，右栏 x 960–1830。
+  // 留到页末的两张（理由前半、理由后半）高约 154，底边加投影不过 722，小卡标签从 734 起。
+  var COL_X = { L: 60, R: 960 }, CARD_Y = 558;
+  var YELLOW = '245,207,74';
+  var END = {}, LEAD = {};   // 每张卡的终点矩形、引线，measure 里算
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.3)) * (1 - T.ease(T.p(t, b, 0.3))); }
+  function frame(box, target, g) {
+    var r = T.rect(target);
+    box.style.left = (r.x - 7) + 'px'; box.style.top = (r.y - 3) + 'px';
+    box.style.width = (r.w + 14) + 'px'; box.style.height = (r.h + 6) + 'px';
+    box.style.opacity = g > 0.001 ? 1 : 0;
+    box.style.borderColor = 'rgba(' + YELLOW + ',' + g + ')';
+    box.style.boxShadow = '0 0 30px rgba(' + YELLOW + ',' + (0.45 * g) + ')';
+  }
+  function grow(zm, from, end, z) {
+    if (z <= 0.001) { zm.style.opacity = 0; return; }
+    zm.style.left = (from.x + (end.x - from.x) * z) + 'px';
+    zm.style.top = (from.y + (end.y - from.y) * z) + 'px';
+    zm.style.width = (from.w + (end.w - from.w) * z) + 'px';
+    zm.style.height = (from.h + (end.h - from.h) * z) + 'px';
+    zm.style.opacity = Math.min(1, z * 4);
+  }
+  function show(id, at) {
+    var el = T.$(id);
+    el.style.display = t0 >= at ? '' : 'none';
+    el.style.opacity = T.ease(T.p(t0, at, 0.4));
+  }
+  var t0 = 0;
+
+  // 量终点和引线：窗口没有位移时量；卡按内容定宽（最宽 870，放不下的折成两行）。
+  // 讲到才出现的行此刻都在（render 还没按时刻隐藏它们），所以黄框位置是它们出现后的位置。
+  function measure() {
+    var win = T.$('win'), saved = win.style.transform;
+    win.style.transform = 'none';
+    CUE.marks.forEach(function (m) {
+      if (m[2] === null) return;
+      var id = m[0].slice(1), zm = T.$('z' + id), r = T.rect(T.$(m[0]));
+      var box = { x: r.x - 7, y: r.y - 3, w: r.w + 14, h: r.h + 6 };   // 黄框外缘（frame() 同款）
+      zm.style.left = '0px'; zm.style.top = '0px'; zm.style.width = 'auto'; zm.style.height = 'auto';
+      var n = T.rect(zm);
+      // 卡长出时宽度在变，里面的字按终点宽度排版、不重新折行：把两行字的宽度钉死（卡宽减左右内边距 68、边框 10）
+      zm.querySelectorAll('.en, .zh').forEach(function (e) { e.style.width = (n.w - 78) + 'px'; });
+      END[id] = { x: COL_X[m[3]], y: CARD_Y, w: n.w, h: n.h };
+      LEAD[id] = T.lead(box, END[id]);
+    });
+    win.style.transform = saved;
+  }
+
+  Stage({
+    duration: 45.36,
+    init: function () { return T.fonts(document.body.textContent).then(measure); },
+    render: function (t) {
+      t0 = t;
+      T.enter(T.$('win'), T.p(t, CUE.win, 0.45), 14);
+      // 讲到才出现：X5 一行（连同「已裁掉」小标题）、X7 原始发现、X7 裁掉理由
+      show('bX', CUE.x5);
+      show('x7', CUE.x7);
+      T.$('x7r').style.opacity = T.ease(T.p(t, CUE.x7r, 0.4));
+      T.$('x7r').style.display = t >= CUE.x7r ? 'inline' : 'none';
+
+      // 黄框一次一处；放大卡分左右两栏，新卡要哪一栏才收起占那一栏的卡，引线跟着卡
+      var dimG = 0;
+      CUE.marks.forEach(function (m, i) {
+        var next = i < CUE.marks.length - 1 ? CUE.marks[i + 1][1] : 999;
+        var el = T.$(m[0]), visible = el.offsetParent !== null;
+        frame(T.$('f' + m[0].slice(1)), el, visible ? on(t, m[1], next) : 0);
+        if (m[2] === null) return;
+        var id = m[0].slice(1), zm = T.$('z' + id);
+        var z = visible ? T.ease(T.p(t, m[2], 0.6)) * (1 - T.ease(T.p(t, m[4] === null ? 999 : m[4], 0.3))) : 0;
+        grow(zm, visible ? T.rect(el) : END[id], END[id], z);
+        T.leadDraw(LEAD[id], z);
+        dimG += z;
+      });
+      T.$('dim').style.opacity = 0.35 * Math.min(1, dimG);
+
+      // 101–102 句：并排两张小卡
+      T.enter(T.$('pD'), T.p(t, CUE.pD, 0.5), 16);
+      T.enter(T.$('pX'), T.p(t, CUE.pX, 0.5), 16);
+    }
+  });
+</script>
+</body>
+</html>

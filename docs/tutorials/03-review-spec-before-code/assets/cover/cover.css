@@ -1,0 +1,113 @@
+/* 第 3 期封面的样式（布局、字体、颜色照第 2 期 episodes/02-spec-still-off-track/assets/cover/；要求见本期 storyboard.md「## 封面」）。
+   cover.html（出封面图）和 S01（开头的片头）共用，所以全部挂在 .cv 下，
+   不和画面自己的类冲突。颜色、字体用 theme.css 的变量。
+   以文字为主，右栏两张卡只是点缀，168px 宽时当纹理看。
+   左栏照前两期：问题句 + 两张工具贴纸「gstack + SDFlow」+ 一行副标「怎么审，怎么拍板，值不值得」。
+   问题句同平台标题，第 2 行 9 个字，比第 2 期（7 个字）长：字号从 172 降到 134，第 2 行收在右栏左边，
+   右栏位置同第 2 期。
+   工具贴纸固定左蓝右琥珀，按位置不按工具（visual-v4.md 第二节「颜色的意思」例外）。
+   评审角度卡同 S08：gstack 原有的角度奶白底，SDFlow 加的墨底，靠底色深浅和文字区分，不借颜色。
+   「批准 · 锁住」章用蓝：蓝是规格一侧，批准锁住的是规格。
+   不用红绿（测试结果）、黄（实底只用于 AI 的猜，描边只表示当前讲到的元素）。
+   四种版式：
+     .cv           主封面，也是片头
+     .cv.text      纯文字变体：去掉右栏，问题句放大，发布时和主封面一起做 YouTube「测试与比较」
+     .cv.p34       视频号个人主页卡片 3:4（1080×1440）：问题句、工具、副标从上往下排，右栏缩小放底部
+     .cv.l43       视频号分享卡片 4:3（1440×1080）：和主封面同一布局，全部缩小
+   右下角 x≥1640 且 y≥960 是时长角标区，主封面和纯文字变体都留空。 */
+
+.cv { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.cv .cv-abs { position: absolute; }
+
+/* 问题句：墨字直压纸底，两行。第 2 行最宽，右端要离右栏留出空。 */
+.cv .cv-q {
+  left: 92px; top: 92px; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 134px; line-height: 1.1;
+  letter-spacing: -2px; white-space: nowrap;
+}
+.cv .cv-q .cv-ai { letter-spacing: 0; margin-right: 0.12em; }
+
+/* 两个工具：gstack + SDFlow。描边、硬投影、字号照第 2 期 grill-me 贴纸；两张都是字，用 flex 按字宽排。 */
+.cv .cv-tools {
+  left: 100px; top: 520px; height: 130px; transform-origin: 0 0;
+  display: flex; align-items: flex-start; gap: 28px;
+}
+.cv .cv-tool {
+  box-sizing: border-box; height: 112px;
+  display: flex; align-items: center; padding: 0 40px;
+  border: 5px solid var(--ink); border-radius: 10px; box-shadow: 9px 9px 0 var(--ink); color: var(--ink);
+  font-family: var(--display); font-weight: 800; font-size: 64px; line-height: 1; white-space: nowrap;
+}
+.cv .cv-tool.l { background: var(--blue); }
+.cv .cv-tool.r { background: var(--amber); }
+.cv .cv-plus {
+  width: 72px; height: 112px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 800; font-size: 96px; color: var(--ink);
+}
+
+.cv .cv-sub {
+  left: 104px; top: 712px; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 58px; line-height: 1.1; white-space: nowrap;
+}
+
+/* 频道 logo：奶白圆底 + 墨环，右上。 */
+.cv .cv-badge {
+  left: 1636px; top: 44px; width: 220px; height: 220px; box-sizing: border-box; border-radius: 50%;
+  background: var(--cream); border: 6px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.cv .cv-badge img { width: 190px; height: 190px; display: block; }
+
+/* 右栏：两张卡错位叠放（同第 2 期）。用 theme.css 的 .card 和 .tab，只覆盖位置与尺寸。 */
+.cv .cv-side { left: 1250px; top: 300px; width: 620px; height: 470px; }
+.cv .cv-side .card { padding: 0; }
+.cv .cv-side .tab { font-size: 40px; padding: 4px 22px; }
+
+/* 后面一张：七个评审角度，三列排开，前面的卡压住卡底，七格都露出来。 */
+.cv .cv-lenses { left: 74px; top: 0; width: 540px; height: 236px; }
+.cv .cv-chips {
+  position: absolute; left: 24px; top: 50px; width: 492px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 10px;
+}
+.cv .cv-lens {
+  height: 48px; box-sizing: border-box; border-radius: 6px; border: 3px solid var(--ink);
+  display: flex; align-items: center; justify-content: center; white-space: nowrap;
+  font-family: var(--display); font-weight: 800; font-size: 28px; line-height: 1;
+}
+.cv .cv-lens.g { background: var(--cream); color: var(--ink); }
+.cv .cv-lens.s { background: var(--ink); color: var(--cream); }
+
+/* 前面一张：深色卡照第 2 期清单塔卡，标签奶白底墨字；几行灰条代表报告正文，上面盖章。 */
+.cv .cv-report { left: 0; top: 250px; width: 590px; height: 220px; box-shadow: 14px 14px 0 var(--ink); }
+.cv .cv-report .tab { background: var(--cream); color: var(--ink); }
+.cv .cv-lines { position: absolute; left: 34px; top: 66px; display: flex; flex-direction: column; gap: 26px; }
+.cv .cv-line { height: 18px; border-radius: 9px; background: var(--cream-dim); }
+.cv .cv-stamp {
+  position: absolute; left: 190px; top: 96px; padding: 8px 26px;
+  background: var(--blue); color: var(--ink); border: 5px solid #0b0b0b; border-radius: 8px; box-shadow: 7px 7px 0 #0b0b0b;
+  font-family: var(--display); font-weight: 900; font-size: 64px; line-height: 1.1; white-space: nowrap;
+}
+
+/* 纯文字变体：去掉右栏，问题句放大到第 2 行接近全宽。 */
+.cv.text .cv-side { display: none; }
+.cv.text .cv-q { top: 80px; font-size: 184px; }
+.cv.text .cv-tools { top: 590px; }
+.cv.text .cv-sub { top: 772px; }
+
+/* 视频号 3:4。舞台 1080×1440 由 cover.html 设。 */
+.cv.p34 { width: 1080px; height: 1440px; }
+.cv.p34 .cv-badge { left: 820px; top: 48px; width: 196px; height: 196px; }
+.cv.p34 .cv-badge img { width: 168px; height: 168px; }
+.cv.p34 .cv-q { left: 64px; top: 300px; font-size: 106px; }
+.cv.p34 .cv-tools { left: 70px; top: 600px; transform: scale(.86); }
+.cv.p34 .cv-sub { left: 74px; top: 746px; }
+.cv.p34 .cv-side { left: 196px; top: 920px; transform: scale(.74); transform-origin: 0 0; }
+
+/* 视频号 4:3。舞台 1440×1080 由 cover.html 设。和主封面同一布局，全部缩小；问题句第 2 行要让开右上的 logo。 */
+.cv.l43 { width: 1440px; height: 1080px; }
+.cv.l43 .cv-badge { left: 1166px; top: 44px; }
+.cv.l43 .cv-q { top: 100px; font-size: 116px; }
+.cv.l43 .cv-tools { top: 390px; transform: scale(.8); }
+.cv.l43 .cv-sub { top: 530px; font-size: 50px; }
+.cv.l43 .cv-side { left: 900px; top: 560px; transform: scale(.74); transform-origin: 0 0; }

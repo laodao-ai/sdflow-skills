@@ -1,0 +1,184 @@
+<!doctype html>
+<!-- S18a · 机制动画（示意）· script 98–102「为什么规则写清楚了，还会跑偏？……它从来没红过，你就不知道它能不能抓住问题。」
+     示意，不标「实录」。提示词卡里那一行是 sdflow-implement 的原文（~/.skills/sdflow-skills/sdflow-implement/SKILL.md:765），按 visual-v4 4.7 用黑底代码窗口，顶栏写来源与行号。
+     - 第 1 句：问题贴纸「写清楚了，为什么还跑偏？」正中放大停 1 秒，0.6 秒缩到左上。
+     - 第 2 句：黑底 提示词卡（标签「派给 agent 的提示词」），里面「循环规则：Red before green」，Red before green 黄框；一条箭头穿过右边空的虚线闸口到「agent 执行」，闸口下标「执行时没人拦」。
+     - 第 3 句：两条路并排：「先写测试 → 再写实现」「先写实现 → 再补测试」，汇到同一个包裹「代码 · 测试 · 全绿」；两路中间问号「哪条路来的？」。
+     - 第 4 句：「再补测试」下面，测试卡的几行照着代码卡一行一行描出来（虚线），旁注「照着代码写 → 天然就过」。
+     - 第 5 句：这张测试卡上盖「从没红过」。
+     配色：提示词卡标签、四个步骤、代码与测试卡是执行一侧，琥珀；绿只用在包裹里的「全绿」（测试通过）；「从没红过」是墨色印章（同 S14a「证伪」），不用红（红只表示测试失败）；黄只作「当前」描边；不用辅助色（本期紫 = Matt Pocock、粉 = 对抗审），两条路靠文字区分。
+     内容都在 y 920 以内，避开字幕带。
+     口播时刻按每分钟 220 字估算（标点算字，英文词算 2 字，句间 0.5 秒；还没录音），录音后用 frame-times.py 对齐：
+       1 句 0.0 · 2 句 4.6 · 3 句 11.9 · 4 句 20.9 · 5 句 27.6，第 5 句约 33.4 念完。 -->
+<html lang="zh-CN" data-frame-id="S18a">
+<head>
+<meta charset="utf-8">
+<title>S18a · 规则写清楚了，为什么还跑偏</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 46px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+
+  /* 第 2 句：提示词卡与闸口 */
+  #pr { position: absolute; left: 60px; top: 235px; width: 740px; box-sizing: border-box; padding: 16px 32px 22px;
+        background: var(--term); color: var(--cream); border: 5px solid var(--ink); border-radius: 12px; box-shadow: 12px 12px 0 var(--ink); }
+  #pr .tab { background: var(--amber); font-size: 36px; left: -14px; top: -46px; padding: 4px 22px; }
+  #pr .bar { font-family: var(--mono); font-size: 26px; color: var(--unlit); }
+  #pr .l1 { margin-top: 10px; font-weight: 600; font-size: 40px; white-space: nowrap; }
+  #pr .l1 b { font-family: var(--mono); font-weight: 800; padding: 0 8px; border-radius: 6px; }
+  #pr .l2 { margin-top: 8px; font-size: 28px; color: var(--cream-dim); white-space: nowrap; }
+  #gt { position: absolute; left: 980px; top: 220px; width: 200px; height: 200px; box-sizing: border-box; border: 6px dashed var(--ink); border-radius: 14px; }
+  #gtl { left: 940px; top: 440px; font-size: 34px; }
+  #ex { left: 1380px; top: 286px; font-size: 38px; background: var(--amber-soft); }
+
+  /* 第 3 句：两条路 */
+  .sp { height: 68px; padding: 0 26px; display: flex; align-items: center; box-sizing: border-box; font-size: 38px; background: var(--amber-soft); }
+  #a1 { left: 60px; top: 500px; } #a2 { left: 400px; top: 500px; }
+  #b1 { left: 60px; top: 640px; } #b2 { left: 400px; top: 640px; }
+  #pk { left: 1250px; top: 520px; width: 610px; height: 150px; padding: 0 30px; display: flex; align-items: center; gap: 14px; }
+  #pk .tab { font-size: 34px; padding: 4px 20px; }
+  #pk .it { flex: none; padding: 6px 20px; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink); font-size: 38px; font-weight: 700; background: var(--amber-soft); }
+  #pk .it.g { background: var(--pass); }
+  #pk .dot { font-family: var(--display); font-weight: 800; font-size: 40px; }
+  #qm { left: 830px; top: 562px; font-size: 38px; }
+
+  /* 第 4 句：照着代码描出测试 */
+  .mini { top: 790px; width: 300px; height: 120px; padding: 0; }
+  .mini .tab { font-size: 30px; padding: 2px 16px; top: -34px; background: var(--amber); }
+  .mini u { position: absolute; left: 26px; height: 14px; border-radius: 7px; background: var(--ink); opacity: .8; }
+  #cc { left: 60px; } #tc { left: 520px; }
+  #nt { left: 900px; top: 820px; font-size: 34px; }
+
+  /* 第 5 句：印章，同 S14a */
+  #stamp { position: absolute; left: 600px; top: 818px; padding: 0 22px; border: 8px solid var(--ink); border-radius: 12px; background: rgba(242,239,230,.92); color: var(--ink);
+           font-family: var(--display); font-weight: 800; font-size: 50px; line-height: 1.12; opacity: 0; transform-origin: 50% 50%; white-space: nowrap; }
+
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="w0" d="M814 320 H1370"/>
+      <path id="wa" d="M268 534 H392"/>
+      <path id="wb" d="M268 674 H392"/>
+      <path id="wa2" d="M610 534 Q960 520 1240 570"/>
+      <path id="wb2" d="M610 674 Q960 690 1240 625"/>
+      <path id="wd" d="M500 712 Q520 760 600 782"/>
+    </g>
+    <g fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="4" stroke-dasharray="10 10" stroke-linecap="round">
+      <path id="d1" d="M290 823 H540"/>
+      <path id="d2" d="M250 851 H540"/>
+      <path id="d3" d="M210 879 H540"/>
+    </g>
+  </svg>
+
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">写清楚了，为什么还跑偏？</div></div>
+
+  <!-- 第 2 句 -->
+  <div id="pr" data-r="0"><div class="tab" data-r="-2">派给 agent 的提示词</div>
+    <div class="bar">sdflow-implement/SKILL.md:765</div>
+    <div class="l1">循环规则：<b id="rbg">Red before green</b></div>
+    <div class="l2">（先写失败测试，再写刚好够通过的代码……）</div>
+  </div>
+  <div id="gt"></div>
+  <div class="tag" id="gtl" data-r="-3">执行时没人拦</div>
+  <div class="chip" id="ex" data-r="1.5">agent 执行</div>
+
+  <!-- 第 3 句 -->
+  <div class="chip sp" id="a1" data-r="-1.2">先写测试</div>
+  <div class="chip sp" id="a2" data-r="1">再写实现</div>
+  <div class="chip sp" id="b1" data-r="1.2">先写实现</div>
+  <div class="chip sp" id="b2" data-r="-1">再补测试</div>
+  <div class="card" id="pk" data-r="0.8"><div class="tab" data-r="-2">交上来的</div>
+    <span class="it">代码</span><span class="dot">·</span><span class="it">测试</span><span class="dot">·</span><span class="it g">全绿</span></div>
+  <div class="chip" id="qm" data-r="4">哪条路来的？</div>
+
+  <!-- 第 4 句 -->
+  <div class="card mini" id="cc" data-r="-1"><div class="tab" data-r="-3">代码</div>
+    <u style="top:26px;width:200px"></u><u style="top:54px;width:160px;left:56px"></u><u style="top:82px;width:120px;left:56px"></u></div>
+  <div class="card mini" id="tc" data-r="1"><div class="tab" data-r="2">测试</div>
+    <u id="u1" style="top:26px;width:200px"></u><u id="u2" style="top:54px;width:160px;left:56px"></u><u id="u3" style="top:82px;width:120px;left:56px"></u></div>
+  <div class="tag" id="nt" data-r="-3">照着代码写 → 天然就过</div>
+
+  <!-- 第 5 句 -->
+  <div id="stamp" data-r="-10">从没红过</div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    hold: 0.876, move: 0.6,   // 第 1 句：问题贴纸正中停到 1.0 秒，0.6 秒缩到左上
+    s2: 4.028,                // 第 2 句：提示词卡、空闸口、没人拦
+    s3: 8.908,               // 第 3 句：两条路、包裹、哪条路来的
+    s4: 15.948,               // 第 4 句：照着代码描出测试
+    s5: 20.588                // 第 5 句：从没红过
+  };
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = p >= 0.99 ? 'url(#ah)' : 'none';
+  }
+  // 虚线描线：用 clip 从左往右擦出，保留虚线样式
+  function trace(id, p) { var el = T.$(id); el.style.opacity = p > 0 ? 1 : 0; el.style.clipPath = 'inset(0 ' + (1 - T.ease(p)) * 100 + '% 0 0)'; }
+  function pop(id, p, dy) { T.enter(T.$(id), p, dy === undefined ? 12 : dy); }
+  function rise(id, p) { var e = T.ease(p); var el = T.$(id); el.style.opacity = e; el.style.transform = 'translateY(' + (1 - e) * 14 + 'px)'; }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 24.848,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句：问题贴纸
+      T.enter(T.$('hdr'), P(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = E(P(t, AT.hold, AT.move)), S = 1.5, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 46;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // 第 2 句：提示词卡（句首前 0.3 秒先进，免得只剩标题超过 3 秒）
+      rise('pr', P(t, AT.s2 - 0.3, 0.5));
+      var g = E(P(t, AT.s2 + 1.6, 0.4)) * (1 - E(P(t, AT.s3, 0.4)));
+      var rb = T.$('rbg');
+      rb.style.outline = '5px solid rgba(245,207,74,' + g + ')';
+      rb.style.outlineOffset = '4px';
+      wire(T.$('w0'), E(P(t, AT.s2 + 3.0, 0.8)));
+      T.$('gt').style.opacity = E(P(t, AT.s2 + 3.2, 0.4));
+      pop('ex', P(t, AT.s2 + 3.8, 0.4));
+      pop('gtl', P(t, AT.s2 + 4.6, 0.4), -8);
+
+      // 第 3 句：两条路汇到同一个包裹
+      pop('a1', P(t, AT.s3, 0.4)); wire(T.$('wa'), E(P(t, AT.s3 + 0.4, 0.3))); pop('a2', P(t, AT.s3 + 0.6, 0.4));
+      pop('b1', P(t, AT.s3 + 0.9, 0.4)); wire(T.$('wb'), E(P(t, AT.s3 + 1.3, 0.3))); pop('b2', P(t, AT.s3 + 1.5, 0.4));
+      wire(T.$('wa2'), E(P(t, AT.s3 + 2.0, 0.6))); wire(T.$('wb2'), E(P(t, AT.s3 + 2.0, 0.6)));
+      pop('pk', P(t, AT.s3 + 2.6, 0.5), 14);
+      pop('qm', P(t, AT.s3 + 5.6, 0.45), -10);
+
+      // 第 4 句：再补测试 → 测试卡的几行照着代码卡描出来
+      T.current(T.$('b2'), E(P(t, AT.s4, 0.4)) * (1 - E(P(t, AT.s5, 0.4))), 7);
+      wire(T.$('wd'), E(P(t, AT.s4 + 0.2, 0.4)));
+      pop('cc', P(t, AT.s4 + 0.4, 0.45)); pop('tc', P(t, AT.s4 + 0.8, 0.45));
+      for (var i = 1; i <= 3; i++) {
+        trace('d' + i, P(t, AT.s4 + 1.4 + (i - 1) * 0.6, 0.5));
+        T.$('u' + i).style.opacity = E(P(t, AT.s4 + 1.8 + (i - 1) * 0.6, 0.3));
+      }
+      pop('nt', P(t, AT.s4 + 3.6, 0.4), -8);
+
+      // 第 5 句：印章
+      var s = E(P(t, AT.s5 + 0.6, 0.35));
+      T.$('stamp').style.opacity = s;
+      T.$('stamp').style.transform = 'rotate(-10deg) scale(' + (1 + 1.2 * (1 - s)) + ')';
+    }
+  });
+</script>
+</body>
+</html>

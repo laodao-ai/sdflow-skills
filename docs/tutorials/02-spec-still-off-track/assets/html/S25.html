@@ -1,0 +1,357 @@
+<!doctype html>
+<!-- S25 · 机制动画 · script 86–100「决定都记下来了，那写出来的规格，里面该有些什么？……这些领域规则是可以扩充的，你在哪块儿常踩坑，就往哪块儿加。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     两类卡 + 三层规则清单塔 + 两个条款原文窗口（作者 2026-10-18 改稿：删去四张条款卡，加 Go 一列的原文窗口与「可扩充」空格）。
+     - 86 句：画面正中只有一张问题贴纸「写出来的规格，里面该有些什么？」，87 句开口淡出。不垫两张卡的空壳（作者 2026-10-18 定：空壳和问题叠在一起看不清，开头只要问题）。
+     - 87 句：两张卡上下落下（一张卡分上下两半的意思）：上「通用规则 · 所有规格都要有」，下「领域规则 · 按这次需求定」。
+       念到「通用规则」上卡当前，念到「领域规则」下卡当前。上卡里四个编号随卡暗着出现。
+     - 88 句：下卡变灰（还没讲到），上卡当前；念到「四样」时四个编号亮起。
+     - 89–92 句：四样逐条出字、当前：成功指标：拿什么度量，做到多少 / 「不做什么」附可证伪的假设 / 代码事实先查再写 / 方案选择写清被否的选项和理由。
+       出处（脚本本节说明）：D-5、D-3、D-1（ff-generation-constraints.md D 表）、BASE-12。
+     - 93 句：下卡亮起、当前；念到「二十多种」时右上角落下一摞卡片「二十多种」（trigger-catalog.md 28 个触发，不写编号），当前到 95 句开口。
+     - 95 句：「实录 · sdflow spec-checklists/」虚线说明落下。
+     - 96–98 句：规则清单塔逐层搭起（实录，条数按 ~/.sdflow/workflow/spec-checklists/ 各文件 ID 行核过，2026-10-17）：
+       96 句底层「通用规则 31 条」，念到「每份规格都要过」时左侧一条括线连到上卡；
+       97 句中层 后端 11 · 嵌入式 11 · 前端 13 · 开发体验 5（按念到的词依次落下），细线连到底层；
+       98 句顶层 Go 6 · ESP32 8 · ML307C 7 · React 3，细线连到各自父层（开发体验上面没有子层）。
+     - 99 句：其它块变灰，念到「通用、后端、Go」依次当前（依据 backend-go.md:6「读 Go 后端完整规则 = base + backend + backend-go 三层并集」）。
+       念到「Go」时上卡、括线、「二十多种」淡出，下卡的标签滑到右上角，腾出上方一排；
+       念到「三层一起过」时上方叠出两个黑底代码窗口（实录，不倾斜），各用一条细线连到亮起的块：
+       左 spec-checklists/domains/backend.md:12-22（BE-01 至 BE-11，只取 ID 与「规则」列）↔ 后端块；
+       右 spec-checklists/domains/backend-go.md:12-17（GO-01 至 GO-06，同样只取 ID 与规则名）↔ Go 块。
+     - 100 句：念到「可以扩充」时其它块恢复，领域那一层末尾出一块虚线空格「+ 你的领域」，backend.md 窗口最后长出一行虚线空行「+ 你的条款」
+       （依据 spec-checklists/README.md:5「领域可持续扩展，新增领域不改 base」）；念到「常踩坑」时两个虚线格当前，到帧尾。
+     - 时刻：按录音实测（frame-times.py，2026-10-19）；全部集中在 CUE 数组，句内节点按字数比例取点，写在下面的常量里。
+     - 内容整体在 y 930 以上，避开底部字幕带。大卡手写小倾角，避免宽卡倾斜后角越界。 -->
+<html lang="zh-CN" data-frame-id="S25">
+<head>
+<meta charset="utf-8">
+<title>S25 · 两类规则与分层规则清单</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 问题贴纸：开头只有它，放在画面正中（left 在 init 里按实际宽度居中）。作者 2026-10-18 定：开头不垫两张卡的空壳 */
+  #q { left: 470px; top: 470px; font-size: 56px; padding: 18px 40px; }
+
+  .half { left: 60px; width: 1800px; }
+  #gen { top: 90px; height: 330px; }
+  #dom { top: 500px; height: 420px; }
+
+  /* 上卡里的四样：编号 + 一句，两列两行 */
+  .it { position: absolute; width: 800px; height: 100px; box-sizing: border-box; padding: 0 20px;
+        display: flex; align-items: center; gap: 24px; border-radius: 8px;
+        font-weight: 600; font-size: 40px; color: var(--ink); white-space: nowrap; }
+
+  /* 一摞卡片「二十多种」 */
+  #stack { position: absolute; left: 1550px; top: 556px; width: 280px; height: 150px; }
+  #stack .card { width: 240px; height: 110px; padding: 0; display: flex; align-items: center; justify-content: center;
+                 border-width: 4px; box-shadow: 6px 6px 0 var(--ink); }
+  #stack .big { font-size: 48px; }
+  #src { left: 1540px; top: 796px; font-size: 30px; line-height: 1.3; white-space: normal; width: 310px; box-sizing: border-box; }
+
+  /* 规则清单塔的块 */
+  .blk { position: absolute; height: 76px; box-sizing: border-box; padding: 0 22px;
+         display: flex; align-items: center; justify-content: center; gap: 14px;
+         background: var(--cream); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px;
+         box-shadow: 6px 6px 0 var(--ink); white-space: nowrap; }
+  .blk .nm { font-family: var(--display); font-weight: 800; font-size: 40px; }
+  .blk .ct { font-weight: 600; font-size: 34px; }
+  .r1 { top: 560px; } .r2 { top: 692px; } .r3 { top: 824px; }
+  /* 「可以扩充」的虚线空格：没有底色和投影 */
+  #bNEW { background: transparent; border-style: dashed; box-shadow: none; }
+
+  #links, #brace, #wires { position: absolute; overflow: visible; }
+  #brace { left: 20px; top: 240px; width: 140px; height: 630px; }
+  #links { left: 250px; top: 636px; width: 1110px; height: 190px; }
+  #wires { left: 0; top: 0; width: 1920px; height: 940px; }
+
+  /* 条款原文窗口：黑底、等宽、不倾斜（全片统一，同 S20a） */
+  .cw { top: 28px; padding: 0; font-size: 26px; line-height: 30px; white-space: nowrap; box-shadow: 12px 12px 0 var(--ink); }
+  #wBE { left: 40px; width: 690px; }
+  #wGO { left: 770px; width: 730px; }
+  .cw .bar { height: 40px; display: flex; align-items: center; padding: 0 22px; box-sizing: border-box;
+             background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0;
+             font-size: 26px; line-height: 1; color: var(--cream); }
+  .cw .body { padding: 10px 22px; }
+  .cw .row { display: flex; gap: 20px; height: 30px; overflow: hidden; border-radius: 4px; }
+  .cw .ln { flex: none; width: 32px; text-align: right; color: var(--unlit); }
+  .cw .id { flex: none; width: 96px; }
+  /* 「+ 你的条款」：虚线框的空行 */
+  #addBE { height: 0; margin-top: 2px; }
+  #addBE .code { flex: 1; box-sizing: border-box; height: 40px; padding: 0 10px; line-height: 1; display: flex; align-items: center;
+                 border: 3px dashed var(--cream-dim); border-radius: 4px; color: var(--cream-dim); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="q" data-r="-2">写出来的规格，里面该有些什么？</div>
+
+  <!-- 上半：通用规则 -->
+  <div class="card half" id="gen" data-r="-0.4">
+    <div class="tab os">通用规则 · 所有规格都要有</div>
+    <div class="it" id="i1" style="left:40px;top:56px"><span class="num os">1</span><span class="tx">成功指标：拿什么度量，做到多少</span></div>
+    <div class="it" id="i2" style="left:930px;top:56px"><span class="num os">2</span><span class="tx">「不做什么」附可证伪的假设</span></div>
+    <div class="it" id="i3" style="left:40px;top:186px"><span class="num os">3</span><span class="tx">代码事实先查再写</span></div>
+    <div class="it" id="i4" style="left:930px;top:186px"><span class="num os">4</span><span class="tx">方案选择写清被否的选项和理由</span></div>
+  </div>
+
+  <!-- 下半：领域规则 -->
+  <div class="card half" id="dom" data-r="0.4">
+    <div class="tab os" id="domTab">领域规则 · 按这次需求定</div>
+  </div>
+
+  <div id="stack">
+    <div class="card" style="left:36px;top:36px"></div>
+    <div class="card" style="left:18px;top:18px"></div>
+    <div class="card" style="left:0;top:0"><span class="big">二十多种</span></div>
+  </div>
+  <div class="tag" id="src">实录 · SDFlow<br>spec-checklists/</div>
+
+  <!-- 左侧括线：底层「通用规则」就是上面那张卡 -->
+  <svg id="brace" viewBox="20 240 140 630" aria-hidden="true">
+    <path id="braceP" d="M150 862 H30 V255 H58" fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round"/>
+    <circle id="braceD" cx="58" cy="255" r="9" fill="#161616"/>
+  </svg>
+
+  <!-- 层间细线：子块下沿中点 → 父块上沿 -->
+  <svg id="links" viewBox="250 636 1110 190" aria-hidden="true">
+    <g stroke="#161616" stroke-opacity=".8" stroke-width="5" stroke-linecap="round">
+      <line class="l2" x1="262" y1="772" x2="262" y2="822"/>
+      <line class="l2" x1="660" y1="772" x2="660" y2="822"/>
+      <line class="l2" x1="1065" y1="772" x2="1065" y2="822"/>
+      <line class="l2" x1="1350" y1="772" x2="1350" y2="822"/>
+      <line class="l3" x1="262" y1="640" x2="262" y2="690"/>
+      <line class="l3" x1="525" y1="640" x2="525" y2="690"/>
+      <line class="l3" x1="790" y1="640" x2="790" y2="690"/>
+      <line class="l3" x1="1065" y1="640" x2="1065" y2="690"/>
+    </g>
+  </svg>
+
+  <!-- 清单塔：底层 → 领域 → 语言 / 芯片 / 框架 -->
+  <div class="blk r3" id="bBase" data-r="0.3" style="left:150px;width:1345px"><span class="nm">通用规则</span><span class="ct">31 条</span></div>
+
+  <div class="blk r2" id="bBE"  style="left:150px;width:225px"><span class="nm">后端</span><span class="ct">11 条</span></div>
+  <div class="blk r2" id="bEMB" data-r="-0.8" style="left:395px;width:530px"><span class="nm">嵌入式</span><span class="ct">11 条</span></div>
+  <div class="blk r2" id="bFE"  style="left:945px;width:240px"><span class="nm">前端</span><span class="ct">13 条</span></div>
+  <div class="blk r2" id="bDX"  style="left:1205px;width:290px"><span class="nm">开发体验</span><span class="ct">5 条</span></div>
+  <div class="blk r2" id="bNEW" data-r="1.2" style="left:1520px;width:290px"><span class="nm">+ 你的领域</span></div>
+
+  <div class="blk r1" id="bGO"    style="left:160px;width:205px"><span class="nm">Go</span><span class="ct">6 条</span></div>
+  <div class="blk r1" id="bESP"   style="left:405px;width:240px"><span class="nm">ESP32</span><span class="ct">8 条</span></div>
+  <div class="blk r1" id="bML"    style="left:665px;width:250px"><span class="nm">ML307C</span><span class="ct">7 条</span></div>
+  <div class="blk r1" id="bREACT" style="left:950px;width:230px"><span class="nm">React</span><span class="ct">3 条</span></div>
+
+  <!-- 窗口 ↔ 亮起的块：后端块左沿 → 左窗口下沿；Go 块上沿 → 右窗口下沿（终点在 render 里按窗口实际高度补齐） -->
+  <svg id="wires" viewBox="0 0 1920 940" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-width="5" stroke-linejoin="round" stroke-linecap="round">
+      <path id="wBEp" d=""/>
+      <path id="wGOp" d=""/>
+    </g>
+    <circle id="wBEd" r="8" fill="#161616"/>
+    <circle id="wGOd" r="8" fill="#161616"/>
+  </svg>
+
+  <!-- 条款原文（实录）：只取 ID 与「规则」列，照原文字面 -->
+  <div class="cmd cw" id="wBE" data-r="0">
+    <div class="bar">spec-checklists/domains/backend.md:12-22</div>
+    <div class="body">
+      <div class="row"><span class="ln">12</span><span class="id">BE-01</span><span class="code">DB Schema 迁移</span></div>
+      <div class="row"><span class="ln">13</span><span class="id">BE-02</span><span class="code">API 合约变更</span></div>
+      <div class="row"><span class="ln">14</span><span class="id">BE-03</span><span class="code">Auth / 权限边界</span></div>
+      <div class="row"><span class="ln">15</span><span class="id">BE-04</span><span class="code">错误处理与失败模式</span></div>
+      <div class="row"><span class="ln">16</span><span class="id">BE-05</span><span class="code">数据一致性</span></div>
+      <div class="row"><span class="ln">17</span><span class="id">BE-06</span><span class="code">性能与容量</span></div>
+      <div class="row"><span class="ln">18</span><span class="id">BE-07</span><span class="code">可观测性（后端具体化）</span></div>
+      <div class="row"><span class="ln">19</span><span class="id">BE-08</span><span class="code">退避重试与熔断</span></div>
+      <div class="row"><span class="ln">20</span><span class="id">BE-09</span><span class="code">优雅退出与部署</span></div>
+      <div class="row"><span class="ln">21</span><span class="id">BE-10</span><span class="code">分发管道</span></div>
+      <div class="row"><span class="ln">22</span><span class="id">BE-11</span><span class="code">可用性与恢复目标（SLA/RTO/RPO）</span></div>
+      <div class="row" id="addBE"><span class="ln"></span><span class="code">+ 你的条款</span></div>
+    </div>
+  </div>
+  <div class="cmd cw" id="wGO" data-r="0">
+    <div class="bar">spec-checklists/domains/backend-go.md:12-17</div>
+    <div class="body">
+      <div class="row"><span class="ln">12</span><span class="id">GO-01</span><span class="code">goroutine 并发与同步</span></div>
+      <div class="row"><span class="ln">13</span><span class="id">GO-02</span><span class="code">goroutine 生命周期</span></div>
+      <div class="row"><span class="ln">14</span><span class="id">GO-03</span><span class="code">TOCTOU 与原子性</span></div>
+      <div class="row"><span class="ln">15</span><span class="id">GO-04</span><span class="code">panic recovery</span></div>
+      <div class="row"><span class="ln">16</span><span class="id">GO-05</span><span class="code">定时任务重叠防护</span></div>
+      <div class="row"><span class="ln">17</span><span class="id">GO-06</span><span class="code">资源清理</span></div>
+    </div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 句子开口时刻，按录音实测（frame-times.py，2026-10-19）。下标 0 = 本页第 1 句 = 全稿 86 句。
+  var CUE = [
+    0.0,   // 86 决定都记下来了……
+    5.36,  // 87 我把它分成两类：……通用规则；……领域规则。
+    15.36, // 88 通用规则所有规格文档都需要满足，最要紧的是四样。
+    21.28, // 89 第一，要写成功指标：拿什么度量，要做到多少。
+    27.68, // 90 第二，写「不做什么」……
+    37.68, // 91 第三，代码里的事实……
+    43.6,  // 92 第四，方案选择……
+    49.44, // 93 领域规则要看这次需求涉及什么：……二十多种情况……
+    60.88, // 94 涉及哪块技术，就带上哪块的规则清单……图表。
+    68.56, // 95 规则清单是分层的。
+    71.04, // 96 最底下就是通用规则，每份规格都要过。
+    76.16, // 97 上面一层按领域分：后端、嵌入式、前端，还有开发体验等等。
+    83.44, // 98 再往上一层，是具体的语言、芯片和框架，比如 Go、ESP32、React。
+    93.12, // 99 写 Go 代码，就是通用、后端、Go 三层一起过。
+    99.2   // 100 这些领域规则是可以扩充的，你在哪块儿常踩坑，就往哪块儿加。
+  ];
+  function S(n) { return CUE[n - 86]; }
+
+  // 句内节点，取该词第一个字的实测开始时间（可提前至多 0.2 秒）
+  var AT_GEN_WORD = 9.4;    // 87 句念到「通用规则」（通 9.44）
+  var AT_DOM_WORD = 13.4;   // 87 句念到「领域规则」（领 13.44）
+  var AT_FOUR     = 19.7;   // 88 句念到「四样」（四 19.68）
+  var AT_MANY     = 55.1;   // 93 句念到「二十多种」（二 55.12）
+  var AT_BRACE    = 73.4;   // 96 句念到「每份规格都要过」（每 73.44）
+  var AT_MID = [78.4, 79.3, 80.3, 81.2];   // 97 句：后端 78.48、嵌入式 79.36、前端 80.32、开发体验 81.28
+  var AT_TOP = 85.2;        // 98 句念完「再往上一层」，接「具体的语言」（具 85.20）
+  var AT_COL = [94.6, 95.4, 96.4];         // 99 句：通用 94.64、后端 95.44、Go 96.40
+  var AT_WIN = 96.9;        // 99 句念到「三层一起过」（三 96.96）
+  var AT_EXT = 100.2;       // 100 句念到「可以扩充」（可 100.24）
+  var AT_PIT = 103.3;       // 100 句念到「常踩坑」（常 103.31）
+
+  var CREAM = [242, 239, 230], DIM = [160, 157, 151];
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function shade(el, dim) { el.style.background = T.mix(CREAM, DIM, dim); }
+  // 代码窗口里的当前行：只加黄框（内描边，行在增高时 overflow 裁切，外描边会被裁掉）
+  function rowCur(el, g) {
+    el.style.boxShadow = 'inset 0 0 0 3px rgba(245,207,74,' + g + ')';
+    el.style.color = T.mix(DIM, CREAM, g);
+  }
+
+  // 两条连线：按窗口和块的实际位置算路径
+  function wires() {
+    var be = T.$('bBE'), go = T.$('bGO'), wb = T.$('wBE'), wg = T.$('wGO');
+    var bBot = wb.offsetTop + 400;   // 11 行时的窗口下沿；长出第 12 行后窗口盖住线头
+    var gBot = wg.offsetTop + wg.offsetHeight;
+    var by = be.offsetTop + be.offsetHeight / 2;
+    var gx = go.offsetLeft + go.offsetWidth - 50, gy = go.offsetTop;
+    var wx = wg.offsetLeft + 300;
+    T.$('wBEp').setAttribute('d', 'M' + be.offsetLeft + ' ' + by + ' H100 V' + (bBot - 10));
+    T.$('wGOp').setAttribute('d', 'M' + gx + ' ' + gy + ' V526 H' + wx + ' V' + (gBot - 10));
+    T.$('wBEd').setAttribute('cx', be.offsetLeft); T.$('wBEd').setAttribute('cy', by);
+    T.$('wGOd').setAttribute('cx', gx); T.$('wGOd').setAttribute('cy', gy);
+    ['wBEp', 'wGOp'].forEach(function (id) {
+      var p = T.$(id), L = p.getTotalLength();
+      p.style.strokeDasharray = L; p.setAttribute('data-len', L);
+    });
+  }
+
+  Stage({
+    duration: 106.5,
+    init: function () {
+      wires();
+      return T.fonts('写出来的规格，里面该有些什么？通用规则所有都要有领域按这次需求定成功指标拿度量做到多少「不做什么」附可证伪的假设代码事实先查再写方案选择清被否选项和理由二十多种实录后端嵌入式前端开发体验条你的·：+').then(function () {
+        // 字体到位后再量宽度，问题贴纸水平居中
+        var q = T.$('q');
+        q.style.left = Math.round((1920 - q.offsetWidth) / 2) + 'px';
+      });
+    },
+    render: function (t) {
+      var gen = T.$('gen'), dom = T.$('dom');
+
+      // 86 句：问题贴纸；87 句开口淡出
+      T.enter(T.$('q'), T.p(t, 0.0, 0.4), -14);
+      T.$('q').style.opacity = T.ease(T.p(t, 0.0, 0.4)) * (1 - T.ease(T.p(t, S(87), 0.4)));
+
+      // 87 句：两半落下
+      T.enter(gen, T.p(t, S(87) + 0.4, 0.5), 16);
+      T.enter(dom, T.p(t, S(87) + 0.6, 0.5), 16);
+      // 99 句念到「Go」：上卡淡出，给代码窗口腾位置
+      var up = T.ease(T.p(t, AT_COL[2], 0.5));
+      gen.style.opacity = T.ease(T.p(t, S(87) + 0.4, 0.5)) * (1 - up);
+      // 99 句：下卡标签滑到右上角，左上让给窗口连线
+      var tab = T.$('domTab');
+      tab.style.left = (-14 + (dom.offsetWidth - tab.offsetWidth - 40 + 14) * up) + 'px';
+
+      // 当前：上卡 87「通用规则」→ 88 句末；下卡 87「领域规则」→ 88 开口；93 句 → 「二十多种」
+      T.current(gen, Math.max(on(t, AT_GEN_WORD, AT_DOM_WORD), on(t, S(88), S(89))), 10);
+      T.current(dom, Math.max(on(t, AT_DOM_WORD, S(88)), on(t, S(93), AT_MANY)), 10);
+      // 下卡在 88–92 句变灰，93 句亮起
+      shade(dom, T.ease(T.p(t, S(88), 0.4)) * (1 - T.ease(T.p(t, S(93), 0.5))));
+
+      // 87 句：四个编号随卡暗着出现；88 句「四样」编号亮起；89–92 句逐条出字、点亮、当前
+      var LIT = [S(89), S(90), S(91), S(92)], END = [S(90), S(91), S(92), S(93)];
+      for (var i = 0; i < 4; i++) {
+        var it = T.$('i' + (i + 1));
+        var four = T.ease(T.p(t, AT_FOUR + i * 0.15, 0.4));
+        it.querySelector('.num').style.opacity = 0.3 + 0.7 * four;
+        it.querySelector('.tx').style.opacity = T.ease(T.p(t, LIT[i], 0.5));
+        var g = on(t, LIT[i], END[i]);
+        T.current(it, g, 0.001);  // 行没有投影；传 0 会回落到默认 10px
+        if (g === 0) { it.style.outline = 'none'; it.style.boxShadow = 'none'; }
+      }
+
+      // 93 句「二十多种」：一摞卡片落下，当前到 95 句开口；99 句随上卡淡出
+      var st = T.$('stack');
+      var ps = T.ease(T.p(t, AT_MANY, 0.5));
+      st.style.opacity = ps * (1 - up);
+      st.style.transform = 'translateY(' + ((1 - ps) * -14) + 'px)';
+      T.current(st.lastElementChild, on(t, AT_MANY, S(95)), 6);
+
+      // 95 句：实录说明
+      T.enter(T.$('src'), T.p(t, S(95) + 0.4, 0.4), -10);
+
+      // 96 句：底层；念到「每份规格都要过」时括线连到上卡
+      var base = T.$('bBase');
+      T.enter(base, T.p(t, S(96) + 0.3, 0.5), 14);
+      // 括线从底层往上擦出：裁掉 svg 上部（svg 顶边在 y 240，高 630）
+      var pb = T.ease(T.p(t, AT_BRACE, 0.8));
+      var br = T.$('brace');
+      br.style.clipPath = 'inset(' + ((1 - pb) * 630) + 'px 0 0 0)';
+      br.style.opacity = (pb > 0 ? 1 : 0) * (1 - up);
+
+      // 97 句：中层逐块落下，细线连到底层
+      var MID = ['bBE', 'bEMB', 'bFE', 'bDX'];
+      var l2 = T.all('.l2');
+      for (var m = 0; m < 4; m++) {
+        T.enter(T.$(MID[m]), T.p(t, AT_MID[m], 0.45), 14);
+        l2[m].style.opacity = T.ease(T.p(t, AT_MID[m] + 0.2, 0.4));
+      }
+      // 98 句：顶层逐块落下，细线连到各自父层
+      var TOP = ['bGO', 'bESP', 'bML', 'bREACT'];
+      var l3 = T.all('.l3');
+      for (var k = 0; k < 4; k++) {
+        T.enter(T.$(TOP[k]), T.p(t, AT_TOP + k * 0.35, 0.45), 14);
+        l3[k].style.opacity = T.ease(T.p(t, AT_TOP + k * 0.35 + 0.2, 0.4));
+      }
+
+      // 99 句：整列点亮。其它块变灰，通用 → 后端 → Go 依次当前，到 100 句「可以扩充」
+      var col = ['bBase', 'bBE', 'bGO'];
+      var dimOthers = T.ease(T.p(t, S(99), 0.4)) * (1 - T.ease(T.p(t, AT_EXT, 0.5)));
+      ['bEMB', 'bFE', 'bDX', 'bESP', 'bML', 'bREACT'].forEach(function (id) { shade(T.$(id), dimOthers); });
+      col.forEach(function (id, j) { T.current(T.$(id), on(t, AT_COL[j], AT_EXT), 6); });
+
+      // 99 句「三层一起过」：两个代码窗口落下（不倾斜），连线从块画到窗口
+      T.enter(T.$('wBE'), T.p(t, AT_WIN, 0.5), -12);
+      T.enter(T.$('wGO'), T.p(t, AT_WIN + 0.15, 0.5), -12);
+      [['wBEp', 'wBEd'], ['wGOp', 'wGOd']].forEach(function (w, j) {
+        var p = T.$(w[0]), pw = T.ease(T.p(t, AT_WIN + 0.2 + j * 0.1, 0.5));
+        p.style.strokeDashoffset = parseFloat(p.getAttribute('data-len')) * (1 - pw);
+        p.style.opacity = pw > 0 ? 1 : 0;
+        T.$(w[1]).style.opacity = pw > 0 ? 1 : 0;
+      });
+
+      // 100 句「可以扩充」：领域层末尾出虚线空格，backend.md 窗口长出一行虚线空行
+      var nw = T.$('bNEW');
+      T.enter(nw, T.p(t, AT_EXT, 0.45), 14);
+      var add = T.$('addBE'), pa = T.ease(T.p(t, AT_EXT + 0.2, 0.45));
+      add.style.height = (40 * pa) + 'px';
+      add.style.opacity = pa;
+      // 「常踩坑」：两个虚线格当前，到帧尾
+      var pit = T.ease(T.p(t, AT_PIT, 0.4));
+      T.current(nw, pit, 0.001);
+      if (pit === 0) { nw.style.outline = 'none'; nw.style.boxShadow = 'none'; }
+      rowCur(add.querySelector('.code'), pit);
+    }
+  });
+</script>
+</body>
+</html>

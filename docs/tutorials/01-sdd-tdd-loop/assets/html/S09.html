@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- S09 · 标题卡 · script 33–37「那该怎么办呢？……英文是 Spec-Driven Development，简称 SDD。」
+     先出办法那句（口播先说「写代码之前，先把需求写成规格文档」），再出术语大字和英文名。
+     还没提到工具，不用蓝 / 琥珀。定下来的东西，倾角小。
+     2026-10-06：术语拆成两句（「这个做法，就叫规格驱动开发，」「英文是 …，简称 SDD。」），英文名后加「（SDD）」，同 S28；
+     英文名推到第二句开口时出。时刻按实测（2026-10-06，frame-times.py）。 -->
+<html lang="zh-CN" data-frame-id="S09">
+<head>
+<meta charset="utf-8">
+<title>S09 · 规格驱动开发</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .term { left: 260px; top: 200px; width: 1400px; height: 400px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; }
+  .term .big { font-size: 170px; }
+  .term .en { font-family: var(--display); font-weight: 800; font-size: 76px; line-height: 1.2; color: #4a4a47; }
+  .how { left: 330px; top: 700px; width: 1260px; height: 170px; display: flex; align-items: center; justify-content: center; }
+  .how .big { font-size: 68px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card term" id="term" data-r="-1">
+    <div class="big">规格驱动开发</div>
+    <div class="en" id="en">Spec-Driven Development（SDD）</div>
+  </div>
+  <div class="card how" id="how" data-r="1"><div class="big">写代码之前，先把需求写成规格文档</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 15,
+    init: function () { return T.fonts('规格驱动开发写代码之前，先把需求成规格文档（）'); },
+    render: function (t) {
+      T.enter(T.$('how'), T.p(t, 4.88, 0.6), 30);    // 35 句开口「写代码之前」
+      T.enter(T.$('term'), T.p(t, 10.88, 0.6), 30);  // 36 句念到「规格驱动开发」的「规」
+      T.$('en').style.opacity = T.ease(T.p(t, 12.88, 0.5));  // 37 句开口「英文是……」
+    }
+  });
+</script>
+</body>
+</html>

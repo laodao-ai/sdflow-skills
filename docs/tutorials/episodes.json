@@ -1,0 +1,57 @@
+[
+  {
+    "episode": 1,
+    "directory": "01-sdd-tdd-loop",
+    "title": "AI 写代码总跑偏？用 OpenSpec 和 Superpowers 搭一个最小的开发循环",
+    "description": "先把需求写清楚，再用测试和审查确认实现。",
+    "links": {
+      "bilibili": "https://www.bilibili.com/video/BV1hPH96dE3V/",
+      "youtube": "https://youtu.be/AoCEBAJ53Uo",
+      "blog": "https://laodao-ai.com/posts/sdd-tdd-loop/"
+    }
+  },
+  {
+    "episode": 2,
+    "directory": "02-spec-still-off-track",
+    "title": "Spec 怎么写，AI 才不会跑偏？",
+    "description": "从需求探索到规格成文，明确目标、边界和验收标准。",
+    "links": {
+      "bilibili": "https://www.bilibili.com/video/BV1JQnN6vEJ9/",
+      "youtube": "https://youtu.be/O09-pLXSD5c",
+      "blog": "https://laodao-ai.com/posts/spec-still-off-track/"
+    }
+  },
+  {
+    "episode": 3,
+    "directory": "03-review-spec-before-code",
+    "title": "AI 写的 Spec，能直接生成代码吗？",
+    "description": "在写代码之前，核对规格中的遗漏、冲突和设计选择。",
+    "links": {
+      "bilibili": "https://www.bilibili.com/video/BV1k6nZ6XEvY/",
+      "youtube": "https://youtu.be/EsiFc6yBd4Q",
+      "blog": "https://laodao-ai.com/posts/review-spec-before-code/"
+    }
+  },
+  {
+    "episode": 4,
+    "directory": "04-split-and-verify",
+    "title": "Spec 写好了，为什么不一口气生成代码？",
+    "description": "拆分任务，逐项实现、测试和检查，再验证整体结果。",
+    "links": {
+      "bilibili": "https://www.bilibili.com/video/BV1hZxX6eEKD/",
+      "youtube": "https://youtu.be/fvmItQ9TuPk",
+      "blog": "https://laodao-ai.com/posts/split-and-verify/"
+    }
+  },
+  {
+    "episode": 5,
+    "directory": "05-fresh-context-review",
+    "title": "测试全过了，为什么还要代码评审？",
+    "description": "用新的上下文检查整体改动，核实发现，再修复与复审。",
+    "links": {
+      "bilibili": "https://www.bilibili.com/video/BV1VWW262ELt/",
+      "youtube": "https://youtu.be/WmwSxW9bdnI",
+      "blog": "https://laodao-ai.com/posts/fresh-context-review/"
+    }
+  }
+]

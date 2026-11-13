@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- S16 · 第 12 轮（2026-11-09），口播 92–96。
+     三行规则卡（意见 53 删「最多修改、复审两轮」一行，两轮复审只在 S17a 讲）。第 1 句问题贴纸「报出来的问题，不能全修」；
+     第 2 句标题「处理规则」；第 3–5 句逐行出，第三行在出现时就标「实现阶段：做不下去 → 停，等人」，前两行是评审处理。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S16">
+<head>
+<meta charset="utf-8">
+<title>S16 · 处理规则</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 问题贴纸 */
+  #hw { left: 60px; top: 50px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+
+  /* 规则卡：标题贴纸 + 三张行卡（S17、S19 的紧凑版用同一套 class 与配色） */
+  .rtitle { font-family: var(--display); font-weight: 800; }
+  .rrow { padding: 0; }
+  .rrow .num { position: absolute; }
+  .rcond { position: absolute; color: var(--ink); font-weight: 700; white-space: nowrap; }
+  .rarr { position: absolute; font-family: var(--display); font-weight: 800; color: var(--ink); line-height: 1; }
+  .ract { position: absolute; font-family: var(--display); font-weight: 800; display: flex; align-items: center; }
+  .ract.fix { background: var(--amber-soft); }
+  .ract.stop { background: var(--charcoal); color: var(--cream); }
+  .who { flex: none; display: inline-block; box-sizing: border-box; border-radius: 50%; border: 5px solid var(--cream); position: relative; }
+  .who::after { content: ""; position: absolute; left: 50%; top: 50%; width: 40%; height: 40%; border-radius: 50%; background: var(--cream); transform: translate(-50%, -50%); }
+
+  /* 本页尺寸 */
+  #rt { left: 60px; top: 190px; font-size: 50px; padding: 8px 28px; }
+  #rows .rrow { left: 60px; width: 1800px; height: 132px; }
+  #r1 { top: 330px; } #r2 { top: 506px; } #r3 { top: 682px; }
+  #rows .num { left: 36px; top: 29px; }
+  #rows .rcond { left: 132px; top: 34px; font-size: 50px; line-height: 1.2; }
+  #rows .rarr { left: 1010px; top: 38px; font-size: 56px; }
+  #rows .ract { left: 1100px; top: 22px; font-size: 52px; padding: 6px 28px; gap: 16px; }
+  #rows .who { width: 50px; height: 50px; }
+  .rcond { font-size: 38px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">报出来的问题，不能全修</div></div>
+
+  <div class="chip rtitle" id="rt" data-r="-1.5">处理规则</div>
+  <div id="rows">
+    <div class="card rrow" id="r1" data-r="-0.4" data-shadow="10">
+      <span class="num">1</span><span class="rcond">影响这次目标的</span><span class="rarr">→</span>
+      <div class="chip ract fix" id="a1" data-r="1.5">马上修</div>
+    </div>
+    <div class="card rrow" id="r2" data-r="0.4" data-shadow="10">
+      <span class="num">2</span><span class="rcond">不重要的、与本次无关的旧问题</span><span class="rarr">→</span>
+      <div class="chip ract" id="a2" data-r="-1.5">记下来</div>
+    </div>
+    <div class="card rrow" id="r3" data-r="-0.4" data-shadow="10">
+      <span class="num">3</span><span class="rcond">实现阶段：做不下去</span><span class="rarr">→</span>
+      <div class="chip ract stop" id="a3" data-r="-1.5"><i class="who"></i>停，等人</div>
+    </div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：按每分钟 220 字估，录音后按实测改。注释写本画面第几句。
+  var CUE = {
+    hold: 0.761, move: 0.5,        // 1 句：问题贴纸
+    rt: 3.12,                     // 2 句：标题
+    r: [5.28, 8.16, 14.16],         // 3–5 句：每句开头落一行
+    a: [6.72, 12.4, 18.96]         // 3–5 句：念到「马上修」「记下来」「停下来等人」出结论
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 21.520,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：问题贴纸正中放大 → 左上
+      T.enter(T.$('hdr'), T.p(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move)), S = 1.6, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 50;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // 2 句：标题贴纸
+      T.enter(T.$('rt'), T.p(t, CUE.rt, 0.45), 14);
+
+      // 3–5 句：三行逐行落下，当前行黄描边
+      for (var i = 0; i < 3; i++) {
+        var row = T.$('r' + (i + 1));
+        T.enter(row, T.p(t, CUE.r[i], 0.5), 18);
+        T.current(row, on(t, CUE.r[i], i < 2 ? CUE.r[i + 1] : 999), 10);
+        T.enter(T.$('a' + (i + 1)), T.p(t, CUE.a[i], 0.45), 10);
+        row.querySelector('.rarr').style.opacity = T.ease(T.p(t, CUE.a[i] - 0.2, 0.35));
+      }
+    }
+  });
+</script>
+</body>
+</html>

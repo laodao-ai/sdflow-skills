@@ -1,0 +1,199 @@
+<!doctype html>
+<!-- S33 · 机制动画 · 示意 · script 149–153「第二件事，按计划一项一项做。……全部做完后，最后再整体审一遍。」
+     Superpowers 按计划做：每个任务派一个新的子代理去做，做完派另一个子代理审，审过才做下一个，
+     全部做完再整体审一遍。依据 Superpowers 6.4.2 subagent-driven-development（每个任务一个新的
+     implementer 子代理 → reviewer 子代理查 spec compliance 和 code quality → 通过才进下一个任务 →
+     最后整条分支再审一遍）。
+     - 上：琥珀区一排任务卡 1、2、3。黄框 = 当前在做的任务，审过一个就移到下一个。
+       做完的任务：卡底变灰（灰 = 已过去），右边贴一个墨色勾。
+     - 下：当前任务的一圈。左卡「新的子代理」照计划几步走，结果灯先红后绿（测试失败 / 通过，只这里用红绿）；
+       右卡「另一个子代理审」两项：照规格没有、代码质量，勾用墨色，不用绿（绿只表示测试通过）；
+       最后「下一个」。任务 1 跟口播慢慢走一圈，任务 2、3 各快放一圈（1.5 秒）。
+     - 子代理用 S07 / S35 的 Agent 六边形。
+     - 全部做完：下面一圈压暗，整排任务加黄框，贴纸「整体审一遍」。 -->
+<html lang="zh-CN" data-frame-id="S33">
+<head>
+<meta charset="utf-8">
+<title>S33 · 按计划做</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .head { left: 90px; top: 62px; font-size: 58px; color: #161616; }
+
+  /* 上：一排任务。子元素坐标相对这个区。 */
+  #row { left: 90px; top: 230px; width: 1740px; height: 190px; padding: 0; }
+  #row > .tab { font-size: 48px; }
+  .task {
+    top: 42px; width: 460px; height: 110px; padding: 0 30px; box-shadow: 8px 8px 0 var(--ink);
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--display); font-weight: 800; font-size: 50px;
+  }
+  .tick {
+    width: 66px; height: 66px; box-sizing: border-box; border-radius: 50%;
+    background: var(--cream); border: 5px solid var(--ink); display: flex; align-items: center; justify-content: center;
+  }
+  .tick svg { width: 40px; height: 40px; }
+
+  /* 指向当前任务的琥珀小箭头 */
+  #ptr { position: absolute; left: 0; top: 428px; width: 44px; height: 44px; }
+
+  /* 下：当前任务的一圈 */
+  .stepcard { top: 520px; height: 330px; padding: 52px 36px 30px; }
+  .stepcard > .tab { font-size: 40px; }
+  .who { display: flex; align-items: center; gap: 22px;
+    font-family: var(--display); font-weight: 800; font-size: 46px; white-space: nowrap; }
+  .agent {
+    flex: none; width: 88px; height: 88px; box-sizing: border-box; border-radius: 10px;
+    background: var(--charcoal); border: 4px solid var(--ink); box-shadow: 5px 5px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .agent svg { width: 60px; height: 60px; }
+  .sub { margin-top: 14px; font-weight: 600; font-size: 34px; color: #4a4741; }
+  .lamps { display: flex; gap: 20px; margin-top: 22px; }
+  .lamp { width: 200px; height: 64px; box-sizing: border-box; border-radius: 8px;
+    border: 4px solid var(--ink); background: var(--cream); color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 800; font-size: 34px; letter-spacing: 2px; }
+  .chk { display: flex; align-items: center; gap: 20px; margin-top: 22px;
+    font-family: var(--display); font-weight: 800; font-size: 42px; white-space: nowrap; }
+  .box { position: relative; flex: none; width: 46px; height: 46px; box-sizing: border-box;
+    border: 5px solid var(--ink); border-radius: 6px; background: #fff; }
+  .box svg { position: absolute; left: -6px; top: -16px; width: 60px; height: 60px; }
+
+  .flow { position: absolute; top: 650px; width: 84px; height: 60px; }
+  #next { left: 1620px; top: 642px; display: flex; align-items: center; gap: 12px; font-size: 40px; }
+  #next svg { width: 40px; height: 40px; }
+
+  #whole { left: 1520px; top: 450px; display: flex; align-items: center; gap: 14px; font-size: 44px; }
+  #whole svg { width: 44px; height: 44px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs big head" id="head">第二件事：按计划一项一项做</div>
+  <div class="mock">示意</div>
+
+  <!-- 上：一排任务 -->
+  <div class="card sp" id="row" data-r="-0.5" data-shadow="16">
+    <div class="tab sp">Superpowers</div>
+    <div class="card task" id="t0" data-r="-1.2" data-shadow="8" style="left:60px">任务 1
+      <div class="tick"><svg viewBox="0 0 40 40" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21 L16 30 L33 10"/></svg></div></div>
+    <div class="card task" id="t1" data-r="1" data-shadow="8" style="left:640px">任务 2
+      <div class="tick"><svg viewBox="0 0 40 40" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21 L16 30 L33 10"/></svg></div></div>
+    <div class="card task" id="t2" data-r="-0.8" data-shadow="8" style="left:1220px">任务 3
+      <div class="tick"><svg viewBox="0 0 40 40" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21 L16 30 L33 10"/></svg></div></div>
+  </div>
+
+  <svg id="ptr" viewBox="0 0 44 44"><path d="M22 6 V32 M10 22 L22 36 L34 22" fill="none" stroke="#161616" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M22 6 V32 M10 22 L22 36 L34 22" fill="none" stroke="#f29b50" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+  <!-- 下左：新的子代理，照计划那几步走 -->
+  <div class="card stepcard" id="doer" data-r="-1" data-shadow="10" style="left:140px;width:640px">
+    <div class="tab ink">做</div>
+    <div class="who"><div class="agent"><svg viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="#fff" stroke="none"/></svg></div>新的子代理</div>
+    <div class="sub">照计划里那几步走</div>
+    <div class="lamps"><div class="lamp" id="red">FAIL</div><div class="lamp" id="green">PASS</div></div>
+  </div>
+
+  <svg class="flow" id="fa" style="left:800px" viewBox="0 0 84 60"><path d="M8 30 H58 M46 14 L66 30 L46 46" fill="none" stroke="#161616" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 30 H58 M46 14 L66 30 L46 46" fill="none" stroke="#f29b50" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+  <!-- 下中：另一个子代理来审 -->
+  <div class="card stepcard" id="rev" data-r="1" data-shadow="10" style="left:900px;width:600px">
+    <div class="tab ink" style="transform:rotate(2deg)">审</div>
+    <div class="who"><div class="agent"><svg viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="#fff" stroke="none"/></svg></div>另一个子代理</div>
+    <div class="chk"><span class="box"><svg class="ck" viewBox="0 0 60 60"><path d="M10 32 L24 46 L52 10" fill="none" stroke="#161616" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>照规格没有</div>
+    <div class="chk"><span class="box"><svg class="ck" viewBox="0 0 60 60"><path d="M10 32 L24 46 L52 10" fill="none" stroke="#161616" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>代码质量</div>
+  </div>
+
+  <svg class="flow" id="fb" style="left:1520px" viewBox="0 0 84 60"><path d="M8 30 H58 M46 14 L66 30 L46 46" fill="none" stroke="#161616" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 30 H58 M46 14 L66 30 L46 46" fill="none" stroke="#f29b50" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+  <!-- 下右：审过了，才做下一个 -->
+  <div class="chip" id="next" data-r="2"><svg viewBox="0 0 40 40" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21 L16 30 L33 10"/></svg>下一个</div>
+
+  <!-- 全部做完：整体审一遍 -->
+  <div class="chip" id="whole" data-r="-2"><svg viewBox="0 0 44 44" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round"><circle cx="19" cy="19" r="12"/><path d="M28 28 L40 40"/></svg>整体审一遍</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 时刻按实测（2026-10-06，frame-times.py）：
+  // 149 句 0，150 句 3.84（派一个新的子代理……照着计划那几步走：照 8.00，走 9.20），
+  // 151 句 10.56（再派一个子代理来审：再 11.44；有没有按照规格 13.68；代码写得怎么样 15.36），
+  // 152 句 16.72（审过了，才做下一个：才 17.92），153 句 19.92（全部做完，最后再整体审一遍：整 21.52）。
+  // 每个任务一圈：s 开始、red / green 结果灯、rev 审的卡、c1 / c2 两项勾上、done 任务打勾。
+  // 任务 1 跟口播走；任务 2、3 在 152–153 句之间各快放一圈（任务 2 从「才做下一个」起，任务 3 从「全部做完」起，一圈 1.4 秒）。
+  var CYCLES = [
+    { s: 3.84, red: 8.0,  green: 9.2,   rev: 11.44, c1: 13.68, c2: 15.36, done: 16.72 },
+    { s: 17.92, red: 18.17, green: 18.47, rev: 18.67, c1: 18.87, c2: 19.07, done: 19.32 },
+    { s: 19.92, red: 20.17, green: 20.47, rev: 20.67, c1: 20.87, c2: 21.07, done: 21.32 }
+  ];
+  var WHOLE = 21.52;
+  var TASK_X = [380, 960, 1540];   // 三张任务卡的中心 x（舞台坐标），小箭头跟着走
+
+  var CREAM = [242, 239, 230], DIM = [160, 157, 151];
+  var tasks = [T.$('t0'), T.$('t1'), T.$('t2')];
+  var checks = T.all('#rev .ck');
+
+  // 当前是第几圈：最后一个已开始的；还没开始返回 -1。
+  function cycleAt(t) {
+    var k = -1;
+    for (var i = 0; i < CYCLES.length; i++) if (t >= CYCLES[i].s) k = i;
+    return k;
+  }
+
+  Stage({
+    duration: 23,
+    init: function () { return T.fonts(document.getElementById('stage').textContent); },
+    render: function (t) {
+      // 149：第二件事，按计划一项一项做。
+      T.enter(T.$('head'), T.p(t, 0.2, 0.5), 12);
+      T.enter(T.$('row'), T.p(t, 0.5, 0.5), 20);
+      T.items('.task', 0.9, 0.2, t, 14);
+
+      // 每个任务：当前时黄框；做完变灰、贴勾。
+      var C0 = CYCLES[0];
+      for (var i = 0; i < 3; i++) {
+        var on = i === 0 ? 1.92 : CYCLES[i].s;
+        var g = T.ease(T.p(t, on, 0.3)) * (1 - T.ease(T.p(t, CYCLES[i].done, 0.3)));
+        T.current(tasks[i], g, 8);
+        var d = T.p(t, CYCLES[i].done, 0.3);
+        tasks[i].style.background = T.mix(CREAM, DIM, T.ease(d));
+        T.enter(tasks[i].querySelector('.tick'), d, -10);
+      }
+
+      // 下面一圈：第一圈各卡依次进场，后两圈只重放状态。
+      T.enter(T.$('doer'), T.p(t, C0.s + 0.3, 0.5), 20);
+      T.wipe(T.$('fa'), T.p(t, C0.rev - 0.3, 0.3), 'x');
+      T.enter(T.$('rev'), T.p(t, C0.rev, 0.5), 20);
+      T.wipe(T.$('fb'), T.p(t, C0.done - 0.3, 0.3), 'x');
+      T.enter(T.$('next'), T.p(t, C0.done, 0.4), 12);
+
+      var k = cycleAt(t);
+      var c = k < 0 ? null : CYCLES[k];
+      var fast = k > 0 ? 0.2 : 0.5;
+      // 结果灯先红后绿（同 S29 / S32：两盏都留着）；新的一圈开始时回到奶白。
+      T.fill(T.$('red'), [229, 83, 75], c ? T.p(t, c.red, fast) : 0);
+      T.fill(T.$('green'), [76, 195, 138], c ? T.p(t, c.green, fast) : 0);
+      T.wipe(checks[0], c ? T.p(t, c.c1, fast * 0.6) : 0, 'x');
+      T.wipe(checks[1], c ? T.p(t, c.c2, fast * 0.6) : 0, 'x');
+
+      // 小箭头指向当前任务，两圈之间滑到下一张。
+      var x = TASK_X[0];
+      for (var j = 1; j < 3; j++) x += (TASK_X[j] - TASK_X[j - 1]) * T.ease(T.p(t, CYCLES[j - 1].done, CYCLES[j].s - CYCLES[j - 1].done));
+      var ptr = T.$('ptr');
+      ptr.style.left = (x - 22) + 'px';
+      ptr.style.opacity = T.ease(T.p(t, C0.s, 0.3)) * (1 - T.ease(T.p(t, WHOLE, 0.3)));
+
+      // 153：全部做完，最后整体审一遍。
+      var w = T.p(t, WHOLE, 0.4);
+      ['doer', 'rev', 'fa', 'fb', 'next'].forEach(function (id) {
+        if (T.ease(w) > 0) T.$(id).style.opacity = 1 - 0.65 * T.ease(w);
+      });
+      T.current(T.$('row'), T.ease(w), 16);
+      T.enter(T.$('whole'), T.p(t, WHOLE + 0.2, 0.5), -14);
+    }
+  });
+</script>
+</body>
+</html>

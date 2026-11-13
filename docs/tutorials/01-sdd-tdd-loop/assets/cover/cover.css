@@ -1,0 +1,107 @@
+/* 首期封面的样式（作者 2026-10-07 选 B，design-demos/cover/direction-approved.md）。
+   cover.html（出封面图）和 S01（开头的片头）共用，所以全部挂在 .cv 下，
+   不和画面自己的 .chat、.bubble、.code 等类冲突。颜色、字体用 theme.css 的变量。
+   以文字为主，场景卡只是点缀（作者 2026-10-07）。两种版式：
+     .cv           主封面，也是片头：左栏问题句 + 两个工具，右栏 S01 的对话卡
+     .cv.text      纯文字变体：去掉对话卡，字放大，发布时和主封面一起做 YouTube「测试与比较」
+     .cv.p34       视频号个人主页卡片 3:4（1080×1440）：问题句、工具、副标从上往下排，对话卡缩小放底部
+     .cv.l43       视频号分享卡片 4:3（1440×1080）：和主封面同一布局，工具和对话卡缩小
+   右下角 x≥1640 且 y≥960 是时长角标区，主封面和纯文字变体都留空。 */
+
+.cv { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.cv .cv-abs { position: absolute; }
+
+/* 问题句：墨字直压纸底。 */
+.cv .cv-q {
+  left: 92px; top: 80px; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 228px; line-height: 1.06;
+  letter-spacing: -2px; white-space: nowrap;
+}
+.cv .cv-q .cv-ai { letter-spacing: 0; margin-right: 18px; }
+
+/* 两个工具：OPENSPEC + Superpowers。 */
+.cv .cv-tools { left: 100px; top: 660px; width: 1000px; height: 130px; transform-origin: 0 0; }
+.cv .cv-tool {
+  position: absolute; top: 0; box-sizing: border-box; height: 112px;
+  display: flex; align-items: center; gap: 18px; padding: 0 34px;
+  border: 5px solid var(--ink); border-radius: 10px; box-shadow: 9px 9px 0 var(--ink); color: var(--ink);
+}
+.cv .cv-tool.os { left: 0; background: var(--blue); }
+.cv .cv-tool.sp { left: 500px; background: var(--amber); }
+.cv .cv-tool.os img { width: 320px; height: 40px; display: block; }
+.cv .cv-tool.sp img { width: 88px; height: 88px; display: block; }
+.cv .cv-tool.sp span { font-family: var(--display); font-weight: 800; font-size: 58px; line-height: 1; }
+.cv .cv-plus {
+  position: absolute; left: 410px; top: 0; width: 72px; height: 112px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 800; font-size: 96px; color: var(--ink);
+}
+.cv .cv-sub {
+  left: 104px; top: 836px; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 58px; line-height: 1.1;
+}
+
+/* 频道 logo：奶白圆底 + 墨环，右上。 */
+.cv .cv-badge {
+  left: 1636px; top: 44px; width: 220px; height: 220px; box-sizing: border-box; border-radius: 50%;
+  background: var(--cream); border: 6px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.cv .cv-badge img { width: 190px; height: 190px; display: block; }
+
+/* 场景：S01 的对话框。对话框本身不倾斜，里面的气泡和贴纸倾斜。
+   用 theme.css 的 .card.dark 和 .tab，只覆盖位置与尺寸。 */
+.cv .cv-chat { left: 1160px; top: 330px; width: 680px; height: 560px; padding: 0; box-shadow: 14px 14px 0 var(--ink); }
+.cv .cv-chat .tab { font-size: 44px; background: var(--cream); color: var(--ink); }
+.cv .cv-who {
+  position: absolute; width: 88px; height: 88px; box-sizing: border-box; border-radius: 50%;
+  border: 5px solid var(--ink); box-shadow: 5px 5px 0 #000;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 800; font-size: 40px;
+}
+.cv .cv-who.me { left: 30px; top: 64px; background: var(--cream); color: var(--ink); }
+.cv .cv-who.ai { left: 30px; top: 236px; background: var(--ink); color: #fff; border-color: var(--cream); }
+.cv .cv-bubble {
+  position: absolute; left: 140px; top: 58px; padding: 14px 28px; border-radius: 10px; white-space: nowrap;
+  background: var(--cream); color: var(--ink); border: 5px solid var(--ink); box-shadow: 7px 7px 0 #000;
+  font-family: var(--display); font-weight: 800; font-size: 58px; line-height: 1.15;
+}
+.cv .cv-code {
+  position: absolute; left: 140px; top: 230px; width: 500px; height: 290px; box-sizing: border-box;
+  padding: 30px 30px; background: var(--term); border: 5px solid var(--ink); border-radius: 10px;
+  box-shadow: 7px 7px 0 #000;
+}
+.cv .cv-bar { height: 16px; border-radius: 8px; background: var(--cream-dim); margin-bottom: 24px; }
+.cv .cv-chat .guess { font-size: 70px; padding: 4px 20px; border-width: 5px; box-shadow: 8px 8px 0 var(--ink); }
+.cv .cv-chat .guess b { margin: 0; }
+.cv .cv-g1 { left: 250px; top: 250px; }
+.cv .cv-g2 { left: 440px; top: 300px; }
+.cv .cv-g3 { left: 330px; top: 410px; }
+/* 第二种失控：测试没过。红 = 测试失败，墨字压红底。小于「猜」，收在对话卡里，只作点缀。 */
+.cv .cv-fail {
+  position: absolute; left: 480px; top: 462px; padding: 4px 16px; border-radius: 8px; white-space: nowrap;
+  background: var(--fail); color: var(--ink); border: 4px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+  font-family: var(--mono); font-weight: 800; font-size: 40px; line-height: 1.1; letter-spacing: 2px;
+}
+
+/* 纯文字变体。 */
+.cv.text .cv-chat { display: none; }
+.cv.text .cv-q { top: 64px; font-size: 330px; letter-spacing: -3px; }
+.cv.text .cv-tools { top: 800px; }
+.cv.text .cv-sub { left: 1170px; top: 826px; }
+
+
+/* 视频号 3:4。舞台 1080×1440 由 cover.html 设。 */
+.cv.p34 { width: 1080px; height: 1440px; }
+.cv.p34 .cv-q { left: 72px; top: 96px; font-size: 186px; }
+.cv.p34 .cv-badge { left: 812px; top: 300px; width: 196px; height: 196px; }
+.cv.p34 .cv-badge img { width: 168px; height: 168px; }
+.cv.p34 .cv-tools { left: 78px; top: 560px; transform: scale(.88); }
+.cv.p34 .cv-sub { left: 80px; top: 712px; }
+.cv.p34 .cv-chat { left: 234px; top: 850px; transform: scale(.9); transform-origin: 0 0; }
+
+/* 视频号 4:3。舞台 1440×1080 由 cover.html 设。和主封面同一布局，工具和对话卡缩小。 */
+.cv.l43 { width: 1440px; height: 1080px; }
+.cv.l43 .cv-badge { left: 1150px; top: 56px; }
+.cv.l43 .cv-tools { transform: scale(.84); }
+.cv.l43 .cv-chat { left: 1000px; top: 430px; transform: scale(.58); transform-origin: 0 0; }

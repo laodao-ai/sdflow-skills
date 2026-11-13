@@ -1,0 +1,264 @@
+<!doctype html>
+<!-- S44 · 机制动画 · script 214–215「第二，两份清单不会自动同步。……Superpowers 那边做完了，OpenSpec 的任务清单并不会跟着勾。」
+     上方是 S43 结束时的缩小全貌图（同一张 S38），亮「写计划」和收尾区——两份清单各自出在这两处，其余压暗。
+     下半屏注意 2：左琥珀卡 = Superpowers 的进度，右蓝卡 = OpenSpec 的 `tasks.md`，中间一条虚线被墨色叉断开 = 不会自动同步
+     （叉用墨不用红：红只表示测试失败）。`tasks.md` 的行只画成灰条，不编任务名；行数取演示仓真实的 6 项（同 S22a）。
+     Superpowers 侧是三个任务逐个打勾、盖「已审」章，`tasks.md` 6 项空着，停在这里。
+     2026-10-06：Superpowers 侧由「计划每项打勾」改成「三个任务做完、审过」。Superpowers 6.4.2 的演示里，计划文件的
+     16 个步骤复选框一个没勾（2026-10-06 核过），进度记在它自己的记录文件里，所以这里不画计划的复选框。「已审」章用奶白 + 墨，不用绿（绿只表示测试通过）。
+     同日 `tasks.md` 由 4 行改成 6 行。
+     同日缩略图的 Superpowers 区随 S38 改成「写计划 / 按计划做」（同 S42）。
+     同日口播缩成两句：手动打勾和归档提醒删掉（tasks.md 的打勾动画、角落的小 tasks.md、「没勾完就归档」虚线框、
+     `/opsx:archive` 卡和提醒卡），改由 S44a–S44c 实录接上；总长 16 → 10 秒。
+     时刻按实测（2026-10-06，frame-times.py）：214 句 0–2.40，215 句 3.04–7.36。
+     「注意 2」在「第二」（0.0），标题在「两份清单」（两 0.72）；左卡在「Superpowers」（3.04），三个任务在「做完了」（做 4.08）起逐个打勾盖章；
+     右卡在「OpenSpec」（4.80）；断开的虚线在「并不会跟着勾」（并 6.32）。 -->
+<html lang="zh-CN" data-frame-id="S44">
+<head>
+<meta charset="utf-8">
+<title>S44 · 注意二</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* —— S38 流程图（照搬母版尺寸，不改） —— */
+  .zone {
+    position: absolute; top: 230px; height: 660px; box-sizing: border-box;
+    padding: 64px 28px 28px; border-radius: 12px; border: 6px solid var(--ink);
+    box-shadow: 16px 16px 0 var(--ink);
+  }
+  .zone.os { background: var(--blue-fill); }
+  .zone.sp { background: var(--amber-fill); }
+  .zone > .tab { font-size: 54px; color: var(--ink); }
+  .sub { font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--blue-soft); }
+  .files { position: relative; height: 190px; margin-top: 12px; }
+  .file {
+    position: absolute; width: 180px; padding: 12px 0; border-radius: 6px; background: var(--cream); text-align: center;
+    border: 4px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+    font-family: var(--mono); font-size: 30px; color: var(--ink);
+  }
+  .stop { position: absolute; left: 110px; top: 360px; width: 210px; height: 210px; }
+  .stop svg { position: absolute; inset: 0; }
+  .stop span {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; font-family: var(--display); font-weight: 800; font-size: 42px;
+    line-height: 1.12; color: var(--ink);
+  }
+  .step {
+    display: flex; align-items: center; gap: 18px; padding: 16px 22px;
+    border-radius: 8px; background: var(--cream); color: var(--ink);
+    border: 5px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.15;
+  }
+  .zone .num { width: 58px; height: 58px; border-width: 4px; font-size: 30px; background: var(--amber); }
+  .tdd {
+    display: flex; border-radius: 8px; overflow: hidden;
+    border: 5px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); background: var(--cream);
+  }
+  .tdd .half {
+    flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+    padding: 16px 12px; font-family: var(--display); font-weight: 800; font-size: 36px; color: var(--ink);
+    white-space: nowrap;
+  }
+  .tdd .half + .half { border-left: 5px solid var(--ink); }
+  /* 第 2 步「按计划做」：标题一行 + 红绿一行，竖排在同一张卡里（同 S42） */
+  .step.do { flex-direction: column; align-items: stretch; gap: 14px; }
+  .do .dohead { display: flex; align-items: center; gap: 18px; }
+  .do .tdd { box-shadow: 5px 5px 0 var(--ink); }
+  .tdd .half small { font-family: var(--mono); font-weight: 700; font-size: 26px; }
+  #red { background: var(--fail); }
+  #green { background: var(--pass); }
+  .down { display: flex; justify-content: center; height: 62px; align-items: center; }
+  .down svg { width: 44px; height: 38px; }
+  .boxes { display: flex; gap: 16px; padding: 18px 22px; border-radius: 8px; background: var(--cream);
+    border: 5px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); }
+  .box { width: 64px; height: 64px; box-sizing: border-box; border-radius: 6px; border: 6px solid var(--ink); position: relative; background: #fff; }
+  .box svg { position: absolute; left: -6px; top: -18px; width: 78px; height: 78px; }
+  .boxes-cap { margin: 14px 0 0 6px; font-family: var(--display); font-weight: 800; font-size: 44px; color: #fff; }
+  .arc svg { width: 56px; height: 56px; flex: none; }
+  .arw { position: absolute; top: 500px; width: 150px; height: 90px; }
+  #note { right: 70px; top: 70px; }
+
+  /* —— 本帧批注 —— */
+  #flow { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+  /* 注意事项标题：墨底贴纸 + 大字。 */
+  .hdr {
+    position: absolute; padding: 6px 26px; white-space: nowrap;
+    border: 5px solid var(--ink); border-radius: 8px; box-shadow: 7px 7px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1;
+    background: var(--ink); color: #fff;
+  }
+  .hline { position: absolute; font-family: var(--display); font-weight: 800; font-size: 60px; color: #161616; white-space: nowrap; }
+
+  #h2 { left: 110px; top: 470px; transform: rotate(-3deg); }
+  #h2t { left: 330px; top: 462px; }
+  .list { top: 620px; width: 470px; height: 304px; padding: 40px 34px 24px; }
+  .list .tab { font-size: 40px; }
+  .list .tab.m { font-family: var(--mono); font-weight: 700; }
+  .li { display: flex; align-items: center; gap: 22px; height: 70px; }
+  .li .box { width: 52px; height: 52px; border-width: 5px; flex: none; }
+  .li .box svg { left: -6px; top: -16px; width: 66px; height: 66px; }
+  .li .bar { height: 16px; border-radius: 8px; background: var(--cream-dim); }
+  /* tasks.md 6 行：行高、框缩小，卡片尺寸不变 */
+  #tasks .li { height: 40px; }
+  #tasks .li .box { width: 38px; height: 38px; }
+  #tasks .li .box svg { left: -5px; top: -12px; width: 50px; height: 50px; }
+  /* Superpowers 进度：三个任务，打勾 + 「已审」章 */
+  .tk { display: flex; align-items: center; gap: 20px; height: 80px; }
+  .tk svg { flex: none; width: 60px; height: 60px; }
+  .tk .nm { font-family: var(--display); font-weight: 800; font-size: 46px; color: #fff; }
+  .tk .stamp {
+    margin-left: auto; padding: 2px 16px; border-radius: 8px; background: var(--cream); color: var(--ink);
+    border: 4px solid var(--ink); box-shadow: 5px 5px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 36px;
+  }
+  #link { position: absolute; left: 590px; top: 727px; width: 160px; height: 90px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="flow">
+  <div class="tag" id="note" data-r="-4">照两边文档接的 · 非官方</div>
+
+  <!-- 第一步：OpenSpec 规划，然后停下 -->
+    <div class="zone os" id="zA" data-r="-1.2" data-shadow="16" style="left:70px;width:450px">
+      <div class="tab os">OpenSpec</div>
+      <div class="sub">规划</div>
+      <div class="files" id="files">
+        <div class="file" data-r="-3" style="left:0;top:0">proposal</div>
+        <div class="file" data-r="2.5" style="left:206px;top:10px">specs/</div>
+        <div class="file" data-r="2" style="left:8px;top:94px">design</div>
+        <div class="file" data-r="-2" style="left:200px;top:100px">tasks</div>
+      </div>
+      <div class="stop" id="stop" data-r="-7">
+        <svg viewBox="0 0 210 210"><polygon points="62,4 148,4 206,62 206,148 148,206 62,206 4,148 4,62" fill="#161616"/>
+          <polygon points="64,10 146,10 200,64 200,146 146,200 64,200 10,146 10,64" fill="#f2efe6"/>
+          <polygon points="68,20 142,20 190,68 190,142 142,190 68,190 20,142 20,68" fill="none" stroke="#161616" stroke-width="5"/></svg>
+        <span>然后<br>停下</span>
+      </div>
+    </div>
+
+    <svg class="arw" id="a1" style="left:536px" viewBox="0 0 150 90">
+      <path d="M24 50 Q 70 30 112 44" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+      <path d="M24 50 Q 70 30 112 44" fill="none" stroke="#f29b50" stroke-width="12" stroke-linecap="round"/>
+      <circle cx="18" cy="52" r="14" fill="#f29b50" stroke="#161616" stroke-width="5"/>
+      <polygon points="100,18 146,50 102,78" fill="#f29b50" stroke="#161616" stroke-width="5" stroke-linejoin="round"/>
+    </svg>
+
+    <!-- 第二、三步：Superpowers -->
+    <div class="zone sp" id="zB" data-r="0.8" data-shadow="16" style="left:704px;width:540px">
+      <div class="tab sp">Superpowers</div>
+      <div class="step" id="seg2" data-r="-1.5" data-shadow="8" style="margin-top:22px"><div class="num">1</div>写计划</div>
+      <div class="down" id="down2"><svg viewBox="0 0 44 38"><path d="M5 7 L22 29 L39 7" fill="none" stroke="#f29b50" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <!-- 第 2 步「按计划做」：每一项都先写测试，再写实现，所以红绿一行装在这张卡里 -->
+      <div class="step do" id="seg3" data-r="1.5" data-shadow="8">
+        <div class="dohead"><div class="num">2</div>按计划做</div>
+        <div class="tdd">
+          <div class="half" id="red">先写测试<small>FAIL</small></div>
+          <div class="half" id="green">再写实现<small>PASS</small></div>
+        </div>
+      </div>
+    </div>
+
+    <svg class="arw" id="a2" style="left:1262px" viewBox="0 0 150 90">
+      <path d="M24 44 Q 70 62 112 46" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+      <path d="M24 44 Q 70 62 112 46" fill="none" stroke="#43a0ed" stroke-width="12" stroke-linecap="round"/>
+      <circle cx="18" cy="42" r="14" fill="#43a0ed" stroke="#161616" stroke-width="5"/>
+      <polygon points="100,18 146,46 102,74" fill="#43a0ed" stroke="#161616" stroke-width="5" stroke-linejoin="round"/>
+    </svg>
+
+    <!-- 第四步：回到 OpenSpec 收尾 -->
+    <div class="zone os" id="zC" data-r="1.4" data-shadow="16" style="left:1420px;width:440px">
+      <div class="tab os">OpenSpec</div>
+      <div class="sub">收尾</div>
+      <div class="boxes" id="boxes" data-r="-1.5" data-shadow="8" style="margin-top:22px">
+        <div class="box" style="transform:rotate(-3deg)"><svg class="tick" viewBox="0 0 78 78"><path d="M16 40 L32 56 L66 14" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="box" style="transform:rotate(2deg)"><svg class="tick" viewBox="0 0 78 78"><path d="M16 40 L32 56 L66 14" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="box" style="transform:rotate(-1deg)"><svg class="tick" viewBox="0 0 78 78"><path d="M16 40 L32 56 L66 14" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="box" style="transform:rotate(3deg)"><svg class="tick" viewBox="0 0 78 78"><path d="M16 40 L32 56 L66 14" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </div>
+      <div class="boxes-cap">勾掉任务</div>
+      <div class="down"><svg viewBox="0 0 44 38"><path d="M5 7 L22 29 L39 7" fill="none" stroke="#43a0ed" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="step arc" id="archive" data-r="2">
+        <svg viewBox="0 0 56 56" fill="none" stroke="#161616" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+          <rect x="4" y="8" width="48" height="12" rx="3"/><path d="M8 20 V48 H48 V20"/><line x1="20" y1="32" x2="36" y2="32"/>
+        </svg>
+        归档
+      </div>
+    </div>
+  </div>
+
+  <!-- 注意 2：两份清单不会自动同步 -->
+  <div class="hdr" id="h2">注意 2</div>
+  <div class="hline" id="h2t">两份清单不会自动同步</div>
+
+  <div class="card sp list" id="plan" data-r="-1.2" data-shadow="10" style="left:110px">
+    <div class="tab sp">Superpowers 进度</div>
+    <div class="tk"><svg class="pt" viewBox="0 0 78 78"><path d="M12 40 L30 58 L68 14" fill="none" stroke="#f29b50" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">任务 1</span><span class="stamp" data-r="-6">已审</span></div>
+    <div class="tk"><svg class="pt" viewBox="0 0 78 78"><path d="M12 40 L30 58 L68 14" fill="none" stroke="#f29b50" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">任务 2</span><span class="stamp" data-r="4">已审</span></div>
+    <div class="tk"><svg class="pt" viewBox="0 0 78 78"><path d="M12 40 L30 58 L68 14" fill="none" stroke="#f29b50" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">任务 3</span><span class="stamp" data-r="-4">已审</span></div>
+  </div>
+
+  <svg id="link" viewBox="0 0 160 90">
+    <line x1="6" y1="45" x2="154" y2="45" stroke="#161616" stroke-width="6" stroke-dasharray="14 12"/>
+    <circle cx="80" cy="45" r="32" fill="#f2efe6" stroke="#161616" stroke-width="5"/>
+    <path d="M66 31 L94 59 M94 31 L66 59" stroke="#161616" stroke-width="8" stroke-linecap="round"/>
+  </svg>
+
+  <div class="card os list" id="tasks" data-r="1.2" data-shadow="10" style="left:760px">
+    <div class="tab os m">tasks.md</div>
+    <!-- 6 项都空着：Superpowers 做完了，这边不会跟着勾 -->
+    <div class="li"><div class="box"></div><div class="bar" style="width:240px"></div></div>
+    <div class="li"><div class="box"></div><div class="bar" style="width:290px"></div></div>
+    <div class="li"><div class="box"></div><div class="bar" style="width:210px"></div></div>
+    <div class="li"><div class="box"></div><div class="bar" style="width:260px"></div></div>
+    <div class="li"><div class="box"></div><div class="bar" style="width:180px"></div></div>
+    <div class="li"><div class="box"></div><div class="bar" style="width:230px"></div></div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var S = 0.6, TX = 379.6, TY = -90;
+  function shrink(e) {
+    T.$('flow').style.transform = 'translate(' + (TX * e) + 'px,' + (TY * e) + 'px) scale(' + (1 - (1 - S) * e) + ')';
+    T.$('note').style.opacity = 1 - e;
+  }
+  // 换灯：每段的亮度从 from 渐变到 to（1 = 亮，0.6 = 压暗）。
+  var PARTS = ['zA', 'a1', 'zB', 'seg2', 'down2', 'seg3', 'a2', 'zC'];
+  function relight(from, to, e) {
+    PARTS.forEach(function (id) {
+      var a = from[id] === undefined ? 1 : from[id], b = to[id] === undefined ? 1 : to[id];
+      T.$(id).style.opacity = a + (b - a) * e;
+    });
+  }
+
+  // S43 结束时：只亮「按计划做」（先写测试 / 再写实现）。
+  var FROM = { zA: 0.6, a1: 0.6, seg2: 0.6, down2: 0.6, a2: 0.6, zC: 0.6 };
+  // 两份清单各出在「写计划」和收尾区：亮这两处。
+  var TO = { zA: 0.6, a1: 0.6, down2: 0.6, seg3: 0.6, a2: 0.6 };
+  var pt = T.all('.pt'), stamps = T.all('.stamp');
+  function tick(el, p) { el.style.clipPath = 'inset(0 ' + ((1 - T.ease(p)) * 100) + '% 0 0)'; }
+
+  Stage({
+    duration: 7,
+    init: function () { return T.fonts('规划然后停下写计划按做先写测试再实现收尾勾掉任务归档注意两份清单不会自动同步进度任务已审'); },
+    render: function (t) {
+      T.tilt();
+      shrink(1);
+      relight(FROM, TO, T.ease(T.p(t, 0, 0.6)));
+
+      T.enter(T.$('h2'), T.p(t, 0.0, 0.4), -12);
+      T.enter(T.$('h2t'), T.p(t, 0.72, 0.4), -12);
+
+      // 两边并排：Superpowers 三个任务做完、审过，tasks.md 不跟着勾
+      T.enter(T.$('plan'), T.p(t, 3.04, 0.5), 24);
+      T.enter(T.$('tasks'), T.p(t, 4.8, 0.5), 24);
+      for (var i = 0; i < pt.length; i++) {
+        tick(pt[i], T.p(t, 4.08 + i * 0.35, 0.3));
+        T.enter(stamps[i], T.p(t, 4.28 + i * 0.35, 0.3), -10);
+      }
+      T.wipe(T.$('link'), T.p(t, 6.32, 0.5), 'x');
+    }
+  });
+</script>
+</body>
+</html>

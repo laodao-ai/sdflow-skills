@@ -1,0 +1,365 @@
+<!doctype html>
+<!-- S06 · 标题卡 · 系列流程卡第二级 · script 16–19「也就是在规格后面加了一道评审。……说完这些，还有一节，叫一句话「魔法咒语」，流程里没有，可我几乎每次都用。」
+     模版 channel/design/templates/series-flow.html（data-level="2"，data-done="1,2"，data-current="3"）；与 S05、S32 是同一张卡的两级。
+     第三步放大成新路线（不再画旧路线，作者 2026-10-23 删），整块在外框里居中。
+     - 第 16 句：「规格」先落下（当前）；「加了一道评审」时四格上方出现括线与「评审」小贴纸（当前）。
+     - 第 17 句：各格随口播逐个进场（派 agent 分角度审、核引用、裁决、人看报告、拍板、锁住），讲到「才开工」出末尾「开工」；
+       讲到它才进场（10-24 新规则：不放空壳）；箭头跟着后一格进场；
+       前两格括「AI 怎么审」，后两格括「人怎么拍板」，括线段名随讲到进场。
+     - 导航灰保留：第 18 句的四章目录（ch1–ch4）是「到哪一步了」的导航结构，未讲到的章用淡墨表示，随口播逐个点亮（visual-v4 4.9）。
+     - 第 18 句（「今天就按这个顺序聊：先看 AI 怎么审、人怎么拍板，再说花这么多，值不值得，还有它的局限和如何改进。」）：卡片下方四章一行：AI 怎么审 · 人怎么拍板 · 值不值得 · 局限与改进，随口播逐个点亮（导航灰），最后一章的「当前」描边在句末淡出。
+     - 第 19 句：「一句话『魔法咒语』」从上方落下，接在四章后面，和四章之间隔一道竖虚线（一行随之重新居中，前四章左移让位），上方一行「流程之外」。
+       四章的编号始终是 1–4，魔法是 5。
+       五章对应后面五张章节标签页（S06a、S13b、S20e、S26a、S28a）。章节编号：AI 怎么审 1，人怎么拍板 2，值不值得 3，局限与改进 4，一句话「魔法咒语」 5（10-24 合并「为什么这么审」「成本怎么控」；当晚「局限与改进」单独成第 4 章）。
+     颜色：黄 = 当前；不上蓝 / 琥珀；箭头与括线用淡墨；不用红绿。
+     内容整体在 y 880 以下留空，外框下沿 926，不进字幕带。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。各句开口 16=0、17=4.00、18=13.20、19=24.96，全页 31.84；第 18 句章名依次在 15.52、17.28、20.08、22.00。  -->
+<html lang="zh-CN" data-frame-id="S06" data-level="2" data-done="1,2" data-current="3" data-ep="off">
+<head>
+<meta charset="utf-8">
+<title>S06 · 系列流程卡 · 第二级</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* ===== 模版共用：复制后不改 ===== */
+  /* 纸底（2026-10-20 作者定：只有章节标签页用深色底，其余页面都是纸底）。
+     「没讲到」= 墨色 65% 不透明度，叠在渲染后的纸底 #8b949e 上约 #3f4246，对比度 3.28:1；CSS 写 --notyet，JS 里同值写 NOTYET。
+     透明底的空框（.off）不带硬投影，否则框外会露出一块实心的墨色。 */
+  :root { --notyet: rgba(22,22,22,.65); }
+  .sf-step.off, .node.off, .act.off, .big3.off { box-shadow: none; }
+
+  /* 第一级：六步一行。 */
+  .sf-step { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px; }
+  .sf-step .big { white-space: nowrap; }
+  html[data-level="1"] .sf-step { width: 280px; height: 104px; }
+  html[data-level="1"] .sf-step .big { font-size: 44px; }
+  html[data-level="1"] .sf-step .num { width: 58px; height: 58px; font-size: 30px; }
+  html[data-level="2"] .sf-step { width: 236px; height: 64px; border-width: 4px; padding: 0 12px; gap: 10px; }
+  html[data-level="2"] .sf-step .big { font-size: 36px; }
+  html[data-level="2"] .sf-step .num { width: 44px; height: 44px; font-size: 26px; border-width: 4px; }
+  .sf-step.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .sf-step.off .num { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  /* 期号：括线 + 「第 N 期」。本期那一组用墨，其余用「没讲到」的淡墨。 */
+  .sf-ep { position: absolute; text-align: center; white-space: nowrap; color: var(--notyet);
+           font-family: var(--display); font-weight: 800; }
+  .sf-ep::before { content: ''; display: block; box-sizing: border-box; border: 4px solid currentColor; border-top: none;
+                   border-radius: 0 0 8px 8px; height: 14px; margin: 0 10px 4px; }
+  html[data-level="1"] .sf-ep { font-size: 34px; }
+  html[data-level="2"] .sf-ep { font-size: 26px; line-height: 1.1; }
+  html[data-level="2"] .sf-ep::before { height: 8px; border-width: 3px; margin-bottom: 2px; }
+  .sf-ep.now { color: var(--ink); }
+  html[data-ep="off"] .sf-ep { display: none; }
+  #sf-fan { position: absolute; left: 0; top: 0; width: 1920px; height: 200px; }
+  #sf-frame { position: absolute; left: 40px; top: 172px; width: 1840px; height: 754px; box-sizing: border-box;
+              border: 3px solid rgba(22,22,22,.4); border-radius: 16px; }
+  #sf-fan, #sf-frame, .sf-step, .sf-ep { opacity: 0; }
+  html[data-level="1"] #sf-fan, html[data-level="1"] #sf-frame, html[data-level="1"] #l2 { display: none; }
+
+  /* 第二级的件。 */
+  /* 只铺到字幕带上沿：里面的元素用画布坐标，高度不到 940（渲染前的越界检查会量容器本身）。 */
+  #l2 { position: absolute; left: 0; top: 0; width: 1920px; height: 930px; }
+  .node { display: flex; align-items: center; justify-content: center; padding: 0 22px; white-space: nowrap;
+          font-family: var(--display); font-weight: 800; font-size: 44px; }
+  .node.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .node.past { background: var(--cream-dim); }
+  .lane { font-family: var(--display); font-weight: 800; }
+  .lane.past { background: var(--cream-dim); }
+  .arr { position: absolute; height: 6px; border-radius: 3px; background: currentColor; color: var(--ink); }
+  .arr::after { content: ''; position: absolute; right: -18px; top: -9px;
+                border-left: 20px solid currentColor; border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+  .seg { position: absolute; height: 24px; box-sizing: border-box; border: 5px solid var(--notyet); border-top: none;
+         border-radius: 0 0 12px 12px; }
+  .pdot { position: absolute; width: 58px; height: 58px; box-sizing: border-box; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--mono); font-weight: 700; font-size: 26px;
+          border: 4px solid var(--notyet); color: var(--notyet); background: transparent; }
+  .pdot.done { background: var(--cream-dim); color: var(--ink); border-color: var(--cream-dim); }
+  .pdot.now { background: var(--cream); color: var(--ink); border-color: var(--ink); }
+  /* ===== 模版共用到此 ===== */
+
+  /* ===== 本页 ===== */
+  .nw { height: 100px; font-size: 40px; }
+  .gochip { font-size: 40px; }
+  .sc { font-size: 40px; }
+  #sct { font-size: 34px; padding: 6px 22px; }
+  .chap { height: 76px; font-size: 40px; gap: 16px; }
+  .chap .num { width: 46px; height: 46px; font-size: 26px; border-width: 4px; }
+  /* 四格上方的括线（开口朝下），和下方两段括线（开口朝上）相对。 */
+  /* 配色（2026-10-23）：新路线规格一侧浅蓝底、开工琥珀；「评审」括线标签饱和蓝；两段括线标签和四章用奶白，「一句话『魔法咒语』」章卡保持奶白、「流程之外」是虚线标签（10-25：紫只留给另一个模型）。点亮的底色由 data-lit 给 SF.lit。 */
+  .bs { background: var(--blue-soft); }
+  .gochip { background: var(--amber); }
+  /* 10-25：紫在本期只表示另一个模型，「一句话『魔法咒语』」章卡保持奶白，「流程之外」改虚线标签。 */
+  #out { font-size: 36px; }
+  #sct, #sc1, #sc2 { background: var(--blue); }
+  /* 四章与「一句话『魔法咒语』」之间的竖虚线（魔法落下时一起出现） */
+  #cdiv { position: absolute; top: 730px; height: 136px; width: 0; border-left: 5px dashed var(--ink); opacity: 0; }
+  .segt { position: absolute; height: 24px; box-sizing: border-box; border: 5px solid var(--ink); border-bottom: none;
+          border-radius: 12px 12px 0 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ===== 模版共用：第一级，由下面的脚本按 <html> 属性填 ===== -->
+  <svg id="sf-fan" viewBox="0 0 1920 200" aria-hidden="true"></svg>
+  <div id="sf-frame"></div>
+  <div id="sf"></div>
+
+  <!-- ===== 本页：第二级 ===== -->
+  <div id="l2">
+    <!-- 新路线（第 16–17 句） -->
+    <div class="card node nw bs" id="n0" data-r="-1" data-lit="140,200,245" style="top:400px">规格</div>
+    <div class="arr" id="na0"></div>
+    <div class="card node nw" id="n1" data-lit="140,200,245" data-r="1" style="top:400px">派 agent 分角度审</div>
+    <div class="arr" id="na1"></div>
+    <div class="card node nw" id="n2" data-lit="140,200,245" data-r="-1" style="top:400px">核引用、裁决</div>
+    <div class="arr" id="na2"></div>
+    <div class="card node nw" id="n3" data-lit="140,200,245" data-r="1" style="top:400px">人看报告、拍板</div>
+    <div class="arr" id="na3"></div>
+    <div class="card node nw" id="n4" data-lit="140,200,245" data-r="-1" style="top:400px">锁住</div>
+    <div class="arr" id="na4"></div>
+    <div class="chip gochip" id="go" data-r="-1.5" style="top:420px">开工</div>
+
+    <!-- 第 16 句：加进来的那道评审 -->
+    <div class="segt" id="st" style="top:340px"></div>
+    <div class="chip sc" id="sct" data-r="-2" style="top:300px">评审</div>
+
+    <div class="seg" id="s1" style="top:514px"></div>
+    <div class="chip sc" id="sc1" data-r="-1" style="top:542px">AI 怎么审</div>
+    <div class="seg" id="s2" style="top:514px"></div>
+    <div class="chip sc" id="sc2" data-r="1" style="top:542px">人怎么拍板</div>
+
+    <!-- 四章一行（第 18 句），第 19 句魔法接在后面、隔一道竖虚线，共五章；和五张章节标签页一一对应 -->
+    <div class="card node off chap" id="ch1" data-r="-1" style="top:760px"><span class="num">1</span>AI 怎么审</div>
+    <div class="card node off chap" id="ch2" data-r="1" style="top:760px"><span class="num">2</span>人怎么拍板</div>
+    <div class="card node off chap" id="ch3" data-r="-1" style="top:760px"><span class="num">3</span>值不值得</div>
+    <div class="card node off chap" id="ch4" data-r="1" style="top:760px"><span class="num">4</span>局限与改进</div>
+    <!-- 第 19 句：一句话「魔法咒语」（第 5 章），从上方落下；「流程之外」压在它上方 -->
+    <div class="card node chap" id="cm" data-r="1" style="top:760px"><span class="num">5</span>一句话「魔法咒语」</div>
+    <div id="cdiv"></div>
+    <div class="tag" id="out" data-r="-2" style="top:664px">流程之外</div>
+  </div>
+</div>
+<script>
+  // ===== 模版共用：按 <html> 属性搭第一级。要在 theme.js 之前跑：自动倾角只认加载时已有的元素。 =====
+  (function () {
+    var STEPS = ['需求明确', '规格编写', '规格评审', '代码实现', '代码评审', '收尾归档'];
+    var EP = [2, 2, 3, 4, 5, 6];   // 每步对应第几期（visual-v4 4.9）
+    var root = document.documentElement;
+    var level = root.getAttribute('data-level') === '2' ? 2 : 1;
+    function list(name) {
+      return (root.getAttribute(name) || '').split(',').map(function (s) { return Number(s.trim()); }).filter(Boolean);
+    }
+    var done = list('data-done'), cur = list('data-current');
+    // 第一级的几何：level 1 放大居中偏上，level 2 缩到顶部一行。两种都左右对称（中心 x 960）。
+    var G = level === 1
+      ? { left: 55, top: 330, w: 280, h: 104, gap: 26, epGap: 26 }
+      : { left: 187, top: 24, w: 236, h: 64, gap: 26, epGap: 24 };
+    var sf = document.getElementById('sf');
+    var html = '';
+    for (var i = 0; i < 6; i++) {
+      var n = i + 1;
+      var st = cur.indexOf(n) >= 0 ? 'now' : done.indexOf(n) >= 0 ? 'done' : 'off';
+      html += '<div class="card sf-step ' + st + '" id="sf' + n + '" data-shadow="' + (level === 1 ? 10 : 7) + '" style="left:' +
+        (G.left + i * (G.w + G.gap)) + 'px;top:' + G.top + 'px"><span class="num">' + n + '</span><span class="big">' + STEPS[i] + '</span></div>';
+    }
+    // 期号：同一期相邻的几步合成一个括线。
+    var a = 0, curL = 9999, curR = 0;
+    while (a < 6) {
+      var b = a;
+      while (b + 1 < 6 && EP[b + 1] === EP[a]) b++;
+      var isNow = false;
+      for (var k = a; k <= b; k++) if (cur.indexOf(k + 1) >= 0) isNow = true;
+      var l = G.left + a * (G.w + G.gap), r = G.left + b * (G.w + G.gap) + G.w;
+      if (isNow) { curL = Math.min(curL, l); curR = Math.max(curR, r); }
+      html += '<div class="sf-ep' + (isNow ? ' now' : '') + '" id="sfe' + EP[a] + '" style="left:' + l + 'px;width:' + (r - l) +
+        'px;top:' + (G.top + G.h + G.epGap) + 'px">第 ' + EP[a] + ' 期</div>';
+      a = b + 1;
+    }
+    sf.innerHTML = html;
+    // 第二级：从「当前」那组的期号括线下沿，两条线连到外框上沿两角。
+    if (level === 2 && curR > 0) {
+      // 期号关掉（data-ep="off"）时没有括线，线从步骤卡下沿起。
+      var y0 = root.getAttribute('data-ep') === 'off' ? G.top + G.h + 12 : G.top + G.h + G.epGap + 32;
+      document.getElementById('sf-fan').innerHTML =
+        '<path d="M' + (curL + 10) + ' ' + y0 + ' L48 174 M' + (curR - 10) + ' ' + y0 + ' L1872 174" fill="none" ' +
+        'stroke="rgba(22,22,22,.4)" stroke-width="3" stroke-linecap="round"/>';
+    }
+    window.SF_LEVEL = level;
+  })();
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // ===== 模版共用：动画小工具 =====
+  var SF = (function () {
+    var DIM = [160, 157, 151], INK = [22, 22, 22], CREAM = [242, 239, 230], NOTYET = [63, 66, 70];
+    // 没讲到 → 讲过：透明底淡墨描边淡墨字 → 奶白底墨描边墨字（同目录页 S05）。里面的 .num 跟着变。
+    function lit(el, p) {
+      var c = T.mix(NOTYET, INK, p);
+      [el].concat(Array.prototype.slice.call(el.querySelectorAll('.num'))).forEach(function (e) {
+        var base = (e === el && el.getAttribute('data-lit')) || '242,239,230';   // 本元素点亮后的底色；里面的 .num 一律奶白
+        e.style.background = 'rgba(' + base + ',' + p + ')';
+        e.style.borderColor = c;
+        e.style.color = c;
+      });
+    }
+    // 讲过 → 被留下：奶白 → 灰实心。
+    function gray(el, p) { el.style.background = T.mix(CREAM, DIM, p); }
+    // 「当前」描边。a = 硬投影的不透明度（不传 = 1）：透明底的空框传它的点亮进度，免得没讲到时露出实心投影。
+    function cur(el, g, s, a) {
+      // s 传 0 = 不要硬投影（进度点）；不传就读 data-shadow，再没有用 10。
+      T.current(el, g, s != null ? s : parseFloat(el.getAttribute('data-shadow') || '10'));
+      // 浏览器读回来的颜色是 rgb(22, 22, 22) 不是 #161616，两种写法都要认。
+      if (a != null) el.style.boxShadow = el.style.boxShadow.replace(/#161616|rgb\(22, 22, 22\)/g, 'rgba(22,22,22,' + a + ')');
+    }
+    // 横箭头：从 x1 到 x2（箭头尖），竖直中心 y。
+    function arrow(el, x1, x2, y) {
+      el.style.left = x1 + 'px';
+      el.style.width = Math.max(0, x2 - x1 - 18) + 'px';
+      el.style.top = (y - 3) + 'px';
+    }
+    function lerp(a, b, p) { return a + (b - a) * p; }
+    // 第一级进场：tIn 起六步依次落下、期号和外框淡入；tCur 起「当前」那几步加黄框。
+    function l1(t, tIn, tCur) {
+      for (var i = 1; i <= 6; i++) {
+        var el = T.$('sf' + i);
+        T.enter(el, T.p(t, tIn + (i - 1) * 0.08, 0.5), window.SF_LEVEL === 1 ? 20 : 12);
+        if (el.classList.contains('now')) cur(el, T.ease(T.p(t, tCur, 0.4)));
+      }
+      var e = T.ease(T.p(t, tIn + 0.3, 0.6));
+      T.all('.sf-ep').forEach(function (x) { x.style.opacity = e; });
+      T.$('sf-fan').style.opacity = e;
+      T.$('sf-frame').style.opacity = e;
+    }
+    return { lit: lit, gray: gray, cur: cur, arrow: arrow, lerp: lerp, l1: l1 };
+  })();
+  // ===== 模版共用到此 =====
+
+  // ===== 本页：帧脚本 =====
+  var NOTYET = [63, 66, 70], INK = [22, 22, 22];
+  function L(id) { return T.$(id); }
+  // 当前窗口：a 起亮，b 起淡出。
+  function win(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+
+  // 口播时刻（秒，画面内，按录音实测：词首字开始时间减 0.2 秒）。
+  var AT = {
+    n0: 0.6, n0End: 1.3,                                          // 第 16 句：「规格」落下，当前
+    st: 1.8, stEnd: 3.8,                                          // 第 16 句：「评审」括线
+    c1: 4.2, c2: 6.92, c3: 8.44, c4: 10.52, go: 11.24,                // 第 17 句：四格逐个进场，再出「开工」
+    s1: 4.2, s2: 8.44, send: 11.84,                                 // 第 17 句：两段括线随讲到进场
+    chs: 13.0,                                                    // 第 18 句：四章目录（导航灰）
+    h1: 15.32, h2: 17.08, h3: 19.88, h4: 21.8, hend: 23.84,           // 第 18 句：四章逐个点亮，末章当前在句末淡出
+    s19: 24.76,                                                    // 第 19 句开口：顶行黄框淡出
+    mg: 27.32, mgEnd: 28.72, out: 28.92, outEnd: 31.24                // 第 19 句：念到「一句话『魔法咒语』」魔法落下（当前），念到「流程里没有」出「流程之外」（当前）
+  };
+  var ROW = ['n0', 'n1', 'n2', 'n3', 'n4'];
+  var NEW = ['n1', 'n2', 'n3', 'n4'];
+
+  // 排位：宽度依赖字体，字体加载后每帧重算（几个赋值，开销可忽略）。
+  function layout() {
+    // 规格 + 四格 + 开工，一行，间距 70，整行在 1920 里居中。
+    var gap = 70, total = L('go').offsetWidth + gap * 5, i;
+    ROW.forEach(function (id) { total += L(id).offsetWidth; });
+    var x = (1920 - total) / 2, pos = [];
+    ROW.forEach(function (id) {
+      var e = L(id);
+      e.style.left = x + 'px';
+      pos.push({ l: x, r: x + e.offsetWidth });
+      x += e.offsetWidth + gap;
+    });
+    for (i = 0; i < 4; i++) SF.arrow(L('na' + i), pos[i].r + 10, pos[i + 1].l - 10, 450);
+    var go = L('go');
+    go.style.left = x + 'px';
+    SF.arrow(L('na4'), pos[4].r + 10, x - 10, 450);
+    // pos[0] 是「规格」，pos[1..4] 是四格。
+    // 评审：括住四格，小贴纸压在括线中间。
+    var st = L('st'), sct = L('sct');
+    st.style.left = pos[1].l + 'px';
+    st.style.width = (pos[4].r - pos[1].l) + 'px';
+    sct.style.left = ((pos[1].l + pos[4].r) / 2 - sct.offsetWidth / 2) + 'px';
+    // 两段：AI 怎么审 = 前两格，人怎么拍板 = 后两格。
+    [[1, 2], [3, 4]].forEach(function (s, k) {
+      var l = pos[s[0]].l, r = pos[s[1]].r, sg = L('s' + (k + 1)), sc = L('sc' + (k + 1));
+      sg.style.left = l + 'px';
+      sg.style.width = (r - l) + 'px';
+      sc.style.left = ((l + r) / 2 - sc.offsetWidth / 2) + 'px';
+    });
+    // 章节一行，居中。第 19 句魔法接在第 4 章后面、隔一道竖虚线：一行从「四章居中」滑到「五章居中」，前四章左移让位。
+    var CG = 18, DG = 28;   // 章与章的间距；虚线两侧的间距（10-25 第五章名改为「一句话『魔法咒语』」变长，30/40 收到 18/28，五章不碰外框）
+    function rowX(ids, extra) {
+      var w = extra || 0, x0, out = {};
+      ids.forEach(function (id) { w += L(id).offsetWidth; });
+      w += CG * (ids.length - 1);
+      x0 = (1920 - w) / 2;
+      ids.forEach(function (id) { out[id] = x0; x0 += L(id).offsetWidth + CG; });
+      return out;
+    }
+    var a4 = rowX(['ch1', 'ch2', 'ch3', 'ch4']);
+    // 五章：前四章间距 CG，ch4 与 cm 之间放虚线，间距 DG + 5 + DG（比 CG 多出 DG * 2 + 5 - CG）。
+    var a5 = rowX(['ch1', 'ch2', 'ch3', 'ch4', 'cm'], DG * 2 + 5 - CG);
+    a5.cm += DG * 2 + 5 - CG;
+    var mp = window.MG_P || 0;   // 0 = 四章居中，1 = 五章居中
+    ['ch1', 'ch2', 'ch3', 'ch4'].forEach(function (id) { L(id).style.left = SF.lerp(a4[id], a5[id], mp) + 'px'; });
+    L('cm').style.left = a5.cm + 'px';
+    L('cdiv').style.left = (a5.ch4 + L('ch4').offsetWidth + DG) + 'px';
+    var o = L('out');
+    o.style.left = (a5.cm + L('cm').offsetWidth / 2 - o.offsetWidth / 2) + 'px';
+  }
+
+  Stage({
+    duration: 31.84,
+    init: function () { return T.fonts(T.$('stage').textContent).then(layout); },
+    render: function (t) {
+      window.MG_P = T.ease(T.p(t, AT.mg, 0.6));   // 魔法落下时一行让位的进度，layout 读它
+      layout();
+      T.tilt();
+      SF.l1(t, 0, 0.6);   // 第一级缩成顶行，第三步「当前」；外框与扇线一起淡入
+      // 第 19 句开口时顶行第三步的黄框淡出，保证魔法落下时只有一个黄框
+      SF.cur(L('sf3'), T.ease(T.p(t, 0.6, 0.4)) * (1 - T.ease(T.p(t, AT.s19, 0.4))));
+
+      // 第 16 句：「规格」先落下；第 17 句四格随讲到逐个进场（不放空壳）
+      T.enter(L('n0'), T.p(t, AT.n0, 0.4), 14);
+      SF.cur(L('n0'), win(t, AT.n0 + 0.3, AT.n0End), 10);
+      var C = [AT.c1, AT.c2, AT.c3, AT.c4, AT.go];
+      NEW.forEach(function (id, i) {
+        var e = L(id);
+        T.enter(e, T.p(t, C[i], 0.4), 14);
+        SF.lit(e, 1);   // 进场时就是点亮后的样子（SF.lit 负责 data-lit 底色）
+        SF.cur(e, win(t, C[i], C[i + 1]), 10);
+      });
+      for (var i = 0; i <= 3; i++) L('na' + i).style.opacity = T.ease(T.p(t, C[i], 0.3));
+      L('na4').style.opacity = T.ease(T.p(t, AT.go - 0.2, 0.3));
+      T.enter(L('go'), T.p(t, AT.go, 0.4), 12);
+      // 「评审」括线：第 16 句末放出，当前，到第 17 句开口淡出
+      L('st').style.opacity = T.ease(T.p(t, AT.st, 0.4));
+      T.enter(L('sct'), T.p(t, AT.st, 0.4), 12);
+      SF.cur(L('sct'), win(t, AT.st + 0.2, AT.stEnd), 7);
+      // 两段括线先后错开出现，随讲到点亮
+      var S = [AT.s1, AT.s2], E = [AT.s2, AT.send];
+      for (var j = 0; j < 2; j++) {
+        var sg = L('s' + (j + 1)), sc = L('sc' + (j + 1));
+        T.enter(sc, T.p(t, S[j], 0.4), 12);
+        sg.style.opacity = T.ease(T.p(t, S[j], 0.4));
+        SF.lit(sc, 1);
+        SF.cur(sc, win(t, S[j], E[j]), 7);
+        sg.style.borderColor = 'rgb(22,22,22)';
+      }
+      // 第 18 句：四章目录随开口放出（导航灰保留），随口播逐个点亮，末章当前在句末淡出
+      var H = [AT.h1, AT.h2, AT.h3, AT.h4], HE = [AT.h2, AT.h3, AT.h4, AT.hend];
+      for (var m = 0; m < 4; m++) {
+        var ch = L('ch' + (m + 1));
+        T.enter(ch, T.p(t, AT.chs + m * 0.1, 0.4), 12);
+        var hp = T.ease(T.p(t, H[m], 0.4));
+        SF.lit(ch, hp);
+        SF.cur(ch, win(t, H[m], HE[m]), 10, hp);
+      }
+      // 第 19 句：「一句话『魔法咒语』」从上方落下（当前）；「流程之外」随后出现（当前，同一时刻只有一个黄框）
+      T.enter(L('cm'), T.p(t, AT.mg, 0.6), -150);
+      L('cdiv').style.opacity = T.ease(T.p(t, AT.mg, 0.4));
+      SF.cur(L('cm'), win(t, AT.mg + 0.3, AT.mgEnd), 10);
+      T.enter(L('out'), T.p(t, AT.out, 0.4), 12);
+      SF.cur(L('out'), win(t, AT.out + 0.2, AT.outEnd), 0);
+    }
+  });
+</script>
+</body>
+</html>

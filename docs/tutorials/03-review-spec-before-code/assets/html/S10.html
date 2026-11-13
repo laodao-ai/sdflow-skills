@@ -1,0 +1,202 @@
+<!doctype html>
+<!-- S10 · 机制动画（实录 · 示例项目）· script 55–57「再看领域这一路。……比如 Go 那层有一条：goroutine 里的 panic，外面接不住，得在里面自己 recover。」
+     10-24 按一页一层：原「命中一个领域就派一个 agent」一句与右上说明三行删去（S09 左路已画）；图表核验一段删去（不在主线）。
+     上半左：领域分层清单塔（示意）：通用 / 后端 · 嵌入式 · 前端 / Go · ESP32 · React；分层 base → backend → backend-go（backend-go.md 第 6 行）。
+     上半右：r3 小卡两行「通过：GO-01/03 · BE-04/08」「报出：GO-04 F1」（10-25 由三行改两行），挂「实录 · 示例项目」标签，出处「领域审回传」：
+       r3 报告没记通过条目，取 backend-go 领域审的回传（review/record-check.md 第 103 行已核）；不适用的 BE-11 / GO-05、BE-03 不上卡。
+       「GO-04 报出 F1」一行第 57 句念到 GO-04 时才出现。F1 就是 r3 D2 推送 panic 那一条（报告第 106 行，S11a）。
+     下半左：清单原文窗口（SDFlow 文件原文，不是示例项目记录：黑底代码窗口，顶栏写文件与行号，visual-v4 4.7）：
+       ~/.sdflow/workflow/spec-checklists/domains/backend-go.md 第 14–16 行；GO-03、GO-05 只取规则名与触发条件的开头，用「……」截断。
+     下半右：GO-04 放大卡，第 15 行检查点全文，重点一句加粗加下划线，附白话。
+       引线（visual-v4 4.7，10-24 新规则）：本页只有这一张放大卡，不存在共存还是一次一张。卡长出时用 T.lead() 画一根黄色细线（2px，不加箭头），
+       从黄框离卡最近的角连到卡离黄框最近的角，随卡展开从黄框一端擦出；线在 #leads 层（theme.js 新建，z-index 20），在清单窗口和压暗层之上、放大卡（z-index 30）之下。
+       黄框和卡的矩形在 init 里按终态量一次（窗口此时没有位移），卡的终点矩形直接用 ZOOM_END。
+     最后一帧：塔里没碰到的领域变灰，右上小卡三行，清单窗口 GO-04 一行黄框 + 放大卡 + 一根黄线连两者。内容都留到页末，没有淡出换内容。
+     颜色：清单塔浅蓝（规格一侧的清单）；没碰到的领域用「没讲到」样式（10-25：不再用灰实底，灰是被留下）；小卡奶白；清单窗口深色终端底；放大卡不加色边；黄 = 当前，同一时刻只有一个；不用红绿。
+     句子与动画节点（口播时刻按录音实测，frame-times.py，2026-10-25；节点取词首字实测开始时间减 0.2 秒）。句起点：
+       55 句 t0.0：标签与塔（底层 → 中层 → 顶层落下）。
+       56 句 t2.08：念到「通用、后端、Go」（t5.48、6.12、6.84）三格依次当前；「没碰到的领域」（t8.44）其余变灰；t9.04 右上小卡落下（前两行）。
+       57 句 t11.55：t11.35 清单原文窗口进场；念到「goroutine 里的 panic」（t13.75）GO-04 一行黄框，小卡出「GO-04 报出 F1」；t14.15 放大卡长出，0.6 秒展开，留到页末。
+       念完 t18.03；时长 19.07 秒。内容整体在 y 940 以上。 -->
+<html lang="zh-CN" data-frame-id="S10">
+<head>
+<meta charset="utf-8">
+<title>S10 · 领域清单</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+
+  /* 上半左：清单塔（放大，占满左侧） */
+  #tL { left: 60px; top: 66px; font-size: 42px; background: var(--blue); color: var(--ink); }
+  .blk { position: absolute; height: 116px; box-sizing: border-box; padding: 0 22px;
+         display: flex; align-items: center; justify-content: center; gap: 14px;
+         background: var(--blue-soft); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px;
+         box-shadow: 6px 6px 0 var(--ink); white-space: nowrap; }
+  .blk .nm { font-family: var(--display); font-weight: 800; font-size: 54px; }
+  .r1 { top: 150px; } .r2 { top: 302px; } .r3 { top: 454px; }
+  #lk { position: absolute; left: 60px; top: 266px; width: 1120px; height: 188px; overflow: visible; }
+  /* 上半右：报告小卡 */
+  #cap { left: 1230px; top: 210px; width: 640px; height: 300px; padding: 0; font-family: var(--display); font-weight: 800; }
+  #cap .tab { font-size: 34px; padding: 4px 20px; }
+  #cap .t { position: absolute; left: 30px; font-size: 44px; white-space: nowrap; }
+  #cap .t1 { top: 60px; } #cap .t3 { top: 140px; }
+  #cap .src { position: absolute; right: 26px; bottom: 16px; font-family: var(--body); font-weight: 600; font-size: 26px; color: rgba(22,22,22,.72); }
+
+  /* 下半左：清单原文窗口（黑底、等宽、不倾斜） */
+  #src { left: 60px; top: 662px; width: 860px; padding: 0 0 10px; overflow: visible; white-space: normal;
+         font-size: 25px; line-height: 1.5; }
+  #src .tab { left: -12px; top: -50px; font-size: 32px; padding: 4px 20px; }
+  #src .bar0 { height: 46px; display: flex; align-items: center; padding: 0 24px; box-sizing: border-box;
+               background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0;
+               font-size: 24px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #src .bd { padding: 14px 24px; }
+  #src .ln { display: block; padding: 4px 10px; margin: 0 -10px 6px; white-space: nowrap; color: #cfcbc2; }
+  #wdim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 7px; background: #000; opacity: 0; }
+  #qb { position: absolute; box-sizing: border-box; border: 7px solid transparent; border-radius: 8px; opacity: 0; }
+
+  /* 放大卡：位置和尺寸由脚本从黄框插值到终点；内容按终点尺寸排版，起点处被裁掉 */
+  #zoom { position: absolute; z-index: 30; left: 940px; top: 580px; width: 930px; height: 334px; box-sizing: border-box; overflow: hidden; opacity: 0;
+          padding: 14px 32px; background: var(--term); border: 5px solid var(--ink); border-radius: 10px; box-shadow: 8px 8px 0 var(--ink); }
+  #zoom .hd { font-family: var(--mono); font-size: 28px; line-height: 34px; color: var(--cream-dim); white-space: nowrap; }
+  #zoom .en { font-variant-ligatures: none; font-family: var(--mono); font-size: 28px; line-height: 38px; color: #cfcbc2; white-space: normal; }
+  #zoom .en .t { color: var(--cream); font-weight: 800; }
+  #zoom .en b { color: var(--cream); font-weight: 800; text-decoration: underline; text-decoration-color: var(--cream); text-decoration-thickness: 3px; text-underline-offset: 6px; }
+  #zoom .zh { margin-top: 4px; font-family: var(--body); font-weight: 600; font-size: 28px; line-height: 36px; color: var(--cream); }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 上半左：清单塔 -->
+  <div class="chip" id="tL" data-r="-1.5">领域分层清单</div>
+  <svg id="lk" viewBox="0 0 1120 188" aria-hidden="true">
+    <g stroke="#161616" stroke-opacity=".8" stroke-width="5" stroke-linecap="round">
+      <line class="lk" x1="230" y1="0" x2="230" y2="36"/><line class="lk" x1="620" y1="0" x2="620" y2="36"/><line class="lk" x1="1010" y1="0" x2="1010" y2="36"/>
+      <line class="lk" x1="230" y1="152" x2="230" y2="188"/><line class="lk" x1="620" y1="152" x2="620" y2="188"/><line class="lk" x1="1010" y1="152" x2="1010" y2="188"/>
+    </g>
+  </svg>
+  <div class="blk r1" id="bGO" style="left:60px;width:340px"><span class="nm">Go</span></div>
+  <div class="blk r1" id="bESP" style="left:430px;width:380px"><span class="nm">ESP32</span></div>
+  <div class="blk r1" id="bRE" style="left:840px;width:340px"><span class="nm">React</span></div>
+  <div class="blk r2" id="bBE" style="left:60px;width:340px"><span class="nm">后端</span></div>
+  <div class="blk r2" id="bEMB" style="left:430px;width:380px"><span class="nm">嵌入式</span></div>
+  <div class="blk r2" id="bFE" style="left:840px;width:340px"><span class="nm">前端</span></div>
+  <div class="blk r3" id="bBase" style="left:60px;width:1120px"><span class="nm">通用规则</span></div>
+  <!-- 上半右：报告小卡 -->
+  <div class="card" id="cap" data-r="-1.5">
+    <div class="tab ink" data-r="-2">实录 · 示例项目</div>
+    <span class="t t1">通过：GO-01/03 · BE-04/08</span><span class="t t3" id="capF1">报出：GO-04 F1</span>
+    <span class="src">出处：领域审回传</span>
+  </div>
+
+  <!-- 下半左：清单原文窗口（实录） -->
+  <div class="cmd" id="src">
+    <div class="tab ink" data-r="-2">清单原文</div>
+    <div class="bar0">spec-checklists/domains/backend-go.md:14–16</div>
+    <div class="bd">
+      <span class="ln">GO-03 · TOCTOU 与原子性 · 先查后改的操作 ……</span>
+      <span class="ln" id="g4">GO-04 · panic recovery · 新增 handler / goroutine ……</span>
+      <span class="ln">GO-05 · 定时任务重叠防护 · cron / time.Ticker ……</span>
+    </div>
+    <div id="wdim"></div>
+    <div id="qb"></div>
+  </div>
+
+  <div id="zoom">
+    <div class="hd">backend-go.md:15</div>
+    <div class="en"><span class="t">GO-04 · panic recovery</span><br>触发：新增 handler / goroutine<br>检查点：是否有全局 recovery middleware，还是依赖各处自理；<b>goroutine 内 panic 不会被 handler recovery 捕获，需就地 recover</b></div>
+    <div class="zh">白话：goroutine 里的 panic，外面的 recovery 接不住，要在 goroutine 里自己 recover。</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，画面内）。按录音实测：词首字开始时间减 0.2 秒。
+  var AT = {
+    head: 0.0,                                  // 55 句：标签、塔
+    col: [[5.48, 6.12], [6.12, 6.84], [6.84, 8.44]],// 56 句「通用、后端、Go」依次当前
+    gray: 8.44,                                 // 56 句「没碰到的领域，不审」：其余变灰
+    cap: 9.04,                                  // 56 句末：r3 小卡（前两行）
+    src: 11.35,                                 // 57 句：清单原文窗口进场
+    frame: 13.75, frameEnd: 999,                 // GO-04 一行加黄框，留到结束
+    zoom: 14.15, zoomEnd: 999,                   // 放大卡：黄框出现后约 0.4 秒长出，0.6 秒展开，不再收起
+  };
+  var ZOOM_END = { x: 940, y: 580, w: 930, h: 334 };   // 底边 914，加投影不过 922；字号全部 ≥ 28px（10-25）
+  var BLUE_SOFT = [140, 200, 245], INK = [22, 22, 22], NOTYET = [63, 66, 70], YELLOW = '245,207,74';   // 塔的底色是浅蓝，变成「没讲到」样式（透明底、淡墨描边、淡墨字）
+
+  // 当前：先淡入 0.2 秒、b 之前淡出 0.2 秒，相邻两段首尾相接，同一时刻只有一个。
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.2)) * (1 - T.ease(T.p(t, b - 0.2, 0.2))); }
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+
+  var LEAD = null;   // 放大卡的引线，init 里建
+
+  function overlays(t) {
+    var src = T.$('src'), row = T.$('g4'), qb = T.$('qb'), zm = T.$('zoom');
+    var sr = src.getBoundingClientRect(), rr = row.getBoundingClientRect();
+    var st = T.$('stage').getBoundingClientRect(), kk = st.width / 1920;
+    // 黄框：贴在 GO-04 那一行外面
+    qb.style.left = ((rr.left - sr.left) / kk - 4) + 'px';
+    qb.style.top = ((rr.top - sr.top) / kk - 4) + 'px';
+    qb.style.width = (rr.width / kk + 8) + 'px';
+    qb.style.height = (rr.height / kk + 8) + 'px';
+    var g = on(t, AT.frame, AT.frameEnd);
+    qb.style.opacity = g > 0 ? 1 : 0;
+    qb.style.borderColor = 'rgba(' + YELLOW + ',' + g + ')';
+    qb.style.boxShadow = '0 0 40px rgba(' + YELLOW + ',' + (0.45 * g) + '), inset 0 0 24px rgba(' + YELLOW + ',' + (0.25 * g) + ')';
+
+    // 放大卡：起点 = 黄框此刻的位置和尺寸，插值到终点；其余实录压暗 0.35
+    var z = T.ease(T.p(t, AT.zoom, 0.6)) * (1 - T.ease(T.p(t, AT.zoomEnd, 0.5)));
+    T.$('wdim').style.opacity = 0.35 * z;
+    T.leadDraw(LEAD, z);
+    if (z <= 0.001) { zm.style.opacity = 0; return; }
+    var br = qb.getBoundingClientRect();
+    var x0 = (br.left - st.left) / kk, y0 = (br.top - st.top) / kk, w0 = br.width / kk, h0 = br.height / kk;
+    zm.style.left = (x0 + (ZOOM_END.x - x0) * z) + 'px';
+    zm.style.top = (y0 + (ZOOM_END.y - y0) * z) + 'px';
+    zm.style.width = (w0 + (ZOOM_END.w - w0) * z) + 'px';
+    zm.style.height = (h0 + (ZOOM_END.h - h0) * z) + 'px';
+    zm.style.opacity = Math.min(1, z * 4);
+  }
+
+  Stage({
+    duration: 19.07,
+    init: function () {
+      return T.fonts(document.body.textContent).then(function () {
+        // 黄框的矩形 = GO-04 那一行外扩 4px；窗口还没做进场位移，现在量的就是终态
+        var r = T.rect(T.$('g4'));
+        LEAD = T.lead({ x: r.x - 4, y: r.y - 4, w: r.w + 8, h: r.h + 8 }, ZOOM_END);
+      });
+    },
+    render: function (t) {
+
+      // 左：塔，底层 → 中层 → 顶层落下（进场就是正常颜色）
+      T.enter(T.$('tL'), T.p(t, AT.head, 0.45), -12);
+      var order = [['bBase'], ['bBE', 'bEMB', 'bFE'], ['bGO', 'bESP', 'bRE']];
+      order.forEach(function (ids, li) {
+        ids.forEach(function (id, j) { T.enter(T.$(id), T.p(t, AT.head + li * 0.12 + j * 0.05, 0.45), 14); });
+      });
+      T.all('.lk').forEach(function (l, i) { l.style.opacity = T.ease(T.p(t, AT.head + 0.4 + (i < 3 ? 0 : 0.1), 0.4)); });
+      var gr = T.ease(T.p(t, AT.gray, 0.5));
+      // 没碰到的领域：「没讲到」样式（透明底、淡墨描边、淡墨字，visual-v4 4.9），不再用灰实底
+      ['bEMB', 'bFE', 'bESP', 'bRE'].forEach(function (id) {
+        var e = T.$(id), c = T.mix(INK, NOTYET, gr);
+        e.style.background = 'rgba(' + BLUE_SOFT.join(',') + ',' + (1 - gr) + ')';
+        e.style.borderColor = c;
+        e.style.color = c;
+        e.style.boxShadow = '6px 6px 0 rgba(22,22,22,' + (1 - gr) + ')';
+      });
+      ['bBase', 'bBE', 'bGO'].forEach(function (id, j) { cur(T.$(id), on(t, AT.col[j][0], AT.col[j][1]), 6); });
+      T.enter(T.$('cap'), T.p(t, AT.cap, 0.45), 14);
+      T.$('capF1').style.opacity = T.ease(T.p(t, AT.frame, 0.4));   // 57 句念到 GO-04 才出
+
+      // 下半左：清单原文窗口，第 3 句进场
+      T.enter(T.$('src'), T.p(t, AT.src, 0.45), 14);
+
+      return overlays(t);
+    }
+  });
+</script>
+</body>
+</html>

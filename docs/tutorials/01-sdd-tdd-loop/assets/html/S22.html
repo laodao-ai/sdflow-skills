@@ -1,0 +1,139 @@
+<!doctype html>
+<!-- S22 · 终端 · script 84–88「接下来补设计和任务。……想用 /opsx:ff 的话，得先在终端里把它打开，命令我放在画面上了。」
+     cast 01-openspec-explore-ff 回放秒 112–150，4 倍速，播 9.5 秒，放完停在最后一帧。
+     区间按回放核准（2026-10-04）：分镜原写 112–143，143 秒时 tasks 还没写；145 秒写出 tasks，150 秒汇报四个文件齐了。
+     作者输入 /opsx:ff，AI 写出 design 和 tasks。标「4 倍速」。
+     由 S18 派生：裁掉底部状态栏，另裁掉顶部 3 行（旧输出），给窗口下方的字条腾位置。
+     字条两行（分镜 S22，2026-10-06 加第二行）：/opsx:ff 默认未开启，照做用 /opsx:propose；
+     想开：openspec config profile 勾上扩展工作流，再在项目目录下 openspec update（本机 OpenSpec 1.14.0 与官方 README 核过）。
+     字条按实测（2026-10-06，frame-times.py）在第 86 句开口（6.08 秒，「这个命令默认是没开的」）出现，两行一起进；
+     第 88 句「命令我放在画面上了」念到「命令」是 19.36 秒，那时已在屏上。 -->
+<html lang="zh-CN" data-frame-id="S22">
+<head>
+<meta charset="utf-8">
+<title>S22 · opsx:ff</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 让出底部字幕带（y ≥ 940，visual-v4 §4.1）：窗口上移、缩到 0.89，下方还要放两行字条。 */
+  .window { left: 150px; top: 72px; width: 1620px; height: 819px; padding: 18px 20px; overflow: visible; transform: scale(0.89); transform-origin: 50% 0; }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 783px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: -89px; width: 1580px; height: 1004px; }
+  /* 播放器暂停时会画播放按钮和加载圈；画面不可交互，全部藏掉。 */
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  /* 终端底色跟随主题，盖过 cast 自带的底色。 */
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  .mask { position: absolute; left: 0; width: 1580px; background: #1b1b1d; display: none; }
+  .qbox { position: absolute; left: 6px; width: 1568px; box-sizing: border-box; border: 5px solid transparent; border-radius: 8px; opacity: 0; }
+  .qnum { position: absolute; left: -46px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .window .speed { right: -30px; top: -34px; }
+  .note { left: 239px; top: 808px; font-size: 32px; line-height: 1.25; padding: 8px 24px; }
+  .note code { font-family: var(--mono); font-weight: 600; }
+  /* 顶部裁掉 3 行后，第一行可能被切半：用渐隐盖住切口。 */
+  .clip::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 40px; background: linear-gradient(rgb(27,27,29), rgba(27,27,29,0)); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip">
+      <div id="term"></div>
+      <div class="mask" id="mask"></div>
+      <div class="qbox" id="b1"></div>
+      <div class="qbox" id="b2"></div>
+      <div class="qbox" id="b3"></div>
+    </div>
+    <div class="num qnum" id="n1" data-r="-6">1</div>
+    <div class="num qnum" id="n2" data-r="5">2</div>
+    <div class="num qnum" id="n3" data-r="-4">3</div>
+    <div class="speed" id="spd">4 倍速</div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+  </div>
+  <div class="chip note" id="note" data-r="-1"><code>/opsx:ff</code> 默认未开启，照做用 <code>/opsx:propose</code><br>想开：<code>openspec config profile</code> 勾上扩展工作流，再在项目目录下 <code>openspec update</code></div>
+</div>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/01-openspec-explore-ff.js"></script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var CAST_START = 112, CAST_END = 150, SPEED = 4;
+  var PLAY = (CAST_END - CAST_START) / SPEED;
+  var HOLD = 0;
+  var player;
+
+  // 本帧不加框。
+  var QUESTIONS = [];
+
+  function lines() { return T.all('#term .ap-line'); }
+  function find(L, text, after) {
+    for (var i = after || 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 行在 .clip 里的上下沿（px，按 1920 宽的舞台坐标）。
+  function span(L, i0, i1) {
+    var clip = document.querySelector('.clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { top: (L[i0].getBoundingClientRect().top - clip.top) / k, bottom: (L[i1].getBoundingClientRect().bottom - clip.top) / k };
+  }
+
+  function overlays(t) {
+    var L = lines();
+    // 横幅还在屏上：从第 0 行盖到「/model.」那一行。
+    var banner = find(L, 'is still your default');
+    var mask = T.$('mask');
+    if (banner >= 0) {
+      var m = span(L, 0, Math.min(banner + 1, L.length - 1));
+      mask.style.display = 'block';
+      mask.style.top = m.top + 'px';
+      mask.style.height = (m.bottom - m.top) + 'px';
+    } else {
+      mask.style.display = 'none';
+    }
+    QUESTIONS.forEach(function (q) {
+      var i0 = find(L, q.from);
+      var box = T.$(q.box), num = T.$(q.num);
+      if (i0 < 0) { box.style.opacity = 0; num.style.opacity = 0; return; }
+      box.style.opacity = 1;
+      var i1 = q.to ? find(L, q.to, i0) : i0 + 1;
+      if (i1 < 0) i1 = i0;
+      var s = span(L, i0, i1);
+      box.style.top = s.top + 'px';
+      box.style.height = (s.bottom - s.top) + 'px';
+      // 黄色只给当前这一个；下一个亮起后，这个降成淡奶白框（讲过了）。
+      var on = T.ease(T.p(t, q.at, 0.35));
+      var next = q.next === undefined ? 0 : T.ease(T.p(t, q.next, 0.35));
+      var g = on * (1 - next);
+      box.style.borderColor = next > 0 ? T.mix([245, 207, 74], [120, 118, 112], next) : 'rgba(245,207,74,' + g + ')';
+      box.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.45 * g) + '), inset 0 0 24px rgba(245,207,74,' + (0.25 * g) + ')';
+      // 编号贴在框左沿外（.window 坐标 = .clip 坐标 + 18）。
+      num.style.top = (s.top + 18 - 10) + 'px';
+      T.enter(num, T.p(t, q.at, 0.35), -14);
+    });
+  }
+
+  Stage({
+    duration: PLAY + HOLD,
+    init: function () {
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS['01-openspec-explore-ff'] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      return T.fonts('实录倍速默认未开启，照做用想勾上扩展工作流再在项目目录下');
+    },
+    render: function (t) {
+      T.enter(T.$('spd'), T.p(t, 0, 0.4), -12);
+      T.enter(T.$('note'), T.p(t, 6.08, 0.5), 20);
+      var castTime = Math.min(CAST_START + t * SPEED, CAST_END);
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位遮罩和框。
+      return Promise.resolve(player.seek(castTime))
+        .then(function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); })
+        .then(function () { overlays(t); });
+    }
+  });
+</script>
+</body>
+</html>

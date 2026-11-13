@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- S26 · 标题卡 · script 107–111「好，OpenSpec 讲完了。……你怎么知道是真的？」
+     小结卡（蓝 = OpenSpec）+ 下方浮出的问题。
+     与 S37 版式完全相同（位置、字号、倾角一致），只换文字和颜色，两张并排可对照。
+     上面的小结是定下来的，倾角小（-1°）；下面的问题还没有答案，倾角取最大（-4°），晚一点从下面浮上来。 -->
+<html lang="zh-CN" data-frame-id="S26">
+<head>
+<meta charset="utf-8">
+<title>S26 · OpenSpec 管做什么</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #sum { left: 200px; top: 250px; width: 1520px; height: 260px; display: flex; align-items: center; padding: 28px 64px; }
+  #sum .big { font-size: 100px; white-space: nowrap; }
+  #sum .big em { font-style: normal; color: var(--blue); }
+  #q { left: 330px; top: 590px; width: 1260px; height: 190px; display: flex; align-items: center; justify-content: center; }
+  #q .big { font-size: 68px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card os" id="sum" data-r="-1"><div class="big"><em>OpenSpec</em> 管：做什么</div></div>
+  <div class="card" id="q" data-r="-4"><div class="big">它说做完了，你怎么知道是真的？</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 17,
+    init: function () { return T.fonts('管：做什么它说做完了，你怎么知道是真的？OpenSpec'); },
+    render: function (t) {
+      T.enter(T.$('sum'), T.p(t, 0.0, 0.6), 30);
+      T.enter(T.$('q'), T.p(t, 15.92, 0.8), 70);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!doctype html>
+<!-- S12 · 机制动画（实录 · 示例项目）· script 32–40「那在一个 ticket 里写些什么呢？……因为前面的 ticket 一做，代码就变了，写死的路径很快就过时。怎么改、怎么写，让写代码的 agent 查当时的代码去定。」
+     右边是示例项目 alarm-notify 归档版 tickets.md:114-125 的 Task 5，几块随口播逐块亮；左边是 tasks.md 5.1 一步（design-approved-r3 与归档版 5.1 文字相同），第 7–9 句其中的路径和函数名一直灰着，不进右边。
+     原文（2026-10-31 核过）：
+       标题 tickets.md:114「Task 5: 端到端推送证据与项目约定同步」；:116「**R-ID:** NTF-01, NTF-02」；:115「**Blocked-by:** 4」；
+       描述首句 :118「连真库的端到端用例增加推送断言，证明「HTTP 上报 → PostgreSQL 入库 → 钉钉推送」整条链路打通（ADR-0003：……）。」截断；
+       Global Constraints：tickets.md 开头，「以下逐字摘自 design.md 的 Goals / Non-Goals、……」，Goals 第 1 条逐字照抄；
+       验收项 :120 起第 1 条「[e2e] 端到端用例接 httptest 假钉钉：已注册设备上报超温读数后，假钉钉在 5 秒内收到一次请求，`text.content` 含设备 ID；……」截断，其余三条折成「……」。
+       旁注「设备上报超温 → 钉钉群收到消息」是口播第 2 句的例子，不是原文，用虚线标签。
+     左边 tasks.md 5.1：「扩展 `internal/httpapi/e2e_integration_test.go` 的 `TestIntegrationEndToEnd`……〔NTF-01、NTF-02〕」。
+
+     句子（本画面内第 N 句，估算起点，录音后用 frame-times.py 对齐）：
+       1 句 0.0：问题贴纸「一个 ticket 里写什么？」正中放大，停约 1 秒，0.6 秒缩到左上；2.4 秒 ticket 外框落下。
+       2 句 3.8：标题、描述首句、旁注。  3 句 11.2：R-ID（规格一侧，蓝）。  4 句 15.6：Blocked-by（执行一侧，琥珀）。
+       5 句 23.8：顶上 Global Constraints（蓝底，逐字摘自 design.md）。  6 句 29.6：验收项，只露 [e2e] 一条加框，其余折成「……」。
+       7 句 36.9：左边 tasks.md 5.1，路径和函数名变灰，一条带叉的箭头指向右边，「不抄进来」。
+       8 句 40.5：「因为前面的 ticket 一做，代码就变了，写死的路径很快就过时」，只念，画面不新增件，灰、叉、箭头保持。
+       9 句 47.3：左下卡片「怎么改、怎么写：让写代码的 agent 查当时的代码去定」出现，留到页末。路径变灰覆盖第 7–9 句。
+     颜色：蓝 = 规格一侧（R-ID、硬约束）；琥珀 = 执行一侧（ticket 外框标签、Blocked-by）；墨底 = [e2e]；黄 = 当前。
+     内容整体在 y 930 以上。 -->
+<html lang="zh-CN" data-frame-id="S12">
+<head>
+<meta charset="utf-8">
+<title>S12 · ticket 里写什么</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 56px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+
+  /* 右：放大的 ticket */
+  #tk { left: 760px; top: 160px; width: 1100px; padding: 28px 36px 32px; display: flex; flex-direction: column; }
+  #tk .tab { left: -14px; top: -44px; font-size: 44px; }
+  /* 行外面包一层：高度随进场展开，没讲到的行不占位；上下左右各 16px 内边距 + 负外边距，留给黄框，不被裁掉 */
+  .rw { box-sizing: content-box; padding: 16px; margin: -16px -16px -16px -16px; overflow: hidden; height: 0; }
+  .row { display: flex; align-items: center; gap: 22px; min-height: 60px; border-radius: 10px; }
+  .row .lb { flex: none; width: 250px; font-family: var(--display); font-weight: 800; font-size: 38px; color: var(--ink); }
+  .row .t { font-weight: 600; font-size: 40px; color: var(--ink); }
+  .row .chip, .row .tag { position: static; }
+  .row .tag { font-size: 30px; padding: 4px 14px; border-width: 3px; }
+  .row .chip { font-family: var(--display); font-weight: 800; font-size: 34px; padding: 4px 20px; border-width: 4px; box-shadow: 5px 5px 0 var(--ink); }
+  #rBan { background: var(--blue-fill); border: 4px solid var(--ink); padding: 10px 20px; color: #fff; flex-direction: column; align-items: flex-start; gap: 8px; }
+  #rBan .chip { background: var(--blue); font-size: 28px; padding: 4px 16px; box-shadow: 4px 4px 0 var(--ink); }
+  #rBan .t { color: #fff; font-size: 30px; line-height: 1.3; }
+  #rNeed .chip { background: var(--blue); }
+  #rAct { align-items: flex-start; flex-wrap: wrap; row-gap: 10px; }
+  #rAct .ttl { width: 100%; font-family: var(--display); font-weight: 800; font-size: 40px; }
+  #rAct .t { font-size: 30px; line-height: 1.3; width: 100%; }
+  #rAcc { align-items: flex-start; }
+  #rAct .nt2 { font-size: 30px; padding: 4px 16px; }
+  #rDep .chip { background: var(--amber); }
+  #rDep .t { font-size: 36px; font-weight: 600; }
+  .acs { display: flex; flex-direction: column; gap: 14px; }
+  .ac { display: flex; align-items: flex-start; gap: 16px; font-weight: 600; font-size: 32px; line-height: 1.3; color: var(--ink); }
+  .ac.hl { border: 4px solid var(--ink); border-radius: 8px; padding: 8px 12px; }
+  .ac.hl span:last-child { flex: 1; }
+  .acs { flex: 1; min-width: 0; }
+  .ac .bx { flex: none; margin-top: 4px; width: 34px; height: 34px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 6px; background: var(--cream); }
+  .ac .e2e { flex: none; padding: 0 12px; border-radius: 6px; background: var(--ink); color: #fff; font-family: var(--mono); font-weight: 700; font-size: 30px; line-height: 1.4; }
+
+  /* 左：任务清单里的一步（深底等宽，不倾斜） */
+  #stp { left: 60px; top: 300px; width: 600px; padding: 0 0 14px; overflow: visible; white-space: normal; overflow-wrap: anywhere; font-size: 26px; line-height: 40px; font-variant-ligatures: none; }
+  #stp .tab { left: -12px; top: -54px; font-size: 32px; padding: 4px 20px; }
+  #stp .bar0 { height: 44px; display: flex; align-items: center; padding: 0 24px; box-sizing: border-box; background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0; font-size: 26px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #stp .bd { padding: 14px 26px 4px; color: #e4e0d6; }
+  #stp .gone { transition: none; color: var(--cream-dim); text-decoration: line-through; text-decoration-thickness: 3px; text-decoration-color: rgba(160,157,151,0); }
+  #stp .rid { color: #fff; font-weight: 800; }
+  #arr { position: absolute; left: 0; top: 0; width: 1920px; height: 940px; overflow: visible; }
+  .nt { white-space: normal; width: 540px; font-size: 34px; }
+  #n7 { left: 76px; top: 640px; }
+  #n8 { left: 76px; top: 760px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">一个 ticket 里写什么？</div></div>
+
+  <!-- 右：Task 5 实录。行的位置固定，讲到才出现 -->
+  <div class="card" id="tk" data-r="0.8">
+    <div class="tab sp" data-r="-2">ticket</div>
+    <div class="tab ink" data-r="2" style="left:auto; right:-14px; font-size:30px; padding:4px 18px">实录 · 示例项目 · tickets.md:114-125</div>
+    <div class="rw" id="w_rBan"><div class="row bar" id="rBan"><span class="chip" data-r="-1">tickets.md 开头 · Global Constraints：逐字摘自 design.md</span><span class="t">推送与上报完全隔离：推送在独立 goroutine、独立 ctx 上执行，上报响应与耗时不受钉钉状态影响。</span></div></div>
+    <div class="rw" id="w_rAct"><div class="row" id="rAct"><span class="ttl">Task 5: 端到端推送证据与项目约定同步</span><span class="t">连真库的端到端用例增加推送断言，证明……整条链路打通……</span><span class="tag nt2" data-r="-2">设备上报超温 → 钉钉群收到消息</span></div></div>
+    <div class="rw" id="w_rNeed"><div class="row" id="rNeed"><span class="lb">R-ID</span><span class="chip" data-r="1">NTF-01, NTF-02</span></div></div>
+    <div class="rw" id="w_rDep"><div class="row" id="rDep"><span class="lb">Blocked-by</span><span class="chip" data-r="-1">4</span></div></div>
+    <div class="rw" id="w_rAcc"><div class="row" id="rAcc"><span class="lb">验收项</span>
+      <div class="acs">
+        <div class="ac hl" id="a1"><i class="bx"></i><span class="e2e">[e2e]</span><span>端到端用例接 httptest 假钉钉……</span></div>
+        <div class="ac" id="a2"><i class="bx"></i><span>……</span></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- 左：任务清单里的一步（7 句） -->
+  <div class="cmd" id="stp">
+    <div class="tab ink" data-r="-2">任务清单里的一步</div>
+    <div class="bar0">tasks.md 5.1</div>
+    <div class="bd">扩展 `<span class="gone" id="g1">internal/httpapi/e2e_integration_test.go</span>` 的 `<span class="gone" id="g2">TestIntegrationEndToEnd</span>`……<span class="rid">〔NTF-01、NTF-02〕</span></div>
+  </div>
+  <svg id="arr" viewBox="0 0 1920 940" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" id="arrG">
+      <path d="M672 440 H748"/>
+    </g>
+    <g id="xm" opacity="0" transform="translate(696,418)"><circle cx="22" cy="22" r="19" fill="#161616" stroke="#161616" stroke-width="4"/><path d="M14 14 L30 30 M30 14 L14 30" fill="none" stroke="#f2efe6" stroke-width="5" stroke-linecap="round"/></g>
+  </svg>
+  <div class="tag nt" id="n7" data-r="-3">路径和代码，不抄进来</div>
+  <div class="tag nt" id="n8" data-r="3">怎么改、怎么写：让写代码的 agent 查当时的代码去定</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。已按录音实测句子起点对齐（2026-11-03）。注释写本画面第几句。
+  var CUE = {
+    hold: 0.821, move: 0.6,                          // 1 句：问题贴纸正中停到 1.0 秒，0.6 秒缩到左上
+    tk: 1.971,                                       // 1 句末：ticket 外框落下（不让只有标题的状态超过 3 秒）
+    act: 3.12, actEnd: 11.6,                        // 2 句：行为
+    need: 11.6, needEnd: 15.04,                     // 3 句：对应需求
+    dep: 15.04, depEnd: 21.6,                       // 4 句：被谁挡着
+    ban: 21.6, banEnd: 28.8,                       // 5 句：硬约束（排在最前面）
+    acc: 28.8, a: [29.145, 32.246], accEnd: 37.185, // 6 句：验收项：[e2e] 一条加框，其余折成「……」
+    stp: 37.185, gone: 38.099, n7: 37.767, stpEnd: 45.825, // 7–8 句：任务清单一步，路径和代码变灰（7–9 句一直灰），不抄进来；黄框到第 9 句开头
+    n8: 45.825                                       // 9 句：怎么改、怎么写让写代码的 agent 查当时的代码去定，留到页末
+  };
+
+  var NAT = {}, GAP = 14;   // GAP：行与行之间的间距
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  // 卡片里的行：黄框的空隙填卡底色（奶白），不填纸底色
+  function curIn(el, g) {
+    el.style.outline = '7px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '8px';
+    el.style.boxShadow = '0 0 0 8px rgba(242,239,230,' + g + ')';
+  }
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 51.685,
+    init: function () {
+      return T.fonts(T.$('stage').textContent).then(function () {
+        // 各行的自然高度（行外层高度是 0，要量里面那一层）
+        ['rBan', 'rAct', 'rNeed', 'rDep', 'rAcc'].forEach(function (id) { NAT[id] = T.$(id).offsetHeight; });
+      });
+    },
+    render: function (t) {
+      // 1 句：问题贴纸正中放大，停约 1 秒，0.6 秒缩到左上（visual-v4 4.8）
+      T.enter(T.$('hdr'), T.p(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move)), S = 1.5, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // ticket 外框
+      T.enter(T.$('tk'), T.p(t, CUE.tk, 0.5), 16);
+
+      // 各行：讲到才出现，高度随之展开（没讲到的行不占位），当前时黄框
+      function row(id, a, b) {
+        var w = T.$('w_' + id), el = T.$(id);
+        var e = T.ease(T.p(t, a, 0.5));
+        w.style.height = (NAT[id] * e) + 'px';
+        w.style.marginBottom = (-16 + GAP * e) + 'px';
+        el.style.opacity = T.ease(T.p(t, a + 0.1, 0.4));
+        curIn(el, on(t, a, b));
+      }
+      row('rAct', CUE.act, CUE.actEnd);
+      row('rNeed', CUE.need, CUE.needEnd);
+      row('rDep', CUE.dep, CUE.depEnd);
+      row('rBan', CUE.ban, CUE.banEnd);
+      row('rAcc', CUE.acc, CUE.accEnd);
+      ['a1', 'a2'].forEach(function (id, i) {
+        var e = T.ease(T.p(t, CUE.a[i], 0.45));
+        T.$(id).style.opacity = e;
+        T.$(id).style.transform = 'translateY(' + ((1 - e) * 10) + 'px)';
+      });
+
+      // 7–9 句：左边任务清单一步；路径和代码变灰；带叉的箭头；「不抄进来」
+      T.enter(T.$('stp'), T.p(t, CUE.stp, 0.5), 14);
+      cur(T.$('stp'), on(t, CUE.stp, CUE.stpEnd), 10);
+      var g = T.ease(T.p(t, CUE.gone, 0.5));
+      ['g1', 'g2'].forEach(function (id) { T.$(id).style.textDecorationColor = 'rgba(160,157,151,' + g + ')'; });
+      T.$('arrG').style.opacity = T.ease(T.p(t, CUE.gone, 0.4));
+      T.$('xm').setAttribute('opacity', T.ease(T.p(t, CUE.gone + 0.3, 0.3)));
+      T.enter(T.$('n7'), T.p(t, CUE.n7, 0.45), 10);
+      // 9 句：留到页末的当前
+      T.enter(T.$('n8'), T.p(t, CUE.n8, 0.45), 10);
+      cur(T.$('n8'), on(t, CUE.n8, 999), 0.001);
+    }
+  });
+</script>
+</body>
+</html>

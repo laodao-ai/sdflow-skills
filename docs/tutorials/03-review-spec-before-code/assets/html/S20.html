@@ -1,0 +1,186 @@
+<!doctype html>
+<!-- S20 · 录屏证据（实录 · 示例项目）· script 135–138「拍完板，报告开头会记下这几份文档的指纹，这份规格就锁住了。……拍板批准，是 SDFlow 整个流程里，唯一要人把关的一步。批准后，后面的实现、代码评审、收尾，就可以一路自动跑下去了。」
+     实录：r3 报告 demo-temp-monitor `2e84aeb` 的 openspec/changes/alarm-notify/spec-review-report.md 第 1–6 行（2026-10-24 核对原件）。
+       第 2 行 `ship-gate:`，第 3 行 `design_approved: true`，第 4 行 `reviewed_sha: acdbb3c8…`（只显示前 8 位），
+       第 5 行 `reviewed_manifest: MTAwNjQ0IGJsb2Ig…`（只显示开头一段；base64 解出来是 design、proposal、两份 spec 的 Git blob 清单）。
+       角上 tag `alarm-notify/design-approved-r3`，git rev-parse 得 `2e84aeb`。
+     黑底代码窗口，顶栏写文件、行号与提交；窗口不倾斜，只有「实录」标签倾斜。
+     第 1 句三行加黄框，0.4 秒后放大卡从黄框处长出到右侧（visual-v4 4.7），窗口其余部分压暗；黄框、放大卡、引线和压暗都留到页末（10-25 改：原来黄框淡出，引线悬空）；窗口整体压暗 0.35（含顶栏），框内三行保持亮；放大卡用终端深底，英文键名下附中文。
+     引线（visual-v4 4.7，10-24 起）：一张卡一根，黄色 2px，用 T.lead() 从黄框离卡最近的角连到卡离黄框最近的角；随卡展开从黄框一端擦出。
+       引线层 #leads（z-index 7）在窗口和压暗之上、放大卡（z-index 8）之下；端点在黄框外缘，黄框淡出后引线仍连在原处。
+     第 2 句中间一行「改了 → 开工被拦 → 重审重批」是示意，后面一个小标「下一期」（被拦下是第 4 期的内容）。
+     第 3–4 句下方一行「拍板批准：全流程唯一要人把关的一步」（第 3 句），后面 实现 → 代码评审 → 收尾 三格随第 4 句口播依次亮起。
+     句子与动画节点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒；句起点：135 句 0，136 句 6.40，137 句 13.76，138 句 19.36，口播结束 24.88，页时长 25.28）：
+       135 句 报告开头窗口一开口就在；念到「这几份文档的指纹」三行加黄框、放大卡长出；念到「这份规格就锁住了」tag 贴上
+       136 句 黄框、放大卡、引线、压暗留到页末；中间一行 改了 → 开工被拦 → 重审重批 依次出现；念到「这个下一期细说」出「下一期」
+       137 句 念到「整个流程里，唯一要人把关的一步」底部一行进场
+       138 句 念到「实现」「代码评审」「收尾」三格依次亮起
+     配色：规格一侧蓝：窗口里三个键名浅蓝，锁住的 tag 饱和蓝（这页最亮的一块）；「改了」「重审重批」浅蓝；
+       执行一侧琥珀：「开工被拦」与下排三格浅琥珀；「拍板批准：全流程唯一要人把关的一步」炭灰底（人的一侧）；「实录」标签墨底。黄只给「当前」，红绿不用。
+     一页一层：窗口、放大卡、引线、中间一行、下排出现后都留到页末，最后一帧全在。放大卡只有一张，从 2.2 秒长出后一直留到页末。
+     内容整体在 y 920 以内，避开底部字幕带。 -->
+<html lang="zh-CN" data-frame-id="S20">
+<head>
+<meta charset="utf-8">
+<title>S20 · 批准锚：design_approved、reviewed_sha、reviewed_manifest</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #gt { left: 1000px; top: 62px; font-family: var(--mono); font-weight: 600; font-size: 30px; background: var(--blue); }
+  #gt b { font-family: var(--display); font-weight: 800; margin-right: 14px; }
+  #gt i { font-style: normal; font-weight: 500; font-size: 26px; margin-left: 12px; }
+
+  #rep { left: 60px; top: 170px; width: 960px; padding: 0; overflow: visible; white-space: normal; }
+  #rep .tab { left: 20px; top: -66px; font-size: 34px; padding: 4px 20px; }
+  #rep .bar0 { height: 44px; display: flex; align-items: center; padding: 0 22px; box-sizing: border-box; background: var(--charcoal);
+               border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0; font-size: 26px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #rep .bd { position: relative; padding: 14px 22px 14px; font-size: 34px; line-height: 54px; overflow: hidden; border-radius: 0 0 7px 7px; }
+  #rep .ln { display: flex; gap: 26px; white-space: nowrap; }
+  #rep .no { flex: none; width: 30px; color: var(--unlit); }
+  #rep .tx { color: var(--cream); white-space: pre; }
+  #rep .k { color: var(--blue-soft); font-weight: 700; }
+  /* 黄框：框住第 3–5 行；放大卡出现时用大范围阴影压暗窗口其余部分 */
+  /* 压暗层 #clip 盖住整个窗口（含顶栏），裁在窗口圆角里；#hl 在里面，用 2000px 阴影把它以外压暗，框内三行保持亮。
+     坐标按窗口内沿算：行 3 起于 y 168（顶栏 44 + 4 描边 + 14 内边距 + 2 行 × 54） */
+  #clip { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; border-radius: 7px; pointer-events: none; }
+  #hl { position: absolute; left: 68px; top: 168px; width: 790px; height: 166px; border-radius: 8px; }
+
+  /* 放大卡：终端深底，不加色边 */
+  .zc { position: absolute; left: 1060px; top: 180px; width: 800px; box-sizing: border-box; padding: 22px 30px 24px; background: var(--term); color: var(--cream);
+        border: 5px solid var(--ink); border-radius: 12px; box-shadow: 12px 12px 0 var(--ink); opacity: 0; z-index: 8; }
+  .zc .r { margin-bottom: 14px; }
+  .zc .r:last-child { margin-bottom: 0; }
+  .zc .en { font-family: var(--mono); font-weight: 600; font-size: 34px; line-height: 1.3; white-space: nowrap; }
+  .zc .en b { color: var(--blue-soft); font-weight: 700; }
+  .zc .zh { font-weight: 600; font-size: 28px; line-height: 1.35; color: var(--cream-dim); }
+  .zc .key { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
+
+  .st { top: 622px; font-family: var(--display); font-weight: 800; font-size: 54px; }
+  #c1, #c3 { background: var(--blue-soft); }
+  #c2 { background: var(--amber-soft); }
+  #c1 { left: 120px; } #c2 { left: 420px; } #c3 { left: 800px; }
+  .ar { position: absolute; top: 610px; font-family: var(--mono); font-weight: 700; font-size: 60px; color: var(--ink); line-height: 1.3; }
+  #nx { left: 1180px; top: 630px; font-family: var(--display); font-weight: 800; font-size: 40px; }
+
+  /* 下方：设计门 -> 实现 -> 代码评审 -> 收尾 */
+  #gate { left: 70px; top: 812px; width: 640px; height: 100px; padding: 0 24px; display: flex; align-items: center; font-family: var(--display); font-weight: 800; font-size: 34px; white-space: nowrap; }
+  .g { top: 812px; height: 100px; padding: 0 24px; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 44px; white-space: nowrap; background: var(--amber-soft); }
+  #g1 { left: 790px; width: 290px; } #g2 { left: 1150px; width: 320px; } #g3 { left: 1540px; width: 290px; }
+  .gar { position: absolute; top: 818px; font-family: var(--mono); font-weight: 700; font-size: 54px; color: var(--ink); line-height: 1.2; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="gt"><b>tag</b>alarm-notify/design-approved-r3<i>= 2e84aeb</i></div>
+
+  <div class="cmd" id="rep" data-r="0">
+    <div class="tab ink">实录 · 示例项目</div>
+    <div class="bar0">spec-review-report.md:1-6 · 2e84aeb</div>
+    <div class="bd">
+      <div class="ln"><span class="no">1</span><span class="tx">---</span></div>
+      <div class="ln"><span class="no">2</span><span class="tx">ship-gate:</span></div>
+      <div class="ln"><span class="no">3</span><span class="tx">  <span class="k">design_approved</span>: true</span></div>
+      <div class="ln"><span class="no">4</span><span class="tx">  <span class="k">reviewed_sha</span>: acdbb3c8…</span></div>
+      <div class="ln"><span class="no">5</span><span class="tx">  <span class="k">reviewed_manifest</span>: MTAwNjQ0IGJsb2Ig…</span></div>
+      <div class="ln"><span class="no">6</span><span class="tx">---</span></div>
+    </div>
+    <div id="clip"><div id="hl"></div></div>
+  </div>
+
+  <!-- 引线层：在窗口与压暗之上、放大卡之下（T.lead 画进这一层） -->
+  <svg class="abs" id="leads" viewBox="0 0 1920 1080" aria-hidden="true" style="left:0;top:0;width:1920px;height:1080px;z-index:7;pointer-events:none"></svg>
+
+  <!-- 放大卡：第 3–5 行，英文原文下附中文 -->
+  <div class="zc" id="z1" data-r="0">
+    <div class="r"><div class="en"><b>design_approved</b>: <span class="key">true</span></div><div class="zh">设计门已批准</div></div>
+    <div class="r"><div class="en"><b>reviewed_sha</b>: acdbb3c8…</div><div class="zh">四份文档合起来的指纹</div></div>
+    <div class="r"><div class="en"><b>reviewed_manifest</b>: MTAwNjQ0IGJsb2Ig…</div><div class="zh">逐份记下：design、proposal、两份 spec</div></div>
+  </div>
+
+  <div class="chip st" id="c1" data-r="-2">改了</div>
+  <div class="ar" id="a1" style="left:300px">→</div>
+  <div class="chip st" id="c2" data-r="2">开工被拦</div>
+  <div class="ar" id="a2" style="left:710px">→</div>
+  <div class="chip st" id="c3" data-r="-2">重审重批</div>
+  <div class="tag" id="nx" data-r="4">下一期</div>
+
+  <!-- 设计门 -> 实现 -> 代码评审 -> 收尾 -->
+  <div class="card dark" id="gate">拍板批准：全流程唯一要人把关的一步</div>
+  <div class="gar" id="ga0" style="left:728px">→</div>
+  <div class="card g" id="g1">实现</div>
+  <div class="gar" id="ga1" style="left:1094px">→</div>
+  <div class="card g" id="g2">代码评审</div>
+  <div class="gar" id="ga2" style="left:1486px">→</div>
+  <div class="card g" id="g3">收尾</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：按录音实测（frame-times.py，2026-10-25），取词首字实测开始时间减 0.2 秒。注释写的是全稿第几句。
+  var CUE = {
+    rep: 0.0,
+    hl: 1.8,                                // 135 句念到「这几份文档的指纹」：三行黄框 + 放大卡，黄框与卡留到页末
+    gt: 3.64,                               // 135 句「这份规格就锁住了」
+    c: [6.76, 7.16, 9.08], a: [6.96, 8.28],    // 136 句：改了 → 开工被拦 → 重审重批
+    nx: 11.08,                              // 136 句「这个下一期细说」
+    gate: 15.48,                            // 137 句「整个流程里，唯一要人把关的一步」
+    g: [20.36, 21.24, 22.36], gEnd: 24.68      // 138 句：实现 → 代码评审 → 收尾
+  };
+  var P = T.p, E = T.ease;
+  function gate(t, from, to) { return E(P(t, from, 0.4)) * (1 - E(P(t, to, 0.4))); }
+
+  // 放大卡：黄框出现 0.4 秒后从黄框处长出，约 0.6 秒展开，留到页末
+  var geo = null, leadLine = null;
+  function measure() {
+    var z = T.$('z1'), s = T.$('hl'), w = T.$('rep');
+    // 卡和窗口都要在没有位移、没有缩放时量；render 每帧会重设它们的 transform
+    z.style.transform = 'none'; w.style.transform = 'none';
+    var zr = z.getBoundingClientRect(), sr = s.getBoundingClientRect();
+    geo = { dx: (sr.left + sr.width / 2) - (zr.left + zr.width / 2), dy: (sr.top + sr.height / 2) - (zr.top + zr.height / 2) };
+    // 引线从黄框外缘出发：黄框描边 6px、离元素 4px，描边中线离元素 7px
+    var b = T.rect(s);
+    leadLine = T.lead({ x: b.x - 7, y: b.y - 7, w: b.w + 14, h: b.h + 14 }, T.rect(z));
+  }
+
+  Stage({
+    duration: 25.28,
+    init: function () { return T.fonts('实录示例项目改了开工被拦重审重批下一期拍板批准全流程唯一要人把关的一步实现代码评审收尾已批准四份文档合起来指纹逐记下两').then(measure); },
+    render: function (t) {
+      T.enter(T.$('rep'), P(t, CUE.rep, 0.45), 16);
+
+      // 135 句：三行黄框；放大卡出现时压暗窗口其余部分（大范围阴影，裁在窗口里）
+      // 黄框、放大卡、引线、压暗都留到页末（2026-10-25 改：引线要连在原文行的黄框上，不再淡出黄框）
+      var g = E(P(t, CUE.hl, 0.3)), hl = T.$('hl');
+      var inn = E(P(t, CUE.hl + 0.4, 0.6));
+      hl.style.outline = '6px solid rgba(245,207,74,' + g + ')';
+      hl.style.outlineOffset = '4px';
+      hl.style.boxShadow = '0 0 30px rgba(245,207,74,' + (0.5 * g) + '), 0 0 0 2000px rgba(22,22,22,' + (0.35 * inn) + ')';
+      var z = T.$('z1'), sc = 0.3 + 0.7 * inn;
+      z.style.opacity = inn;
+      z.style.transform = 'translate(' + ((1 - inn) * geo.dx) + 'px,' + ((1 - inn) * geo.dy) + 'px) scale(' + sc + ')';
+      T.leadDraw(leadLine, inn);
+
+      T.enter(T.$('gt'), P(t, CUE.gt, 0.45), -14);
+
+      // 136 句：改了 → 开工被拦 → 重审重批
+      for (var i = 0; i < 3; i++) {
+        T.enter(T.$('c' + (i + 1)), P(t, CUE.c[i], 0.4), 14);
+        var end = i < 2 ? CUE.c[i + 1] : CUE.nx;
+        T.current(T.$('c' + (i + 1)), gate(t, CUE.c[i], end), 8);
+      }
+      for (var j = 0; j < 2; j++) T.$('a' + (j + 1)).style.opacity = E(P(t, CUE.a[j], 0.35));
+      T.enter(T.$('nx'), P(t, CUE.nx, 0.45), -12);
+
+      // 137 句拍板批准一行；138 句 三格念到时依次亮起
+      T.enter(T.$('gate'), P(t, CUE.gate, 0.45), 16);
+      T.current(T.$('gate'), gate(t, CUE.gate + 0.4, CUE.g[0]), 10);
+      for (var m = 0; m < 3; m++) {
+        T.enter(T.$('g' + (m + 1)), P(t, CUE.g[m], 0.45), 16);
+        var gEnd = m < 2 ? CUE.g[m + 1] : CUE.gEnd;
+        T.current(T.$('g' + (m + 1)), gate(t, CUE.g[m], gEnd), 10);
+        T.$('ga' + m).style.opacity = E(P(t, CUE.g[m], 0.4));
+      }
+    }
+  });
+</script>
+</body>
+</html>

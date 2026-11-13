@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- S34 · 标题卡 · script 137–139「示例项目和 sdflow 的仓库地址，都在简介里。……我是老刀Cheney，下期见。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     片尾三项自上而下：两行仓库地址（等宽，照原样）、征集一句、logo 加署名。
+     logo 用 img/logo.svg（复制自 channel/brand/logo/logo.svg，原样不改），放在炭灰卡上。
+     节点时刻集中在 CUE，按录音实测（frame-times.py，2026-10-19；句 137 开口 0.0、138 开口 4.64、139 开口 11.04）。
+     内容整体在 y 910 以上，避开底部字幕带。 -->
+<html lang="zh-CN" data-frame-id="S34">
+<head>
+<meta charset="utf-8">
+<title>S34 · 片尾</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .repo { left: 210px; width: 1500px; height: 130px; display: flex; align-items: center; padding: 0 56px; }
+  .repo .a { font-family: var(--mono); font-weight: 700; font-size: 54px; color: var(--ink); white-space: nowrap; }
+  .repo .tab { font-size: 40px; }
+  .ask { left: 240px; top: 520px; width: 1440px; height: 150px; padding: 0 56px; display: flex; align-items: center; }
+  .ask .big { font-size: 58px; }
+  .ask .tab { font-size: 40px; }
+  .sig { left: 560px; top: 740px; width: 800px; height: 170px; padding: 0 40px; display: flex; align-items: center; gap: 36px; }
+  .sig img { width: 130px; height: 130px; flex: none; }
+  .sig .big { font-size: 84px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card repo" id="r1" data-r="-1.2" style="top:90px"><div class="tab ink">示例项目 · 见简介</div><div class="a">github.com/laodao-ai/demo-temp-monitor</div></div>
+  <div class="card repo" id="r2" data-r="1.2" style="top:300px"><div class="tab ink" style="transform:rotate(2deg)">SDFlow · 见简介</div><div class="a">github.com/laodao-ai/sdflow-skills</div></div>
+  <div class="card ask" id="ask" data-r="-1"><div class="tab ink" style="transform:rotate(2deg)">留言告诉我</div><div class="big">你用 AI 开发的时候碰到过什么问题？</div></div>
+  <div class="card dark sig" id="sig" data-r="1"><img src="img/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按录音实测（frame-times.py，2026-10-19）：r1 137 句开口；r2 念到「sdflow」；ask 138 句开口；sig 139 句开口。
+  var CUE = { r1: 0.0, r2: 1.04, ask: 4.64, sig: 11.04 };
+  Stage({
+    duration: 14.5,
+    init: function () { return T.fonts('示例项目见简介留言告诉我你用开发的时候碰到过什么问题老刀'); },
+    render: function (t) {
+      T.enter(T.$('r1'), T.p(t, CUE.r1, 0.6), 30);
+      T.enter(T.$('r2'), T.p(t, CUE.r2, 0.6), 30);
+      T.enter(T.$('ask'), T.p(t, CUE.ask, 0.6), 30);
+      T.enter(T.$('sig'), T.p(t, CUE.sig, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+/* 第 4 期封面的样式（布局、字体、颜色照第 3 期 episodes/03-review-spec-before-code/assets/cover/；要求见本期 storyboard.md「## 封面」）。
+   cover.html（出封面图）和 S01（开头的片头）共用，所以全部挂在 .cv 下，
+   不和画面自己的类冲突。颜色、字体用 theme.css 的变量。
+   以文字为主，右栏两张卡只是点缀，168px 宽时当纹理看。
+   左栏照前三期：问题句 + 三张工具贴纸「Superpowers + Matt Pocock + SDFlow」+ 一行副标「怎么拆开发任务，怎么生成代码」。
+   标题 2026-10-31 作者定缩短为「Spec 写好了，为什么不一口气生成代码？」，断在「Spec 写好了，」后面，字号同第 3 期 134。
+   第 2 行比第 3 期长，伸到右栏上方，所以右栏比第 3 期下移约 150。工具贴纸、副标的位置同第 3 期（作者 10-31 定）。
+   三张贴纸一行放不下，整体缩到 0.78 倍，右端不进右栏。
+   工具贴纸左蓝右琥珀，按位置不按工具（visual-v4.md 第二节「颜色的意思」例外）；中间一张 Matt Pocock 用奶白，不加新颜色。
+   右栏后面的卡是拆出的 6 个小格（1–5 加收尾，同 S13），前面的深色卡是 ticket 2（S12 缩略）：三行验收项带勾选框，前两行勾上，
+   下面一对「FAIL → PASS」。红绿只表示测试结果，这里正是测试结果，所以可以用。
+   不用黄（实底只用于 AI 的猜，描边只表示当前讲到的元素）。
+   四种版式：
+     .cv           主封面，也是片头
+     .cv.text      纯文字变体：去掉右栏，问题句放大，发布时和主封面一起做 YouTube「测试与比较」
+     .cv.p34       视频号个人主页卡片 3:4（1080×1440）：问题句、工具、副标从上往下排，右栏缩小放底部
+     .cv.l43       视频号分享卡片 4:3（1440×1080）：和主封面同一布局，全部缩小
+   右下角 x≥1640 且 y≥960 是时长角标区，主封面和纯文字变体都留空。 */
+
+.cv { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.cv .cv-abs { position: absolute; }
+
+/* 问题句：墨字直压纸底，两行。第 2 行最宽，右端伸到右栏上方。 */
+.cv .cv-q {
+  left: 92px; top: 92px; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 134px; line-height: 1.1;
+  letter-spacing: -2px; white-space: nowrap;
+}
+.cv .cv-q .cv-ai { letter-spacing: 0; margin: 0 0.12em; }
+
+/* 三个工具：Superpowers + Matt Pocock + SDFlow。描边、硬投影、字号照第 3 期；都是字，用 flex 按字宽排。 */
+.cv .cv-tools {
+  left: 100px; top: 520px; height: 130px; transform: scale(.78); transform-origin: 0 0;
+  display: flex; align-items: flex-start; gap: 24px;
+}
+.cv .cv-tool {
+  box-sizing: border-box; height: 112px;
+  display: flex; align-items: center; padding: 0 36px;
+  border: 5px solid var(--ink); border-radius: 10px; box-shadow: 9px 9px 0 var(--ink); color: var(--ink);
+  font-family: var(--display); font-weight: 800; font-size: 64px; line-height: 1; white-space: nowrap;
+}
+.cv .cv-tool.l { background: var(--blue); }
+.cv .cv-tool.m { background: var(--cream); }
+.cv .cv-tool.r { background: var(--amber); }
+.cv .cv-plus {
+  width: 56px; height: 112px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 800; font-size: 90px; color: var(--ink);
+}
+
+.cv .cv-sub {
+  left: 104px; top: 712px; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 58px; line-height: 1.1; white-space: nowrap;
+}
+
+/* 频道 logo：奶白圆底 + 墨环，右上。 */
+.cv .cv-badge {
+  left: 1636px; top: 44px; width: 220px; height: 220px; box-sizing: border-box; border-radius: 50%;
+  background: var(--cream); border: 6px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.cv .cv-badge img { width: 190px; height: 190px; display: block; }
+
+/* 右栏：两张卡错位叠放（同第 2、3 期）。用 theme.css 的 .card 和 .tab，只覆盖位置与尺寸。
+   问题句第 2 行底约 390，右栏顶 455，比第 3 期（300）低。 */
+.cv .cv-side { left: 1250px; top: 455px; width: 620px; height: 470px; }
+.cv .cv-side .card { padding: 0; }
+.cv .cv-side .tab { font-size: 40px; padding: 4px 22px; }
+
+/* 后面一张：6 个 ticket 小格排一行，前面的卡压住卡底。 */
+.cv .cv-split { left: 74px; top: 0; width: 540px; height: 190px; }
+.cv .cv-cells {
+  position: absolute; left: 24px; top: 62px; width: 492px;
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+}
+.cv .cv-cell {
+  height: 64px; box-sizing: border-box; border-radius: 6px; border: 3px solid var(--ink); background: var(--cream);
+  display: flex; align-items: center; justify-content: center; white-space: nowrap; color: var(--ink);
+  font-family: var(--display); font-weight: 800; font-size: 32px; line-height: 1;
+}
+/* 收尾那一格墨底，和 1–5 区分，同 S13。 */
+.cv .cv-cell.last { background: var(--ink); color: var(--cream); font-size: 26px; }
+
+/* 前面一张：深色卡，标签奶白底墨字；三行验收项，下面 FAIL → PASS。 */
+.cv .cv-t2 { left: 0; top: 150px; width: 590px; height: 300px; box-shadow: 14px 14px 0 var(--ink); }
+.cv .cv-t2 .tab { background: var(--cream); color: var(--ink); }
+.cv .cv-rows { position: absolute; left: 34px; top: 66px; display: flex; flex-direction: column; gap: 18px; }
+.cv .cv-row { display: flex; align-items: center; gap: 18px; }
+.cv .cv-box {
+  position: relative; width: 30px; height: 30px; box-sizing: border-box; border-radius: 5px;
+  border: 4px solid var(--cream);
+}
+/* 勾用边框画，不依赖字体里有没有 ✓。 */
+.cv .cv-box.on::after {
+  content: ''; position: absolute; left: 6px; top: 0px; width: 8px; height: 15px;
+  border-right: 5px solid var(--cream); border-bottom: 5px solid var(--cream); transform: rotate(40deg);
+}
+.cv .cv-line { height: 18px; border-radius: 9px; background: var(--cream-dim); }
+.cv .cv-result { position: absolute; left: 34px; top: 222px; display: flex; align-items: center; gap: 18px; }
+.cv .cv-res {
+  padding: 2px 22px; border: 4px solid #0b0b0b; border-radius: 8px; box-shadow: 5px 5px 0 #0b0b0b; color: var(--ink);
+  font-family: var(--display); font-weight: 900; font-size: 40px; line-height: 1.2;
+}
+.cv .cv-res.fail { background: var(--fail); }
+.cv .cv-res.pass { background: var(--pass); }
+.cv .cv-arrow { font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--cream); }
+
+/* 纯文字变体：去掉右栏，问题句放大；放大后第 1 行会碰 logo，所以问题句整体下移到 logo 下面。 */
+.cv.text .cv-side { display: none; }
+.cv.text .cv-q { top: 290px; font-size: 148px; }
+.cv.text .cv-tools { top: 690px; }
+.cv.text .cv-sub { top: 830px; }
+
+/* 视频号 3:4。舞台 1080×1440 由 cover.html 设。 */
+.cv.p34 { width: 1080px; height: 1440px; }
+.cv.p34 .cv-badge { left: 820px; top: 48px; width: 196px; height: 196px; }
+.cv.p34 .cv-badge img { width: 168px; height: 168px; }
+.cv.p34 .cv-q { left: 60px; top: 300px; font-size: 82px; }
+.cv.p34 .cv-tools { left: 66px; top: 560px; transform: scale(.66); }
+.cv.p34 .cv-sub { left: 70px; top: 700px; font-size: 52px; }
+.cv.p34 .cv-side { left: 240px; top: 860px; transform: scale(.88); transform-origin: 0 0; }
+
+/* 视频号 4:3。舞台 1440×1080 由 cover.html 设。和主封面同一布局，全部缩小；问题句第 1 行要让开右上的 logo。 */
+.cv.l43 { width: 1440px; height: 1080px; }
+.cv.l43 .cv-badge { left: 1166px; top: 44px; }
+.cv.l43 .cv-q { top: 96px; font-size: 88px; }
+.cv.l43 .cv-tools { top: 370px; transform: scale(.6); }
+.cv.l43 .cv-sub { top: 480px; font-size: 46px; }
+.cv.l43 .cv-side { left: 800px; top: 520px; transform: scale(.9); transform-origin: 0 0; }

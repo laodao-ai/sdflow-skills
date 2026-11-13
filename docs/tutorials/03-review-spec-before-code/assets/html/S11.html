@@ -1,0 +1,98 @@
+<!doctype html>
+<!-- S11 · 标题卡 · script 58–62「再说对抗审。对抗审的任务，是先假设这份规格在实现的时候一定会出事，再去证明它。……平常开其中两个，高风险三个都开。」
+     10-24 按一页一层拆页：原 S11 后半的例子拆到 S11a，本页只留对抗审说明卡，内容出现后留到页末，不淡出。
+     说明卡是示意（不加角标）。三个角度出自 ~/.skills/sdflow-skills/sdflow-spec-review/SKILL.md 第 345 行（隐藏假设 / 失败模式 / 乐观估计与边界；画面用分镜里的人话名称）；
+       平常两个、高风险三个出自同文件第 274 行；报告里叫对抗 A / B / C（/tmp/sr-r2.md 第 133–135 行附近的镜表）。
+     最后一帧：左上标题贴纸「对抗审」；目的卡「先假设一定出事，再去证明；找不到，才放过」，三个角度卡（A 隐藏的假设 · B 失败模式 · C 太乐观的估计和边界），
+       旁注「平常开两个，高风险三个」。原末句「每条发现都要带上文件、行号和原文」已删（作者 10-24 定），底部「每条都带」那一行随之删去，核引用在 S12 讲。
+     动画（每句，共 5 句，全稿第 58–62 句）：
+     - 第 1 句「再说对抗审」58：0.0 标题贴纸；说明卡（目的 / 三个角度 / 每条都带）讲到时才进场（10-24 新规则：不放空壳）。
+     - 第 2 句「对抗审的任务，是先假设……一定会出事，再去证明它」59：1.8 目的卡进场并当前：「先假设一定出事，再去证明」。
+     - 第 3 句「找不到会出事的地方，才放过」60：9.24 同一行后半句「找不到，才放过」出现；12.88 前一个当前结束。
+     - 第 4 句「它有三个角度：隐藏的假设、失败模式、太乐观的估计和边界」61：三个角度依次进场并依次当前：A 14.44 → B 15.64 → C 17.0（当前到 19.44）。
+     - 第 5 句「平常开其中两个，高风险三个都开」62：19.64 旁注「平常开两个，高风险三个」落下，留到页末。
+     颜色（2026-10-23 再改）：对抗审一律粉（记号）：标题贴纸粉、三个角度卡浅粉，三个角度靠编号形状区分（A 圆、B 方、C 菱形）；黄 = 当前，同一时刻只有一个。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。各句起点：第 1 句 0.0，2 句 2.0，3 句 9.44，4 句 12.88，5 句 19.84；
+     时长 24.00 秒（实测页长）。内容整体在 y 920 以上，避开字幕带。
+     10-25 版面：删「每条都带」后整体下移放大，旁注标签和 A、B 两张卡的上沿拉开 50px 以上。 -->
+<html lang="zh-CN" data-frame-id="S11">
+<head>
+<meta charset="utf-8">
+<title>S11 · 对抗审：说明</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hdr { left: 60px; top: 70px; font-family: var(--display); font-weight: 800; font-size: 52px; }
+
+  /* 说明卡（第 1–6 句） */
+  #pur { left: 60px; top: 290px; width: 1800px; height: 160px; padding: 0; display: flex; align-items: center; justify-content: center;
+         font-family: var(--display); font-weight: 800; font-size: 70px; white-space: nowrap; }
+  #pur .tab { font-size: 40px; }
+  #angTab { left: 60px; top: 530px; font-size: 40px; }
+  .ang { top: 660px; width: 580px; height: 200px; padding: 0 20px; display: flex; align-items: center; justify-content: center; gap: 18px;
+         font-family: var(--display); font-weight: 800; font-size: 48px; white-space: nowrap; }
+  #g1 { left: 60px; } #g2 { left: 670px; } #g3 { left: 1280px; }
+  #note { left: 330px; top: 528px; font-size: 38px; }
+
+  /* 配色：找茬都用粉；三个角度靠编号的形状区分：A 圆、B 圆角方、C 菱形（里面的字反向转正） */
+  #hdr { background: var(--pink); }
+  #g1, #g2, #g3 { background: var(--pink-soft); }
+  #g1 .num, #g2 .num, #g3 .num { background: var(--pink); }
+  #g2 .num { border-radius: 10px; }
+  #g3 .num { width: 50px; height: 50px; margin: 8px; border-radius: 6px; transform: rotate(45deg); }
+  #g3 .num i { font-style: normal; transform: rotate(-45deg); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="hdr" data-r="-2">对抗审</div>
+
+  <!-- 说明卡（第 1–6 句），留到页末 -->
+  <div class="abs" id="exp">
+    <div class="card" id="pur" data-r="-0.6"><div class="tab" data-r="-3">目的</div><span>先假设一定出事，再去证明<span id="pur2">；找不到，才放过</span></span></div>
+    <div class="tab" id="angTab" data-r="-2">三个角度</div>
+    <div class="card ang" id="g1" data-r="-1.2"><span class="num">A</span><span>隐藏的假设</span></div>
+    <div class="card ang" id="g2" data-r="1"><span class="num">B</span><span>失败模式</span></div>
+    <div class="card ang" id="g3" data-r="-1"><span class="num"><i>C</i></span><span>太乐观的估计和边界</span></div>
+    <div class="tag" id="note" data-r="-3">平常开两个，高风险三个</div>
+  </div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，画面内）。按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒。
+  var AT = {
+    head: 0.0,                                          // 第 1 句：标题贴纸
+    pur: 1.8, pur2: 9.24, purEnd: 12.88,                  // 第 2 句：目的卡进场并当前；第 3 句：后半句出现；12.3 当前结束
+    ang: [14.44, 15.64, 17.0], angEnd: [15.64, 17.0, 19.44],// 第 4 句：三个角度依次进场并当前
+    note: 19.64                                         // 第 5 句：旁注「平常开两个，高风险三个」，留到页末
+  };
+
+  // 当前：先淡入 0.2 秒、b 之前淡出 0.2 秒，相邻两段首尾相接，同一时刻只有一个。
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.2)) * (1 - T.ease(T.p(t, b - 0.2, 0.2))); }
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+
+  Stage({
+    duration: 24.00,
+    init: function () { return T.fonts(document.body.textContent); },
+    render: function (t) {
+      T.enter(T.$('hdr'), T.p(t, AT.head, 0.45), -14);
+
+      // 说明卡：随口播进场，留到页末
+      T.enter(T.$('pur'), T.p(t, AT.pur, 0.45), 16);
+      T.$('pur2').style.opacity = T.ease(T.p(t, AT.pur2, 0.4));
+      cur(T.$('pur'), on(t, AT.pur + 0.1, AT.purEnd), 10);
+      T.enter(T.$('angTab'), T.p(t, AT.ang[0], 0.45), -10);
+      ['g1', 'g2', 'g3'].forEach(function (id, i) {
+        T.enter(T.$(id), T.p(t, AT.ang[i], 0.45), 16);
+        cur(T.$(id), on(t, AT.ang[i], AT.angEnd[i]), 10);
+      });
+      T.enter(T.$('note'), T.p(t, AT.note, 0.45), -10);
+    }
+  });
+</script>
+</body>
+</html>

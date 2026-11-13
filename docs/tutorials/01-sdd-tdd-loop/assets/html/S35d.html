@@ -1,0 +1,155 @@
+<!doctype html>
+<!-- S35d · 终端 · script 167–170「回到终端，OpenSpec 任务清单里的六条，被它归成了三个开发任务。……不过为了让你看到子代理怎么干活，我选了子代理那种。」
+     cast 02-sp-writing-plans 回放秒 31–34，1 倍速（不标倍速），播 3 秒，停 18.2 秒，共 21.2 秒（画面时长，按实测）。
+     终点取 34 不取 34.3：AI 的汇报 32.1 秒出齐，之后到 34.3 画面不变；34.4–34.5 秒输入框里出现「Native, go ahead」，
+     那句没发出去，不能进画面。34 秒离它留出余量，输入框是空的。
+     - 旧历史：开头约 1 秒屏上还有第一次中断的尝试（Interrupted 那几行）。同 S35b，按行文字找最后一次
+       /superpowers:writing-plans，从第 0 行盖到它的上一行；汇报出来后命令滚出屏外，遮罩自动撤掉。
+     - 只露前 30 行：底部 4 行状态栏（模型名、用量）不进画面。另按「Cost $」找状态栏行，
+       它若上移进画面，从这一行盖到窗口底（本段不会发生，逻辑与 S35e 一致）。
+     - 依次加黄框（= 当前），前一个降成淡框。时间按实测（2026-10-06，frame-times.py）：
+       ① 第 1 句：「The plan maps each tasks.md item (1.1–3.1) to one of three tasks」这一行，1.1 秒。
+          第 1 句 0.00 秒开口，汇报 1.1 秒才出来，取行出现的时刻。
+       ② 第 2 句开口：Subagent-driven / Native 两种方式（4 行），6.64 秒。
+       ③ 第 2 句「推荐的是省事的那种」到第 3 句：「For this plan I recommend Native …」两行，9.04 秒（「推荐」）。
+       ④ 第 4 句「我选了子代理那种」：只框 Subagent-driven 那两行，17.52 秒（「我」）。②的淡框跟它重叠，这时淡出。
+          用框不用贴纸：框和口播一起出现，意思够清楚，少一个元素。
+     窗口本身不倾斜，只让标签倾斜（终端要能读）。 -->
+<html lang="zh-CN" data-frame-id="S35d">
+<head>
+<meta charset="utf-8">
+<title>S35d · plan summary</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 让出底部字幕带（y ≥ 940，visual-v4 §4.1）：窗口上移、整体缩到 0.947，30 行都留着。 */
+  .window { left: 150px; top: 72px; width: 1620px; height: 908px; padding: 18px 20px; overflow: visible; transform: scale(0.947); transform-origin: 50% 0; }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 872px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: 0; width: 1580px; height: 1004px; }
+  /* 播放器暂停时会画播放按钮和加载圈；画面不可交互，全部藏掉。 */
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  /* 终端底色跟随主题，盖过 cast 自带的底色。 */
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  .mask { position: absolute; left: 0; width: 1580px; background: #1b1b1d; display: none; }
+  .qbox { position: absolute; left: 6px; width: 1568px; box-sizing: border-box; border: 5px solid transparent; border-radius: 8px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip">
+      <div id="term"></div>
+      <div class="mask" id="mask"></div>
+      <div class="mask" id="mask-status"></div>
+      <div class="qbox" id="b1"></div>
+      <div class="qbox" id="b2"></div>
+      <div class="qbox" id="b3"></div>
+      <div class="qbox" id="b4"></div>
+    </div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+  </div>
+</div>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/02-sp-writing-plans.js"></script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var CAST_START = 31, CAST_END = 34, SPEED = 1;
+  var PLAY = (CAST_END - CAST_START) / SPEED;
+  var HOLD = 18.2;   // 总长 = 画面时长 21.2 秒（时间轴，实测）
+  var CLIP_H = 872;
+  var player;
+
+  // 框：起始行与结束行的文字特征（to 为 null 时只框一行）。
+  // at = 亮黄；next = 降成淡框；gone = 整个淡出（被后面的框盖住时用）。
+  var BOXES = [
+    { box: 'b1', from: 'The plan maps each tasks.md item', to: null, at: 1.1, next: 6.64 },
+    { box: 'b2', from: '- Subagent-driven:', to: 'whole branch. Cheapest', at: 6.64, next: 9.04, gone: 17.52 },
+    { box: 'b3', from: 'For this plan I recommend Native', to: 'mistake would be cheap', at: 9.04, next: 17.52 },
+    { box: 'b4', from: '- Subagent-driven:', to: 'then a whole-branch review', at: 17.52 }
+  ];
+
+  function lines() { return T.all('#term .ap-line'); }
+  function find(L, text, after) {
+    for (var i = after || 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  function findLast(L, text) {
+    for (var i = L.length - 1; i >= 0; i--) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 行在 .clip 里的上下沿（px，按 1920 宽的舞台坐标）。
+  function span(L, i0, i1) {
+    var clip = document.querySelector('.clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { top: (L[i0].getBoundingClientRect().top - clip.top) / k, bottom: (L[i1].getBoundingClientRect().bottom - clip.top) / k };
+  }
+
+  function overlays(t) {
+    var L = lines();
+    // 旧历史：从第 0 行盖到最后一次提交的命令的上一行。命令滚出屏外后不盖。
+    var cmd = findLast(L, '/superpowers:writing-plans Use');
+    var mask = T.$('mask');
+    if (cmd > 0) {
+      var m = span(L, 0, cmd - 1);
+      mask.style.display = 'block';
+      mask.style.top = m.top + 'px';
+      mask.style.height = (m.bottom - m.top) + 'px';
+    } else {
+      mask.style.display = 'none';
+    }
+    // 状态栏（模型名、费用）若上移进画面：从这一行盖到窗口底。
+    var status = findLast(L, 'Cost $');
+    var ms = T.$('mask-status');
+    if (status >= 0) {
+      var s0 = span(L, status, status).top;
+      ms.style.display = s0 < CLIP_H ? 'block' : 'none';
+      ms.style.top = s0 + 'px';
+      ms.style.height = Math.max(0, CLIP_H - s0) + 'px';
+    } else {
+      ms.style.display = 'none';
+    }
+    BOXES.forEach(function (q) {
+      var i0 = find(L, q.from);
+      var box = T.$(q.box);
+      if (i0 < 0) { box.style.opacity = 0; return; }
+      box.style.opacity = q.gone === undefined ? 1 : 1 - T.ease(T.p(t, q.gone, 0.35));
+      var i1 = q.to ? find(L, q.to, i0) : i0;
+      if (i1 < 0) i1 = i0;
+      var s = span(L, i0, i1);
+      // 上下各放出 3px：单行框贴着字太紧。
+      box.style.top = (s.top - 3) + 'px';
+      box.style.height = (s.bottom - s.top + 6) + 'px';
+      // 黄色只给当前这一个；下一个亮起后，这个降成淡奶白框（讲过了）。
+      var on = T.ease(T.p(t, q.at, 0.35));
+      var next = q.next === undefined ? 0 : T.ease(T.p(t, q.next, 0.35));
+      var g = on * (1 - next);
+      box.style.borderColor = next > 0 ? T.mix([245, 207, 74], [120, 118, 112], next) : 'rgba(245,207,74,' + g + ')';
+      box.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.45 * g) + '), inset 0 0 24px rgba(245,207,74,' + (0.25 * g) + ')';
+    });
+  }
+
+  Stage({
+    duration: PLAY + HOLD,
+    init: function () {
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS['02-sp-writing-plans'] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      return T.fonts('实录');
+    },
+    render: function (t) {
+      var castTime = Math.min(CAST_START + t * SPEED, CAST_END);
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位遮罩和框。
+      return Promise.resolve(player.seek(castTime))
+        .then(function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); })
+        .then(function () { overlays(t); });
+    }
+  });
+</script>
+</body>
+</html>

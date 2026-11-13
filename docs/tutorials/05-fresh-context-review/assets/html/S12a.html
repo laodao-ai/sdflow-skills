@@ -1,0 +1,315 @@
+<!doctype html>
+<!-- S12a · 第 10 轮（2026-11-08），口播 65–69。
+     角色图：S08 的五路 Agent 缩小排成一列，第 1–2 句同时亮起，各自一个「不带开发对话」框，互相之间一道隔板；第 3–4 句各路的发现汇到一个漏斗「脚本核引用」，一条引用位置对不上的发现被筛掉；第 5 句漏斗下面「主会话逐条裁决：成立 / 不成立」；核引用仅验证位置与引文，问题是否成立仍由主会话判断。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S12a">
+<head>
+<meta charset="utf-8">
+<title>S12a · 五路同时读，先核引用再裁决</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* ===== Agent 方块：S08 同一套写法，缩小 ===== */
+  .tile { position: absolute; box-sizing: border-box; width: 140px; height: 96px; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 10px 10px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 52px; height: 52px; margin-top: -22px; }
+  .tile .name { position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%) rotate(var(--r, -2deg));
+          padding: 3px 14px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 28px; line-height: 1.1; }
+  .name.spec { background: var(--blue); }
+  .name.adv { background: var(--pink); }
+  .name.xm { background: var(--violet); }
+  .tile.cond { background: var(--cream-dim); border: 5px dashed rgba(22,22,22,.75); box-shadow: none; color: var(--ink); }
+
+  /* 五行：框顶 y = 40 + 172·i，框高 150 */
+  .box { position: absolute; left: 60px; width: 500px; height: 150px; box-sizing: border-box; border: 4px dashed rgba(22,22,22,.75); border-radius: 12px; }
+  .box .lb { position: absolute; left: 250px; top: 52px; font-size: 30px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .tile { left: 90px; }
+  #a1 { top: 56px; } #a2 { top: 228px; } #a3 { top: 400px; } #a4 { top: 572px; } #a5 { top: 744px; }
+  #b1 { top: 40px; } #b2 { top: 212px; } #b3 { top: 384px; } #b4 { top: 556px; } #b5 { top: 728px; }
+  .wall { position: absolute; left: 40px; width: 540px; height: 10px; border-radius: 5px; background: var(--ink); }
+  #wa { top: 196px; } #wb { top: 368px; } #wc { top: 540px; } #wd { top: 712px; }
+
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+
+  /* 发现贴纸：位置由脚本写 */
+  .fd { position: absolute; width: 96px; height: 48px; box-sizing: border-box; padding: 0; display: flex; align-items: center; justify-content: center;
+        font-size: 28px; border-width: 4px; box-shadow: 5px 5px 0 var(--ink); }
+  .fd .x { position: absolute; right: -16px; top: -18px; width: 36px; height: 36px; opacity: 0; }
+  #rej { left: 1440px; top: 372px; font-size: 30px; }
+
+  /* 录像卡（第 2 句）：外层 #rvw 管缩小，里面的 #rv 管进场。源画面 1920x1080，裁 x 225、y 232 起，1:1 */
+  #rvw { position: absolute; left: 700px; top: 200px; width: 1042px; height: 392px; transform-origin: 0 0; }
+  #rv { left: 0; top: 0; width: 1042px; height: 392px; overflow: visible; }
+  #rv .tab { left: -12px; top: -50px; font-size: 34px; padding: 4px 22px; }
+  .clip { position: absolute; left: 0; top: 0; width: 1030px; height: 380px; overflow: hidden; border-radius: 8px; }
+  #rec { position: absolute; left: -225px; top: -232px; width: 1920px; height: 1080px; }
+  .hl { position: absolute; box-sizing: border-box; border: 5px solid rgba(245,207,74,0); border-radius: 6px; opacity: 0; }
+  #sync { position: absolute; left: 340px; top: 150px; padding: 4px 22px; background: var(--cream); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px;
+          box-shadow: 6px 6px 0 var(--ink); font-family: var(--display); font-weight: 800; font-size: 44px; white-space: nowrap; opacity: 0; }
+  /* 压暗层（4.7）：两处黄框同时亮，用 evenodd 挖两个洞（路径在 layoutBoxes 里按黄框位置写）；在 #sync 之下，旁注不压暗 */
+  #dim { position: absolute; left: 0; top: 0; width: 1030px; height: 380px; background: #161616; opacity: 0; }
+
+  /* 放大卡（4.7）：录像卡下方空处，七行等宽 28px；奶白底、不加色边（同 S17）；z-index 高于引线层（7） */
+  #z1 { position: absolute; left: 760px; top: 616px; box-sizing: border-box; padding: 8px 26px 10px; background: var(--cream); color: var(--ink);
+        border: 5px solid var(--ink); border-radius: 10px; box-shadow: 8px 8px 0 var(--ink); opacity: 0; z-index: 8;
+        font-family: var(--mono); font-weight: 600; font-size: 28px; line-height: 1.3; white-space: nowrap; }
+  #z1 b { font-weight: 800; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 5px; }
+  #z1 .cv { margin-top: 8px; padding-top: 8px; border-top: 3px dashed rgba(22,22,22,.6); }
+
+  /* 漏斗标签 */
+  #fl { left: 1022px; top: 272px; font-family: var(--display); font-weight: 800; font-size: 46px; color: var(--ink); white-space: nowrap; }
+
+  /* 裁决卡 */
+  #vd { left: 880px; top: 648px; width: 540px; height: 244px; padding: 0; }
+  #vd .tab { font-size: 38px; }
+  .bin { position: absolute; top: 40px; height: 185px; box-sizing: border-box; border: 4px dashed rgba(22,22,22,.75); border-radius: 10px; }
+  .bin .bl { position: absolute; left: 0; right: 0; top: 6px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 36px; color: var(--ink); }
+  #bin1 { left: 24px; width: 258px; }
+  #bin2 { left: 300px; width: 212px; background: rgba(160,157,151,.55); }
+.ctx{font-size:28px}</style>
+</head>
+<body>
+<div id="stage">
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <!-- 漏斗：先画墨色硬投影，再画奶白本体；黄色描边做「当前」 -->
+    <g id="fun">
+      <polygon points="870,240 1430,240 1210,480 1210,550 1090,550 1090,480" fill="#161616" transform="translate(10,10)"/>
+      <polygon points="870,240 1430,240 1210,480 1210,550 1090,550 1090,480" fill="#f2efe6" stroke="#161616" stroke-width="5" stroke-linejoin="round"/>
+      <polygon id="funCur" points="870,240 1430,240 1210,480 1210,550 1090,550 1090,480" fill="none" stroke="#f5cf4a" stroke-width="7" stroke-linejoin="round" opacity="0"/>
+    </g>
+    <g fill="none" stroke="#161616" stroke-opacity=".8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <!-- 括线：五路的右边汇成一道 -->
+      <path id="br" d="M582 115 H606 M582 287 H606 M582 459 H606 M582 631 H606 M582 803 H606 M606 115 V803"/>
+      <!-- 括线中点 → 漏斗口 -->
+      <path id="ar1" d="M612 459 C 700 459, 760 300, 856 214"/>
+      <!-- 漏斗出口 → 裁决卡 -->
+      <path id="ar2" d="M1150 556 V 640"/>
+    </g>
+  </svg>
+
+  <!-- 五行：不带开发对话框（第 2 句） -->
+  <div class="box" id="b1"><span class="lb">不带开发对话</span></div>
+  <div class="box" id="b2"><span class="lb">不带开发对话</span></div>
+  <div class="box" id="b3"><span class="lb">不带开发对话</span></div>
+  <div class="box" id="b4"><span class="lb">不带开发对话</span></div>
+  <div class="box" id="b5"><span class="lb">不带开发对话</span></div>
+  <div class="wall" id="wa"></div><div class="wall" id="wb"></div><div class="wall" id="wc"></div><div class="wall" id="wd"></div>
+
+  <!-- 五路 Agent（第 1 句） -->
+  <div class="tile" id="a1" data-r="-1.2"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name spec" style="--r:-2deg">对照规格</div></div>
+  <div class="tile" id="a2" data-r="1.2"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">领域视角</div></div>
+  <div class="tile" id="a3" data-r="-1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name adv" style="--r:2deg">对抗 × 2–3</div></div>
+  <div class="tile" id="a4" data-r="1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name xm" style="--r:-2deg">换模型</div></div>
+  <div class="tile cond" id="a5" data-r="-0.8" data-shadow="0"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">历史</div></div>
+
+  <!-- 录像卡（第 2 句）：原片 199.0–203.0 秒，1 倍速，放完定格 -->
+  <div id="rvw">
+    <div class="window" id="rv">
+      <div class="clip">
+        <video id="rec" src="../../assets/video/20261031-025409-code-review-review.mp4" muted preload="auto" playsinline></video>
+        <div id="dim"></div>
+        <div class="hl" id="hb1"></div><div class="hl" id="hb2"></div>
+        <div id="sync">← 同时派出</div>
+      </div>
+      <div class="tab ink">实录 · 示例项目</div>
+    </div>
+  </div>
+  <!-- 放大卡与引线层（第 2 句末，缩小前收起） -->
+  <svg class="abs" id="leads" viewBox="0 0 1920 1080" aria-hidden="true" style="left:0;top:0;width:1920px;height:1080px;z-index:7;pointer-events:none"></svg>
+  <div id="z1">
+    <div><b>Step1</b> scope 审计</div>
+    <div><b>领域镜</b> backend+go</div>
+    <div><b>对抗镜1</b> 并发竞态</div>
+    <div><b>对抗镜2</b> 资源泄漏</div>
+    <div><b>对抗镜3</b> 错误路径</div>
+    <div><b>历史镜</b> blame 核验</div>
+    <div class="cv">后台派发 <b>code-voice</b> 跨模型第二意见</div>
+  </div>
+
+  <!-- 漏斗标签（第 3 句） -->
+  <div class="abs" id="fl">脚本核引用</div>
+
+  <!-- 第 5 句：逐条裁决 -->
+  <div class="card" id="vd" data-r="0.8">
+    <div class="tab ink" data-r="-2">主会话逐条裁决</div>
+    <div class="bin" id="bin1"><div class="bl">成立</div></div>
+    <div class="bin" id="bin2"><div class="bl">不成立</div></div>
+  </div>
+
+  <!-- 发现：每路一张（第 3 句），位置由脚本按进度写 -->
+  <div class="chip fd" id="f1" data-r="-2">发现</div>
+  <div class="chip fd" id="f2" data-r="2">发现</div>
+  <div class="chip fd" id="f3" data-r="-1.5">发现</div>
+  <div class="chip fd" id="f4" data-r="1.5">发现</div>
+  <div class="chip fd" id="f5" data-r="-2">发现<svg class="x" viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" fill="#161616" stroke="#161616" stroke-width="4"/><path d="M14 14 L30 30 M30 14 L14 30" fill="none" stroke="#f2efe6" stroke-width="5" stroke-linecap="round"/></svg></div>
+  <div class="tag" id="rej" data-r="3">引用位置对不上</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算；录音后按实测对齐）。
+  var AT = {
+    ag: 0.074,                    // 第 1 句：五路 Agent 落下
+    lit: 5.208, litEnd: 11.425,     // 第 2 句：五路同时亮起
+    box: 5.558, wall: 9.236,       // 第 2 句：「每一路都是一个新的 agent」不带开发对话框；「各看各的」隔板
+    fun: 11.6, br: 11.711,        // 第 3 句：漏斗、括线与箭头
+    fd: 12.098, fdGap: 0.65,      // 第 3 句：发现依次滑到漏斗口
+    funCur: 13.315, funEnd: 16.08, // 第 3–4 句：漏斗当前
+    rejCur: 16.08, rejOut: 19.714, // 第 4 句：最右那张当前，念到「是不是真的存在」被筛出
+    vd: 26.32, vdCur: 26.577,      // 第 5 句：裁决卡
+    drop: [26.9, 27.5, 28.1, 28.7],   // 第 5 句：四张发现逐条落进「成立」「不成立」
+    rv: 5.12, play: 5.208, playLen: 4.0,   // 第 2 句：录像卡进场，原片 199.0 → 203.0 秒（1 倍速）
+    hb: 8.885, sync: 9.236,               // 放完定格后：两个黄框、旁注「同时派出」
+    zc: 9.236, zOut: 10.593,              // 黄框后 0.4 秒放大卡长出（0.6 秒）；13.15–13.5 卡与引线收回黄框，缩小开始前收完
+    shrink: 10.899, shrinkLen: 0.6,       // 第 2 句念完：缩到右上角，黄框与旁注淡出
+    end: 30.56
+  };
+  // 录像：原片 203.0 秒之后列表不再变。源画面裁切 x 225、y 240 起，1:1；黄框 = 源画面坐标 x1, y1, x2, y2
+  var SRC0 = 0.0, SRC1 = 4.0, X0 = 225, Y0 = 232;
+  var HB = [['hb1', [266, 330, 506, 498]], ['hb2', [228, 524, 1220, 553]]];   // 六行 agents；code-voice 一行
+  var CORNER = { x: 1478, y: 36, k: 0.39 };
+  var video = T.$('rec');
+  function seekVideo(sec) {
+    return new Promise(function (resolve) {
+      // 两帧：seeked 之后视频帧要再过一个合成周期才画到屏上（同第 3 期 S17）。
+      // 本页另加一道：seeked 后等视频帧真正呈现（requestVideoFrameCallback，300 毫秒兜底），大跨度跳秒时不会截到上一帧。
+      function painted() { requestAnimationFrame(function () { requestAnimationFrame(function () { resolve(); }); }); }
+      if (Math.abs(video.currentTime - sec) < 0.001 && video.readyState >= 2) { painted(); return; }
+      video.addEventListener('seeked', function () {
+        var done = false;
+        function fin() { if (done) return; done = true; painted(); }
+        if (video.requestVideoFrameCallback) { video.requestVideoFrameCallback(fin); setTimeout(fin, 300); } else { fin(); }
+      }, { once: true });
+      video.currentTime = sec;
+    });
+  }
+  function loaded() {
+    return new Promise(function (resolve) {
+      if (video.readyState >= 1) { resolve(); return; }
+      video.addEventListener('loadedmetadata', function () { resolve(); }, { once: true });
+    });
+  }
+  var GEO = null;
+  function layoutBoxes() {
+    var holes = '';
+    HB.forEach(function (h) {
+      var b = T.$(h[0]), r = h[1], pad = 4;
+      var x = r[0] - X0 - pad, y = r[1] - Y0 - pad, w = r[2] - r[0] + 2 * pad, hh = r[3] - r[1] + 2 * pad;
+      b.style.left = x + 'px'; b.style.top = y + 'px'; b.style.width = w + 'px'; b.style.height = hh + 'px';
+      holes += ' M' + x + ' ' + y + ' H' + (x + w) + ' V' + (y + hh) + ' H' + x + ' Z';
+    });
+    // 压暗层挖两个洞（两处黄框同时亮）
+    T.$('dim').style.clipPath = 'path(evenodd, "M0 0 H1030 V380 H0 Z' + holes + '")';
+    // 一张放大卡对两处黄框，只画一根引线：hb2（code-voice 一行）横在 hb1 正下方，
+    // 从 hb1 往下拉的直线都会穿过 hb2（4.7：不穿过黄框），所以引线按两处黄框合起来的范围量，落在 hb2 左下角。
+    // 卡从两处黄框合起来的中心长出。在录像卡没有缩放、放大卡没有位移时量（同 S17）。
+    var b1 = T.rect(T.$('hb1')), b2 = T.rect(T.$('hb2'));
+    var x1 = Math.min(b1.x, b2.x), y1 = Math.min(b1.y, b2.y);
+    var box = { x: x1, y: y1, w: Math.max(b1.x + b1.w, b2.x + b2.w) - x1, h: Math.max(b1.y + b1.h, b2.y + b2.h) - y1 };
+    var z = T.$('z1'); z.style.transform = 'none';
+    var card = T.rect(z);
+    GEO = { dx: (box.x + box.w / 2) - (card.x + card.w / 2), dy: (box.y + box.h / 2) - (card.y + card.h / 2), lead: T.lead(box, card) };
+  }
+  // 发现贴纸的三个位置：起点（各路右侧）→ 漏斗口 → 裁决格
+  var START = [[440, 91], [440, 263], [440, 435], [440, 607], [440, 779]];
+  var MOUTH = [[905, 172], [1020, 172], [1135, 172], [1250, 172], [1365, 172]];
+  var BIN = [[928, 762], [1040, 762], [928, 818], [1243, 762]];   // f1–f3 成立，f4 不成立（卡内坐标换成舞台坐标）
+  var OUT = [1480, 290];                                           // f5 被筛出后停的位置
+  var CREAM = [242, 239, 230], GRAY = [160, 157, 151];
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = (el.id !== 'br' && p >= 0.99) ? 'url(#ah)' : 'none';
+  }
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.3)) * (1 - T.ease(T.p(t, b - 0.3, 0.3))); }
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+  function lerp(a, b, k) { return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]; }
+  function place(el, xy) { el.style.left = xy[0] + 'px'; el.style.top = xy[1] + 'px'; }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: AT.end,
+    init: function () { return Promise.all([loaded(), T.fonts(T.$('stage').textContent)]).then(layoutBoxes); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 2 句：录像卡进场、1 倍速放 4 秒后定格、两个黄框与旁注；第 2 句念完缩到右上角
+      T.enter(T.$('rv'), P(t, AT.rv, 0.45), 14);
+      var sk = E(P(t, AT.shrink, AT.shrinkLen));
+      T.$('rvw').style.transform = 'translate(' + ((CORNER.x - 700) * sk) + 'px,' + ((CORNER.y - 200) * sk) + 'px) scale(' + (1 + (CORNER.k - 1) * sk) + ')';
+      var hg = E(P(t, AT.hb, 0.3)) * (1 - E(P(t, AT.shrink, 0.3)));
+      HB.forEach(function (h) {
+        var b = T.$(h[0]);
+        b.style.opacity = hg > 0.001 ? 1 : 0;
+        b.style.borderColor = 'rgba(245,207,74,' + hg + ')';
+        b.style.boxShadow = '0 0 24px rgba(245,207,74,' + (0.6 * hg) + ')';
+      });
+      var sy = T.$('sync'), sg = E(P(t, AT.sync, 0.4)) * (1 - E(P(t, AT.shrink, 0.3)));
+      sy.style.opacity = sg;
+      sy.style.transform = 'translateY(' + ((1 - E(P(t, AT.sync, 0.4))) * -10) + 'px) rotate(-3deg)';
+      // 放大卡与引线：黄框后 0.4 秒从黄框处长出；缩小开始前收回黄框（原文随录像卡缩走，4.7「原文滚出窗口的卡和引线一起收起」）
+      var zk = E(P(t, AT.zc, 0.6)) * (1 - E(P(t, AT.zOut, AT.shrink - AT.zOut)));
+      var z1 = T.$('z1');
+      z1.style.opacity = zk;
+      z1.style.transform = 'translate(' + ((1 - zk) * GEO.dx) + 'px,' + ((1 - zk) * GEO.dy) + 'px) scale(' + (0.3 + 0.7 * zk) + ')';
+      T.leadDraw(GEO.lead, zk);
+      // 压暗：卡在画面上就压暗约 0.35，黄框保持亮；卡收起时一起退
+      var dk = E(P(t, AT.zc + 0.4, 0.6)) * (1 - E(P(t, AT.zOut, AT.shrink - AT.zOut)));
+      T.$('dim').style.opacity = 0.35 * dk;
+
+      // 第 1 句：五路落下；第 2 句：同时亮起、不带开发对话框、隔板
+      for (var i = 1; i <= 5; i++) {
+        var a = T.$('a' + i);
+        T.enter(a, P(t, AT.ag + (i - 1) * 0.12, 0.5), 14);
+        cur(a, on(t, AT.lit, AT.litEnd), i === 5 ? 0.001 : 10);
+        var b = T.$('b' + i);
+        b.style.opacity = E(P(t, AT.box + (i - 1) * 0.1, 0.4));
+      }
+      T.all('.wall').forEach(function (w, j) { T.wipe(w, P(t, AT.wall + j * 0.12, 0.5), 'x'); });
+
+      // 第 3 句：漏斗、括线、箭头
+      T.$('fun').style.opacity = E(P(t, AT.fun, 0.4));
+      T.$('fl').style.opacity = E(P(t, AT.fun + 0.2, 0.4));
+      wire(T.$('br'), E(P(t, AT.br, 0.5)));
+      wire(T.$('ar1'), E(P(t, AT.br + 0.4, 0.6)));
+      T.$('funCur').setAttribute('opacity', on(t, AT.funCur, AT.funEnd));
+
+      // 发现：起点 → 漏斗口；f5 第 4 句被筛出；f1–f4 第 5 句落进裁决格
+      for (var k = 1; k <= 5; k++) {
+        var f = T.$('f' + k), s = AT.fd + (k - 1) * AT.fdGap;
+        f.style.opacity = E(P(t, s, 0.25));
+        var xy = lerp(START[k - 1], MOUTH[k - 1], E(P(t, s, 0.55)));
+        if (k === 5) {
+          xy = lerp(xy, OUT, E(P(t, AT.rejOut, 0.7)));
+          var g5 = E(P(t, AT.rejOut + 0.3, 0.4));
+          f.style.background = T.mix(CREAM, GRAY, g5);
+          f.querySelector('.x').style.opacity = g5;
+        } else {
+          var d = E(P(t, AT.drop[k - 1], 0.6));
+          xy = lerp(xy, BIN[k - 1], d);
+          if (k === 4) f.style.background = T.mix(CREAM, GRAY, E(P(t, AT.drop[3] + 0.4, 0.4)));
+        }
+        place(f, xy);
+      }
+      cur(T.$('f5'), on(t, AT.rejCur, AT.rejOut + 1.6), 5);
+      T.enter(T.$('rej'), P(t, AT.rejOut + 0.6, 0.4), -10);
+
+      // 第 5 句：裁决卡
+      wire(T.$('ar2'), E(P(t, AT.vd, 0.4)));
+      T.enter(T.$('vd'), P(t, AT.vd, 0.5), 16);
+      cur(T.$('vd'), on(t, AT.vdCur, 999), 10);
+
+      return seekVideo(SRC0 + Math.min(SRC1 - SRC0, Math.max(0, t - AT.play)));
+    }
+  });
+</script>
+</body>
+</html>

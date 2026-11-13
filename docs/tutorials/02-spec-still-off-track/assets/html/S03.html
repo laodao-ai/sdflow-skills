@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- S03 · 录屏证据 · script 8–9「在聊之前，我们先来看看上一期 B站 网友的一个问题：……为什么不用 grill-me 代替 OpenSpec？」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     实录：B站评论截图（用户名「今年必要上岸1」保留，作者 2026-10-13 定；2026-10-11 的评论）。
+     - 截图 img/bilibili-comments.png 本身不倾斜、不裁剪，放在不倾斜的卡里（真实截图，不是示意）；左上角「实录」标签。
+     - 第 8 句开口：截图卡落下。
+     - 第 9 句开口：整句评论（正文那一行）加黄框（作者 2026-10-17 定：整句评论加框）。
+     口播时刻按录音实测（frame-times.py，2026-10-19；画面内秒数）：见 AT。 -->
+<html lang="zh-CN" data-frame-id="S03">
+<head>
+<meta charset="utf-8">
+<title>S03 · 网友提问</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 截图 964×129，放大 1.75 倍：1687×226。卡片不倾斜。 */
+  .shot { left: 116px; top: 380px; width: 1687px; height: 226px; padding: 0; overflow: visible; }
+  .shot img { position: absolute; left: 0; top: 0; width: 1687px; height: 226px; display: block; border-radius: 5px; }
+  .shot .tab { font-size: 44px; }
+  /* 评论正文那一行（截图坐标 x 74–855，y 56–100，乘 1.75）。 */
+  #hit { position: absolute; left: 126px; top: 104px; width: 1374px; height: 62px; box-sizing: border-box; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card shot" id="shot" data-r="0">
+    <img src="img/bilibili-comments.png" alt="B站评论截图">
+    <div id="hit"></div>
+    <div class="tab ink" id="tag">实录</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按录音实测 frame-times.py，2026-10-19）。
+  var AT = {
+    shot: 0.0,    // 第 8 句开口：截图卡落下
+    tag: 0.5,     // 「实录」标签
+    frame: 5.4    // 第 9 句开口：整句评论加框
+  };
+
+  Stage({
+    duration: 10,
+    init: function () { return T.fonts('实录'); },
+    render: function (t) {
+      T.enter(T.$('shot'), T.p(t, AT.shot, 0.5), 24);
+      T.enter(T.$('tag'), T.p(t, AT.tag, 0.4), 10);
+      // 黄色描边 + 外发光 = 当前。框在截图里面，所以不画 T.current 的底色环（会盖住旁边的用户名），只画黄色描边加外发光。
+      var g = T.ease(T.p(t, AT.frame, 0.4));
+      var hit = T.$('hit');
+      hit.style.outline = '7px solid rgba(245,207,74,' + g + ')';
+      hit.style.outlineOffset = '3px';
+      hit.style.boxShadow = '0 0 0 3px rgba(22,22,22,' + g + '), 0 0 50px rgba(245,207,74,' + (0.5 * g) + ')';
+    }
+  });
+</script>
+</body>
+</html>

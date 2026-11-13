@@ -1,0 +1,200 @@
+<!doctype html>
+<!-- S14a · 机制动画 · script 62–68「所以，SDFlow 每次拆完开发任务，都要再查一遍。……改过的第二版，把断言从 ticket 2 拆出来，放到相应的 ticket 上，复核才通过。」
+     「拆完再查一遍」流水线：拆好的 ticket → ① 脚本 → ② 通读 → ③ 三种情况派对抗审。第 6 句 S14 的初稿卡缩小飞到 ③ 第三个分叉下面；第 7 句旁边出 v2。
+     原第 8 句示例项目小卡「3 处和批过的切法不一样 → 对抗审 → 通过」随口播删掉（2026-10-31 第 9 轮评审）。
+     依据（SDFlow 开发仓，script.md「来源与限定」）：sdflow-implement/SKILL.md:588-599——每次出 ticket 先由 impl_route.py plan-budget 脚本查预算与 Blocked-by 拓扑（环、非法依赖退出 6），
+       再由编排层通读全部 ticket 做语义一致性自扫；发现矛盾走 T10-choice（无客观判据派强档对抗镜）。
+       对抗审的触发条件：有矛盾、切法和批过的对不上、设计里没写切法（planning-decisions.md:3「T10-choice 必触发条件 1」是第三种）。
+     实录 · 原文摘要（初稿 v1 与 v2 两格是 SDFlow 自己的开发记录）：planning-decisions.md:3、:5-6（已逐字对原文，2026-10-30 读）：
+       :5 v1「7 票……全串行，2.1 整条落票 2」对抗镜结论 证伪；:6 v2「覆盖列写明 2.1 拆分；票 6 改 Blocked-by 4 与票 5 并行……」对抗镜结论 通过。
+       v2 画成断言从 ticket 2 拆出来、放到 ticket 4、6 上（:6 与 :3 的「断言随产物落地」；第 10 轮评审 2026-10-31 按 script.md S14a 画面改），不画票 6 与票 5 并行。
+     颜色：粉 = 对抗审（本期粉只表示对抗审，同 S15）；琥珀 = ticket（执行一侧）；蓝 = 断言（任务清单 2.1，规格一侧）；红 = ticket 2 的测试转不绿；墨色印章 = 证伪；黄 = 当前。
+
+     句子（本画面内第 N 句，估算起点，每分钟 220 字、句间 0.5 秒，2026-10-31 按第 10 轮评审后的口播重估，录音后用 frame-times.py 对齐）：
+       1 句 0.0：标题「拆完再查一遍」；1.4 秒起「拆好的 ticket」。
+       2 句 6.2：① 脚本：个数对不对 · 有没有循环依赖。  3 句 11.9：② 通读：有没有互相矛盾。
+       4 句 17.9：③ 碰到三种情况，派对抗审，专挑切法的毛病。  5 句 24.9：三种情况逐条落下（有矛盾 / 切法和批过的对不上 / 设计里没写切法）。
+       6 句 32.5：第三种亮；S14 的初稿卡缩小飞到它下面，盖「证伪」。  7 句 40.4：v2：断言从 ticket 2 拆出来，放到 ticket 4、6 上，「复核通过」，留到页末。
+     内容整体在 y 930 以上。 -->
+<html lang="zh-CN" data-frame-id="S14a">
+<head>
+<meta charset="utf-8">
+<title>S14a · 拆完再查一遍</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hdr { left: 60px; top: 56px; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+  #inp { left: 60px; top: 396px; font-family: var(--display); font-weight: 800; font-size: 40px; padding: 8px 24px; background: var(--amber-soft); }
+  .ar { position: absolute; top: 396px; width: 50px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 52px; line-height: 1; color: var(--ink); }
+
+  .st { top: 206px; width: 440px; height: 462px; padding: 0; }
+  #c1 { left: 410px; } #c2 { left: 910px; } #c3 { left: 1420px; }
+  .st h3 { position: absolute; left: 32px; top: 26px; margin: 0; font-family: var(--display); font-weight: 800; font-size: 46px; line-height: 1.1; color: var(--ink); white-space: nowrap; }
+  .st .ln { position: absolute; left: 32px; width: 380px; font-weight: 600; font-size: 40px; line-height: 1.3; color: var(--ink); }
+  #c1 .a { top: 120px; } #c1 .b { top: 230px; } #c2 .a { top: 120px; } #c2 .b { top: 250px; }
+  #pk { position: absolute; left: 32px; top: 92px; width: 376px; height: 100px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+        background: var(--pink-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; font-size: 34px; line-height: 1.25; color: var(--ink); }
+  #pk b { font-family: var(--display); font-weight: 800; font-size: 40px; }
+  .cd { position: absolute; left: 70px; height: 58px; box-sizing: border-box; padding: 0 14px; display: flex; align-items: center; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+        background: var(--cream); font-weight: 600; font-size: 34px; color: var(--ink); white-space: nowrap; }
+  #d1 { top: 236px; } #d2 { top: 306px; } #d3 { top: 376px; }
+  #rail { position: absolute; left: 0; top: 0; width: 440px; height: 462px; overflow: visible; }
+
+  /* 初稿 v1 与 v2 */
+  #v1c { left: 1400px; top: 712px; width: 460px; height: 206px; padding: 0; transform-origin: 0 0; }
+  #v1c .tab { left: -14px; top: -44px; font-size: 36px; }
+  #v1c .row { position: absolute; left: 24px; top: 36px; width: 412px; height: 50px; }
+  #v1c .row u { position: absolute; left: 20px; right: 20px; top: 23px; height: 4px; background: var(--ink); opacity: .75; }
+  #v1c .row i { position: absolute; top: 0; width: 46px; height: 46px; box-sizing: border-box; border: 3px solid var(--ink); border-radius: 6px; background: var(--amber-soft);
+                font-style: normal; font-weight: 800; font-size: 28px; line-height: 40px; text-align: center; color: var(--ink); }
+  #v1c .dot { position: absolute; left: 82px; top: 22px; width: 24px; height: 24px; border-radius: 50%; background: var(--fail); border: 3px solid var(--ink); }
+  #v1c p { position: absolute; left: 24px; top: 108px; margin: 0; font-weight: 600; font-size: 32px; line-height: 1.3; color: var(--ink); }
+  #stamp { position: absolute; left: 1676px; top: 834px; padding: 0 22px; border: 8px solid var(--ink); border-radius: 12px; background: rgba(242,239,230,.92); color: var(--ink);
+           font-family: var(--display); font-weight: 800; font-size: 66px; line-height: 1.12; opacity: 0; transform-origin: 50% 50%; }
+  #pt { position: absolute; left: 0; top: 0; width: 1920px; height: 940px; overflow: visible; }
+
+  #v2c { left: 850px; top: 712px; width: 510px; height: 206px; padding: 0; }
+  #v2c .tab { left: -14px; top: -44px; font-size: 36px; }
+  #v2c .bx { position: absolute; top: 20px; width: 136px; height: 66px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink); background: var(--amber-soft);
+             display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 34px; color: var(--ink); }
+  #v2c .as { position: absolute; top: 94px; width: 136px; height: 36px; box-sizing: border-box; border: 3px solid var(--ink); border-radius: 6px; background: var(--blue-soft);
+             display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 28px; color: var(--ink); }
+  #v2c .as.gone { border-style: dashed; background: transparent; color: var(--ink); }
+  #v2c svg.mv { position: absolute; left: 0; top: 0; width: 510px; height: 206px; overflow: visible; }
+  #v2c .ok { position: absolute; left: 26px; top: 150px; display: flex; align-items: center; gap: 12px; font-family: var(--display); font-weight: 800; font-size: 38px; color: var(--ink); }
+  #v2c .ok svg { width: 40px; height: 40px; }
+
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="hdr" data-r="-2">拆完再查一遍</div>
+  <div class="chip" id="inp" data-r="1.5">拆好的 ticket</div>
+  <div class="ar" id="g1" style="left:354px">→</div>
+
+  <!-- ① 脚本 -->
+  <div class="card st" id="c1" data-r="-0.8">
+    <h3>① 脚本</h3>
+    <div class="ln a" id="l1a">个数对不对</div>
+    <div class="ln b" id="l1b">有没有<br>循环依赖</div>
+  </div>
+  <div class="ar" id="g2" style="left:858px">→</div>
+
+  <!-- ② 通读 -->
+  <div class="card st" id="c2" data-r="0.8">
+    <h3>② 通读</h3>
+    <div class="ln a" id="l2a">把全部 ticket<br>通读一遍</div>
+    <div class="ln b" id="l2b">找互相矛盾<br>的地方</div>
+  </div>
+  <div class="ar" id="g3" style="left:1364px">→</div>
+
+  <!-- ③ 三种情况，派对抗审 -->
+  <div class="card st" id="c3" data-r="-0.8">
+    <h3>③ 碰到三种情况</h3>
+    <div id="pk"><b>派对抗审</b><span>专挑切法的毛病</span></div>
+    <svg id="rail" viewBox="0 0 440 462" aria-hidden="true">
+      <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+        <path id="rl" d="M48 405 V200 M34 214 L48 198 L62 214"/>
+        <path class="tk" id="k1" d="M48 265 H70"/><path class="tk" id="k2" d="M48 335 H70"/><path class="tk" id="k3" d="M48 405 H70"/>
+      </g>
+    </svg>
+    <div class="cd" id="d1" data-r="0">有矛盾</div>
+    <div class="cd" id="d2" data-r="0">切法和批过的对不上</div>
+    <div class="cd" id="d3" data-r="0">设计里没写切法</div>
+  </div>
+
+  <!-- 第 6 句：S14 的初稿，缩小飞到第三种下面 -->
+  <svg id="pt" viewBox="0 0 1920 940" aria-hidden="true"><path id="ptr" d="M1660 712 V650 M1646 664 L1660 648 L1674 664" fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div class="card" id="v1c" data-r="1">
+    <div class="tab" data-r="-2">初稿 v1</div>
+    <div class="row"><u></u><i style="left:0">1</i><i style="left:61px">2</i><i style="left:122px">3</i><i style="left:183px">4</i><i style="left:244px">5</i><i style="left:305px">6</i><i style="left:366px">7</i></div>
+    <span class="dot"></span>
+    <p>2.1 整条落在<br>ticket 2</p>
+  </div>
+  <div id="stamp" data-r="-10">证伪</div>
+
+  <!-- 第 7 句：v2 -->
+  <div class="card" id="v2c" data-r="-1">
+    <div class="tab" data-r="2">v2</div>
+    <div class="bx" id="x2" style="left:26px" data-r="0">ticket 2</div><div class="as gone" id="s2" style="left:26px">已拆出</div>
+    <div class="bx" id="x4" style="left:187px" data-r="0">ticket 4</div><div class="as" id="s4" style="left:187px">断言</div>
+    <div class="bx" id="x6" style="left:348px" data-r="0">ticket 6</div><div class="as" id="s6" style="left:348px">断言</div>
+    <svg class="mv" id="mv" viewBox="0 0 510 206" aria-hidden="true"><g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M94 132 V140 H255 V133 M249 140 L255 133 L261 140"/><path d="M255 140 H416 V133 M410 140 L416 133 L422 140"/></g></svg>
+    <div class="ok" id="okv"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" fill="#f2efe6" stroke="#161616" stroke-width="4"/><path d="M12 23 L19 30 L32 14" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>复核通过</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。已按录音实测句子起点对齐（2026-11-03）。注释写本画面第几句。
+  var CUE = {
+    inp: 1.084,                                  // 1 句：拆好的 ticket
+    c1: 4.8, l1a: 5.3, l1b: 7.135, c1End: 9.554,  // 2 句：① 脚本
+    c2: 9.554, l2a: 9.534, l2b: 11.757, c2End: 14.274, // 「把全部ticket通读一遍」9.714秒，字与卡同时出现
+    c3: 14.274, pk: 15.257, c3End: 18.863,           // 4 句：③ 派对抗审
+    d: [18.994, 20.195, 21.749], dEnd: [20.195, 21.749, 30.274], // 5–6 句：三种情况逐条落下，第三种当前到 v2 出现
+    v1: 24.434, v1Len: 0.9, st: 26.98,            // 6 句：初稿飞到第三种下面，盖「证伪」
+    v2: 30.274, x: [31.681, 32.807, 33.933], mv: 34.778, ok: 35.622  // 7 句：v2：断言从 ticket 2 拆到 4、6，复核通过，当前留到页末
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  // 卡片里的小格：黄框的空隙填卡底色（奶白），保留自己的硬投影
+  function curIn(el, g) {
+    el.style.outline = '6px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '6px';
+    el.style.boxShadow = '0 0 0 6px rgba(242,239,230,' + g + '), 5px 5px 0 #161616';
+  }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function setPath(id, p, axis) { var el = T.$(id); el.style.opacity = p > 0 ? 1 : 0; el.style.clipPath = axis === 'up' ? 'inset(' + ((1 - p) * 100) + '% 0 0 0)' : 'inset(0 ' + ((1 - p) * 100) + '% 0 0)'; }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 39.094,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      show('hdr', t, 0, -14);
+      show('inp', t, CUE.inp, 10);
+
+      // ① 脚本
+      T.$('g1').style.opacity = T.ease(T.p(t, CUE.c1 - 0.1, 0.4));
+      T.enter(T.$('c1'), T.p(t, CUE.c1, 0.5), 18); T.current(T.$('c1'), on(t, CUE.c1, CUE.c1End), 10);
+      show('l1a', t, CUE.l1a, 8); show('l1b', t, CUE.l1b, 8);
+      // ② 通读
+      T.$('g2').style.opacity = T.ease(T.p(t, CUE.c2 - 0.1, 0.4));
+      T.enter(T.$('c2'), T.p(t, CUE.c2, 0.5), 18); T.current(T.$('c2'), on(t, CUE.c2, CUE.c2End), 10);
+      show('l2a', t, CUE.l2a, 8); show('l2b', t, CUE.l2b, 8);
+      // ③ 派对抗审，三种情况
+      T.$('g3').style.opacity = T.ease(T.p(t, CUE.c3 - 0.1, 0.4));
+      T.enter(T.$('c3'), T.p(t, CUE.c3, 0.5), 18); T.current(T.$('c3'), on(t, CUE.c3, CUE.c3End), 10);
+      show('pk', t, CUE.pk, 8);
+      ['d1', 'd2', 'd3'].forEach(function (id, i) {
+        show(id, t, CUE.d[i], 8);
+        T.$('k' + (i + 1)).style.opacity = T.ease(T.p(t, CUE.d[i], 0.3));
+        curIn(T.$(id), on(t, CUE.d[i], CUE.dEnd[i]));
+      });
+      setPath('rl', T.ease(T.p(t, CUE.d[0], 0.9)), 'up');
+
+      // 6 句：初稿卡缩小飞来
+      var p = T.ease(T.p(t, CUE.v1, CUE.v1Len)), r = parseFloat(T.$('v1c').getAttribute('data-r') || '0');
+      var v1 = T.$('v1c');
+      v1.style.opacity = Math.min(1, p * 4);
+      v1.style.transform = 'translate(' + (-560 * (1 - p)) + 'px,' + (-380 * (1 - p)) + 'px) scale(' + (1 + 0.9 * (1 - p)) + ') rotate(' + r + 'deg)';
+      T.$('ptr').style.opacity = T.ease(T.p(t, CUE.v1 + CUE.v1Len - 0.1, 0.3));
+      var s = T.ease(T.p(t, CUE.st, 0.25));
+      T.$('stamp').style.opacity = s;
+      T.$('stamp').style.transform = 'rotate(-10deg) scale(' + (1 + 1.2 * (1 - s)) + ')';
+
+      // 7 句：v2
+      T.enter(T.$('v2c'), T.p(t, CUE.v2, 0.5), 16);
+      T.current(T.$('v2c'), on(t, CUE.v2, 999), 10);
+
+      [['x2', 's2'], ['x4', 's4'], ['x6', 's6']].forEach(function (ids, i) {
+        show(ids[0], t, CUE.x[i], 8); show(ids[1], t, CUE.x[i] + 0.2, 6);
+      });
+      T.$('mv').style.opacity = T.ease(T.p(t, CUE.mv, 0.4));
+      T.$('okv').style.opacity = T.ease(T.p(t, CUE.ok, 0.4));
+    }
+  });
+</script>
+</body>
+</html>

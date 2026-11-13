@@ -1,0 +1,150 @@
+<!doctype html>
+<!-- S35 · 机制动画 · script 154–155「还有一种做法，是不派子代理，就在当前会话里做完，最后统一审一遍。……这样省事，但中间没人审，适合任务少、又简单的情况。」
+     两条路线并排：左边每个任务派一个新的子代理，做完一个审一个；右边当前会话一口气做完三个任务，最后审一遍。
+     - 琥珀 = Superpowers：两条路线都是它的执行方式。
+     - 子代理用 S07 角色图里 Agent 的六边形；左边每个任务一个新的六边形，右边整段只有一个。
+     - 「审」用墨色放大镜 + 字，不用绿（绿只表示测试通过）。
+     - 左路线 S33 刚讲完，开场一次出齐；右路线跟第 1 句搭出来，黄框只给右路线。
+     - 第 2 句「中间没人审」：奶白贴纸贴在最后那个「审」旁边，是代价说明，倾斜大一点。
+       车道底是琥珀深底，墨色虚线框（.tag）看不见，所以用 .chip。
+     - 2026-10-06：口播改成只讲第二种做法；车道上移、压矮（原来压进字幕带），内容间距随之收紧。 -->
+<html lang="zh-CN" data-frame-id="S35">
+<head>
+<meta charset="utf-8">
+<title>S35 · 两种执行方式</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .head { left: 90px; top: 62px; font-size: 58px; color: #161616; }
+  .lane { top: 190px; width: 860px; height: 720px; padding: 64px 40px 30px; }
+  .lane > .tab { font-size: 44px; }
+  .lane h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 48px; line-height: 1.15; color: #fff; }
+  .lane .sub { margin-top: 10px; font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--amber-soft); }
+
+  .row { position: absolute; left: 40px; display: flex; align-items: center; gap: 16px; }
+  .task { position: static; font-size: 38px; padding: 10px 22px; }
+  .rev { position: static; display: flex; align-items: center; gap: 12px; font-size: 38px; padding: 10px 22px; }
+  .rev svg { width: 40px; height: 40px; }
+  .arw { width: 52px; height: 36px; flex: none; }
+
+  /* Agent：S07 的六边形，炭色小块。 */
+  .agent {
+    flex: none; width: 92px; height: 92px; box-sizing: border-box; border-radius: 10px;
+    background: var(--charcoal); border: 4px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .agent svg { width: 62px; height: 62px; }
+  .agent-name { font-family: var(--display); font-weight: 800; font-size: 38px; color: #fff; white-space: nowrap; }
+
+  /* 当前会话：一个炭色大块装下全部任务。 */
+  .session { left: 40px; top: 225px; width: 770px; height: 280px; padding: 26px 30px; background: var(--charcoal); color: #fff; }
+  .session .hd { display: flex; align-items: center; gap: 18px; }
+  .session .hd .agent { box-shadow: none; border-color: #fff; }
+  .session .tasks { display: flex; align-items: center; gap: 12px; margin-top: 40px; }
+  .down { position: absolute; left: 398px; top: 521px; width: 44px; height: 64px; }
+  .last { position: absolute; left: 352px; top: 595px; }
+  #nobody { left: 530px; top: 583px; font-size: 38px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs big head" id="head">计划写好以后，两种执行方式</div>
+
+  <!-- 方式一：每个任务一个新的子代理，做完有人审 -->
+  <div class="card sp lane" id="L" data-r="-0.8" data-shadow="16" style="left:70px">
+    <div class="tab sp">方式一</div>
+    <h2>每个任务一个新的子代理</h2>
+    <div class="sub">做完有人审</div>
+
+    <div class="row r1" style="top:235px">
+      <div class="chip task">任务 1</div>
+      <svg class="arw" viewBox="0 0 52 36"><path d="M4 18 H40 M30 6 L44 18 L30 30" fill="none" stroke="#f29b50" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="agent"><svg viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="#fff" stroke="none"/></svg></div>
+      <span class="agent-name">新子代理</span>
+      <svg class="arw" viewBox="0 0 52 36"><path d="M4 18 H40 M30 6 L44 18 L30 30" fill="none" stroke="#f29b50" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="chip rev"><svg viewBox="0 0 40 40" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round"><circle cx="17" cy="17" r="11"/><path d="M25 25 L36 36"/></svg>审</div>
+    </div>
+    <div class="row r2" style="top:365px">
+      <div class="chip task">任务 2</div>
+      <svg class="arw" viewBox="0 0 52 36"><path d="M4 18 H40 M30 6 L44 18 L30 30" fill="none" stroke="#f29b50" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="agent"><svg viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="#fff" stroke="none"/></svg></div>
+      <span class="agent-name">新子代理</span>
+      <svg class="arw" viewBox="0 0 52 36"><path d="M4 18 H40 M30 6 L44 18 L30 30" fill="none" stroke="#f29b50" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="chip rev"><svg viewBox="0 0 40 40" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round"><circle cx="17" cy="17" r="11"/><path d="M25 25 L36 36"/></svg>审</div>
+    </div>
+    <div class="row r3" style="top:495px">
+      <div class="chip task">任务 3</div>
+      <svg class="arw" viewBox="0 0 52 36"><path d="M4 18 H40 M30 6 L44 18 L30 30" fill="none" stroke="#f29b50" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="agent"><svg viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="#fff" stroke="none"/></svg></div>
+      <span class="agent-name">新子代理</span>
+      <svg class="arw" viewBox="0 0 52 36"><path d="M4 18 H40 M30 6 L44 18 L30 30" fill="none" stroke="#f29b50" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="chip rev"><svg viewBox="0 0 40 40" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round"><circle cx="17" cy="17" r="11"/><path d="M25 25 L36 36"/></svg>审</div>
+    </div>
+  </div>
+
+  <!-- 方式二：当前会话一口气做完，最后审一遍 -->
+  <div class="card sp lane" id="R" data-r="0.8" data-shadow="16" style="left:990px">
+    <div class="tab sp">方式二</div>
+    <h2>当前会话一口气做完</h2>
+    <div class="sub">最后审一遍</div>
+
+    <div class="card session" id="sess" data-r="-1" data-shadow="10">
+      <div class="hd">
+        <div class="agent"><svg viewBox="0 0 120 120" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="#fff" stroke="none"/></svg></div>
+        <span class="agent-name">当前会话</span>
+      </div>
+      <div class="tasks">
+        <div class="chip task st">任务 1</div>
+        <svg class="arw st" viewBox="0 0 52 36"><path d="M4 18 H40 M30 6 L44 18 L30 30" fill="none" stroke="#f29b50" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="chip task st">任务 2</div>
+        <svg class="arw st" viewBox="0 0 52 36"><path d="M4 18 H40 M30 6 L44 18 L30 30" fill="none" stroke="#f29b50" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="chip task st">任务 3</div>
+      </div>
+    </div>
+    <svg class="down" id="down" viewBox="0 0 44 64"><path d="M22 4 V52 M8 38 L22 54 L36 38" fill="none" stroke="#f29b50" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="chip rev last" id="last" data-r="2" data-shadow="7"><svg viewBox="0 0 40 40" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round"><circle cx="17" cy="17" r="11"/><path d="M25 25 L36 36"/></svg>审</div>
+    <div class="chip" id="nobody" data-r="4">中间没人审</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 黄框只在 [on, off) 之间亮，讲到下一个就淡出。
+  function cur(el, on, off, t) {
+    T.current(el, T.ease(T.p(t, on, 0.3)) * (1 - T.ease(T.p(t, off, 0.3))));
+  }
+  // 一行里的元素从左到右依次出现。
+  function row(sel, start, t) {
+    var kids = T.$('L').querySelector(sel).children;
+    for (var i = 0; i < kids.length; i++) T.enter(kids[i], T.p(t, start + i * 0.15, 0.35), 10);
+  }
+
+  // 节点（秒），按实测（2026-10-06，frame-times.py）：
+  // 154 句 0 开口，2.32 秒念到「就在当前会话里做完」，4.08 秒念到「最后统一审一遍」；155 句 6.48 秒开口，贴纸在念到「中间没人审」时（7.52 秒）落下。
+  var BEATS = { lane2: 0.6, session: 2.32, review: 4.08, nobody: 7.52 };
+
+  Stage({
+    duration: 9,
+    init: function () { return T.fonts(document.getElementById('stage').textContent); },
+    render: function (t) {
+      // 方式一 S33 刚讲完：开场一次出齐。
+      T.enter(T.$('head'), T.p(t, 0.0, 0.4), 12);
+      T.enter(T.$('L'), T.p(t, 0.0, 0.4), 16);
+      row('.r1', 0.1, t);
+      row('.r2', 0.1, t);
+      row('.r3', 0.1, t);
+
+      // 154：还有一种做法，不派子代理，当前会话里做完，最后统一审一遍。
+      T.enter(T.$('R'), T.p(t, BEATS.lane2, 0.6), 24);
+      cur(T.$('R'), BEATS.lane2 + 0.2, 99, t);
+      T.enter(T.$('sess'), T.p(t, BEATS.session, 0.5), 16);
+      T.items('#R .st', BEATS.session + 0.4, 0.2, t, 10);
+      T.wipe(T.$('down'), T.p(t, BEATS.review, 0.4), 'y');
+      T.enter(T.$('last'), T.p(t, BEATS.review + 0.3, 0.4), 12);
+
+      // 155：这样省事，但中间没人审，适合任务少、又简单的情况。
+      T.enter(T.$('nobody'), T.p(t, BEATS.nobody, 0.5), -14);
+    }
+  });
+</script>
+</body>
+</html>

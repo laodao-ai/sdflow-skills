@@ -1,0 +1,87 @@
+<!doctype html>
+<!-- S23 · 机制动画 · script 96–98「打开任务清单看一眼。……每一项都写了怎么验证做完。」
+     tasks.md 的录屏屏上原文摘录（同一录屏，/opsx:ff 写出；演示仓没提交，文件已不在）。
+     原文一字不改，界面截断的地方照原样留「…」：1.1 的前半句看不到（只从「…」开始）、行尾「doe…」、
+     第 2 组两行的开头「… un(」「… st ./...`」、末尾「… +17 lines」。分镜写的「Add a failing table test」
+     屏上看不到，不写。
+     - 黄色描边 + 外发光 = 当前讲到的那一处「怎么验证」：先 1.1 的 verify it fails，
+       再 1.2 的 verify … passes，最后第 2 组的 passes before and after the extraction（那行屏上没有 verify 字样）。
+       同一时刻只亮一个；扫过的留一条奶白下划线，不加新颜色。
+     - 窗口是终端屏幕摘录，不倾斜；只让标签和贴纸倾斜。 -->
+<html lang="zh-CN" data-frame-id="S23">
+<head>
+<meta charset="utf-8">
+<title>S23 · tasks 验证</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .window { overflow: visible; padding: 50px 40px 24px; color: var(--cream); font-family: var(--mono); font-size: 34px; line-height: 50px; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .ln { display: flex; gap: 24px; }
+  .ln .g { flex: none; width: 2ch; text-align: right; color: var(--unlit); }
+  .ln .x { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .dim { color: var(--unlit); }
+  .hl { display: inline-block; position: relative; border-radius: 4px; }
+
+  .note { top: 815px; display: flex; align-items: center; gap: 16px; }
+  .note b { font-family: var(--mono); font-weight: 700; }
+  .say { left: 860px; top: 805px; padding: 14px 30px; font-family: var(--display); font-weight: 800; font-size: 50px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="w1" style="left:70px;top:76px;width:1780px">
+    <div class="tab ink">实录<span class="m">tasks.md</span></div>
+    <div class="ln"><span class="g">1</span><span class="x"># Tasks</span></div>
+    <div class="ln"><span class="g">3</span><span class="x">## 1. Threshold check in `sensor`</span></div>
+    <div class="ln"><span class="g">5</span><span class="x">- [ ] 1.1 <span class="dim">…</span> (exactly at the limit), 23.5 and -4.0; <span class="hl vf">verify it fails with `go test ./sensor`</span> because `IsOverTemp` doe<span class="dim">…</span></span></div>
+    <div class="ln"><span class="g">6</span><span class="x">- [ ] 1.2 Add exported `MaxCelsius = 80.0` and `IsOverTemp(celsius float64) bool` (strictly greater than</span></div>
+    <div class="ln"><span class="g"></span><span class="x">&nbsp;&nbsp;<span class="dim">…</span>) in `sensor/sensor.go`; <span class="hl vf">verify `go test ./sensor` passes</span></span></div>
+    <div class="ln"><span class="g">8</span><span class="x">## 2. Testable loop and alert output in `main`</span></div>
+    <div class="ln"><span class="g"></span><span class="x"><span class="dim">…</span> un(os.Stdin, os.Stdout, os.Stderr)`, adding a `main_test.go` test first that feeds `23.5` and `81.2` and</span></div>
+    <div class="ln"><span class="g"></span><span class="x"><span class="dim">…</span> st ./...` <span class="hl vf">passes before and after the extraction</span></span></div>
+    <div class="ln dim"><span class="g">…</span><span class="x">+17 lines</span></div>
+  </div>
+
+  <div class="chip note" id="n1" data-r="-2.5" style="left:90px"><b>1.1</b>确认它失败</div>
+  <div class="card say" id="n2" data-r="1.5">每一项都写了怎么验证做完</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 行内高亮：黄色描边 + 外发光，描边贴近文字，不压到上下行。
+  function mark(el, g) {
+    el.style.outline = '5px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '4px';
+    el.style.boxShadow = '0 0 30px rgba(245,207,74,' + (0.55 * g) + ')';
+  }
+  // 扫过的「怎么验证」留一条奶白下划线（不新增颜色）。
+  function done(el, p) {
+    el.style.textDecoration = p > 0 ? 'underline' : 'none';
+    el.style.textDecorationThickness = '4px';
+    el.style.textUnderlineOffset = '8px';
+    el.style.textDecorationColor = 'rgba(242,239,230,' + p + ')';
+  }
+  var AT = [3.52, 9.61, 11.29]; // 按实测（2026-10-06，frame-times.py）：97 句开口点 1.1；98 句开口扫 1.2，念到「怎么验证」扫第 2 组
+
+  Stage({
+    duration: 12,
+    init: function () { return T.fonts('实录确认它失败每一项都写了怎么验证做完'); },
+    render: function (t) {
+      // 96：打开清单。
+      T.enter(T.$('w1'), T.p(t, 0.1, 0.6), 24);
+
+      // 97–98：一处一处亮「怎么验证」。
+      var vf = T.all('.vf');
+      for (var i = 0; i < vf.length; i++) {
+        var off = i < vf.length - 1 ? T.ease(T.p(t, AT[i + 1], 0.3)) : 0;
+        mark(vf[i], T.ease(T.p(t, AT[i], 0.3)) * (1 - off));
+        done(vf[i], off);
+      }
+      T.enter(T.$('n1'), T.p(t, 6.88, 0.5), -18);
+      T.enter(T.$('n2'), T.p(t, 9.61, 0.5), 24);
+    }
+  });
+</script>
+</body>
+</html>

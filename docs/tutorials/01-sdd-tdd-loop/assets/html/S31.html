@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- S31 · 标题卡 · script 134–139「Superpowers 是一组 skill，装进你的 AI 客户端里用。……它主要做两件事。」
+     命令卡一行，命令原样不改，不带 `$`：它是在 Claude Code 对话框里输入的，不是终端命令。
+     卡上沿琥珀标签 = Superpowers。命令卡不倾斜；贴纸轻倾斜。版式与 S15 相同。
+     - 卡上方小贴纸「在 Claude Code 对话框里输入」：第 2 句（我用的是 Claude Code……）开口时落下。
+     - 旁注「装好后自动触发，也能直接敲命令」分两段出：前半句跟第 3 句（装好以后不用专门敲命令），
+       后半句跟第 5 句（想指定用哪一步，也可以直接敲命令）。 -->
+<html lang="zh-CN" data-frame-id="S31">
+<head>
+<meta charset="utf-8">
+<title>S31 · 装 Superpowers</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #cmd { left: 180px; top: 380px; width: 1260px; }
+  #cmd .tab { font-size: 40px; }
+  #where { left: 560px; top: 250px; font-size: 40px; }
+  #note { left: 760px; top: 650px; font-size: 44px; }
+  /* 后半句从 0 宽长出来，贴纸跟着变长，前半句时不留空白。 */
+  #note span { display: inline-block; vertical-align: top; white-space: nowrap; }
+  #n2 { overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="where" data-r="-2">在 Claude Code 对话框里输入</div>
+  <div class="cmd" id="cmd" data-r="0"><div class="tab sp">Superpowers</div>/plugin install superpowers@claude-plugins-official</div>
+  <div class="chip" id="note" data-r="2"><span id="n1">装好后自动触发，</span><span id="n2">也能直接敲命令</span></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 句子开口时间（秒），按实测（2026-10-06，frame-times.py）：
+  // 134 句 0，135 句 6.32（我用的是 Claude Code……），136 句 14.24（装好以后……），
+  // 137 句 17.28，138 句 20.88（想指定用哪一步……），139 句 25.12（它主要做两件事）。
+  var BEATS = { where: 6.32, note: 14.24, note2: 20.88 };
+
+  Stage({
+    duration: 24,
+    init: function () { return T.fonts('在对话框里输入装好后自动触发，也能直接敲命令Superpowers'); },
+    render: function (t) {
+      T.enter(T.$('cmd'), T.p(t, 0.0, 0.6), 30);
+      T.enter(T.$('where'), T.p(t, BEATS.where, 0.5), -16);
+      T.enter(T.$('note'), T.p(t, BEATS.note, 0.6), 30);
+      var g = T.ease(T.p(t, BEATS.note2, 0.5));
+      T.$('n2').style.maxWidth = (330 * g) + 'px';
+      T.$('n2').style.opacity = g;
+    }
+  });
+</script>
+</body>
+</html>

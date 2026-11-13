@@ -1,0 +1,166 @@
+<!doctype html>
+<!-- S13 · 机制动画 · script 49–56「那怎么来切 ticket 呢？……设计文档里就有一节切片建议，你在设计门的时候一起批准。」
+     示意画面，不加角标；③ 旁的小标签「这次示例项目：5 个 + 1 个收尾」取自示例项目 alarm-notify 归档版 tickets.md 的 Task 1–5 加收尾 Task 6。「怎么切」卡，四行随口播逐行落下，黄框跟着当前行，落下的内容留到页末（一页一层）。
+     行 ①标准（第 2–3 句）：每个做完能单独验收 · 竖着切，不按层切；右边小示意：横着切的三层（数据库、接口、页面）打叉，竖着一条打穿三层打勾。
+     行 ②大小（第 4 句）：一个新 agent，一个上下文里读完、写完、测完。
+     行 ③个数（第 5–6 句）：一般 3–6 个 + 1 个收尾；小字：小改动可只有 1 个，全仓大改按先扩、分批迁、后收来拆；「收尾」旁「→ 跑全量测试」。
+     行 ④切法（第 7–8 句）：设计文档里的切片建议 → 你在设计门批。
+     小字出处：SDFlow 开发仓 sdflow-implement/SKILL.md 的切片规则（script.md「来源与限定」IMPL:332、:337-338；3–6 个的预算与单票例外）；小改动 / 全仓大改的例外按分镜写。
+     颜色：琥珀 = 执行一侧（ticket、收尾 ticket、竖切的那一片）；蓝 = 规格一侧（设计文档里的切片建议、设计门）；勾 = 奶白圆片 + 墨勾，叉 = 墨底圆片 + 奶白叉（红绿只留给测试）。
+
+     句子（本画面内第 N 句，估算起点，录音后用 frame-times.py 对齐）：
+       1 句 0.0：问题贴纸「怎么来切 ticket？」正中放大停约 1 秒缩到左上；2.8 秒起第一行外框落下。
+       2 句 3.6：标准第一行。  3 句 9.0：竖着切（打勾）、按层切（打叉）。  4 句 14.3：大小。  5 句 26.0：个数。  6 句 33.9：收尾 → 跑全量测试。
+       7 句 40.5：切法一行落下。  8 句 49.5：你在设计门批，留到页末。
+     内容整体在 y 930 以上。 -->
+<html lang="zh-CN" data-frame-id="S13">
+<head>
+<meta charset="utf-8">
+<title>S13 · 怎么切 ticket</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 56px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+
+  .rw { left: 60px; width: 1800px; padding: 0; }
+  #r1 { top: 192px; height: 232px; } #r2 { top: 448px; height: 124px; } #r3 { top: 596px; height: 168px; } #r4 { top: 788px; height: 120px; }
+  .lb { position: absolute; left: 36px; font-family: var(--display); font-weight: 800; font-size: 58px; line-height: 1; color: var(--ink); }
+  .ln { position: absolute; left: 250px; font-weight: 600; font-size: 46px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .rw .chip { position: absolute; font-family: var(--display); font-weight: 800; font-size: 44px; padding: 6px 22px; border-width: 4px; box-shadow: 5px 5px 0 var(--ink); }
+  .rw .tag { font-size: 28px; padding: 3px 14px; border-width: 3px; }
+  .ar { position: absolute; font-family: var(--display); font-weight: 800; font-size: 46px; line-height: 1; color: var(--ink); }
+
+  /* ① 的小示意：三层 + 竖着的一片 */
+  .stk { position: absolute; top: 16px; width: 300px; height: 148px; }
+  .stk i { position: absolute; left: 0; width: 300px; height: 44px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 8px; background: var(--cream);
+           font-style: normal; font-weight: 700; font-size: 26px; line-height: 36px; text-align: left; padding-left: 14px; color: var(--ink); }
+  .stk .b1 { top: 0; } .stk .b2 { top: 52px; } .stk .b3 { top: 104px; }
+  #sv { left: 1130px; } #sh { left: 1470px; }
+  #sv .cut { position: absolute; left: 118px; top: -10px; width: 64px; height: 168px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 10px; background: var(--amber); opacity: .92; }
+  .cap { position: absolute; top: 172px; }
+  #cv { left: 1130px; } #ch { left: 1470px; }
+  .mk { position: absolute; width: 44px; height: 44px; }
+  #mv { left: 1408px; top: 2px; } #mh { left: 1748px; top: 2px; }
+
+  /* ② 一个上下文 */
+  #ctx { position: absolute; left: 600px; top: 12px; width: 880px; height: 100px; box-sizing: border-box; border: 4px dashed rgba(22,22,22,.75); border-radius: 16px; }
+  #ctx .tag { position: absolute; left: 20px; top: 28px; border: 0; padding: 0; font-size: 34px; }
+  #ctx .chip { top: 14px; font-size: 38px; padding: 2px 18px; }
+  #ctx .ar { top: 28px; font-size: 38px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="okm"><circle cx="22" cy="22" r="19" fill="#f2efe6" stroke="#161616" stroke-width="4"/><path d="M12 23 L19 30 L32 14" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g id="xm"><circle cx="22" cy="22" r="19" fill="#161616" stroke="#161616" stroke-width="4"/><path d="M14 14 L30 30 M30 14 L14 30" fill="none" stroke="#f2efe6" stroke-width="5" stroke-linecap="round"/></g>
+    </defs>
+  </svg>
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">怎么来切 ticket？</div></div>
+
+  <!-- ① 标准 -->
+  <div class="card rw" id="r1" data-r="-0.4">
+    <div class="lb" style="top:30px">标准</div>
+    <div class="ln" id="l1a" style="top:40px">每个 ticket 做完，都能单独验收</div>
+    <div class="ln" id="l1b" style="top:122px">竖着切，不按层切</div>
+    <div class="stk" id="sv"><i class="b1">数据库</i><i class="b2">接口</i><i class="b3">页面</i><span class="cut"></span></div>
+    <div class="stk" id="sh"><i class="b1">数据库</i><i class="b2">接口</i><i class="b3">页面</i></div>
+    <div class="tag cap" id="cv" data-r="0">竖着切</div>
+    <div class="tag cap" id="ch" data-r="0">按层切</div>
+    <svg class="mk" id="mv" viewBox="0 0 44 44"><use href="#okm"/></svg>
+    <svg class="mk" id="mh" viewBox="0 0 44 44"><use href="#xm"/></svg>
+  </div>
+
+  <!-- ② 大小 -->
+  <div class="card rw" id="r2" data-r="0.4">
+    <div class="lb" style="top:32px">大小</div>
+    <div class="chip" id="agt" style="left:250px; top:28px; background: var(--amber-soft)" data-r="-1.5">一个新 agent</div>
+    <div id="ctx"><div class="tag" id="ctxT" data-r="0">一个上下文里</div>
+      <div class="chip" id="k1" style="left:250px" data-r="-1.5">读完</div><div class="ar" id="q1" style="left:394px">→</div>
+      <div class="chip" id="k2" style="left:466px" data-r="1.5">写完</div><div class="ar" id="q2" style="left:610px">→</div>
+      <div class="chip" id="k3" style="left:682px" data-r="-1.5">测完</div>
+    </div>
+  </div>
+
+  <!-- ③ 个数 -->
+  <div class="card rw" id="r3" data-r="-0.4">
+    <div class="lb" style="top:24px">数量</div>
+    <div class="ln" id="n1" style="top:24px; font-family: var(--display); font-weight: 800; font-size: 58px">一般 3–6 个</div>
+    <div class="ar" id="np" style="left:700px; top:30px; font-size: 54px">+</div>
+    <div class="chip" id="n2" style="left:770px; top:20px; background: var(--amber-soft)" data-r="1.5">1 个收尾</div>
+    <div class="ar" id="n3" style="left:1030px; top:32px; font-size: 44px">→ 跑全量测试</div>
+    <div class="tag" id="nt" style="left:250px; top:102px" data-r="0">小改动可只有 1 个　·　全仓大改按先扩、分批迁、后收来拆</div>
+    <div class="tag" id="ex" style="left:1250px; top:100px; font-size:30px; background:var(--amber-soft)" data-r="2">这次示例项目：5 个 + 1 个收尾</div>
+  </div>
+
+  <!-- ④ 切法 -->
+  <div class="card rw" id="r4" data-r="0.4">
+    <div class="lb" style="top:30px">切法</div>
+    <div class="chip" id="m1" style="left:250px; top:26px; background: var(--blue-soft)" data-r="-1.5">设计文档里的切片建议</div>
+    <div class="ar" id="m3" style="left:850px; top:34px">→</div>
+    <div class="chip" id="m2" style="left:930px; top:26px; background: var(--blue)" data-r="1.5">你在设计门批</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。已按录音实测句子起点对齐（2026-11-03）。注释写本画面第几句。
+  var CUE = {
+    hold: 1.394, move: 0.5,                        // 1 句：问题贴纸正中停到 0.8 秒，0.5 秒缩到左上
+    r1: 4.88, l1a: 5.519, r1End: 15.12,              // 2 句：标准；第 3 句整行仍是当前
+    l1b: 9.28, sv: 9.5, mv: 10.382, sh: 11.704, mh: 12.586,  // 3 句：竖着切（打勾）、按层切（打叉）
+    r2: 15.12, agt: 15.283, ctx: 17.49, k: [19.614, 21.249, 22.72], r2End: 24.681,   // 4 句：大小
+    r3: 24.681, n1: 24.806, n2: 26.8, nt: 27.797, n3: 31.332, ex: 30.041, r3End: 35.481,        // 5–6 句：个数、收尾 → 跑全量测试；ex 示例项目的个数
+    r4: 35.481, m1: 37.183, m2: 41.561                 // 7–8 句：切法，留到页末
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 10 : dy); }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 47.821,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：问题贴纸
+      T.enter(T.$('hdr'), T.p(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move)), S = 1.5, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // ① 标准
+      T.enter(T.$('r1'), T.p(t, CUE.r1, 0.5), 18);
+      T.current(T.$('r1'), on(t, CUE.r1, CUE.r1End), 10);
+      show('l1a', t, CUE.l1a); show('l1b', t, CUE.l1b);
+      show('sv', t, CUE.sv); show('cv', t, CUE.sv + 0.1, 6);
+      T.$('mv').style.opacity = T.ease(T.p(t, CUE.mv, 0.3));
+      show('sh', t, CUE.sh); show('ch', t, CUE.sh + 0.1, 6);
+      T.$('mh').style.opacity = T.ease(T.p(t, CUE.mh, 0.3));
+
+      // ② 大小
+      T.enter(T.$('r2'), T.p(t, CUE.r2, 0.5), 18);
+      T.current(T.$('r2'), on(t, CUE.r2, CUE.r2End), 10);
+      show('agt', t, CUE.agt);
+      T.$('ctx').style.opacity = T.ease(T.p(t, CUE.ctx, 0.45));
+      ['k1', 'k2', 'k3'].forEach(function (id, i) {
+        show(id, t, CUE.k[i], 8);
+        if (i < 2) T.$('q' + (i + 1)).style.opacity = T.ease(T.p(t, CUE.k[i + 1] - 0.1, 0.35));
+      });
+
+      // ③ 个数
+      T.enter(T.$('r3'), T.p(t, CUE.r3, 0.5), 18);
+      T.current(T.$('r3'), on(t, CUE.r3, CUE.r3End), 10);
+      show('n1', t, CUE.n1); T.$('np').style.opacity = T.ease(T.p(t, CUE.n2, 0.35)); show('n2', t, CUE.n2);
+      show('nt', t, CUE.nt, 6); show('ex', t, CUE.ex, 6); T.$('n3').style.opacity = T.ease(T.p(t, CUE.n3, 0.4));
+
+      // ④ 切法
+      T.enter(T.$('r4'), T.p(t, CUE.r4, 0.5), 18);
+      T.current(T.$('r4'), on(t, CUE.r4, 999), 10);
+      show('m1', t, CUE.m1); T.$('m3').style.opacity = T.ease(T.p(t, CUE.m2 - 0.1, 0.35)); show('m2', t, CUE.m2);
+    }
+  });
+</script>
+</body>
+</html>

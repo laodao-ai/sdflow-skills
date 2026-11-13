@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- S08 · 标题卡（角度清单卡）· script 23–36「第二件事：多角度审。……gstack 里，这几个评审是一个接一个跑的；我改成每个角度一个独立的 agent，同时跑。」
+     依据 review/sdflow-upgrade-research.md 3.1 与第七节。七个角度一张卡，每行「角度 · 它问的问题 · 来源」。
+     - 第 23–24 句：问题贴纸「从哪几个角度审？」在屏幕正中放大，停约 1 秒，用 0.6 秒缩小移到左上（visual-v4 §4.8）；落位后，第 26 句开口时卡和第一行进场；每一行讲到时才进场（10-24 新规则：不放空壳，讲到时进场）。
+     - 第 25 句：角上小卡「来源 gstack · Garry Tan」，当前到第 26 句开口。
+     - 第 26–30 句：CEO 审、工程审、开发体验审（第 28–29 句，含触发条件）、另一个模型，逐行进场，右边标 gstack 里对应的出处：/plan-ceo-review、/plan-eng-review、/plan-devex-review，另一个模型标 outside voice（不是单独的 skill，是这几个评审里的一节；装了 Codex 就请 Codex，见 review/research-2026-10-23.md 第二节）。另一个模型只写「独立的第二意见」（作者 10-23 定）。
+     - 第 31 句：另一个模型这一行下面加一行小字「SDFlow：Claude 开发请 Codex，Codex 开发请 Claude」，当前。下面三行下移，小字和上下两行留开距离，当前描边不叠。画面不写 gpt 型号。
+     - 第 32 句「SDFlow 又加了三样。」：画面无新动作，另一个模型下面小字的当前到第 33 句开口。
+     - 第 33–35 句（页内第 11–13 句）：代码审、领域审、对抗审，逐行进场，右边标「SDFlow 加的」。
+     - 名字旁小字标 SDFlow 里的镜名（作者 10-24 定：口播统一叫「xx 审」，「镜」只上画面）：CEO 审、工程审 广审镜；开发体验审 领域镜；
+       另一个模型 outside-voice（10-24 由 design-voice 改：design-voice 只是每次那一处，高风险那处叫 hr-tg，总称 outside-voice）；代码审 接地镜；领域审 领域镜；对抗审 对抗镜。小字是奶白底加墨色虚线框的小标签，随行一起进场。
+     - 第 36 句：卡片下方对照「gstack：一个接一个跑」→「SDFlow：每个角度一个独立 agent，同时跑」，两格依次当前。
+     - 来源没有颜色意思可借：gstack 用奶白底标签，SDFlow 加的用墨底标签，靠形状和文字区分。
+     配色（2026-10-23）：来源标签保持奶白 / 墨底区分；「另一个模型」那行左缘加紫条、下面那行小字垫浅紫（本期另一个模型都用紫）；
+       「对抗审」那行左缘加粉条（对抗视角用粉）；代码审、领域审保持中性（领域按 S11 保持奶白）。条随行一起进场。
+     - 句子时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。各句开口：23=0.00、24=2.88、25=5.68、26=14.96、27=21.92、28=27.04、29=30.88、30=37.68、31=42.16、32=52.56、33=55.76、34=62.16、35=68.24、36=75.36，全页 83.12。
+     - 内容整体在 y 920 以上，避开字幕带（10-25：对照卡上移到 826–902，投影不进字幕带；outside-voice 标签 26px，标签列加宽到 215）。「示意」：七个角度是对 gstack 评审的归纳，不是原文。 -->
+<html lang="zh-CN" data-frame-id="S08">
+<head>
+<meta charset="utf-8">
+<title>S08 · 评审的七个角度</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 问题贴纸的定位容器：对它做 scale / translate；贴纸 #q 在里面，只管自己的倾角 */
+  #qw { left: 60px; top: 44px; transform-origin: 0 0; }
+  #qw .chip { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; }
+  #from { left: 700px; top: 58px; }
+
+  #list { left: 60px; top: 150px; width: 1800px; height: 664px; padding: 0; }
+  .row { position: absolute; left: 36px; width: 1726px; height: 68px; box-sizing: border-box; padding: 0 24px;
+         display: flex; align-items: center; gap: 24px; border-radius: 8px; background: rgba(22,22,22,.06); opacity: 0; }
+  .row .nm { flex: none; width: 250px; font-family: var(--display); font-weight: 800; font-size: 46px; color: var(--ink); white-space: nowrap; }
+  /* 镜名小标签：奶白底墨色虚线框，小字号，不抢主名字 */
+  .row .mj { flex: none; width: 226px; box-sizing: border-box; text-align: center; padding: 2px 0; border: 3px dashed var(--ink); border-radius: 6px;
+             background: var(--cream); color: var(--ink); font-weight: 600; font-size: 26px; white-space: nowrap; }
+  .row .mj.m { font-family: var(--mono); font-size: 26px; }
+  .row .q { flex: 1; font-weight: 600; font-size: 38px; color: var(--ink); white-space: nowrap; }
+  .row .sr { flex: none; width: 370px; box-sizing: border-box; text-align: center; padding: 2px 0; border: 4px solid var(--ink); border-radius: 6px;
+             font-weight: 700; font-size: 32px; white-space: nowrap; }
+  .sr.g { background: var(--cream); color: var(--ink); font-family: var(--mono); font-size: 28px; }
+  .sr.s { background: var(--ink); color: var(--cream); }
+
+  /* 记号条：另一个模型紫、对抗审粉；行内左缘，不改行的布局 */
+  #r4::before, #r7::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 16px; border-radius: 8px 0 0 8px; }
+  #r4::before { background: var(--violet); }
+  #r7::before { background: var(--pink); }
+
+  /* 另一个模型下面的小字：SDFlow 怎么选这个模型 */
+  #sub { position: absolute; left: 392px; top: 352px; height: 42px; padding: 0 14px; border-radius: 6px; background: var(--violet-soft); display: flex; align-items: center; font-weight: 600; font-size: 32px; color: var(--ink); opacity: 0; }
+  .cmp { top: 826px; height: 76px; padding: 0; display: flex; align-items: center; justify-content: center;
+         font-weight: 700; font-size: 38px; white-space: nowrap; }
+  #c1 { left: 60px; width: 580px; }
+  #c2 { left: 800px; width: 1060px; }
+  #arr { position: absolute; left: 650px; top: 826px; width: 140px; height: 76px; overflow: visible; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="qw"><div class="chip" id="q" data-r="-3">从哪几个角度审？</div></div>
+  <div class="tag" id="from" data-r="3">来源　gstack · Garry Tan</div>
+
+  <div class="card" id="list" data-r="-0.4">
+    <div class="row" id="r1" style="top:22px"><span class="nm">CEO 审</span><span class="mj">广审镜</span><span class="q">该不该做？做多大？会不会后悔？</span><span class="sr g">/plan-ceo-review</span></div>
+    <div class="row" id="r2" style="top:102px"><span class="nm">工程审</span><span class="mj">广审镜</span><span class="q">架构、出错的路、测试计划</span><span class="sr g">/plan-eng-review</span></div>
+    <div class="row" id="r3" style="top:182px"><span class="nm">开发体验审</span><span class="mj">领域镜</span><span class="q">好不好上手？动到命令、接口、配置才审</span><span class="sr g">/plan-devex-review</span></div>
+    <div class="row" id="r4" style="top:262px"><span class="nm">另一个模型</span><span class="mj m">outside-voice</span><span class="q">独立的第二意见</span><span class="sr g">outside voice</span></div>
+    <div id="sub">SDFlow：Claude 开发请 Codex，Codex 开发请 Claude</div>
+    <div class="row" id="r5" style="top:414px"><span class="nm">代码审</span><span class="mj">接地镜</span><span class="q">规格里说的代码是真的吗</span><span class="sr s">SDFlow 加的</span></div>
+    <div class="row" id="r6" style="top:494px"><span class="nm">领域审</span><span class="mj">领域镜</span><span class="q">按技术栈的分层清单</span><span class="sr s">SDFlow 加的</span></div>
+    <div class="row" id="r7" style="top:574px"><span class="nm">对抗审</span><span class="mj">对抗镜</span><span class="q">假设一定出事，怎么出事，影响多大</span><span class="sr s">SDFlow 加的</span></div>
+  </div>
+
+  <div class="card cmp" id="c1" data-r="-0.5">gstack：一个接一个跑</div>
+  <svg id="arr" viewBox="0 0 140 88" aria-hidden="true">
+    <path id="arrP" d="M14 44 H108" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round"/>
+    <path id="arrH" d="M94 26 L122 44 L94 62" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <div class="card cmp" id="c2" data-r="0.5">SDFlow：每个角度一个独立 agent，同时跑</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。按录音实测：词首字开始时间减 0.2 秒；注释写的是全稿第几句。
+  var CUE = {
+    q: 0.0, qHold: 1.0, qMove: 0.6,   // 第 23 句一开口：问题贴纸正中放大，停约 1 秒，0.6 秒缩小移到左上
+    from: 8.6, fromEnd: 14.76,           // 第 25 句念到「Garry Tan」：来源小卡，当前到第 26 句开口
+    rows: [14.76, 21.72, 26.84, 37.48, 55.56, 61.96, 68.04],   // 第 26 27 28 30 33 34 35 句：CEO 审 工程审 开发体验审 另一个模型 代码审 领域审 对抗审
+    sub: 41.96,                         // 第 31 句：另一个模型下面的小字，当前到第 33 句开口（第 32 句无新动作）
+    rowsEnd: 75.16,                     // 7 行的当前到第 36 句开口
+    c1: 75.16, c2: 78.84, c2End: 81.24     // 第 36 句：两格对照；78.84 起念到「我改成……同时跑」
+  };
+  var Q_SCALE = 1.7, Q_CENTER = [960, 500];
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  // 没有投影的元素用当前：传极小的 size，g 为 0 时去掉描边
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+
+  Stage({
+    duration: 83.12,
+    init: function () { return T.fonts('从哪几个角度审前提和范围工程开发体验另一个模型领域找茬读代码来源加的一个接跑每独立同时只报问题示意该不做多大会后悔架构出错的路测试计划好上手碰到才第二意见按技术栈分层清单假设定事怎么规格里说是真吗广镜接地对抗代码'); },
+    render: function (t) {
+      // 问题贴纸：容器先放大到正中，停一会儿，再缩小移回左上
+      T.enter(T.$('q'), T.p(t, CUE.q, 0.45), -16);
+      var qw = T.$('qw'), q = T.$('q');
+      var mv = T.ease(T.p(t, CUE.qHold, CUE.qMove));
+      var sc = Q_SCALE + (1 - Q_SCALE) * mv;
+      var fx = Q_CENTER[0] - Q_SCALE * q.offsetWidth / 2 - 60, fy = Q_CENTER[1] - Q_SCALE * q.offsetHeight / 2 - 44;
+      qw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // 卡随第一行进场，每一行讲到时才进场（不放空壳）
+      T.enter(T.$('list'), T.p(t, CUE.rows[0] - 0.3, 0.5), 16);
+      // 卡的高度跟着已进场的行长，不留空白的壳（行底边：各行 top + 68 + 22 边距；小字行到 416）
+      var NEED = [[CUE.rows[0], 112], [CUE.rows[1], 192], [CUE.rows[2], 272], [CUE.rows[3], 352], [CUE.sub, 416], [CUE.rows[4], 504], [CUE.rows[5], 584], [CUE.rows[6], 660]];
+      var hh = 112;
+      NEED.forEach(function (n) { hh += (Math.max(hh, n[1]) - hh) * T.ease(T.p(t, n[0], 0.45)); });
+      T.$('list').style.height = hh + 'px';
+      for (var i = 0; i < 7; i++) {
+        var row = T.$('r' + (i + 1));
+        T.enter(row, T.p(t, CUE.rows[i], 0.45), 14);
+        // 另一个模型那一行的当前到小字出现为止，同一时刻只有一个黄框
+        cur(row, on(t, CUE.rows[i], i === 3 ? CUE.sub : i < 6 ? CUE.rows[i + 1] : CUE.rowsEnd));
+      }
+
+      // 第 31 句：另一个模型下面的小字
+      T.$('sub').style.opacity = T.ease(T.p(t, CUE.sub, 0.45));
+      cur(T.$('sub'), on(t, CUE.sub, CUE.rows[4]));
+
+      // 第 25 句：来源小卡
+      T.enter(T.$('from'), T.p(t, CUE.from, 0.45), -10);
+      cur(T.$('from'), on(t, CUE.from, CUE.fromEnd));
+
+      // 第 36 句：对照
+      T.enter(T.$('c1'), T.p(t, CUE.c1, 0.45), 14);
+      var ar = T.$('arr');
+      ar.style.opacity = T.ease(T.p(t, CUE.c1 + 0.3, 0.4));
+      T.enter(T.$('c2'), T.p(t, CUE.c2 - 0.3, 0.45), 14);
+      cur(T.$('c1'), on(t, CUE.c1, CUE.c2), 10);
+      cur(T.$('c2'), on(t, CUE.c2, CUE.c2End), 10);
+    }
+  });
+</script>
+</body>
+</html>

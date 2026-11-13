@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- S33 · 标题卡 · script 135–136「最后留一个问题：规格写出来了，能直接拿去生成代码吗？……下一期，我们继续聊聊如何做规格评审。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     - 问题句大字（第 3 期标题）：135 句开口（0.0）出现。
+     - 小字「下一期：规格评审」：136 句开口（6.56 秒）。
+     节点时刻集中在 CUE，按录音实测（frame-times.py，2026-10-19；句 135 开口 0.0、136 开口 6.56）。 -->
+<html lang="zh-CN" data-frame-id="S33">
+<head>
+<meta charset="utf-8">
+<title>S33 · 引到下一期</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #q { left: 180px; top: 200px; width: 1560px; height: 400px; display: flex; flex-direction: column; justify-content: center; padding: 0 70px; }
+  #q .big { font-size: 118px; color: var(--ink); white-space: nowrap; }
+  #next { left: 580px; top: 700px; width: 760px; height: 130px; display: flex; align-items: center; justify-content: center; }
+  #next .big { font-size: 64px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="q" data-r="-1"><div class="big">规格写出来了，</div><div class="big">能直接拿去生成代码吗？</div></div>
+  <div class="card dark" id="next" data-r="1.2"><div class="big">下一期：规格评审</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按录音实测（frame-times.py，2026-10-19）：q 135 句开口；next 136 句开口。
+  var CUE = { q: 0.0, next: 6.56 };
+  Stage({
+    duration: 11,
+    init: function () { return T.fonts('规格写出来了能直接拿去生成代码吗下一期评审'); },
+    render: function (t) {
+      T.enter(T.$('q'), T.p(t, CUE.q, 0.6), 30);
+      T.enter(T.$('next'), T.p(t, CUE.next, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

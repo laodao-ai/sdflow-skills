@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- S49 · 标题卡 · script 234–243「不过要说清楚，今天搭的，只是一个最小的开发循环。……第六，收尾归档：每一条「做完了」都要拿出证据，规格也要对着最后的代码再核一遍。」
+     2026-10-06 全稿改口语：原来「还会碰到四件事」改成「最小的开发循环，六步各有要补的活」（作者定六步：需求明确、规格编写、规格评审、代码实现、代码评审、收尾归档）。
+     - 上方一行标签：「最小的开发循环 → 每一步还要补的活」。
+     - 236 句「按这六步」时六行一起进场，暗着（建出来了，还没讲）；念到哪步点亮哪步：底色回到奶白，黄色描边 + 外发光标当前。
+     - 每行：编号、步骤名、一句要补的活（口播的缩写）。右边墨色小贴纸标对应的一期：前三步合一张竖贴纸「规格」，其余各一张。
+     - 240 句「前面那条写错的测试，就是在这一步漏过去的」：第三行再当前一次。
+     - 不用蓝 / 琥珀 / 红 / 绿：讲的是要补的活，不是这两个工具。
+     - 内容整体在 y 920 以上，避开底部 140px 字幕带（visual-v4.md「字幕带」）。
+     - 时刻按实测（2026-10-06，frame-times.py）：234 句 0、235 句 5.12、236 句 10.80、237 句 14.08、238 句 23.04、239 句 30.40、
+       240 句 37.68、241 句 42.56、242 句 51.52、243 句 58.32，67.52 秒念完（243 句 65.76 秒念完）。 -->
+<html lang="zh-CN" data-frame-id="S49">
+<head>
+<meta charset="utf-8">
+<title>S49 · 六步要补的活</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #head { left: 200px; top: 40px; font-size: 40px; }
+  .row { left: 200px; width: 1400px; height: 100px; display: flex; align-items: center; padding: 0 40px; gap: 30px; }
+  .row .num { width: 64px; height: 64px; font-size: 34px; }
+  .row .k { flex: none; width: 210px; font-family: var(--display); font-weight: 800; font-size: 46px; color: var(--ink); }
+  .row .t { flex: 1; font-weight: 600; font-size: 40px; color: var(--ink); white-space: nowrap; }
+  .ep { position: absolute; left: 1650px; width: 200px; display: flex; align-items: center; justify-content: center;
+        background: var(--ink); color: #fff; border-radius: 8px;
+        font-family: var(--display); font-weight: 800; font-size: 44px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="head" data-r="-2">最小的开发循环 → 每一步还要补的活</div>
+
+  <div class="card row" data-r="-0.5" id="r1" style="top:150px"><span class="num">1</span><span class="k">需求明确</span><span class="t">追到底，每个决定连同理由记下来</span></div>
+  <div class="card row" data-r="0.5" id="r2" style="top:276px"><span class="num">2</span><span class="k">规格编写</span><span class="t">照决定一次写成，先查代码现状</span></div>
+  <div class="card row" data-r="-0.6" id="r3" style="top:402px"><span class="num">3</span><span class="k">规格评审</span><span class="t">换几个角度审，人拍板才定稿</span></div>
+  <div class="card row" data-r="0.6" id="r4" style="top:528px"><span class="num">4</span><span class="k">代码实现</span><span class="t">规矩写成清单，每个任务照着审</span></div>
+  <div class="card row" data-r="-0.5" id="r5" style="top:654px"><span class="num">5</span><span class="k">代码评审</span><span class="t">合并前换干净会话，分角度再审</span></div>
+  <div class="card row" data-r="0.5" id="r6" style="top:780px"><span class="num">6</span><span class="k">收尾归档</span><span class="t">每条「做完了」拿证据，规格对代码再核</span></div>
+
+  <!-- 对应的一期：前三步合一张竖贴纸 -->
+  <div class="ep" id="e1" data-r="1" style="top:150px;height:352px">规格</div>
+  <div class="ep" id="e4" data-r="-1" style="top:528px;height:100px">实现</div>
+  <div class="ep" id="e5" data-r="1" style="top:654px;height:100px">代码评审</div>
+  <div class="ep" id="e6" data-r="-1" style="top:780px;height:100px">收尾</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var CREAM = [242, 239, 230], DIM = [160, 157, 151];
+  // 每步开口的时刻（237、238、239、241、242、243 句），以及 240 句（第三行再当前一次）。
+  var LIT = [14.08, 23.04, 30.4, 42.56, 51.52, 58.32];
+  var REDO3 = 37.68;
+  // 每行当前到何时：下一步开口；最后一行留到帧尾。
+  var END = [23.04, 30.4, 37.68, 51.52, 58.32, 999];
+
+  Stage({
+    duration: 60,
+    init: function () { return T.fonts('最小的开发循环每一步还要补的活需求明确规格编写评审代码实现收尾归档追到底个决定连同理由记下来照一次写成先查现状换几角度审人拍板才定稿规矩清单任务着合并前干净会话分再条做完了拿证据对核「」，→'); },
+    render: function (t) {
+      // 234 句念到「最小的开发循环」
+      T.enter(T.$('head'), T.p(t, 2.48, 0.5), -14);
+
+      // 236 句「按这六步」（按 11.52 秒）：六行一起进场，暗着
+      for (var i = 0; i < 6; i++) {
+        var row = T.$('r' + (i + 1));
+        T.enter(row, T.p(t, 11.52 + i * 0.12, 0.5), 20);
+        var on = T.ease(T.p(t, LIT[i], 0.5));
+        row.style.background = T.mix(DIM, CREAM, on);
+        var cur = T.ease(T.p(t, LIT[i], 0.4)) * (1 - T.ease(T.p(t, END[i], 0.4)));
+        if (i === 2) cur = Math.max(cur, T.ease(T.p(t, REDO3, 0.4)) * (1 - T.ease(T.p(t, LIT[3], 0.4))));
+        T.current(row, cur, 10);
+      }
+
+      // 对应的一期：随这一组的第一步点亮时贴上
+      T.enter(T.$('e1'), T.p(t, LIT[0] + 0.6, 0.4), 16);
+      T.enter(T.$('e4'), T.p(t, LIT[3] + 0.6, 0.4), 16);
+      T.enter(T.$('e5'), T.p(t, LIT[4] + 0.6, 0.4), 16);
+      T.enter(T.$('e6'), T.p(t, LIT[5] + 0.6, 0.4), 16);
+    }
+  });
+</script>
+</body>
+</html>

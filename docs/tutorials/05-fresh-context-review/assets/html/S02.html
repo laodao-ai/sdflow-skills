@@ -1,0 +1,147 @@
+<!doctype html>
+<!-- S02 · 机制动画 · script 7–8「团队里写代码，一个人写完，总要换个人，从不同角度再看一遍，就是做 code review。」「AI 写的代码，更要做 code review。」
+     示意画面，不加角标。角色图形按 visual-v4 第五节：人 = 圆环加实心圆点，Agent = 六边形加实心小六边形，放在炭灰方块上，名字贴纸挂在方块下沿外 18px。
+     - 第 1 句 0.0：左边「写」的人落下（开头 0.5 秒内有内容）；「写完」约 2.9 中间一张「代码」卡（琥珀 = 执行一侧），箭头从写的人指过去；
+       「换个人」约 4.8 右边「审」的人落下，箭头从代码指过去；「不同角度」约 5.5 起审的人身边五张角度标签逐个出现：
+       对照规格 · 领域清单 · 对抗 · 换模型 · 历史（取自代码评审的几路，作者 2026-10-31 第 4 条）；「code review」约 8.4 左上出标签「code review」。
+     - 第 2 句 10.5：审的人缩小挪到下方，整块变灰（灰 = 被留下，visual-v4 第二节），标「换成」箭头；原位落下一个 Agent，名字「审」，黄色「当前」描边一次。
+       一页一层：人没有淡出，缩小挪位后留到页末，最后一帧看得出「审的人换成了 Agent」。
+     2026-11-01 作者定：写的一方也换成 Agent（第 2 句讲的是 AI 写的代码），两边做法一致：人缩小挪到下方变灰，标「换成 Agent」，原位落下 Agent。
+       写的一方先换（「AI 写的代码」），审的一方后换（「更要做 code review」），黄色「当前」依次各一次。
+     颜色：角度标签全用奶白，不用紫、粉（S08 起五路的辅助色由那一页定，这里不先占）；代码琥珀；角色炭灰中性；黄只作「当前」。
+     内容整体在 y 900 以上；右下 200×200 不放内容。
+     口播时刻（估算，每分钟 220 字，标点算字、英文词算 2 字，句间 0.4 秒；还没录音）：第 1 句 0.0 · 第 2 句 10.5，念完 14.6，全页 16.6。 -->
+<html lang="zh-CN" data-frame-id="S02">
+<head>
+<meta charset="utf-8">
+<title>S02 · 写完换个人审，换成 Agent</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .tile { position: absolute; box-sizing: border-box; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 12px 12px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 120px; height: 120px; margin-top: -26px; }
+  .tile .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+          padding: 6px 30px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 52px; line-height: 1.1; }
+  #wr, #wra { left: 170px; top: 300px; width: 290px; height: 240px; transform-origin: 0 0; }
+  #hr, #ag { left: 1080px; top: 300px; width: 290px; height: 240px; transform-origin: 0 0; }
+  #hr.left { background: var(--cream-dim); color: var(--ink); }
+  #code { left: 640px; top: 372px; background: var(--amber); font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 30px; }
+  .ang { font-size: 36px; padding: 8px 22px; }
+  #cr { left: 120px; top: 110px; font-family: var(--mono); font-weight: 700; font-size: 44px; padding: 8px 26px; }
+  #swap { left: 1080px; top: 720px; font-size: 32px; padding: 4px 18px; }
+  #swapw { left: 400px; top: 720px; font-size: 32px; padding: 4px 18px; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; overflow: visible; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path id="a1" d="M478 420 H612" marker-end="url(#ah)" pathLength="1"/>
+      <path id="a2" d="M890 420 H1052" marker-end="url(#ah)" pathLength="1"/>
+      <path id="a4" d="M300 676 C 300 650, 304 632, 306 612" marker-end="url(#ah)" pathLength="1"/>
+      <path id="a3" d="M1052 700 C 1130 690, 1180 640, 1200 584" marker-end="url(#ah)" pathLength="1"/>
+    </g>
+  </svg>
+
+  <div class="tile" id="wr">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8"><circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/></svg>
+    <div class="name" style="--r:-2deg">写</div>
+  </div>
+  <div class="tile" id="wra">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg>
+    <div class="name" style="--r:-2deg">写 · Agent</div>
+  </div>
+  <div class="tag" id="swapw" data-r="3">换成 Agent</div>
+  <div class="chip" id="code" data-r="-1.5">代码</div>
+
+  <!-- 审：人（第 2 句缩小挪到下方变灰）与 Agent（落到原位） -->
+  <div class="tile" id="hr">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8"><circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/></svg>
+    <div class="name" style="--r:2deg">审</div>
+  </div>
+  <div class="tile" id="ag">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg>
+    <div class="name" style="--r:2deg">审 · Agent</div>
+  </div>
+  <div class="tag" id="swap" data-r="-3">换成 Agent</div>
+
+  <div class="chip ang" id="g1" style="left:1060px;top:160px">对照规格</div>
+  <div class="chip ang" id="g2" style="left:1420px;top:200px">领域清单</div>
+  <div class="chip ang" id="g3" style="left:1440px;top:320px">对抗</div>
+  <div class="chip ang" id="g4" style="left:1440px;top:440px">换模型</div>
+  <div class="chip ang" id="g5" style="left:1420px;top:560px">历史</div>
+
+  <div class="chip" id="cr" data-r="-2">code review</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播时刻（秒，画面内，估算）。
+  var AT = {
+    wr: 0, code: 2.091, hr: 3.509, g0: 4.032, gGap: 0.3, cr: 6.272,   // 第 1 句
+    wswap: 7.961, wag: 8.323, wagCur: 8.564, wagCurOff: 9.167,       // 第 2 句：写的一方先换
+    swap: 8.986, ag: 9.348, agCur: 9.529, agCurOff: 10.555           // 第 2 句：审的一方后换
+  };
+  // 人缩小挪到的位置（舞台坐标，左上角）与比例
+  var AWAY = { x: 860, y: 680, k: 0.6 };
+  var WAWAY = { x: 170, y: 680, k: 0.6 };   // 写的人缩小挪到的位置
+  var DIM = [160, 157, 151];   // --cream-dim
+
+  function draw(el, p) { el.style.strokeDasharray = 1; el.style.strokeDashoffset = 1 - T.ease(p); el.style.opacity = p > 0 ? 1 : 0; }
+  function drop(el, p, dy) {
+    var e = T.ease(p);
+    el.style.opacity = e;
+    el.style.transform = 'translateY(' + (1 - e) * (dy || 16) + 'px)';
+  }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 11.520,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.tilt();
+      // 第 1 句
+      // 写的人：先落下；第 2 句缩小挪到下方、变灰
+      var wr = T.$('wr');
+      var wpin = T.ease(T.p(t, AT.wr, 0.45));
+      var wmv = T.ease(T.p(t, AT.wswap, 0.6));
+      wr.style.opacity = wpin;
+      wr.style.transform = 'translate(' + ((WAWAY.x - 170) * wmv) + 'px,' + ((1 - wpin) * 16 + (WAWAY.y - 300) * wmv) + 'px) scale(' + (1 + (WAWAY.k - 1) * wmv) + ')';
+      wr.style.background = T.mix([38, 38, 38], DIM, wmv);
+      wr.style.color = T.mix([255, 255, 255], [22, 22, 22], wmv);
+      draw(T.$('a4'), T.p(t, AT.wag, 0.4));
+      T.enter(T.$('swapw'), T.p(t, AT.wag + 0.2, 0.4), 10);
+      var wra = T.$('wra');
+      drop(wra, T.p(t, AT.wag, 0.45), 16);
+      T.current(wra, T.ease(T.p(t, AT.wagCur, 0.4)) * (1 - T.ease(T.p(t, AT.wagCurOff, 0.5))), 12);
+      draw(T.$('a1'), T.p(t, AT.code - 0.2, 0.4));
+      T.enter(T.$('code'), T.p(t, AT.code, 0.4), 12);
+      draw(T.$('a2'), T.p(t, AT.hr - 0.2, 0.4));
+      for (var i = 1; i <= 5; i++) T.enter(T.$('g' + i), T.p(t, AT.g0 + (i - 1) * AT.gGap, 0.35), -10);
+      T.enter(T.$('cr'), T.p(t, AT.cr, 0.4), 12);
+
+      // 审的人：先落下；第 2 句缩小挪到下方、变灰
+      var hr = T.$('hr');
+      var pin = T.ease(T.p(t, AT.hr, 0.45));
+      var mv = T.ease(T.p(t, AT.swap, 0.6));
+      var x = (AWAY.x - 1080) * mv, y = (1 - pin) * 16 + (AWAY.y - 300) * mv, k = 1 + (AWAY.k - 1) * mv;
+      hr.style.opacity = pin;
+      hr.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + k + ')';
+      hr.style.background = T.mix([38, 38, 38], DIM, mv);
+      hr.style.color = T.mix([255, 255, 255], [22, 22, 22], mv);
+      draw(T.$('a3'), T.p(t, AT.ag, 0.4));
+      T.enter(T.$('swap'), T.p(t, AT.ag + 0.2, 0.4), 10);
+
+      // Agent 落到原位，黄色「当前」一次
+      var ag = T.$('ag');
+      drop(ag, T.p(t, AT.ag, 0.45), 16);
+      T.current(ag, T.ease(T.p(t, AT.agCur, 0.4)) * (1 - T.ease(T.p(t, AT.agCurOff, 0.5))), 12);
+    }
+  });
+</script>
+</body>
+</html>

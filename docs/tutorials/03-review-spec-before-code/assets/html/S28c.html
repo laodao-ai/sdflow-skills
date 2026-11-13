@@ -1,0 +1,169 @@
+<!doctype html>
+<!-- S28c（原 S20c、S24e） · 卡片 · script 194–202「这句话会让 AI 回到目标，重新调研一遍。……以后新写的时间判断，把当前时间当参数传进去就行。」
+     「一句话『魔法咒语』」章第 2 页（原 S18 中段）。goapi-framework 是作者公司的项目：只做卡片，不上源码、库名、ADR 与会话原文，
+     只讲机制和数字；角上标「作者公司的项目 · 只讲机制和数字」（不是「示意」，也不是「实录」）。
+     依据：change `test-infra-cases-b` 的 decision-memo D2（注入只多测三个时间谓词的 ±1 秒边界，方向今天已可测）、
+     提交 `290e52c4`（openspec/rules/testing.md TL-05 由 G 降 R）、Claude 会话 `7866bf64`（2026-09-09）。10-24 作者定换成这个例子，共 9 句。
+     节点表（左栏 = 原方案，右栏 = 结果，中间 = 那句话）：
+     - 第 194 句：角上标签和上方一行的开头「问那句话之后」一开头就在（不放空壳）。
+     - 第 195 句：上方一行接「多数：再优化一轮 · 有时：整个推翻，重新设计」，两段随口播逐段出现。
+     - 第 196 句「我给一个 Go 项目补测试」：只有上方一行，不出新元素。
+     - 第 197 句（「AI 推荐，把生产代码里，取当前时间的地方，都改成可替换的接口。」，10-25 句首加「AI 推荐，」）：左栏「AI 推荐」，念到「取当前时间的地方」出几行 time.Now() 小代码条（十来处，示意），念到「可替换的接口」出「时钟接口」卡和箭头。
+     - 第 198 句：念到「写进了规范」出「规范：强制」，念到「我同意了」标签补「· 已同意」。
+     - 第 199 句：中间「问那句话」出现，当前。
+     - 第 200 句：念到「只多测了」右栏出「只多测了：差一秒的边界」，当前。
+     - 第 201 句：右栏依次出「生产代码：0 处改动」「规范：强制 → 建议」，各自当前；念到「一处没改」左栏盖「推翻」（墨底印章，不用红；左卡底从浅蓝渐变成灰 = 作废）。
+     - 第 202 句：念到「把当前时间当参数传进去」出代码条 withinWindow(ts, now)，当前，留到页末。
+     配色（2026-10-24）：左卡和「规范」两处是规格一侧，用浅蓝（标签饱和蓝），被推翻时左卡渐变成灰；「生产代码：0 处改动」是执行一侧，琥珀；「问那句话」墨底奶白字，角标是奶白虚线标签（2026-10-25 起本章不用紫，紫只留给「另一个模型」）；「推翻」印章和时钟接口卡保持墨底；代码条是终端深底。本页没有「另一个模型」。
+     颜色：不用红绿；黄只给「当前」描边，同一时刻只有一个；灰 = 作废。
+     内容整体在 y 880 以内，避开底部字幕带（y ≥ 940）。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。
+       句子起点（页内秒）：第 194 句 0.00，195 句 4.64，196 句 12.48，197 句 16.64，198 句 22.88，199 句 28.24，200 句 33.84，201 句 42.88，202 句 47.12，念完 52.16；
+       页内时长 53.28。 -->
+<html lang="zh-CN" data-frame-id="S28c">
+<head>
+<meta charset="utf-8">
+<title>S28c · 一句话推翻原方案</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #note { right: 64px; top: 52px; }
+  #mrow { position: absolute; left: 90px; top: 150px; display: flex; align-items: center; gap: 20px; }
+  #mrow .chip { position: static; font-size: 40px; padding: 6px 24px; }
+  #mrow .dot { font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--ink); }
+  #lead { background: var(--ink); color: var(--cream); }
+
+  /* 左栏：原方案 */
+  #lc { left: 90px; top: 330px; width: 720px; height: 470px; background: var(--blue-soft); padding: 0; }
+  #lt { left: 20px; top: -44px; font-size: 40px; }
+  .sn { position: absolute; left: 40px; width: 300px; height: 56px; box-sizing: border-box; padding: 0 18px; display: flex; align-items: center; background: var(--term); color: var(--cream); border: 4px solid var(--ink); border-radius: 8px; font-family: var(--mono); font-size: 30px; white-space: nowrap; }
+  #n1 { top: 50px; } #n2 { top: 122px; } #n3 { top: 194px; } #n4 { top: 266px; }
+  #many { position: absolute; left: 40px; top: 338px; width: 300px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 36px; }
+  #clock { position: absolute; left: 470px; top: 120px; width: 210px; height: 150px; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 44px; white-space: nowrap; padding: 0; }
+  #arrows { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+  #rule1 { position: absolute; left: 40px; top: 395px; }
+  .pill { display: inline-block; padding: 2px 16px; border: 4px solid var(--ink); border-radius: 8px; background: var(--cream); font-weight: 600; font-size: 34px; white-space: nowrap; }
+  #stamp { left: 420px; top: 660px; padding: 6px 26px; background: var(--ink); color: var(--cream); font-family: var(--display); font-weight: 800; font-size: 64px; box-shadow: 6px 6px 0 var(--charcoal); }
+
+  /* 中间：那句话 */
+  #ask { left: 860px; top: 505px; width: 250px; height: 110px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--ink); color: var(--cream); font-family: var(--display); font-weight: 800; font-size: 44px; white-space: nowrap; }
+
+  /* 右栏：结果，自上而下 */
+  .rc { left: 1160px; width: 690px; height: 100px; padding: 0 30px; display: flex; align-items: center; font-family: var(--display); font-weight: 800; font-size: 44px; white-space: nowrap; }
+  #r1 { top: 330px; }
+  #r2 { top: 470px; background: var(--amber); }
+  #r3 { top: 610px; background: var(--blue-soft); }
+  #code { left: 1160px; top: 750px; width: 690px; height: 100px; box-sizing: border-box; padding: 0 30px; display: flex; align-items: center; background: var(--term); color: var(--cream); font-family: var(--mono); font-size: 42px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="tag" id="note" data-r="3">作者公司的项目 · 只讲机制和数字</div>
+  <div id="mrow">
+    <div class="chip" id="lead" data-r="-2">问那句话之后</div>
+    <div class="chip" id="m1" data-r="-1.5">多数：再优化一轮</div><span class="dot" id="md">·</span>
+    <div class="chip" id="m2" data-r="1">有时：整个推翻，重新设计</div>
+  </div>
+
+  <div class="card" id="lc" data-r="-0.6">
+    <div class="tab os" id="lt" data-r="-2"><span>AI 推荐</span><span id="agreed"> · 已同意</span></div>
+    <div class="sn" id="n1">time.Now()</div>
+    <div class="sn" id="n2">time.Now()</div>
+    <div class="sn" id="n3">time.Now()</div>
+    <div class="sn" id="n4">time.Now()</div>
+    <div id="many">十来处 ……</div>
+    <div class="card dark" id="clock" data-r="1">时钟接口</div>
+    <div class="pill" id="rule1">规范：强制</div>
+  </div>
+
+  <svg id="arrows" viewBox="0 0 1920 1080" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="ar1" d="M440 408 H490 L548 470 M546 453 L548 470 L531 466"/>
+      <path id="ar2" d="M440 480 H490 L548 494 M537 481 L548 494 L532 500"/>
+      <path id="ar3" d="M440 552 H490 L548 518 M531 517 L548 518 L541 533"/>
+      <path id="ar4" d="M440 624 H490 L548 542 M532 548 L548 542 L548 559"/>
+      <path id="ar5" d="M1112 560 H1146 M1130 546 L1146 560 L1130 574"/>
+    </g>
+  </svg>
+
+  <div class="card" id="ask" data-r="1">问那句话</div>
+
+  <div class="card rc" id="r1" data-r="-0.8">只多测了：差一秒的边界</div>
+  <div class="card rc" id="r2" data-r="0.8">生产代码：0 处改动</div>
+  <div class="card rc" id="r3" data-r="-0.6">规范：强制 → 建议</div>
+  <div class="card" id="code" data-r="0.6">withinWindow(ts, now)</div>
+
+  <div class="chip" id="stamp" data-r="-8">推翻</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒。
+  var AT = {
+    base: 0.0,                                  // 194 句开口（0.00，不能小于 0）：角上标签、「问那句话之后」
+    m: [4.44, 8.52],                            // 195 句「大多数」（4.64）「有时候」（8.72）：「多数：再优化一轮」「有时：整个推翻，重新设计」
+    lt: 16.44, sn: [18.44, 18.70, 18.96, 19.22], many: 19.48, // 197 句开口（16.64）：左栏标签；念到「取当前时间的地方」（18.64–19.68）：time.Now() 条逐个出
+    clock: 20.52, ar: [20.92, 21.07, 21.22, 21.37],   // 197 句念到「可替换的接口」（20.72）：时钟接口、四根箭头（间隔不变）
+    rule: 25.24, agreed: 26.28,                 // 198 句念到「写进了规范」（25.44）、「我同意了」（26.48）：规范：强制、已同意
+    ask: 28.04, askEnd: 37.32,                  // 199 句开口（28.24）：问那句话（当前）；askEnd = r1 前 0.4 秒
+    r1: 37.72, r1End: 42.96,                    // 200 句念到「只多测了」（37.92）：只多测了（当前）；r1End = r2 前 0.2 秒
+    r2: 43.16, r2End: 44.48,                    // 201 句念到「生产代码」（43.36）：生产代码 0 处改动（当前）；r2End = r3 前 0.2 秒
+    r3: 44.68, r3End: 48.24,                    // 201 句念到「规范」（44.88）：规范 强制 → 建议（当前）；r3End = code 前 0.2 秒
+    stamp: 43.8,                                // 201 句念到「一处没改」（44.00）：盖推翻
+    code: 48.44                                 // 202 句念到「把当前时间当参数传进去」（48.64）：withinWindow(ts, now)（当前，留到页末）
+  };
+  var P = T.p, E = T.ease;
+
+  function gate(t, from, to) { return E(P(t, from, 0.4)) * (to === undefined ? 1 : 1 - E(P(t, to, 0.4))); }
+  function fade(el, t, at) { el.style.opacity = E(P(t, at, 0.35)); }
+  var GRAY = [160, 157, 151];       // --cream-dim：作废
+  var BLUESOFT = [140, 200, 245];   // --blue-soft：左卡原色，推翻时从它渐变成灰
+
+  Stage({
+    duration: 53.28,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 194 句：角上标签、上方一行开头
+      T.enter(T.$('note'), P(t, AT.base, 0.45), -12);
+      T.enter(T.$('lead'), P(t, AT.base + 0.1, 0.45), 14);
+
+      // 195 句：多数 / 有时，随口播出现
+      T.enter(T.$('m1'), P(t, AT.m[0], 0.45), 14);
+      fade(T.$('md'), t, AT.m[1]);
+      T.enter(T.$('m2'), P(t, AT.m[1], 0.45), 14);
+
+      // 197 句：左栏 AI 推荐，time.Now() 条接到时钟接口
+      T.enter(T.$('lc'), P(t, AT.lt, 0.45), 16);
+      for (var i = 0; i < 4; i++) fade(T.$('n' + (i + 1)), t, AT.sn[i]);
+      fade(T.$('many'), t, AT.many);
+      fade(T.$('clock'), t, AT.clock);
+      for (var j = 0; j < 4; j++) T.$('ar' + (j + 1)).style.opacity = E(P(t, AT.ar[j], 0.35));
+
+      // 198 句：规范：强制，已同意
+      fade(T.$('rule1'), t, AT.rule);
+      fade(T.$('agreed'), t, AT.agreed);
+
+      // 199 句：问那句话（当前）
+      T.enter(T.$('ask'), P(t, AT.ask, 0.45), 16);
+      T.$('ar5').style.opacity = E(P(t, AT.ask + 0.2, 0.35));
+      T.current(T.$('ask'), gate(t, AT.ask + 0.3, AT.askEnd), 10);
+
+      // 200–201 句：右栏逐条，各自当前
+      T.enter(T.$('r1'), P(t, AT.r1, 0.45), 16);
+      T.current(T.$('r1'), gate(t, AT.r1 + 0.3, AT.r1End), 10);
+      T.enter(T.$('r2'), P(t, AT.r2, 0.45), 16);
+      T.current(T.$('r2'), gate(t, AT.r2 + 0.3, AT.r2End), 10);
+      T.enter(T.$('r3'), P(t, AT.r3, 0.45), 16);
+      T.current(T.$('r3'), gate(t, AT.r3 + 0.3, AT.r3End), 10);
+
+      // 201 句：左卡盖「推翻」，卡底变灰
+      T.enter(T.$('stamp'), P(t, AT.stamp, 0.3), -34);
+      T.fill(T.$('lc'), GRAY, P(t, AT.stamp, 0.5), BLUESOFT);
+
+      // 202 句：withinWindow(ts, now)（当前，留到页末）
+      T.enter(T.$('code'), P(t, AT.code, 0.5), 16);
+      T.current(T.$('code'), gate(t, AT.code + 0.3), 10);
+    }
+  });
+</script>
+</body>
+</html>

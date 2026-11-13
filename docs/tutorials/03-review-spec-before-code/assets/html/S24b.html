@@ -1,0 +1,110 @@
+<!doctype html>
+<!-- S24b · 标题卡 · script 177–180「我自己是这么算账的。……所以多花的这些时间和 token，换来两样：大模型的不确定性少了，问题早发现早解决了。」
+     第 6 章「值不值得」第 6 页（10-24 作者定合并「成本怎么控」后新加；账的写法沿用原 S25）。示意，不标「实录」。
+     - 第 177 句：问题贴纸「算一笔账」先在屏幕正中放大，停约 1 秒，再约 0.6 秒缩小移到左上（visual-v4 4.8）。
+     - 第 178 句：念到「前面那条推送 panic」左边小卡「推送里的 panic · 前面那条 · r3 D2」（S11a、S23 的那一条）；念到「要是上线了才发现」箭头；
+       念到「就是整个服务挂掉」右边小卡「上线才发现：服务挂掉」。
+     - 第 179 句：念到「在写代码之前」，对面一格「写代码前：约 17 分钟」（S21 实录的 17 分钟）；念到「我觉得值」，两格之间出大字「值」。
+     - 第 180 句：念到「大模型的不确定性少了」「问题早发现早解决了」，另起一行两条：「分几路、换模型 → 不确定性少了」「越早发现 → 早发现早解决」；上面的内容都留着（一页一层）。
+     配色（2026-10-23 起）：推送 panic 卡粉浅（本期粉 = 对抗审，这条是对抗审报出的）；「上线才发现」琥珀浅（运行环境）；「写代码前」蓝浅（规格一侧）；
+       「值」是墨色大字，直接压在纸底上；末行两条深色卡是这一页最重的块；黄只给「当前」。
+     句子起点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒）：177 句 0，178 句 2.96，179 句 10.08，180 句 15.12，念完 23.76；页内时长 24.16。
+     内容整体在 y 830 以内，避开底部字幕带（y ≥ 930）；中部卡高 280、结论条高 170，上下留白匀开。粉色卡加小标签「对抗审」（2026-10-25）。  -->
+<html lang="zh-CN" data-frame-id="S24b">
+<head>
+<meta charset="utf-8">
+<title>S24b · 算一笔账</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #q { left: 70px; top: 24px; font-size: 42px; }
+
+  /* 中间一行：左边推送 panic 的账，右边写代码前的花费，中间一个「值」 */
+  .acc { top: 210px; height: 280px; padding: 0 36px; display: flex; flex-direction: column; justify-content: center; white-space: nowrap; }
+  .acc .ln1 { font-family: var(--display); font-weight: 800; line-height: 1.15; }
+  .acc .ln2 { font-weight: 600; font-size: 42px; margin-top: 10px; }
+  #pc { left: 50px; width: 470px; background: var(--pink-soft); } #pc .ln1 { font-size: 54px; }
+  #fc { left: 590px; width: 600px; background: var(--amber-soft); } #fc .ln1 { font-size: 64px; }
+  #bf { left: 1440px; width: 420px; background: var(--blue-soft); } #bf .ln1 { font-size: 68px; }
+  /* 粉色的意思：本期粉 = 对抗审；这条 panic 是对抗审报出的，加小标签说明 */
+  .lab { position: absolute; left: 24px; top: -30px; padding: 2px 16px; border: 4px solid var(--ink); border-radius: 6px; background: var(--pink);
+         font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1.2; white-space: nowrap; }
+  #ar { position: absolute; left: 0; top: 0; width: 1920px; height: 930px; }
+  #val { left: 1215px; top: 290px; width: 210px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 180px; line-height: 1; color: var(--ink); }
+
+  /* 末行：两条结论 */
+  .cl { top: 650px; height: 170px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .cl .big { font-size: 52px; white-space: nowrap; }
+  #c1 { left: 60px; width: 900px; } #c2 { left: 1000px; width: 860px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="q" data-r="-3.5">算一笔账</div>
+
+  <svg id="ar" viewBox="0 0 1920 930" aria-hidden="true">
+    <path id="ap" pathLength="1" d="M530 350 C 545 350 560 350 568 350" fill="none" stroke="#161616" stroke-width="7" stroke-linecap="round" stroke-dasharray="1"/>
+    <polygon id="ah" points="588,350 566,337 566,363" fill="#161616"/>
+  </svg>
+  <div class="card acc" id="pc" data-r="-1"><div class="lab">对抗审</div><div class="ln1">推送里的 panic</div><div class="ln2">前面那条 · r3 D2</div></div>
+  <div class="card acc" id="fc" data-r="1"><div class="ln2" style="margin:0 0 4px">上线才发现</div><div class="ln1">服务挂掉</div></div>
+
+  <div class="abs" id="val" data-r="0">值</div>
+  <div class="card acc" id="bf" data-r="-1"><div class="ln2" style="margin:0 0 4px">写代码前</div><div class="ln1">约 17 分钟</div></div>
+
+  <div class="card dark cl" id="c1" data-r="-0.5"><div class="big">分几路、换模型 → 不确定性少了</div></div>
+  <div class="card dark cl" id="c2" data-r="0.5"><div class="big">越早发现 → 早发现早解决</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），取词首字实测开始时间减 0.2 秒。
+  var CUE = {
+    hold: 1.4, move: 0.6,           // 177 句：贴纸出现 0.4 秒后在正中停约 1 秒，再 0.6 秒移到左上，2.0 落位
+    pc: 3.48,                      // 178 句开口：「前面那条推送 panic」左卡
+    arrow: 5.8, fc: 7.24,           // 念到「要是上线了才发现」箭头；「就是整个服务挂掉」右卡
+    bf: 10.92, val: 12.76,           // 179 句：念到「在写代码之前」右格；念到「我觉得值」大字
+    c1: 19.32, c2: 21.88             // 180 句：念到「大模型的不确定性少了」「问题早发现早解决了」
+  };
+  var P = T.p, E = T.ease;
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function on(t, a, b) { return E(P(t, a, 0.4)) * (1 - E(P(t, b, 0.4))); }
+
+  Stage({
+    duration: 24.16,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 177 句：问题贴纸，正中放大 -> 缩小移到左上
+      var q = T.$('q'), r = parseFloat(q.getAttribute('data-r'));
+      var fx = 70 + q.offsetWidth / 2, fy = 24 + q.offsetHeight / 2;
+      var a = E(P(t, 0, 0.4));
+      var m = E(P(t, CUE.hold, CUE.move));
+      q.style.opacity = a;
+      q.style.transform = 'translate(' + ((960 - fx) * (1 - m)) + 'px,' + ((460 - fy) * (1 - m)) + 'px) scale(' + lerp(1.7, 1, m) + ') rotate(' + (r * (1 + (1 - a))) + 'deg)';
+
+      // 178 句：推送 panic -> 上线才发现
+      T.enter(T.$('pc'), P(t, CUE.pc, 0.45), 14);
+      T.enter(T.$('fc'), P(t, CUE.fc, 0.45), 14);
+      T.current(T.$('pc'), on(t, CUE.pc + 0.3, CUE.arrow), 10);
+      T.current(T.$('fc'), on(t, CUE.fc + 0.3, CUE.bf), 10);
+      var ap = E(P(t, CUE.arrow, 0.5));
+      T.$('ap').style.strokeDashoffset = 1 - ap;
+      T.$('ap').style.opacity = ap > 0 ? 1 : 0;
+      T.$('ah').style.opacity = E(P(t, CUE.arrow + 0.4, 0.2));
+
+      // 179 句：对面一格，中间「值」
+      T.enter(T.$('bf'), P(t, CUE.bf, 0.45), 14);
+      T.current(T.$('bf'), on(t, CUE.bf + 0.3, CUE.val), 10);
+      var v = T.$('val'), ve = E(P(t, CUE.val, 0.45));
+      v.style.opacity = ve;
+      v.style.transform = 'scale(' + (1.5 - 0.5 * ve) + ')';
+
+      // 180 句：两条结论，随口播逐条出现，当前随之换
+      T.enter(T.$('c1'), P(t, CUE.c1, 0.5), 20);
+      T.enter(T.$('c2'), P(t, CUE.c2, 0.5), 20);
+      T.current(T.$('c1'), on(t, CUE.c1 + 0.3, CUE.c2), 10);
+      T.current(T.$('c2'), on(t, CUE.c2 + 0.3, 23.56), 10);
+    }
+  });
+</script>
+</body>
+</html>

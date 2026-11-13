@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- S14 · 标题卡 · script 55–59「一句话：规格驱动开发，……OpenSpec 就是把它做成固定步骤的工具。」
+     上面是收束句，下面接 OpenSpec（蓝）作过渡：口播最后一句才提到工具，所以最后出现。
+     蓝 = OpenSpec；收束句本身还是概念，不上色。 -->
+<html lang="zh-CN" data-frame-id="S14">
+<head>
+<meta charset="utf-8">
+<title>S14 · 一句话与过渡</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .say { left: 210px; top: 160px; width: 1500px; height: 400px; display: flex; align-items: center; justify-content: center; text-align: center; }
+  .say .big { font-size: 112px; }
+  .link { left: 956px; top: 570px; width: 8px; height: 100px; background: var(--ink); }
+  .tool { left: 610px; top: 700px; width: 700px; height: 170px; display: flex; align-items: center; justify-content: center; padding: 0; background: var(--blue); color: var(--ink); }
+  .tool .big { font-size: 96px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card say" id="say" data-r="-1"><div class="big">先把「做什么」写下来，<br>再让 AI 照着做</div></div>
+  <div class="abs link" id="link"></div>
+  <div class="card tool" id="tool" data-r="1"><div class="big">OpenSpec</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 14,
+    init: function () { return T.fonts('先把做什么写下来，再让照着'); },
+    render: function (t) {
+      T.enter(T.$('say'), T.p(t, 0.3, 0.6), 30);
+      T.wipe(T.$('link'), T.p(t, 12.45, 0.4), 'y');
+      T.enter(T.$('tool'), T.p(t, 12.75, 0.5), 20);
+    }
+  });
+</script>
+</body>
+</html>

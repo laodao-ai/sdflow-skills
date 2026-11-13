@@ -1,0 +1,233 @@
+<!doctype html>
+<!-- S22 · 录屏证据 · script 149–155「我拿上一期写好的那份规格，试了一下。……也就是说，只审一次，漏掉哪几条，要看运气。」（7 句）
+     实录。三次简单审查并排，每格只截那一轮 OBS 录像里「结论」那一行（静止，不回放；10-25 由整屏缩略图改成一行，整屏缩到 0.39 倍后字读不出）：AI 刚给出结论的时刻。
+       录像（本期 assets/video/，被 Git 忽略；页面从 render/tmp/ 渲染，所以用 ../../assets/video/ 找它）：
+       - 第 01 轮 20261017-043608-self-review-01-review.mp4，取 213.8 秒（这一屏只在 213.3–214.4 秒之间）；结论行是第 1 行「总体结论：可以进实现。没有阻断问题……」；
+       - 第 02 轮 20261017-045933-self-review-02-review.mp4，取 195.0 秒（194.3–195.7 秒之间）；结论行是第 2 行「整体可以进入实现，但有两处设计缺陷要先修……」；
+       - 第 03 轮 20261017-050632-self-review-03-review.mp4，取 207.6 秒（207.1–208.0 秒之间）；结论行是「结论：可以进实现，没有阻塞问题。……」。
+       三格同一放大倍数 1.3（源 1920×1080 放到 2496×1404），各取一条高约 35 源像素的横带、宽 420 源像素，缩放后是 568×48 的一行，字高约 34px。
+       源帧中的位置：01 取 x 1035、y 156；02 取 x 730、y 185；03 取 x 255、y 267（量自对应帧的整屏截图）。
+       三格窗口连标签在第 150 句「开三个全新的会话」开口时落下，结论行同时露出；第 154 句讲到结论时，三行结论依次当前（10-25 晚作者定：原先第 154 句才落下，顶上一排最后出现，顺序不对；代价是结论比口播早约 20 秒露出，作者接受）。放大倍数改 1.3（字约 32px），三格窗口宽按整字截：01 到「没有阻断问题」，02 到「设计缺陷」，03 到「没有阻塞问题。」。
+     录像里的原话（review/self-review-comparison.md 第二至四节）：
+       - 结论：01「总体结论：可以进实现。……」；02「整体可以进入实现，但有两处设计缺陷要先修，……」；03「结论：可以进实现，没有阻塞问题。……」。
+         10-25 起窗口本身就是结论那一行，原窗口下方的「结论 + 前半句」结论条删去（内容重复）。
+       - 提示词原话两句：「你自己审一下这份规格。就在这个会话里看，不调用 skill，也不派子代理。」三轮相同，三格共用一张跨三格的说明卡，34px 两行。
+     数字（self-review-comparison.md 第一节、第五节汇总表、第七节）：去重 16 条，实质问题 7 条（#1、2、3、5、6、11、13）。
+       小表打点，逐条对第五节汇总表的 01 / 02 / 03 三列：
+       - #1 连接串无口令吞掉失败原因：01、02、03 轮都有（2 / 2 / F1）；
+       - #2 5 秒超时没测试：01、02、03 轮都有（1 / 3 / F2）；
+       - #5 时间格式没定时区：02、03 轮（— / 小 2 / F4 时间）；
+       - #3 缺 errcode 判成功：只 02 轮；
+       - #6 内容断言会被时间戳命中：只 03 轮（F4 数值）；
+       - #11 只发一次请求没断言：只 01 轮（7）；
+       - #13 短口令改坏 errmsg：只 03 轮（F1 顺带）。
+       第七节：三轮都提 #1、#2（实质 2 条，另有措辞格式 #4）；只一轮提的实质 4 条：#3、#6、#11、#13。
+     句子与动画节点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒）：149 句 0，150 句 4.00，151 句 11.36，152 句 13.20，153 句 19.68，154 句 25.76，155 句 29.44，念完 33.12；页内时长 34.24。
+     - 第 149 句：说明卡落下。
+     - 第 150 句：三个实录窗口依次落下（结论行同时出）；说明卡「三轮都是：新会话 · 同一模型 · 只问一句」这一行当前，念到「你自己审一下这份规格」当前换到提示词。
+     - 第 151 句「每次三分钟左右」：说明卡右端贴一张小贴纸「每次约 3 分钟」（三轮各约 3、3、3.5 分钟，review/self-review-comparison.md 第二至四节），当前到第 152 句开口淡出。
+     - 第 152 句：左侧数字卡，念到「一共 16 条」出「去重 16 条」，念到「实质问题 7 条」出第二行。
+     - 第 153 句：右侧 7 行 × 3 列小表（窗口腾出的高度全给表，行高 62px，字 36px），行是 7 条实质问题短名，查到的格打点；念到「三次都查到的只有 2 条」旁标「三次都有：2 条」并框住 #1、#2 两行；
+       念到「有 4 条只有一次」旁标「只有一次：4 条」并框住 #3、#6、#11、#13 四行（一次一组当前，上一组淡出后再点亮下一组）。
+     - 第 154 句：三个窗口的结论行依次当前（黄描边，一次一个），第 155 句开口前淡出。
+     - 第 155 句：左下一行「只审一次：漏哪几条，看运气」。
+     一页一层：窗口、说明卡、数字卡、小表、结论条、末行出现后都留到页末，不覆盖、不淡出换内容。
+     位置说明：窗口一行高（y 190–250），小表放在 y 310–880，左侧是数字卡与末行；内容底边（含阴影与黄框外发光）都在 y 910 以内。
+     配色：「去重 16 条」蓝浅（规格评审的结果，同旧稿）；末行墨底奶白字，是这一页最重的块；打点墨色；窗口是录像本身的深色底；「实录」标签墨底；
+       黄只做当前的描边。不用红绿（这里是审查结论，不是测试）；本页没有对抗审和另一个模型，不用粉紫。
+     内容都在 y 910 以内，避开字幕带。  -->
+<html lang="zh-CN" data-frame-id="S22">
+<head>
+<meta charset="utf-8">
+<title>S22 · 三次简单审查</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 三个实录窗口：窗口不倾斜，只让标签倾斜。内宽 568，录像裁切区缩到 568×290。 */
+  .window { top: 190px; width: 568px; height: 58px; overflow: visible; box-shadow: 12px 12px 0 var(--ink); }
+  #w1 { left: 50px; width: 556px; } #w2 { left: 670px; width: 553px; } #w3 { left: 1290px; width: 533px; }
+  #w2 .clip { width: 541px; } #w3 .clip { width: 521px; }
+  .window .tab { top: -56px; font-size: 34px; padding: 4px 20px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 28px; margin-left: 12px; }
+  .clip { position: absolute; left: 0; top: 0; width: 544px; height: 46px; overflow: hidden; border-radius: 8px; }
+  /* 源 1920×1080 × 1.38 = 2649.6×1490.4；各轮把结论那一行对到裁切框里（x、y 见头部注释） */
+  .clip video { position: absolute; width: 2496px; height: 1404px; }
+  #v1 { left: -1345.5px; top: -202.8px; } #v2 { left: -949px; top: -240.5px; } #v3 { left: -331.5px; top: -347.1px; }
+  /* 10-25 改：窗口落下时结论行就露出，不需要盖层 */
+  .cv { display: none; }
+
+  /* 窗口上方的说明卡（不是录像内容）与下方的结论条 */
+  .hd { top: 14px; width: 1820px; height: 106px; padding: 8px 26px; display: flex; flex-direction: column; justify-content: center; gap: 4px;
+        border-width: 4px; box-shadow: 7px 7px 0 var(--ink); }
+  #h1 { left: 50px; }
+  /* 「每次约 3 分钟」：贴在说明卡右端（提示词那行到不了的空位），不改说明卡高度 */
+  #t3 { left: 1500px; top: 32px; font-size: 34px; padding: 6px 20px; z-index: 2; }
+  .hd .l1, .hd .l2 { align-self: flex-start; padding: 0 10px; margin: 0 -10px; border-radius: 6px; white-space: nowrap; }
+  .hd .l1 { font-weight: 600; font-size: 34px; line-height: 1.25; }
+  .hd .l2 { font-weight: 700; font-size: 34px; line-height: 1.25; }
+  .hd .l2 i { font-style: normal; font-family: var(--mono); color: #6b6b6b; margin-right: 12px; }
+
+  /* 左下：数字卡与末行 */
+  #sum { left: 50px; top: 360px; width: 610px; height: 200px; padding: 0 30px; display: flex; flex-direction: column; justify-content: center; gap: 4px; background: var(--blue-soft); }
+  #sum .a { font-family: var(--display); font-weight: 800; font-size: 72px; line-height: 1.1; white-space: nowrap; }
+  #sum .b { font-family: var(--display); font-weight: 800; font-size: 52px; line-height: 1.1; white-space: nowrap; }
+  #last { left: 50px; top: 640px; font-family: var(--display); font-weight: 800; font-size: 44px; padding: 10px 26px; background: var(--ink); color: var(--cream); }
+
+  /* 右下：7 行 × 3 列小表。分三组（三次都有 / 两次 / 只一次），组与组之间留 24px，当前框画在组外 */
+  #tb { left: 690px; top: 312px; width: 1190px; padding: 18px 20px 26px; }
+  #tb .hdr { display: flex; align-items: center; height: 46px; margin-bottom: 8px; }
+  #tb .hdr .nm { width: 550px; font-weight: 700; font-size: 34px; line-height: 1.2; color: #55524c; }
+  #tb .hdr .c { width: 92px; text-align: center; font-family: var(--mono); font-weight: 700; font-size: 30px; }
+  #tb .grp { position: relative; border-radius: 8px; margin-bottom: 20px; }
+  #tb .grp:last-of-type { margin-bottom: 0; }
+  #tb .row { display: flex; align-items: center; height: 62px; line-height: 62px; white-space: nowrap; }
+  #tb .row .id { width: 70px; font-family: var(--mono); font-weight: 700; font-size: 30px; color: #55524c; }
+  #tb .row .nm { width: 480px; font-weight: 600; font-size: 36px; }
+  #tb .row .c { width: 92px; display: flex; justify-content: center; }
+  #tb .dot { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); }
+  #tb .note { position: absolute; right: 8px; top: 50%; margin-top: -26px; padding: 4px 16px; border: 4px solid var(--ink); border-radius: 8px; background: var(--cream);
+              font-weight: 700; font-size: 34px; white-space: nowrap; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 说明卡：本页加的说明，不是录像内容；三轮相同，三格共用一张 -->
+  <div class="card hd" id="h1" data-r="-0.5"><div class="l1">三轮都是：新会话 · 同一模型 · 只问一句</div><div class="l2"><i>❯</i>你自己审一下这份规格。就在这个会话里看，不调用 skill，也不派子代理。</div></div>
+
+  <div class="chip" id="t3" data-r="3">每次约 3 分钟</div>
+
+  <div class="window" id="w1">
+    <div class="clip"><video id="v1" src="../../assets/video/20261017-043608-self-review-01-review.mp4" muted preload="metadata" playsinline></video><div class="cv" id="cv1"></div></div>
+    <div class="tab ink">实录<span class="m">第 01 轮</span></div>
+  </div>
+  <div class="window" id="w2">
+    <div class="clip"><video id="v2" src="../../assets/video/20261017-045933-self-review-02-review.mp4" muted preload="metadata" playsinline></video><div class="cv" id="cv2"></div></div>
+    <div class="tab ink">实录<span class="m">第 02 轮</span></div>
+  </div>
+  <div class="window" id="w3">
+    <div class="clip"><video id="v3" src="../../assets/video/20261017-050632-self-review-03-review.mp4" muted preload="metadata" playsinline></video><div class="cv" id="cv3"></div></div>
+    <div class="tab ink">实录<span class="m">第 03 轮</span></div>
+  </div>
+
+
+  <div class="card" id="sum" data-r="-1"><span class="a" id="s1">去重 16 条</span><span class="b" id="s2">实质问题 7 条</span></div>
+
+  <!-- 小表：打点按 self-review-comparison.md 第五节汇总表的 01 / 02 / 03 三列 -->
+  <div class="card" id="tb" data-r="0.6">
+    <div class="hdr"><span class="nm">7 条实质问题</span><span class="c">01</span><span class="c">02</span><span class="c">03</span></div>
+    <div class="grp" id="g1">
+      <div class="row r"><span class="id">#1</span><span class="nm">连接串无口令吞掉失败原因</span><span class="c"><i class="dot"></i></span><span class="c"><i class="dot"></i></span><span class="c"><i class="dot"></i></span></div>
+      <div class="row r"><span class="id">#2</span><span class="nm">5 秒超时没测试</span><span class="c"><i class="dot"></i></span><span class="c"><i class="dot"></i></span><span class="c"><i class="dot"></i></span></div>
+      <div class="note" id="n1">三次都有：2 条</div>
+    </div>
+    <div class="grp" id="g2">
+      <div class="row r"><span class="id">#5</span><span class="nm">时间格式没定时区</span><span class="c"></span><span class="c"><i class="dot"></i></span><span class="c"><i class="dot"></i></span></div>
+    </div>
+    <div class="grp" id="g3">
+      <div class="row r"><span class="id">#3</span><span class="nm">缺 errcode 判成功</span><span class="c"></span><span class="c"><i class="dot"></i></span><span class="c"></span></div>
+      <div class="row r"><span class="id">#6</span><span class="nm">内容断言会被时间戳命中</span><span class="c"></span><span class="c"></span><span class="c"><i class="dot"></i></span></div>
+      <div class="row r"><span class="id">#11</span><span class="nm">只发一次请求没断言</span><span class="c"><i class="dot"></i></span><span class="c"></span><span class="c"></span></div>
+      <div class="row r"><span class="id">#13</span><span class="nm">短口令改坏 errmsg</span><span class="c"></span><span class="c"></span><span class="c"><i class="dot"></i></span></div>
+      <div class="note" id="n3">只有一次：4 条</div>
+    </div>
+  </div>
+
+  <div class="chip" id="last" data-r="-2">只审一次：漏哪几条，看运气</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，页内）：按录音实测（frame-times.py，2026-10-25），取词首字实测开始时间减 0.2 秒。
+  var AT = {
+    head: 0.2,                    // 150 句开口：说明卡落下，「新会话 · 同一模型 · 只问一句」当前
+    prompt: 8.28, headEnd: 11.16,   // 念到「你自己审一下这份规格」：当前换到提示词，151 句开口淡出
+    t3: 11.26, t3End: 13.0,        // 151 句：「每次约 3 分钟」，152 句开口淡出当前
+    s1: 15.16, s2: 17.24, sumEnd: 19.38, // 152 句：「一共 16 条」「实质问题 7 条」
+    tb: 19.48,                    // 153 句开口：小表，七行依次出现
+    n1: 20.44, g1End: 22.74,       // 念到「三次都查到的只有 2 条」：旁标，#1、#2 当前
+    n3: 22.84, g3End: 25.46,       // 念到「有 4 条只有一次」：旁标，#3、#6、#11、#13 当前
+    win: 3.8,                     // 150 句开口：三个实录窗口连标签依次落下，结论行同时出
+    concl: [25.6, 26.3, 27.0], conclEnd: 29.24, // 154 句：三行结论依次当前，一次一个
+    last: 29.24                   // 155 句开口：末行
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.3)) * (1 - T.ease(T.p(t, b, 0.3))); }
+  // 说明卡里一行的当前：只画黄色描边加外发光。
+  function line(el, g) {
+    el.style.outline = g > 0 ? '5px solid rgba(245,207,74,' + g + ')' : 'none';
+    el.style.outlineOffset = '2px';
+    el.style.boxShadow = '0 0 30px rgba(245,207,74,' + (0.45 * g) + ')';
+  }
+  // 实录窗口的当前：同 line，但保留窗口的 12px 墨色硬投影
+  function wline(el, g) {
+    el.style.outline = g > 0 ? '5px solid rgba(245,207,74,' + g + ')' : 'none';
+    el.style.outlineOffset = '4px';
+    el.style.boxShadow = '12px 12px 0 #161616, 0 0 30px rgba(245,207,74,' + (0.45 * g) + ')';
+  }
+  // 小表里一组行的当前：黄描边 7px，离组 4px，空隙填奶白（卡底色）
+  function grp(el, g) {
+    el.style.boxShadow = '0 0 0 2px rgba(242,239,230,' + g + '), 0 0 0 6px rgba(245,207,74,' + g + ')';
+  }
+
+  var REC = [
+    { id: 'v1', sec: 0.1 },
+    { id: 'v2', sec: 0.1 },
+    { id: 'v3', sec: 0.1 }
+  ];
+  // 定位到 sec 秒，等 seeked 再等一帧。三格都是静止一帧，只在 init 里定位一次，render 不再碰录像。
+  function still(rec) {
+    var v = T.$(rec.id);
+    return new Promise(function (resolve) {
+      function seek() {
+        v.addEventListener('seeked', function () { requestAnimationFrame(function () { resolve(); }); }, { once: true });
+        v.currentTime = rec.sec;
+      }
+      if (v.readyState >= 1) seek();
+      else v.addEventListener('loadedmetadata', seek, { once: true });
+    });
+  }
+
+  Stage({
+    duration: 34.24,
+    init: function () { return Promise.all([Promise.all(REC.map(still)), T.fonts(T.$('stage').textContent)]); },
+    render: function (t) {
+      var i;
+      // 150 句：三个窗口依次落下（结论行同时出）；154 句：三行结论依次当前，同一时刻一个
+      for (i = 0; i < 3; i++) {
+        T.enter(T.$('w' + (i + 1)), T.p(t, AT.win + i * 0.15, 0.5), 18);
+        wline(T.$('w' + (i + 1)), on(t, AT.concl[i], i < 2 ? AT.concl[i + 1] - 0.3 : AT.conclEnd));
+      }
+
+      // 150 句：说明卡落下；当前先在第一行，念到提示词换到第二行，151 句开口淡出
+      var h = T.$('h1');
+      T.enter(h, T.p(t, AT.head, 0.45), -12);
+      line(h.querySelector('.l1'), on(t, AT.head + 0.3, AT.prompt));
+      line(h.querySelector('.l2'), on(t, AT.prompt, AT.headEnd));
+
+      // 151 句：说明卡右端的「每次约 3 分钟」，一次当前
+      T.enter(T.$('t3'), T.p(t, AT.t3, 0.4), 14);
+      T.current(T.$('t3'), on(t, AT.t3 + 0.3, AT.t3End), 8);
+
+      // 152 句：数字卡，两行依次
+      T.enter(T.$('sum'), T.p(t, AT.s1 - 0.1, 0.45), 14);
+      T.$('s1').style.opacity = T.ease(T.p(t, AT.s1, 0.35));
+      T.$('s2').style.opacity = T.ease(T.p(t, AT.s2, 0.35));
+      T.current(T.$('sum'), on(t, AT.s1 + 0.2, AT.sumEnd), 10);
+
+      // 153 句：小表，七行依次出现，旁标与分组当前
+      T.enter(T.$('tb'), T.p(t, AT.tb, 0.45), 14);
+      var rows = T.all('.r');
+      for (i = 0; i < rows.length; i++) rows[i].style.opacity = T.ease(T.p(t, AT.tb + 0.3 + i * 0.3, 0.35));
+      T.$('n1').style.opacity = T.ease(T.p(t, AT.n1, 0.35));
+      T.$('n3').style.opacity = T.ease(T.p(t, AT.n3, 0.35));
+      grp(T.$('g1'), on(t, AT.n1, AT.g1End));
+      grp(T.$('g3'), on(t, AT.n3, AT.g3End));
+
+      // 154 句的结论当前见上
+
+      // 155 句：末行
+      T.enter(T.$('last'), T.p(t, AT.last, 0.45), 12);
+    }
+  });
+</script>
+</body>
+</html>

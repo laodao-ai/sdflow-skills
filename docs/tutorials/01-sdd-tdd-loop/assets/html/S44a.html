@@ -1,0 +1,226 @@
+<!doctype html>
+<!-- S44a · 终端 · script 216–219「我在演示仓里敲了 `/opsx:verify` 命令。……还有一个警告，就是前面 81.2 那条写错的测试。」
+     cast 04-openspec-verify-archive 回放秒 26.75–33.5 + 45.3–48.6，2 倍速（标「2 倍速」），一处剪接、一处停帧，放完停在最后一帧（总长 18.56 秒，画面时长按实测）。
+     区间按回放核准（2026-10-06）：26.75 输入框里是选好的 `/opsx:verify`，28.5 发出；30「Using change: add-over-temperature-alert」；
+     31–45.3 AI 读代码、测试和 README，画面只有转圈的「Kerfuffling…」；45.5 整份报告一次刷出来，
+     报告上半（CRITICAL / WARNING 小节）一刷出就滚出屏外，屏上留下「Evidence by check」表；
+     46.6 表头 ┌ 在第 0 行，整张表在屏上；48.3「Final assessment」：1 critical issue（任务没勾）、1 warning（2.1 那条写错的测试）。
+     50 起作者在输入框敲「yes, tick the boxes and fix 2.1」，画面停在 48.6，回复留给 S44b。
+     剪接与停帧（倍速角标未另标）：
+       - 33.5 直接接 45.3：中间 12 个回放秒画面不变，只有转圈的字和秒数在变（2 倍速下要 6 秒）。
+       - 46.6 停 4.98 秒：整张表只在 45.5–47.0 在屏上，2 倍速下不到 1 秒；停住让黄框盖住第 217 句。
+     - 底部状态栏：按行文字找（Cost $ / Context / Usage），从那一行盖到底。
+     - 输入框：26.75 起输入框里是随后发出的 `/opsx:verify`，不盖；之前那句没发出的「update tasks.md and archive the change」
+       在 21.75–26.75，本帧从 26.75 开始，不出现。
+     - 框（黄色只给当前一个，下一个亮起后降成淡灰框）：
+       ① 「Evidence by check」表：每条规格对到代码和测试的 file:line（第 217 句）
+       ② 「1 critical issue found: the unchecked task boxes.」（第 218 句；不是测试失败，用黄不用红）
+       ③ 同一行后半「The 1 warning, task 2.1's contradictory」（第 219 句，留到结尾）
+       ②③ 在同一行，按字所在的横向位置只框那几个字（用 Range 量字的位置，不按列宽估）。
+     框的出现时间按实测（2026-10-06，frame-times.py）：取口播开口秒和这些行在回放里出现的秒，两者里晚的那个。
+       ① 3.68（第 217 句开口：口播 3.68，表 3.4 已在屏上）
+       ② 9.55（第 218 句：口播 8.56，Final assessment 那行 9.55 才出现）
+       ③ 13.68（第 219 句开口：口播 13.68，同一行已在屏上）
+     窗口本身不倾斜，只让标签倾斜（终端要能读）。 -->
+<html lang="zh-CN" data-frame-id="S44a">
+<head>
+<meta charset="utf-8">
+<title>S44a · verify 报告</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 让出底部字幕带（y ≥ 940，visual-v4 §4.1）：窗口上移、整体缩到 0.947，30 行都留着。 */
+  .window { left: 150px; top: 72px; width: 1620px; height: 908px; padding: 18px 20px; overflow: visible; transform: scale(0.947); transform-origin: 50% 0; }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 872px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: 0; width: 1580px; height: 1004px; }
+  /* 播放器暂停时会画播放按钮和加载圈；画面不可交互，全部藏掉。 */
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  /* 终端底色跟随主题，盖过 cast 自带的底色。 */
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  .mask { position: absolute; right: 0; background: #1b1b1d; display: none; }
+  .qbox { position: absolute; left: 6px; width: 1568px; box-sizing: border-box; border: 5px solid transparent; border-radius: 8px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .window .speed { right: -30px; top: -34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip" id="clip">
+      <div id="term"></div>
+      <div class="qbox" id="b1"></div>
+      <div class="qbox" id="b2"></div>
+      <div class="qbox" id="b3"></div>
+    </div>
+    <div class="speed" id="spd">2 倍速</div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+  </div>
+</div>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/04-openspec-verify-archive.js"></script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 画面秒 → 回放秒的分段表：相邻两点之间线性插值；回放秒相同 = 停帧，画面秒相同 = 剪接。
+  var KEYS = [[0, 26.75], [3.375, 33.5], [3.375, 45.3], [4.025, 46.6], [9.0, 46.6], [9.85, 48.3], [10.0, 48.6]];
+  var HOLD = 8.56;   // 总长 = 画面时长 18.56 秒（时间轴，实测）。
+  var DURATION = KEYS[KEYS.length - 1][0] + HOLD;
+  var INPUT_MASK = false;   // 本帧输入框里只有随后发出的 /opsx:verify，不用盖。
+  var player;
+
+  var YELLOW = [245, 207, 74], RED = [229, 83, 75], GREEN = [76, 195, 138], DIM = [120, 118, 112];
+  // 每个框：alt 是候选 [起始行文字, 结束行文字或 null, 结束行找不到时往下多框几行]，按顺序取第一个找得到的。
+  // cols：只框起始行里从第一段文字开头到第二段文字结尾的那几个字（同一行里有两个要分开框的地方）。
+  var BOXES = [
+    { box: 'b1', c: YELLOW, at: 3.68, next: 9.55, alt: [['┌──', '└──', 0], ['│', '└──', 0]] },
+    { box: 'b2', c: YELLOW, at: 9.55, next: 13.68, alt: [['1 critical issue found', null, 0]], cols: ['1 critical issue', 'unchecked task boxes.'] },
+    { box: 'b3', c: YELLOW, at: 13.68, alt: [['1 critical issue found', null, 0]], cols: ['The 1 warning', "2.1's contradictory"] }
+  ];
+
+  function castAt(t) {
+    var c = KEYS[0][1];
+    for (var i = 1; i < KEYS.length; i++) {
+      var a = KEYS[i - 1], b = KEYS[i];
+      if (t >= b[0]) { c = b[1]; continue; }
+      if (b[0] > a[0]) c = a[1] + (b[1] - a[1]) * (t - a[0]) / (b[0] - a[0]);
+      break;
+    }
+    return c;
+  }
+
+  function lines() { return T.all('#term .ap-line'); }
+  function find(L, text, after) {
+    for (var i = after || 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 行在 .clip 里的上下沿（px，按 1920 宽的舞台坐标）。
+  function span(L, i0, i1) {
+    var clip = T.$('clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { top: (L[i0].getBoundingClientRect().top - clip.top) / k, bottom: (L[i1].getBoundingClientRect().bottom - clip.top) / k };
+  }
+  // 行里第 idx 个字在屏上的矩形：顺着文字节点数到第 idx 个字，用 Range 量。
+  function charRect(el, idx) {
+    var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), n, left = idx;
+    while ((n = w.nextNode())) {
+      if (left < n.length) {
+        var r = document.createRange();
+        r.setStart(n, left);
+        r.setEnd(n, left + 1);
+        return r.getBoundingClientRect();
+      }
+      left -= n.length;
+    }
+    return null;
+  }
+  // 一行里从 a 开头到 b 结尾的横向范围（px，.clip 坐标）。
+  function hspan(el, a, b) {
+    var s = el.textContent, i = s.indexOf(a), j = s.indexOf(b, i);
+    if (i < 0 || j < 0) return null;
+    var r0 = charRect(el, i), r1 = charRect(el, j + b.length - 1);
+    if (!r0 || !r1) return null;
+    var clip = T.$('clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { left: (r0.left - clip.left) / k, right: (r1.right - clip.left) / k };
+  }
+
+  // 要盖住的行：[起始行, 结束行, 左边留几个字符]。
+  function maskRows(L) {
+    var out = [];
+    for (var i = 0; i < L.length; i++) {
+      var s = L[i].textContent;
+      // 启动头：版本号、模型名和套餐、目录。
+      if (/Claude Code v\d/.test(s)) { out.push([Math.max(i - 1, 0), Math.min(i + 2, L.length - 1), 0]); }
+      else if (s.indexOf('· Claude Pro') >= 0) { out.push([i, Math.min(i + 1, L.length - 1), 0]); }
+    }
+    // 底部状态栏：从模型名 / 费用那一行盖到底。
+    for (var j = 0; j < L.length; j++) {
+      if (/Cost \$|Context\s+\d+%|Usage\s+\d+%/.test(L[j].textContent)) { out.push([j, L.length - 1, 0]); break; }
+    }
+    // 输入框里提前打好、当时还没发出去的字：留下「❯」，盖住后面的字。
+    if (INPUT_MASK) {
+      for (var k = L.length - 1; k > 0; k--) {
+        var t = L[k].textContent;
+        if (t.charAt(0) === '❯' && L[k - 1].textContent.indexOf('────') >= 0) {
+          if (t.slice(1).trim() && t.indexOf('Message @') < 0) out.push([k, k, 2]);
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  function overlays(t) {
+    var L = lines();
+    var clip = T.$('clip');
+    var rows = maskRows(L);
+    var cw = 1580 / 120;
+    var masks = T.all('#clip .mask');
+    while (masks.length < rows.length) {
+      var d = document.createElement('div');
+      d.className = 'mask';
+      clip.insertBefore(d, T.$('b1'));
+      masks.push(d);
+    }
+    masks.forEach(function (m, n) {
+      if (n >= rows.length) { m.style.display = 'none'; return; }
+      var s = span(L, rows[n][0], rows[n][1]);
+      m.style.display = 'block';
+      m.style.left = (rows[n][2] * cw) + 'px';
+      m.style.top = s.top + 'px';
+      m.style.height = (s.bottom - s.top) + 'px';
+    });
+
+    BOXES.forEach(function (q) {
+      var box = T.$(q.box);
+      var i0 = -1, i1 = -1;
+      for (var a = 0; a < q.alt.length && i0 < 0; a++) {
+        i0 = find(L, q.alt[a][0]);
+        if (i0 < 0) continue;
+        i1 = q.alt[a][1] ? find(L, q.alt[a][1], i0) : -1;
+        if (i1 < 0) i1 = Math.min(i0 + q.alt[a][2], L.length - 1);
+      }
+      var h = (i0 >= 0 && q.cols) ? hspan(L[i0], q.cols[0], q.cols[1]) : null;
+      if (i0 < 0 || t < q.at || (q.cols && !h)) { box.style.opacity = 0; return; }
+      box.style.opacity = 1;
+      var s = span(L, i0, i1);
+      // 上下各留 4px，框线不压字；只框几个字时左右各留 10px。
+      box.style.top = (s.top - 4) + 'px';
+      box.style.height = (s.bottom - s.top + 8) + 'px';
+      if (h) {
+        box.style.left = (h.left - 10) + 'px';
+        box.style.width = (h.right - h.left + 20) + 'px';
+      }
+      // 当前这一个用自己的颜色；下一个亮起后降成淡灰框（讲过了）。
+      var on = T.ease(T.p(t, q.at, 0.35));
+      var next = q.next === undefined ? 0 : T.ease(T.p(t, q.next, 0.35));
+      var g = on * (1 - next);
+      var rgb = q.c.join(',');
+      box.style.borderColor = next > 0 ? T.mix(q.c, DIM, next) : 'rgba(' + rgb + ',' + g + ')';
+      box.style.boxShadow = '0 0 40px rgba(' + rgb + ',' + (0.45 * g) + '), inset 0 0 24px rgba(' + rgb + ',' + (0.25 * g) + ')';
+    });
+  }
+
+  Stage({
+    duration: DURATION,
+    init: function () {
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS['04-openspec-verify-archive'] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      return T.fonts('实录倍速');
+    },
+    render: function (t) {
+      T.enter(T.$('spd'), T.p(t, 0, 0.4), -12);
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位遮罩和框。
+      return Promise.resolve(player.seek(castAt(t)))
+        .then(function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); })
+        .then(function () { overlays(t); });
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,283 @@
+<!doctype html>
+<!-- S38 · 机制动画（流程图） · script 198–201「两个工具，各管一件事。……你可以照着走。」
+     流程图全貌，三区依次搭出来：OpenSpec（规划：四个文档，然后停下）→ Superpowers（1 写计划 → 2 按计划做：
+     先写测试 / 再写实现）→ OpenSpec（勾掉任务 → 归档）。S39–S42 照搬这张图，只换亮的段。
+     - 颜色 = 区块：蓝 OpenSpec，琥珀 Superpowers；箭头取它进入的区块色。红 / 绿只表示测试失败 / 通过。
+     - 黄色描边 + 外发光 = 正在搭的区块。
+     - 右上虚线说明「照两边文档接的 · 非官方」：官方没写怎么一起用，是注意事项，倾斜最大。
+     - 2026-10-06：Superpowers 区从原来的三步改成「写计划 / 按计划做」两步，
+       红绿一行装进第 2 步。时间轴没动。
+     - 2026-10-07：第 198 句从 S37 末尾挪到本页开头（作者定，章节标签页后接这句）。
+       OpenSpec 区仍在 0 秒出现，对应这句；其余节点整体后移 2.48 秒（198 句 1.92 秒 + 停顿 0.56 秒）。
+     - 时刻按实测（2026-10-07，frame-times.py）：198 句 0–1.92，199 句 2.48–3.92，200 句 5.04–8.80，201 句 9.84–12.56。
+       三区搭出来的顺序没有逐词对应的口播，按句分段：OpenSpec 区 0 秒（198 句开口）；
+       Superpowers 区连箭头从 200 句开口（5.04 秒）起；收尾区连箭头从 201 句开口（9.84 秒）起；
+       「非官方」说明在 200 句念到「官方文档」时（官 7.04 秒）；各区内部的间隔和原来一致；
+       收尾区的黄框在 201 句念完（12.56 秒）时撤。 -->
+<html lang="zh-CN" data-frame-id="S38">
+<head>
+<meta charset="utf-8">
+<title>S38 · flow</title>
+<style>
+  @font-face {
+    font-family: "SHS Heavy";
+    src: url("../../../shared/fonts/SourceHanSansCN-Heavy.otf") format("opentype");
+    font-weight: 900;
+  }
+  :root {
+    --paper: #73818f;
+    --cream: #f2efe6;
+    --ink: #161616;
+    --yellow: #f5cf4a;
+    --blue: #43a0ed;
+    --blue-fill: #1e3349;
+    --blue-soft: #8cc8f5;
+    --amber: #f29b50;
+    --amber-fill: #3d2a1b;
+    --fail: #e5534b;
+    --pass: #4cc38a;
+    --display: "Avenir Next Condensed", "SHS Heavy", sans-serif;
+    --body: "Avenir Next", "PingFang SC", system-ui, sans-serif;
+    --mono: "JetBrainsMono Nerd Font", Menlo, monospace;
+  }
+  html, body { margin: 0; background: var(--paper); }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: var(--paper); font-family: var(--body);
+  }
+  .paper { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+
+  .zone {
+    position: absolute; top: 230px; height: 660px; box-sizing: border-box;
+    padding: 64px 28px 28px; border-radius: 12px; border: 6px solid var(--ink);
+    box-shadow: 16px 16px 0 var(--ink);
+  }
+  .zone.os { background: var(--blue-fill); }
+  .zone.sp { background: var(--amber-fill); }
+  /* Zone name: a coloured tab stuck across the top edge. */
+  .tab {
+    position: absolute; left: -14px; top: -40px; padding: 6px 26px;
+    border: 5px solid var(--ink); border-radius: 8px; box-shadow: 7px 7px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 54px; line-height: 1.1; color: var(--ink);
+  }
+  .os .tab { background: var(--blue); transform: rotate(-3deg); }
+  .sp .tab { background: var(--amber); transform: rotate(2deg); }
+  .sub { font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--blue-soft); }
+
+  .files { position: relative; height: 190px; margin-top: 12px; }
+  .file {
+    position: absolute; width: 180px; padding: 12px 0; border-radius: 6px; background: var(--cream); text-align: center;
+    border: 4px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+    font-family: var(--mono); font-size: 30px; color: var(--ink);
+  }
+  .stop { position: absolute; left: 110px; top: 360px; width: 210px; height: 210px; }
+  .stop svg { position: absolute; inset: 0; }
+  .stop span {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; font-family: var(--display); font-weight: 800; font-size: 42px;
+    line-height: 1.12; color: var(--ink);
+  }
+
+  .step {
+    display: flex; align-items: center; gap: 18px; padding: 16px 22px;
+    border-radius: 8px; background: var(--cream); color: var(--ink);
+    border: 5px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.15;
+  }
+  .num {
+    flex: none; width: 58px; height: 58px; box-sizing: border-box; border-radius: 50%;
+    background: var(--amber); border: 4px solid var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-weight: 700; font-size: 30px; color: var(--ink);
+  }
+  .tdd {
+    display: flex; border-radius: 8px; overflow: hidden;
+    border: 5px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); background: var(--cream);
+  }
+  .tdd .half {
+    flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+    padding: 16px 12px; font-family: var(--display); font-weight: 800; font-size: 36px; color: var(--ink);
+    white-space: nowrap;
+  }
+  .tdd .half + .half { border-left: 5px solid var(--ink); }
+  .tdd .half small { font-family: var(--mono); font-weight: 700; font-size: 26px; }
+  /* 第 2 步「按计划做」：标题一行 + 红绿一行，竖排在同一张卡里 */
+  .step.do { flex-direction: column; align-items: stretch; gap: 14px; }
+  .do .dohead { display: flex; align-items: center; gap: 18px; }
+  .do .tdd { box-shadow: 5px 5px 0 var(--ink); }
+
+  .down { display: flex; justify-content: center; height: 62px; align-items: center; }
+  .down svg { width: 44px; height: 38px; }
+
+  .boxes { display: flex; gap: 16px; padding: 18px 22px; border-radius: 8px; background: var(--cream);
+    border: 5px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); }
+  .box { width: 64px; height: 64px; box-sizing: border-box; border-radius: 6px; border: 6px solid var(--ink); position: relative; background: #fff; }
+  .box svg { position: absolute; left: -6px; top: -18px; width: 78px; height: 78px; }
+  .boxes-cap { margin: 14px 0 0 6px; font-family: var(--display); font-weight: 800; font-size: 44px; color: #fff; }
+  .arc svg { width: 56px; height: 56px; flex: none; }
+
+  .arw { position: absolute; top: 500px; width: 150px; height: 90px; }
+
+  .tag {
+    position: absolute; right: 70px; top: 70px; padding: 10px 24px; border-radius: 8px;
+    border: 4px dashed #161616; color: #161616; font-weight: 600; font-size: 32px;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg class="paper" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs>
+      <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+        <circle cx="18" cy="18" r="1.6" fill="rgba(255,255,255,.10)"/>
+      </pattern>
+    </defs>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 0.30"/>
+    </filter>
+    <filter id="mottle" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.006" numOctaves="4" seed="3"/>
+      <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 0.24"/>
+    </filter>
+    <filter id="fiber" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/><feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 0.10"/></filter>
+    <rect width="1920" height="1080" filter="url(#mottle)"/>
+    <rect width="1920" height="1080" filter="url(#fiber)"/>
+    <rect width="1920" height="1080" fill="url(#grid)"/>
+
+  </svg>
+
+  <!-- A caveat, not a settled fact: the most tilted thing on this frame. -->
+  <div class="tag" id="tag" data-r="-4">照两边文档接的 · 非官方</div>
+
+  <!-- 1. OpenSpec plans, then stops -->
+  <div class="zone os" id="zA" data-r="-1.2" style="left:70px;width:450px">
+    <div class="tab">OpenSpec</div>
+    <div class="sub">规划</div>
+    <div class="files">
+      <div class="file iA" data-r="-3" style="left:0;top:0">proposal</div>
+      <div class="file iA" data-r="2.5" style="left:206px;top:10px">specs/</div>
+      <div class="file iA" data-r="2" style="left:8px;top:94px">design</div>
+      <div class="file iA" data-r="-2" style="left:200px;top:100px">tasks</div>
+    </div>
+    <div class="stop iA" data-r="-7">
+      <svg viewBox="0 0 210 210"><polygon points="62,4 148,4 206,62 206,148 148,206 62,206 4,148 4,62" fill="#161616"/>
+        <polygon points="64,10 146,10 200,64 200,146 146,200 64,200 10,146 10,64" fill="#f2efe6"/>
+        <polygon points="68,20 142,20 190,68 190,142 142,190 68,190 20,142 20,68" fill="none" stroke="#161616" stroke-width="5"/></svg>
+      <span>然后<br>停下</span>
+    </div>
+  </div>
+
+  <svg class="arw" id="a1" style="left:536px" viewBox="0 0 150 90">
+    <path d="M24 50 Q 70 30 112 44" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+    <path d="M24 50 Q 70 30 112 44" fill="none" stroke="#f29b50" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="18" cy="52" r="14" fill="#f29b50" stroke="#161616" stroke-width="5"/>
+    <polygon points="100,18 146,50 102,78" fill="#f29b50" stroke="#161616" stroke-width="5" stroke-linejoin="round"/>
+  </svg>
+
+  <!-- 2. Superpowers does the work, test first -->
+  <div class="zone sp" id="zB" data-r="0.8" style="left:704px;width:540px">
+    <div class="tab">Superpowers</div>
+    <div class="step iB" data-r="-1.5" style="margin-top:22px"><div class="num">1</div>写计划</div>
+    <div class="down iB"><svg viewBox="0 0 44 38"><path d="M5 7 L22 29 L39 7" fill="none" stroke="#f29b50" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <!-- 第 2 步「按计划做」：每一项都先写测试，再写实现，所以红绿一行装在这张卡里 -->
+    <div class="step do iB" data-r="1.5">
+      <div class="dohead"><div class="num">2</div>按计划做</div>
+      <div class="tdd">
+        <div class="half" id="red">先写测试<small>FAIL</small></div>
+        <div class="half" id="green">再写实现<small>PASS</small></div>
+      </div>
+    </div>
+  </div>
+
+  <svg class="arw" id="a2" style="left:1262px" viewBox="0 0 150 90">
+    <path d="M24 44 Q 70 62 112 46" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+    <path d="M24 44 Q 70 62 112 46" fill="none" stroke="#43a0ed" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="18" cy="42" r="14" fill="#43a0ed" stroke="#161616" stroke-width="5"/>
+    <polygon points="100,18 146,46 102,74" fill="#43a0ed" stroke="#161616" stroke-width="5" stroke-linejoin="round"/>
+  </svg>
+
+  <!-- 3. Back to OpenSpec to close out -->
+  <div class="zone os" id="zC" data-r="1.4" style="left:1420px;width:440px">
+    <div class="tab">OpenSpec</div>
+    <div class="sub">收尾</div>
+    <div class="boxes iC" data-r="-1.5" style="margin-top:22px">
+      <div class="box" style="transform:rotate(-3deg)"><svg class="tick" viewBox="0 0 78 78"><path d="M16 40 L32 56 L66 14" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="box" style="transform:rotate(2deg)"><svg class="tick" viewBox="0 0 78 78"><path d="M16 40 L32 56 L66 14" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="box" style="transform:rotate(-1deg)"><svg class="tick" viewBox="0 0 78 78"><path d="M16 40 L32 56 L66 14" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="box" style="transform:rotate(3deg)"><svg class="tick" viewBox="0 0 78 78"><path d="M16 40 L32 56 L66 14" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    </div>
+    <div class="boxes-cap iC">勾掉任务</div>
+    <div class="down iC"><svg viewBox="0 0 44 38"><path d="M5 7 L22 29 L39 7" fill="none" stroke="#43a0ed" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="step arc iC" data-r="2">
+      <svg viewBox="0 0 56 56" fill="none" stroke="#161616" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="4" y="8" width="48" height="12" rx="3"/><path d="M8 20 V48 H48 V20"/><line x1="20" y1="32" x2="36" y2="32"/>
+      </svg>
+      归档
+    </div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script>
+  var M = window.StageMath;
+  var $ = function (id) { return document.getElementById(id); };
+  var ticks = document.querySelectorAll('.tick');
+
+  function mix(a, b, p) {
+    return 'rgb(' + [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * p); }).join(',') + ')';
+  }
+  // Stickers land: drop in and settle from a bigger tilt to their own tilt.
+  function enter(el, p, dy) {
+    var e = M.easeOut(p);
+    var r = parseFloat(el.getAttribute('data-r') || '0');
+    el.style.opacity = e;
+    el.style.transform = 'translateY(' + ((1 - e) * dy) + 'px) rotate(' + (r + (1 - e) * r * 2) + 'deg)';
+  }
+  function items(cls, start, gap, t) {
+    var els = document.querySelectorAll('.' + cls);
+    for (var i = 0; i < els.length; i++) enter(els[i], M.progress(t, start + i * gap, 0.4), 14);
+  }
+  function arrow(el, start, t) {
+    var p = M.easeOut(M.progress(t, start, 0.5));
+    el.style.clipPath = 'inset(0 ' + ((1 - p) * 100) + '% 0 0)';
+  }
+  // Current = selected: a yellow outline with a gap plus a glow; the ink hard shadow stays.
+  // It fades when the next zone starts.
+  function current(el, on, off, t) {
+    var g = M.easeOut(M.progress(t, on, 0.3)) * (1 - M.easeOut(M.progress(t, off, 0.4)));
+    el.style.outline = '7px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '10px';
+    el.style.boxShadow = '0 0 0 10px rgba(138,147,157,' + g + '), 0 0 0 20px rgba(22,22,22,' + g + '), ' + '16px 16px 0 #161616, 0 0 60px rgba(245,207,74,' + (0.5 * g) + ')';
+  }
+  function fill(el, to, p) { el.style.background = mix([242, 239, 230], to, M.easeOut(p)); }
+
+  Stage({
+    duration: 13.5,   // zC 高亮 12.67 起淡出 0.4 秒
+    init: function () { return document.fonts.load('900 54px "SHS Heavy"', '规划然后停下写计划按做先写测试再实现收尾勾掉任务归档照两边文档接的非官方').then(function () { return document.fonts.ready; }); },
+    render: function (t) {
+      enter($('zA'), M.progress(t, 0.0, 0.6), 30);
+      items('iA', 0.5, 0.3, t);
+      current($('zA'), 0.2, 5.34, t);
+
+      arrow($('a1'), 5.04, t);
+      enter($('zB'), M.progress(t, 5.34, 0.6), 30);
+      items('iB', 5.74, 0.3, t);
+      fill($('red'), [229, 83, 75], M.progress(t, 7.34, 0.4));
+      fill($('green'), [76, 195, 138], M.progress(t, 7.94, 0.4));
+      current($('zB'), 5.44, 10.05, t);
+
+      arrow($('a2'), 9.95, t);
+      enter($('zC'), M.progress(t, 10.25, 0.6), 30);
+      items('iC', 10.65, 0.3, t);
+      for (var i = 0; i < ticks.length; i++) {
+        var p = M.easeOut(M.progress(t, 11.05 + i * 0.25, 0.25));
+        ticks[i].style.clipPath = 'inset(0 ' + ((1 - p) * 100) + '% 0 0)';
+      }
+      current($('zC'), 10.35, 12.67, t);
+
+      enter($('tag'), M.progress(t, 6.94, 0.6), -12);   // 200 句「官方」（2026-10-07 补录后重测）
+    }
+  });
+</script>
+</body>
+</html>

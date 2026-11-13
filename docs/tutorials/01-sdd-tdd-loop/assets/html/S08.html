@@ -1,0 +1,89 @@
+<!doctype html>
+<!-- S08 · 机制动画 · script 26–32「就拿超温告警来说。……猜错一个，你就得返工一次。」
+     一句需求在上，往下展开三个问题，每个问题上落一张「猜」，最后三条线汇到「返工」。
+     - 问题 = 没定的东西：奶白贴纸，倾角 ±3–5°（同 S01 的问题贴纸）。
+     - 黄色实底「猜」贴纸只用于 AI 的猜（S07 定下的）。
+     - 念到哪个问题，哪个问题是当前（黄色描边 + 外发光），下一个亮起前淡出。
+     - 「返工」是结论：墨底白字，不用红（红只表示测试失败）。
+     - 还没讲到工具：不用蓝 / 琥珀。 -->
+<html lang="zh-CN" data-frame-id="S08">
+<head>
+<meta charset="utf-8">
+<title>S08 · 每一个都得猜</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .req { left: 660px; top: 80px; width: 600px; text-align: center; padding: 26px 30px; }
+  .req .big { font-size: 64px; }
+  .q { width: 500px; box-sizing: border-box; padding: 24px 32px; font-size: 44px; line-height: 1.35; white-space: normal; text-align: center; }
+  .q .guess { left: auto; right: -30px; top: -44px; font-size: 38px; padding: 6px 18px; }
+  .q .guess b { margin: 0; }
+  .lines { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+  .redo { left: 760px; top: 748px; width: 400px; text-align: center; padding: 24px 30px; background: var(--ink); color: #fff; border-color: var(--ink); box-shadow: 10px 10px 0 #000; }
+  .redo .big { font-size: 80px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 连线：需求 → 三个问题（上），三个问题 → 返工（下）。 -->
+  <svg class="lines" viewBox="0 0 1920 1080" fill="none" stroke="#161616" stroke-width="8" stroke-linecap="round">
+    <path class="dn" d="M860 210 Q 560 250 360 350"/>
+    <path class="dn" d="M960 210 L 960 350"/>
+    <path class="dn" d="M1060 210 Q 1360 250 1560 350"/>
+    <path class="up" d="M360 600 Q 420 720 760 800"/>
+    <path class="up" d="M960 600 L 960 740"/>
+    <path class="up" d="M1560 600 Q 1500 720 1160 800"/>
+  </svg>
+
+  <div class="card req" id="req" data-r="-1.5" data-shadow="10"><div class="big">加一个超温告警</div></div>
+
+  <div class="chip q" id="q1" data-r="-4" data-shadow="7" style="left:110px;top:370px">发到哪？同一行，<br>还是单独一行？
+    <div class="guess" id="g1" data-r="6"><b>猜</b></div></div>
+  <div class="chip q" id="q2" data-r="3" data-shadow="7" style="left:710px;top:370px">写死，<br>还是做成参数？
+    <div class="guess" id="g2" data-r="-5"><b>猜</b></div></div>
+  <div class="chip q" id="q3" data-r="-3.5" data-shadow="7" style="left:1310px;top:370px">正好 80.0，<br>算不算超温？
+    <div class="guess" id="g3" data-r="5"><b>猜</b></div></div>
+
+  <div class="card redo" id="redo" data-r="2"><div class="big">返工</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 念到第 i 个问题时它是当前，下一个亮起时淡出。按实测（2026-10-06，frame-times.py）：
+  // 27 句开口 2.72「告警发到哪儿」（28 句 5.04 接着讲同一个问题）、29 句开口 11.36「阈值」、30 句开口 15.60「正好 80 度」；
+  // q3 在 31 句开口 19.04 淡出，同一时刻落「猜」。
+  var Q = [
+    { id: 'q1', on: 2.72, off: 11.36 },
+    { id: 'q2', on: 11.36, off: 15.6 },
+    { id: 'q3', on: 15.6, off: 19.04 }
+  ];
+  Stage({
+    duration: 23.6,
+    init: function () { return T.fonts('发到哪加一个超温告警同一行，还是单独一行？写死做成参数正好80.0算不算猜返工'); },
+    render: function (t) {
+      // 1. 一句需求。
+      T.enter(T.$('req'), T.p(t, 0.0, 0.5), 20);
+
+      // 2. 往下展开三个问题，一个一个念。
+      var dn = T.all('.dn');
+      Q.forEach(function (q, i) {
+        var line = dn[i];
+        line.style.strokeDasharray = 600;
+        line.style.strokeDashoffset = 600 * (1 - T.ease(T.p(t, q.on - 0.3, 0.4)));
+        T.enter(T.$(q.id), T.p(t, q.on, 0.5), 20);
+        T.current(T.$(q.id), T.ease(T.p(t, q.on, 0.3)) * (1 - T.ease(T.p(t, q.off, 0.3))));
+      });
+
+      // 3. 每一个它都得猜：31 句开口 19.04，三张间隔 0.3。
+      ['g1', 'g2', 'g3'].forEach(function (id, i) { T.enter(T.$(id), T.p(t, 19.04 + i * 0.3, 0.35), -20); });
+
+      // 4. 猜错一个，就返工一次：三条线汇到「返工」。32 句开口 21.60 画线，念到「返工」22.88 出「返工」。
+      T.all('.up').forEach(function (line) {
+        line.style.strokeDasharray = 600;
+        line.style.strokeDashoffset = 600 * (1 - T.ease(T.p(t, 21.6, 0.6)));
+      });
+      T.enter(T.$('redo'), T.p(t, 22.88, 0.5), 24);
+    }
+  });
+</script>
+</body>
+</html>

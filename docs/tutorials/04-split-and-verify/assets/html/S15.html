@@ -1,0 +1,108 @@
+<!doctype html>
+<!-- S15 · 机制动画（三栏对比卡）· script 69–77「SDFlow 怎么拆开发任务就讲完了，最后跟那两家对比一下。……总结一句话：ticket 从规格来，按能单独验收来拆，拆完再查一遍。」
+     「三家怎么拆」，作本章小结。列：Superpowers · Matt Pocock · SDFlow；行：拆成什么、多大几个、切法谁定、拆完怎么查、能不能并行，五行逐字照 script.md 的 S15 画面行。
+     写法、配色、标记照 S22（同一种三栏对比卡，两页要一致）。
+     - 第 1 句：「三家怎么拆」、五个行名、三个列头从开头依次出现（格子里的内容讲到时才出）。第 1 句约 8 秒，只有行名和列头，比 visual-v4 4.8「只有标题不超过 3 秒」长；
+       同 S22 的处理，录音后看要不要把第一列第一格提前。
+     - 第 2–3 句 Superpowers 一列逐格出现；第 4–5 句 Matt Pocock 一列；第 6–8 句 SDFlow 一列。当前列的列头黄描边。
+     - SDFlow 一列：第 6 句「同 Matt」两格（拆成什么、多大几个）标「学 Matt Pocock」；第 7 句「另标需求编号、带硬约束」「3–6 个 + 1 个收尾」标「SDFlow 自己加的」；
+       第 8 句「设计阶段定」「对抗审」标「SDFlow 自己加的」。这两格的文字分两段出：「同 Matt」在第 6 句，后半句在第 7 句，不先放。
+     - 这四段字本身也是墨底白字（.mk），和「SDFlow 自己加的」标记同色（作者 2026-10-31 第 99 条）；「对抗审」只标这三个字，同格前半「脚本 + 通读，对不上派」保持墨字。
+     - 「能不能并行」一格「同 Matt」不标「学 Matt Pocock」：SDFlow 的并行加 worktree 是 2026-08-02，比 Matt 的提交（84b5ee5，2026-08-21）早，口播只说「和 Matt 后来加的一样」，不说学的（script.md「来源与限定」）。
+     - 第 9 句：卡底一行大字「ticket 从规格来 · 按能单独验收来拆 · 拆完再查一遍」（作者 2026-10-31 第 144 条去掉「切法前面定」）。
+     配色：列头与标记同色：Superpowers 琥珀，Matt Pocock 紫（辅助色，本页有文字说明；本期紫 = Matt Pocock），SDFlow 墨底白字；「SDFlow 自己加的」墨底，「学 Matt Pocock」紫；卡底保持奶白；不用红绿蓝。
+     字号：正文 34px，标记 26px。内容都在 y 930 以内，避开字幕带。口播时刻按每分钟 220 字估算（还没录音；2026-10-31 按第 10 轮评审后的口播重估：第 2–9 句起点 7.3、14.9、24.4、32.8、42.0、46.1、58.6、67.8），录音后用 frame-times.py 对齐。 -->
+<html lang="zh-CN" data-frame-id="S15">
+<head>
+<meta charset="utf-8">
+<title>S15 · 三家怎么拆</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #tb { position: absolute; left: 60px; top: 40px; width: 1800px; display: grid; grid-template-columns: 190px 520px 520px 540px; column-gap: 8px; row-gap: 26px; align-items: stretch; }
+  .hd { box-sizing: border-box; height: 62px; margin-bottom: 4px; display: flex; align-items: center; justify-content: center; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 42px; color: var(--ink); }
+  #h1 { background: var(--amber); } #h2 { background: var(--violet); } #h3 { background: var(--ink); color: #fff; }
+  .lb { box-sizing: border-box; display: flex; align-items: center; padding: 4px 10px; font-weight: 800; font-size: 34px; line-height: 1.2; color: var(--ink); }
+  .ce { box-sizing: border-box; padding: 6px 16px; background: var(--cream); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px;
+        font-weight: 600; font-size: 34px; line-height: 1.25; min-height: 118px; position: relative; display: flex; align-items: center; flex-wrap: wrap; align-content: center; }
+  .tg { position: absolute; right: 14px; top: -19px; z-index: 2; font-style: normal; font-size: 26px; font-weight: 700; line-height: 1.2; padding: 0 10px; border: 3px solid var(--ink); border-radius: 6px; white-space: nowrap; }
+  .tg.t2 { right: 242px; }
+  .tg.mt { background: var(--violet); } .tg.me { background: var(--ink); color: #fff; }
+  /* SDFlow 自己加的那段字：墨底白字，和 .tg.me 同色；inline-block 让底色不跨行、不压上下行 */
+  .mk { display: inline-block; background: var(--ink); color: #fff; padding: 0 10px; border-radius: 6px; line-height: 1.3; }
+  #end { position: absolute; left: 60px; top: 852px; width: 1800px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 52px; line-height: 1.1; color: var(--ink); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+<div id="tb">
+  <div class="lb" id="lt" style="font-size:36px;font-family:var(--display);white-space:nowrap;padding:0">三家怎么拆</div>
+  <div class="hd" id="h1">Superpowers</div><div class="hd" id="h2">Matt Pocock</div><div class="hd" id="h3">SDFlow</div>
+  <div class="lb" id="l1">拆成什么</div>
+  <div class="ce" id="c1_1">一份计划，一个个任务，一步一个动作</div><div class="ce" id="c2_1">一个个 ticket，做完能单独验收</div><div class="ce" id="c3_1"><div><span>同 Matt</span><br><span class="mk" id="c3_1b">另标需求编号、带硬约束</span></div><i class="tg me" id="g3_1b">SDFlow 自己加的</i><i class="tg mt t2" id="g3_1a">学 Matt Pocock</i></div>
+  <div class="lb" id="l2">多大、几个</div>
+  <div class="ce" id="c1_2">一步一个动作</div><div class="ce" id="c2_2">一个新上下文装得下</div><div class="ce" id="c3_2"><div><span>同 Matt</span><br><span class="mk" id="c3_2b">一般 3–6 个 + 1 个收尾</span></div><i class="tg me" id="g3_2b">SDFlow 自己加的</i><i class="tg mt t2" id="g3_2a">学 Matt Pocock</i></div>
+  <div class="lb" id="l3">切法谁定</div>
+  <div class="ce" id="c1_3">写计划时定</div><div class="ce" id="c2_3">拆的时候定</div><div class="ce" id="c3_3"><span class="mk">设计阶段定</span><i class="tg me" id="g3_3b">SDFlow 自己加的</i></div>
+  <div class="lb" id="l4">拆完怎么查</div>
+  <div class="ce" id="c1_4">自己对照规格查一遍，再交人审</div><div class="ce" id="c2_4">拿给人看：粒度、依赖、要不要合并或再拆</div><div class="ce" id="c3_4"><div>脚本 + 通读，对不上派<span class="mk" style="margin-left:6px">对抗审</span></div><i class="tg me" id="g3_4b">SDFlow 自己加的</i></div>
+  <div class="lb" id="l5">能不能并行</div>
+  <div class="ce" id="c1_5">不并行</div><div class="ce" id="c2_5">能开工的并行，各一个 worktree</div><div class="ce" id="c3_5">同 Matt</div>
+</div>
+<div id="end">ticket 从规格来 · 按能单独验收来拆 · 拆完再查一遍</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    base: 0.0,    // 第 1 句：行名
+    sp: 6.08,      // 第 2–3 句：Superpowers（第 2 句 7.3，第 3 句 14.9）
+    mt: 19.84,     // 第 4–5 句：Matt Pocock（第 4 句 24.4，第 5 句 32.8）
+    sd: 33.52,     // 第 6–8 句：SDFlow（第 6 句 42.0，第 7 句 46.1，第 8 句 58.6）
+    end: 56.559     // 第 9 句：总结一句话
+  };
+  // 每一格出现的时刻 [行, 秒]
+  // 2026-11-03：各格按逐字时间单独对齐，提前0.18秒开始淡入，关键词说到时已可读。
+  var SP = [[1, 7.02], [2, 9.74], [5, 11.82], [3, 14.70], [4, 16.06]];
+  var MT = [[1, 20.38], [2, 22.62], [5, 24.54], [3, 28.30], [4, 29.74]];
+  var SD = [[1, 35.18], [2, 35.38], [5, 35.58], [3, 49.58], [4, 52.54]];
+  // SDFlow 里分段出的后半句和标记 [id, 秒]
+  var SD_PART = [['c3_1b', 42.22], ['c3_2b', 45.58]];
+  var SD_TAG = [['g3_1a', 35.18], ['g3_2a', 35.38], ['g3_1b', 42.22], ['g3_2b', 45.58], ['g3_3b', 49.58], ['g3_4b', 54.38]];
+
+  function fade(el, p) {
+    var e = T.ease(p);
+    el.style.opacity = e;
+    el.style.transform = 'translateY(' + ((1 - e) * 10) + 'px)';
+  }
+  function col(prefix, list, t) {
+    for (var i = 0; i < list.length; i++) fade(T.$(prefix + '_' + list[i][0]), T.p(t, list[i][1], 0.35));
+  }
+  // 列头：第 1 句里「那两家」时就出现（不留空屏），念到这一列的时候黄描边
+  function head(id, show, from, to, t) {
+    var h = T.$(id);
+    fade(h, T.p(t, show, 0.4));
+    T.current(h, T.ease(T.p(t, from + 0.3, 0.4)) * (1 - T.ease(T.p(t, to, 0.4))), 5);
+  }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 64.639,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      fade(T.$('lt'), T.p(t, AT.base, 0.4));
+      for (var i = 1; i <= 5; i++) fade(T.$('l' + i), T.p(t, AT.base + 0.2 + i * 0.15, 0.35));
+
+      head('h1', 1.0, AT.sp, AT.mt, t); col('c1', SP, t);
+      head('h2', 1.6, AT.mt, AT.sd, t); col('c2', MT, t);
+      head('h3', 2.2, AT.sd, AT.end, t); col('c3', SD, t);
+      SD_PART.forEach(function (p) { T.$(p[0]).style.opacity = T.ease(T.p(t, p[1], 0.35)); });
+      SD_TAG.forEach(function (p) { fade(T.$(p[0]), T.p(t, p[1], 0.35)); T.$(p[0]).style.transform = 'translateY(' + ((1 - T.ease(T.p(t, p[1], 0.35))) * 10) + 'px)'; });
+
+      T.enter(T.$('end'), T.p(t, AT.end + 0.3, 0.5), 14);
+    }
+  });
+</script>
+</body>
+</html>

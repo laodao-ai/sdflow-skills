@@ -1,0 +1,224 @@
+<!doctype html>
+<!-- S07 · role map · direction E-a (E's material and metaphors, laid out like A:
+     everything slightly tilted, ink outlines, hard ink shadows, sticker labels).
+     Narration: why isn't what it built what you wanted? The requirement is in
+     your head; you gave it one sentence, and it has to guess the rest.
+     Tilt: everything ±1–2°; unsettled things ±3–5°. Yellow hard shadow = current.
+     Timing: measured (2026-10-06, frame-times.py), seconds inside this frame. Sentences: 22 at 0.00, 23 at 4.80, 24 at 9.28, 25 at 11.20 (2026-10-07: sentence 22 moved here from S05a, later cues +4.80). -->
+<html lang="zh-CN" data-frame-id="S07">
+<head>
+<meta charset="utf-8">
+<title>S07 · roles</title>
+<style>
+  @font-face {
+    font-family: "SHS Heavy";
+    src: url("../../../shared/fonts/SourceHanSansCN-Heavy.otf") format("opentype");
+    font-weight: 900;
+  }
+  :root {
+    --paper: #73818f;
+    --charcoal: #262626;
+    --cream: #f2efe6;
+    --ink: #161616;
+    --yellow: #f5cf4a;
+    --unlit: #9a9a9a;
+    --display: "Avenir Next Condensed", "SHS Heavy", sans-serif;
+    --body: "Avenir Next", "PingFang SC", system-ui, sans-serif;
+  }
+  html, body { margin: 0; background: var(--paper); }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: var(--paper); font-family: var(--body);
+  }
+  .paper { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+
+  .tile {
+    position: absolute; width: 290px; height: 270px; box-sizing: border-box;
+    border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+    box-shadow: 12px 12px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .tile svg { width: 120px; height: 120px; margin-top: -30px; }
+  .tile.unlit { color: var(--unlit); }
+  /* Role name: a cream label stuck over the tile's bottom edge. -18px keeps it above the subtitle band (y >= 940). */
+  .name {
+    position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+    padding: 8px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+    border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1;
+  }
+  .unlit .name { background: #b9b6ae; }
+
+  .cloud {
+    position: absolute; left: 60px; top: 50px; width: 930px; height: 470px;
+    box-sizing: border-box; border: 4px dashed rgba(22,22,22,.75); border-radius: 46px;
+  }
+  .cloud-tab {
+    position: absolute; left: 96px; top: 26px; padding: 6px 20px; background: var(--ink); color: #fff;
+    font-family: var(--display); font-weight: 800; font-size: 34px; transform: rotate(-3deg);
+  }
+  .dot { position: absolute; box-sizing: border-box; border-radius: 50%; border: 4px dashed rgba(22,22,22,.75); }
+  .chip {
+    position: absolute; padding: 12px 24px; border-radius: 8px;
+    font-weight: 600; font-size: 38px; color: var(--ink); background: var(--cream);
+    border: 4px solid var(--ink); box-shadow: 7px 7px 0 var(--ink); white-space: nowrap;
+  }
+
+  .say {
+    position: absolute; left: 440px; top: 690px; padding: 14px 28px; border-radius: 10px;
+    font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--ink);
+    background: var(--cream); border: 5px solid var(--ink); white-space: nowrap;
+  }
+  .arrow { position: absolute; left: 408px; top: 774px; width: 740px; height: 60px; }
+
+  .guess {
+    position: absolute; padding: 10px 22px; border-radius: 8px;
+    font-weight: 600; font-size: 36px; color: var(--ink); background: var(--yellow);
+    border: 4px solid var(--ink); box-shadow: 7px 7px 0 var(--ink); white-space: nowrap;
+  }
+  .guess b { font-family: var(--display); font-weight: 800; margin-right: 10px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg class="paper" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs>
+      <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+        <circle cx="18" cy="18" r="1.6" fill="rgba(255,255,255,.10)"/>
+      </pattern>
+    </defs>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 0.30"/>
+    </filter>
+    <filter id="mottle" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.006" numOctaves="4" seed="3"/>
+      <feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 0.24"/>
+    </filter>
+    <filter id="fiber" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="11"/><feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 0.10"/></filter>
+    <rect width="1920" height="1080" filter="url(#mottle)"/>
+    <rect width="1920" height="1080" filter="url(#fiber)"/>
+    <rect width="1920" height="1080" fill="url(#grid)"/>
+
+  </svg>
+
+  <!-- What is in your head: the loosest part of the frame. -->
+  <div class="cloud" id="cloud"></div>
+  <div class="cloud-tab" id="ctab">你脑子里的</div>
+  <div class="dot" id="d1" style="left:330px;top:536px;width:44px;height:44px"></div>
+  <div class="dot" id="d2" style="left:296px;top:598px;width:26px;height:26px"></div>
+  <div class="chip req" data-r="-4" style="left:110px;top:110px">告警发到哪？</div>
+  <div class="chip req" data-r="3.5" style="left:480px;top:96px">阈值多少？</div>
+  <div class="chip req" data-r="2" style="left:170px;top:240px">80.0 算不算超？</div>
+  <div class="chip req" data-r="-3" style="left:580px;top:236px">输出什么格式？</div>
+  <div class="chip req" data-r="3" style="left:120px;top:380px">多久查一次？</div>
+  <div class="chip req" data-r="-4.5" style="left:490px;top:384px">通知谁？</div>
+
+  <!-- Roles. Glyphs are geometric primitives only; no figures. -->
+  <div class="tile" id="human" data-r="-1.5" style="left:110px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8">
+      <circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:-3deg">人</div>
+  </div>
+  <div class="tile" id="agent" data-r="1.5" style="left:1170px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round">
+      <polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/>
+      <polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:2deg">Agent</div>
+  </div>
+  <div class="tile unlit" id="repo" data-r="2" style="left:1570px;top:150px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round">
+      <path d="M34 22 H78 L98 42 V102 H34 Z"/><path d="M78 22 V42 H98"/>
+      <path d="M22 34 V112 H84"/><line x1="48" y1="62" x2="84" y2="62"/><line x1="48" y1="80" x2="76" y2="80"/>
+    </svg>
+    <div class="name" style="--r:-2deg">仓库文件</div>
+  </div>
+  <div class="tile unlit" id="runtime" data-r="-1" style="left:1570px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="12" y="22" width="96" height="76" rx="12"/><path d="M32 48 L46 60 L32 72"/><line x1="56" y1="74" x2="82" y2="74"/>
+    </svg>
+    <div class="name" style="--r:1.5deg">运行环境</div>
+  </div>
+
+  <!-- The one sentence that made it out. Arrow: ring at the tail, as in A; a slight bow. -->
+  <svg class="arrow" id="arrow" viewBox="0 0 740 60">
+    <path d="M28 36 Q 370 18 700 32" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="20" cy="36" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    <polygon points="690,12 738,33 692,54" fill="#f2efe6"/>
+  </svg>
+  <div class="say" id="say" data-r="-2">加一个超温告警。</div>
+
+  <!-- Guesses, one per gap it could not see; they overlap the Agent tile like stickers. -->
+  <div class="guess" data-r="-5" style="left:1080px;top:574px"><b>猜</b>阈值 80</div>
+  <div class="guess" data-r="4" style="left:1300px;top:500px"><b>猜</b>打日志</div>
+  <div class="guess" data-r="-3" style="left:1140px;top:420px"><b>猜</b>每分钟查</div>
+</div>
+<script src="lib/stage.js"></script>
+<script>
+  var M = window.StageMath;
+  var $ = function (id) { return document.getElementById(id); };
+  var reqs = document.querySelectorAll('.req');
+  var guesses = document.querySelectorAll('.guess');
+  var INK = 'rgba(22,22,22,1)';
+
+  function mix(a, b, p) {
+    return 'rgb(' + [0, 1, 2].map(function (i) { return Math.round(a[i] + (b[i] - a[i]) * p); }).join(',') + ')';
+  }
+  // Stickers land: drop in and settle from a bigger tilt to their own tilt.
+  function enter(el, p, dy) {
+    var e = M.easeOut(p);
+    var r = parseFloat(el.getAttribute('data-r') || '0');
+    el.style.opacity = e;
+    el.style.transform = 'translateY(' + ((1 - e) * dy) + 'px) rotate(' + (r + (1 - e) * r * 2) + 'deg)';
+  }
+  // Current = selected: a yellow outline with a gap plus a glow; the ink hard shadow stays.
+  function current(el, g, size) {
+    el.style.outline = '7px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '10px';
+    el.style.boxShadow = '0 0 0 10px rgba(138,147,157,' + g + '), 0 0 0 20px rgba(22,22,22,' + g + '), ' + size + 'px ' + size + 'px 0 ' + INK + ', 0 0 60px rgba(245,207,74,' + (0.5 * g) + ')';
+  }
+
+  Stage({
+    duration: 14.00,
+    init: function () { return document.fonts.load('900 44px "SHS Heavy"', '人猜你脑子里的仓库文件运行环境').then(function () { return document.fonts.ready; }); },
+    render: function (t) {
+      // 1. Human, then the cloud of open questions in their head.
+      // Human at 0.00 (sentence 22 opens). Cloud at 6.80 (spoken "需求" in "需求在你的脑子里"), chips 0.25 later, 0.16 apart.
+      enter($('human'), M.progress(t, 0.0, 0.6), 30);
+      var cloudP = M.easeOut(M.progress(t, 6.80, 0.6));
+      ['cloud', 'ctab', 'd1', 'd2'].forEach(function (id) { $(id).style.opacity = cloudP; });
+      // Dim at 10.24 (spoken "一句话", the sentence leaves the cloud).
+      var dim = M.easeOut(M.progress(t, 10.24, 0.8));
+      for (var i = 0; i < reqs.length; i++) {
+        enter(reqs[i], M.progress(t, 7.05 + i * 0.16, 0.45), 18);
+        // Left behind: dim, still legible.
+        reqs[i].style.background = mix([242, 239, 230], [160, 157, 151], dim);
+      }
+      $('cloud').style.borderColor = 'rgba(22,22,22,' + (0.75 - 0.35 * dim) + ')';
+
+      // 2. The other roles. Repo files and Runtime stay unlit. Agent at 9.28 (sentence 24 opens, "你给 AI 的"), repo 0.2 and runtime 0.35 later.
+      enter($('agent'), M.progress(t, 9.28, 0.6), 30);
+      enter($('repo'), M.progress(t, 9.48, 0.6), 30);
+      enter($('runtime'), M.progress(t, 9.63, 0.6), 12);  // 落差 12：大了入场时名字标签会掉进字幕带
+
+      // 3. One sentence leaves the cloud and rides the arrow to the Agent.
+      //    Arrow at 10.00 (spoken "只有一句话", "只"); sentence sticker leaves at 10.24 (spoken "一句话", "一").
+      var arrowP = M.easeOut(M.progress(t, 10.00, 0.8));
+      $('arrow').style.clipPath = 'inset(0 ' + ((1 - arrowP) * 100) + '% 0 0)';
+      var travel = M.easeOut(M.progress(t, 10.24, 1.1));
+      var say = $('say');
+      say.style.opacity = M.easeOut(M.progress(t, 10.24, 0.3));
+      say.style.transform = 'translateY(' + ((1 - travel) * -330) + 'px) rotate(-2deg)';
+      current(say, M.easeOut(M.progress(t, 10.24, 0.4)) * (1 - M.easeOut(M.progress(t, 11.20, 0.4))), 8);
+
+      // 4. The Agent becomes current at 11.20 (sentence 25 opens) and fills each gap with a guess,
+      //    first sticker at 12.64 (spoken "猜"), 0.45 apart.
+      current($('agent'), M.easeOut(M.progress(t, 11.20, 0.4)), 12);
+      for (var j = 0; j < guesses.length; j++) enter(guesses[j], M.progress(t, 12.64 + j * 0.45, 0.4), 22);
+    }
+  });
+</script>
+</body>
+</html>

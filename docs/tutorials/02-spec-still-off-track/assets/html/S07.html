@@ -1,0 +1,422 @@
+<!doctype html>
+<!-- S07 · 标题卡 · 系列流程卡（第二级：旧路线在上一行，新路线在下一行） · script 21–26「不过现在，我给自己定制了一套流程，叫 sdflow。……最后，才从这份纪要，一次写成 OpenSpec 的规格文档。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     复制自 channel/design/templates/series-flow.html（data-level="2"）。S06–S08 是同一张卡，元素位置前后接得上：
+     开头接 S06 的终帧（卡头「一开始：OpenSpec + grill-with-docs」、四张卡 y 380–640）：卡头先淡出（0.05–0.35 秒），
+     旧流程四步缩小变灰，移到第二级顶行（x 320–1340，y 196–260；「探索」那张宽 200，后面三张依次右移）；
+     本页终帧就是 S08 的开头。新旧对比放同一张卡、旧路线在上一行（visual-v4 4.9，guides/script-rules.md 第 7 条）。
+     - 第一级（六步一行）S06–S08 都不出场（系列位置单开一页 S08b），所以本页不调用 SF.l1。
+     - 新流程按作者 2026-10-17 手绘图画大，占顶行以下的主体（「新流程图」共用块：标记、样式、脚本在 S07、S08、S29 里是同一份，改一处三页一起改；S08 起整体缩放）：
+       上排行首 sdflow 标签、explore → 澄清 → 临时决策纪要 → 长箭头「一次写成」→ OpenSpec 规格；纪要正下方是拷问，
+       两者之间一下一上两条箭头（纪要 ↓ 拷问 = 拷问读纪要；拷问 ↑ 纪要 = 每定一条写回纪要，旁标「逐条填写」）；
+       拷问右边分出 ADR、术语表（上下排，上方标「长期留存」），两者各有箭头指向规格。草稿贴纸贴在纪要右下角。
+     - 动作和文档分两种图形和颜色：动作（explore、澄清、拷问）是奶白圆角卡；文档（纪要、ADR、术语表、规格）是带折角的文档形，
+       蓝区底 --blue-fill + 蓝边 --blue + 奶白字（蓝 = 写下来的约定，visual-v4 第二节）。--blue 实底配奶白字对比不够，所以底用 --blue-fill（奶白字对 --blue-fill 11.24:1）。
+     - 整张图先暗着进场（淡墨描边），随口播逐个点亮（没讲到 → 讲过 + 当前）。
+     - 不放「OpenSpec 按领域定制，补全规格要求」角标：作者 2026-10-18 删去对应口播（原第 29 句），S08 第 3 张卡已写「领域定制的规格要求」。
+     - 本页不出 /sdflow-spec 分组框（S08 起才出）。
+     - 三页共有的卡片手写 data-r（不走自动倾角）：自动倾角按帧 ID 算，各页不同，切页时会跳。
+     - 纸底（2026-10-20 作者定：只有章节标签页用深色底，系列流程卡不用），不上蓝 / 琥珀（visual-v4 4.9）。
+     - 动画节点（按录音实测，frame-times.py，2026-10-19；新流程的时刻集中在共用块的 NF.C 里，本页只管旧路线）：
+       MORPH 0.0 第 21 句开口：旧流程四步缩小变灰移到顶行；NEWIN 1.6：新流程整张暗着进场（旧路线移完后，不挂词）；
+       SDF 2.9 第 21 句念到「叫 SDFlow」（「叫」2.88）：出 SDFlow 标签；EXP 5.5 第 22 句开口（5.68）：explore 亮；
+       CLR 11.6 第 23 句开口（11.68）：澄清亮；MEMO 15.6 第 23 句念到「临时的决策纪要」（「临」15.60）：纪要（草稿）亮；
+       GRILL 17.9 第 24 句开口（18.00）：拷问亮，纪要 ↓ 拷问；FILL 23.5 第 24 句念到「马上填进」（「马」23.52）：拷问 ↑ 纪要和「逐条填写」；
+       ADR 25.9 第 25 句开口（26.00）：拷问分出两条箭头，念到「ADR 和术语表」（ADR 29.52，ADR2 29.5）两份文档亮、标「长期留存」；
+       WRITE 32.7 第 26 句念到「从这份纪要」（「从」32.72）：纪要再当前一次，长箭头「一次写成」，ADR、术语表指向规格的箭头同时出；
+       SPEC 34.5 念到「OpenSpec 的规格文档」（OpenSpec 34.48）：规格亮；END 35.6 第 26 句念完（35.84）前规格的「当前」淡出。本页 37.0 秒。 -->
+<html lang="zh-CN" data-frame-id="S07" data-level="2" data-done="" data-current="1,2">
+<head>
+<meta charset="utf-8">
+<title>S07 · 系列流程卡 · 新流程 sdflow</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* ===== 模版共用：复制后不改 ===== */
+  /* 纸底（2026-10-20 作者定：只有章节标签页用深色底，其余页面都是纸底）。
+     「没讲到」= 墨色 65% 不透明度，叠在渲染后的纸底 #8b949e 上约 #3f4246，对比度 3.28:1；CSS 写 --notyet，JS 里同值写 NOTYET。
+     透明底的空框（.off）不带硬投影，否则框外会露出一块实心的墨色。 */
+  :root { --notyet: rgba(22,22,22,.65); }
+  .sf-step.off, .node.off, .act.off, .big3.off { box-shadow: none; }
+
+  /* 第一级：六步一行。 */
+  .sf-step { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px; }
+  .sf-step .big { white-space: nowrap; }
+  html[data-level="1"] .sf-step { width: 280px; height: 104px; }
+  html[data-level="1"] .sf-step .big { font-size: 44px; }
+  html[data-level="1"] .sf-step .num { width: 58px; height: 58px; font-size: 30px; }
+  html[data-level="2"] .sf-step { width: 236px; height: 64px; border-width: 4px; padding: 0 12px; gap: 10px; }
+  html[data-level="2"] .sf-step .big { font-size: 36px; }
+  html[data-level="2"] .sf-step .num { width: 44px; height: 44px; font-size: 26px; border-width: 4px; }
+  .sf-step.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .sf-step.off .num { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  /* 期号：括线 + 「第 N 期」。本期那一组用墨，其余用「没讲到」的淡墨。 */
+  .sf-ep { position: absolute; text-align: center; white-space: nowrap; color: var(--notyet);
+           font-family: var(--display); font-weight: 800; }
+  .sf-ep::before { content: ''; display: block; box-sizing: border-box; border: 4px solid currentColor; border-top: none;
+                   border-radius: 0 0 8px 8px; height: 14px; margin: 0 10px 4px; }
+  html[data-level="1"] .sf-ep { font-size: 34px; }
+  html[data-level="2"] .sf-ep { font-size: 26px; line-height: 1.1; }
+  html[data-level="2"] .sf-ep::before { height: 8px; border-width: 3px; margin-bottom: 2px; }
+  .sf-ep.now { color: var(--ink); }
+  #sf-fan { position: absolute; left: 0; top: 0; width: 1920px; height: 200px; }
+  #sf-frame { position: absolute; left: 40px; top: 172px; width: 1840px; height: 754px; box-sizing: border-box;
+              border: 3px solid rgba(22,22,22,.4); border-radius: 16px; }
+  #sf-fan, #sf-frame, .sf-step, .sf-ep { opacity: 0; }
+  html[data-level="1"] #sf-fan, html[data-level="1"] #sf-frame, html[data-level="1"] #l2 { display: none; }
+
+  /* 第二级的件。 */
+  /* 只铺到字幕带上沿：里面的元素用画布坐标，高度不到 940（渲染前的越界检查会量容器本身）。 */
+  #l2 { position: absolute; left: 0; top: 0; width: 1920px; height: 930px; }
+  .node { display: flex; align-items: center; justify-content: center; padding: 0 22px; white-space: nowrap;
+          font-family: var(--display); font-weight: 800; font-size: 44px; }
+  .node.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .node.past { background: var(--cream-dim); }
+  .lane { font-family: var(--display); font-weight: 800; }
+  .lane.past { background: var(--cream-dim); }
+  .arr { position: absolute; height: 6px; border-radius: 3px; background: currentColor; color: var(--ink); }
+  .arr::after { content: ''; position: absolute; right: -18px; top: -9px;
+                border-left: 20px solid currentColor; border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+  .seg { position: absolute; height: 24px; box-sizing: border-box; border: 5px solid var(--notyet); border-top: none;
+         border-radius: 0 0 12px 12px; }
+  .pdot { position: absolute; width: 58px; height: 58px; box-sizing: border-box; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--mono); font-weight: 700; font-size: 26px;
+          border: 4px solid var(--notyet); color: var(--notyet); background: transparent; }
+  .pdot.done { background: var(--cream-dim); color: var(--ink); border-color: var(--cream-dim); }
+  .pdot.now { background: var(--cream); color: var(--ink); border-color: var(--ink); }
+  /* ===== 模版共用到此 ===== */
+
+  /* ===== 本页 ===== */
+  /* 旧流程的一张卡（同 S06）：编号压在左上角，上一行工具 / 命令，中间步骤名，下一行说明。本页缩成只剩步骤名。 */
+  .old { display: block; padding: 0; overflow: visible; }
+  .old .num { position: absolute; left: -26px; top: -26px; }
+  .old .l1, .old .ttl, .old .sub { position: absolute; left: 0; right: 0; text-align: center; white-space: nowrap; }
+  .old .l1 { top: 40px; font-family: var(--mono); font-weight: 700; font-size: 32px; }
+  .old .l1.cn { font-family: var(--body); font-weight: 600; font-size: 34px; }
+  .old .ttl { top: 50%; transform: translateY(-50%); font-family: var(--display); font-weight: 800; font-size: 56px; }
+  .old .sub { bottom: 36px; font-family: var(--body); font-weight: 600; font-size: 34px; }
+  /* ===== 新流程图（S07、S08、S29 共用，作者 2026-10-17 手绘图） =====
+     动作（explore、澄清、拷问）= 奶白圆角卡；文档（纪要、ADR、术语表、规格）= 带折角的文档形，蓝区底 + 蓝边 + 奶白字（蓝 = 写下来的约定）。
+     整张图放在 #nf 里，坐标是 S07 的大图；S08 起整体 scale 缩小，形状和颜色不变。 */
+  /* #nf 本身不占面积（宽高 0），里面的元素照常按画布坐标摆；箭头层只铺箭头所在的那一块。
+     这样缩小上移后，容器和箭头层的外框不会越出画布（渲染前的越界检查会量容器本身）。 */
+  #nf { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  #nfa { position: absolute; left: 500px; top: 440px; width: 1240px; height: 350px; overflow: visible; }
+  #nfa g { color: var(--notyet); }
+  .act { display: flex; align-items: center; justify-content: center; padding: 0; white-space: nowrap;
+         font-family: var(--display); font-weight: 800; font-size: 48px; }
+  .act.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .doc { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+         font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--notyet); }
+  .doc .dsh { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible;
+              filter: drop-shadow(10px 10px 0 var(--ink)); }
+  .doc .dsh path { stroke-width: 5; stroke-linejoin: round; }
+  .doc .dt { position: relative; white-space: nowrap; text-align: center; line-height: 1.05; }
+  .doc .dt small { display: block; font-family: var(--mono); font-weight: 700; font-size: 30px; }
+  .nlab { position: absolute; white-space: nowrap; color: var(--ink); font-family: var(--body); font-weight: 600; font-size: 28px; }
+  /* /sdflow-spec 分组框：中性，淡墨虚线（visual-v4 第五节：分组框不借蓝 / 琥珀）。S07 不出。 */
+  #nfbox { position: absolute; box-sizing: border-box; border: 5px dashed var(--notyet); border-radius: 22px; opacity: 0; }
+  #nfbox .tab { font-family: var(--mono); font-weight: 700; font-size: 38px; box-shadow: 7px 7px 0 var(--ink); }
+  /* S06 的卡头，样式与 S06 相同；本页开场淡出。 */
+  .hd { position: absolute; left: 90px; top: 150px; white-space: nowrap; color: var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 60px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ===== 模版共用：第一级，由下面的脚本按 <html> 属性填 ===== -->
+  <svg id="sf-fan" viewBox="0 0 1920 200" aria-hidden="true"></svg>
+  <div id="sf-frame"></div>
+  <div id="sf"></div>
+
+  <div id="l2">
+    <div class="hd" id="head">一开始：OpenSpec + grill-with-docs</div>
+    <!-- 旧路线（接 S06，坐标是 S06 的终帧，本页 MORPH 后缩到顶行） -->
+    <div class="chip lane" id="laneO" data-r="-2" style="left:90px;top:270px;font-size:44px">原来的流程</div>
+    <div class="card node old" id="o1" data-r="-1.2" style="left:90px;top:380px;width:390px;height:260px">
+      <span class="num">1</span><span class="l1">/opsx:explore</span><span class="ttl">探索</span><span class="sub">定边界和方向</span></div>
+    <div class="arr oa" id="oa1"></div>
+    <div class="card node old" id="o2" data-r="1.4" style="left:540px;top:380px;width:390px;height:260px">
+      <span class="num">2</span><span class="l1">OpenSpec</span><span class="ttl">生成四个文档</span><span class="sub">提案·规格·设计·任务</span></div>
+    <div class="arr oa" id="oa2"></div>
+    <div class="card node old" id="o3" data-r="-1.5" style="left:990px;top:380px;width:390px;height:260px">
+      <span class="num">3</span><span class="l1">/grill-with-docs</span><span class="ttl">拷问</span><span class="sub">一条一条问我</span></div>
+    <div class="arr oa" id="oa3"></div>
+    <div class="card node old" id="o4" data-r="1.1" style="left:1440px;top:380px;width:390px;height:260px">
+      <span class="num">4</span><span class="l1 cn">记 ADR、术语表</span><span class="ttl">回改四个文档</span><span class="sub">再回头改一遍</span></div>
+
+    <!-- 新流程图（共用块，坐标是 S07 的大图） -->
+    <div id="nf">
+      <div id="nfbox" style="left:566px;top:330px;width:1288px;height:520px"><div class="tab" data-r="-3" style="top:-44px">/sdflow-spec</div></div>
+      <svg id="nfa" viewBox="500 440 1240 350" aria-hidden="true">
+        <g id="a1"><path/><polygon/></g><g id="a2"><path/><polygon/></g>
+        <g id="a3"><path/><polygon/></g><g id="a4"><path/><polygon/></g><g id="a5"><path/><polygon/></g>
+        <g id="a6"><path/><polygon/></g><g id="a7"><path/><polygon/></g>
+        <g id="a8"><path/><polygon/></g><g id="a9"><path/><polygon/></g>
+      </svg>
+      <div class="chip lane" id="laneN" data-r="1.5" style="left:60px;top:422px;font-family:var(--mono);font-weight:700;font-size:40px">SDFlow</div>
+      <div class="nlab" id="sdfFull" style="left:66px;top:522px;font-size:22px;line-height:1.25;opacity:0">Spec-Driven<br>workFlow</div>
+      <div class="card act off" id="n1" data-r="1.2" style="left:280px;top:400px;width:230px;height:120px">explore</div>
+      <div class="card act off" id="n2" data-r="-1.4" style="left:590px;top:400px;width:180px;height:120px">澄清</div>
+      <div class="doc" id="d1" data-r="-1.1" data-shadow="0" style="left:850px;top:390px;width:330px;height:140px"><span class="dt">临时决策纪要</span></div>
+      <div class="chip" id="draft" data-r="-4" style="left:1108px;top:498px;font-size:26px;padding:4px 14px">草稿</div>
+      <div class="card act off" id="n3" data-r="1.3" style="left:915px;top:650px;width:200px;height:120px">拷问</div>
+      <div class="nlab" id="lbF" style="left:1070px;top:572px">逐条填写</div>
+      <div class="nlab" id="lbW" style="left:1291px;top:410px;width:140px;text-align:center">一次写成</div>
+      <div class="doc" id="d4" data-r="1.5" data-shadow="0" style="left:1540px;top:390px;width:290px;height:140px"><span class="dt"><small>OpenSpec</small>规格</span></div>
+      <div class="nlab" id="keep" style="left:1256px;top:528px">长期留存</div>
+      <div class="abs" id="adrg" data-shadow="0" style="left:1250px;top:600px;width:200px;height:220px;border-radius:12px"></div>
+      <div class="doc" id="d2" data-r="1.4" data-shadow="0" style="left:1250px;top:600px;width:200px;height:96px;font-size:40px"><span class="dt">ADR</span></div>
+      <div class="doc" id="d3" data-r="-1.2" data-shadow="0" style="left:1250px;top:724px;width:200px;height:96px;font-size:40px"><span class="dt">术语表</span></div>
+      <div class="abs" id="hlW" data-shadow="0" style="left:1214px;top:404px;width:296px;height:80px;border-radius:12px"></div>
+    </div>
+  </div>
+</div>
+<script>
+  // ===== 模版共用：按 <html> 属性搭第一级。要在 theme.js 之前跑：自动倾角只认加载时已有的元素。 =====
+  (function () {
+    var STEPS = ['需求明确', '规格编写', '规格评审', '代码实现', '代码评审', '收尾归档'];
+    var EP = [2, 2, 3, 4, 5, 6];   // 每步对应第几期（visual-v4 4.9）
+    var root = document.documentElement;
+    var level = root.getAttribute('data-level') === '2' ? 2 : 1;
+    function list(name) {
+      return (root.getAttribute(name) || '').split(',').map(function (s) { return Number(s.trim()); }).filter(Boolean);
+    }
+    var done = list('data-done'), cur = list('data-current');
+    // 第一级的几何：level 1 放大居中偏上，level 2 缩到顶部一行。两种都左右对称（中心 x 960）。
+    var G = level === 1
+      ? { left: 55, top: 330, w: 280, h: 104, gap: 26, epGap: 26 }
+      : { left: 187, top: 24, w: 236, h: 64, gap: 26, epGap: 24 };
+    var sf = document.getElementById('sf');
+    var html = '';
+    for (var i = 0; i < 6; i++) {
+      var n = i + 1;
+      var st = cur.indexOf(n) >= 0 ? 'now' : done.indexOf(n) >= 0 ? 'done' : 'off';
+      html += '<div class="card sf-step ' + st + '" id="sf' + n + '" data-shadow="' + (level === 1 ? 10 : 7) + '" style="left:' +
+        (G.left + i * (G.w + G.gap)) + 'px;top:' + G.top + 'px"><span class="num">' + n + '</span><span class="big">' + STEPS[i] + '</span></div>';
+    }
+    // 期号：同一期相邻的几步合成一个括线。
+    var a = 0, curL = 9999, curR = 0;
+    while (a < 6) {
+      var b = a;
+      while (b + 1 < 6 && EP[b + 1] === EP[a]) b++;
+      var isNow = false;
+      for (var k = a; k <= b; k++) if (cur.indexOf(k + 1) >= 0) isNow = true;
+      var l = G.left + a * (G.w + G.gap), r = G.left + b * (G.w + G.gap) + G.w;
+      if (isNow) { curL = Math.min(curL, l); curR = Math.max(curR, r); }
+      html += '<div class="sf-ep' + (isNow ? ' now' : '') + '" id="sfe' + EP[a] + '" style="left:' + l + 'px;width:' + (r - l) +
+        'px;top:' + (G.top + G.h + G.epGap) + 'px">第 ' + EP[a] + ' 期</div>';
+      a = b + 1;
+    }
+    sf.innerHTML = html;
+    // 第二级：从「当前」那组的期号括线下沿，两条线连到外框上沿两角。
+    if (level === 2 && curR > 0) {
+      var y0 = G.top + G.h + G.epGap + 32;
+      document.getElementById('sf-fan').innerHTML =
+        '<path d="M' + (curL + 10) + ' ' + y0 + ' L48 174 M' + (curR - 10) + ' ' + y0 + ' L1872 174" fill="none" ' +
+        'stroke="rgba(22,22,22,.4)" stroke-width="3" stroke-linecap="round"/>';
+    }
+    window.SF_LEVEL = level;
+  })();
+</script>
+<script>
+  // 文档形：按每个 .doc 的宽高画折角页（右上角折角，同首期 S22a 的文件图标），要在 theme.js 之前插进去。
+  (function () {
+    var F = 30;
+    Array.prototype.slice.call(document.querySelectorAll('.doc')).forEach(function (el) {
+      var w = parseFloat(el.style.width), h = parseFloat(el.style.height), e = 2.5;
+      var body = 'M' + e + ' ' + e + ' H' + (w - F) + ' L' + (w - e) + ' ' + F + ' V' + (h - e) + ' H' + e + ' Z';
+      var fold = 'M' + (w - F) + ' ' + e + ' V' + F + ' H' + (w - e);
+      el.insertAdjacentHTML('afterbegin', '<svg class="dsh" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true">' +
+        '<path class="body" d="' + body + '"/><path class="fold" d="' + fold + '" fill="none"/></svg>');
+    });
+  })();
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // ===== 模版共用：动画小工具 =====
+  var SF = (function () {
+    var DIM = [160, 157, 151], INK = [22, 22, 22], CREAM = [242, 239, 230], NOTYET = [63, 66, 70];
+    // 没讲到 → 讲过：透明底淡墨描边淡墨字 → 奶白底墨描边墨字（同目录页 S05）。里面的 .num 跟着变。
+    function lit(el, p) {
+      var c = T.mix(NOTYET, INK, p);
+      [el].concat(Array.prototype.slice.call(el.querySelectorAll('.num'))).forEach(function (e) {
+        e.style.background = 'rgba(242,239,230,' + p + ')';
+        e.style.borderColor = c;
+        e.style.color = c;
+      });
+    }
+    // 讲过 → 被留下：奶白 → 灰实心。
+    function gray(el, p) { el.style.background = T.mix(CREAM, DIM, p); }
+    // 「当前」描边。a = 硬投影的不透明度（不传 = 1）：透明底的空框传它的点亮进度，免得没讲到时露出实心投影。
+    function cur(el, g, s, a) {
+      // s 传 0 = 不要硬投影（进度点）；不传就读 data-shadow，再没有用 10。
+      T.current(el, g, s != null ? s : parseFloat(el.getAttribute('data-shadow') || '10'));
+      // 浏览器读回来的颜色是 rgb(22, 22, 22) 不是 #161616，两种写法都要认。
+      if (a != null) el.style.boxShadow = el.style.boxShadow.replace(/#161616|rgb\(22, 22, 22\)/g, 'rgba(22,22,22,' + a + ')');
+    }
+    // 横箭头：从 x1 到 x2（箭头尖），竖直中心 y。
+    function arrow(el, x1, x2, y) {
+      el.style.left = x1 + 'px';
+      el.style.width = Math.max(0, x2 - x1 - 18) + 'px';
+      el.style.top = (y - 3) + 'px';
+    }
+    function lerp(a, b, p) { return a + (b - a) * p; }
+    // 第一级进场：tIn 起六步依次落下、期号和外框淡入；tCur 起「当前」那几步加黄框。
+    function l1(t, tIn, tCur) {
+      for (var i = 1; i <= 6; i++) {
+        var el = T.$('sf' + i);
+        T.enter(el, T.p(t, tIn + (i - 1) * 0.08, 0.5), window.SF_LEVEL === 1 ? 20 : 12);
+        if (el.classList.contains('now')) cur(el, T.ease(T.p(t, tCur, 0.4)));
+      }
+      var e = T.ease(T.p(t, tIn + 0.3, 0.6));
+      T.all('.sf-ep').forEach(function (x) { x.style.opacity = e; });
+      T.$('sf-fan').style.opacity = e;
+      T.$('sf-frame').style.opacity = e;
+    }
+    return { lit: lit, gray: gray, cur: cur, arrow: arrow, lerp: lerp, l1: l1 };
+  })();
+  // ===== 模版共用到此 =====
+
+  // ===== 新流程图（共用块）=====
+  // NF.show(t)：S07 的点亮时间轴（t = S07 的本页时刻）。S08、S29 调 NF.show(999) 得到 S07 终帧的样子，再缩放。
+  var NF = (function () {
+    var NOTYET = [63, 66, 70], INK = [22, 22, 22], CREAM = [242, 239, 230], BLUE = [67, 160, 237];
+    // S07 的时刻（秒）。对应的句子见 S07 文件头注释。按录音实测（frame-times.py，2026-10-19）。
+    // 2026-10-18：原第 29 句（角标）删去，NOTE 改名 END = 第 26 句念完前规格的「当前」淡出。
+    var C = { NEWIN: 1.6, SDF: 2.9, EXP: 5.5, CLR: 11.6, MEMO: 15.6, GRILL: 17.9, FILL: 23.5,
+              ADR: 25.9, ADR2: 29.5, WRITE: 32.7, SPEC: 34.5, END: 35.6 };
+    // 箭头：起点 → 箭头尖（画布坐标，S07 大图）。
+    var A = {
+      a1: [518, 460, 576, 460],   // explore → 澄清（箭头尖离目标 14px：目标标「当前」时，描边外圈只压住箭头尖一点）
+      a2: [778, 460, 836, 460],   // 澄清 → 纪要
+      a3: [975, 540, 975, 636],   // 纪要 ↓ 拷问：拷问读纪要
+      a4: [1055, 642, 1055, 544], // 拷问 ↑ 纪要：每定一条写回纪要
+      a5: [1190, 460, 1526, 460], // 纪要 → 规格：一次写成
+      a6: [1123, 690, 1236, 655], // 拷问 → ADR
+      a7: [1123, 730, 1236, 766], // 拷问 → 术语表
+      a8: [1458, 640, 1617, 546], // ADR → 规格
+      a9: [1458, 770, 1716, 546]  // 术语表 → 规格
+    };
+    function geom() {
+      Object.keys(A).forEach(function (id) {
+        var a = A[id], dx = a[2] - a[0], dy = a[3] - a[1], L = Math.sqrt(dx * dx + dy * dy), ux = dx / L, uy = dy / L;
+        var bx = a[2] - ux * 20, by = a[3] - uy * 20;   // 箭头底边中点
+        var g = T.$(id);
+        var p = g.querySelector('path');
+        p.setAttribute('d', 'M' + a[0] + ' ' + a[1] + ' L' + (a[2] - ux * 16) + ' ' + (a[3] - uy * 16));
+        p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', '6'); p.setAttribute('stroke-linecap', 'round');
+        g.querySelector('polygon').setAttribute('points', a[2] + ',' + a[3] + ' ' + (bx - uy * 12) + ',' + (by + ux * 12) + ' ' + (bx + uy * 12) + ',' + (by - ux * 12));
+        g.querySelector('polygon').setAttribute('fill', 'currentColor');
+      });
+    }
+    // 文档：没讲到（淡墨描边、淡墨字）→ 讲过（蓝区底、蓝边、奶白字）。硬投影随点亮显出来。
+    function docLit(el, p) {
+      var st = T.mix(NOTYET, BLUE, p);
+      el.querySelector('.dsh').style.filter = 'drop-shadow(10px 10px 0 rgba(22,22,22,' + p + '))';
+      var b = el.querySelector('.body'), f = el.querySelector('.fold');
+      b.style.fill = 'rgba(30,51,73,' + p + ')'; b.style.stroke = st; f.style.stroke = st;
+      el.style.color = T.mix(NOTYET, CREAM, p);
+    }
+    function aLit(id, p) { T.$(id).style.color = T.mix(NOTYET, INK, p); }
+    function span(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.3))); }
+    function act(el, t, t0, g) { var p = T.ease(T.p(t, t0, 0.4)); SF.lit(el, p); SF.cur(el, g, 10, p); }
+    function doc(el, t, t0, g) { docLit(el, T.ease(T.p(t, t0, 0.4))); SF.cur(el, g, 0); }
+
+    function show(t) {
+      geom();
+      var c = C;
+      // 整张图暗着进场（动作卡、文档的描边和箭头都是淡墨）。
+      ['n1', 'n2', 'd1', 'n3', 'd2', 'd3', 'd4'].forEach(function (id, i) { T.enter(T.$(id), T.p(t, c.NEWIN + i * 0.1, 0.5), 14); });
+      Object.keys(A).forEach(function (id, k) { T.$(id).style.opacity = T.ease(T.p(t, c.NEWIN + 0.2 + k * 0.06, 0.4)); aLit(id, 0); });
+      T.enter(T.$('laneN'), T.p(t, c.SDF, 0.5), 14);
+      // 名字的全称只上画面不念（作者 2026-10-19 定）
+      T.enter(T.$('sdfFull'), T.p(t, c.SDF + 0.4, 0.5), 10);
+
+      act(T.$('n1'), t, c.EXP, span(t, c.EXP, c.CLR));
+      act(T.$('n2'), t, c.CLR, span(t, c.CLR, c.MEMO));
+      aLit('a1', T.ease(T.p(t, c.CLR, 0.4)));
+      doc(T.$('d1'), t, c.MEMO, Math.max(span(t, c.MEMO, c.GRILL), span(t, c.WRITE, c.SPEC)));
+      aLit('a2', T.ease(T.p(t, c.MEMO, 0.4)));
+      T.enter(T.$('draft'), T.p(t, c.MEMO + 0.3, 0.4), 10);
+      act(T.$('n3'), t, c.GRILL, span(t, c.GRILL, c.ADR2));
+      aLit('a3', T.ease(T.p(t, c.GRILL, 0.4)));
+      aLit('a4', T.ease(T.p(t, c.FILL, 0.4)));
+      T.$('lbF').style.opacity = T.ease(T.p(t, c.FILL, 0.4));
+
+      // ADR · 术语表：拷问分出两条箭头，两份文档亮，一起标「当前」。
+      aLit('a6', T.ease(T.p(t, c.ADR, 0.4)));
+      aLit('a7', T.ease(T.p(t, c.ADR + 0.15, 0.4)));
+      doc(T.$('d2'), t, c.ADR2, 0);
+      doc(T.$('d3'), t, c.ADR2 + 0.15, 0);
+      SF.cur(T.$('adrg'), span(t, c.ADR2, c.WRITE), 0);
+      T.$('keep').style.opacity = T.ease(T.p(t, c.ADR2 + 0.4, 0.4));
+
+      // 纪要 → 一次写成规格；ADR、术语表指向规格的箭头同时出。
+      aLit('a5', T.ease(T.p(t, c.WRITE, 0.4)));
+      aLit('a8', T.ease(T.p(t, c.WRITE + 0.2, 0.4)));
+      aLit('a9', T.ease(T.p(t, c.WRITE + 0.3, 0.4)));
+      T.$('lbW').style.opacity = T.ease(T.p(t, c.WRITE, 0.4));
+      doc(T.$('d4'), t, c.SPEC, span(t, c.SPEC, c.END));
+      SF.cur(T.$('hlW'), 0, 0);
+    }
+    // 整张图缩放：s = 比例，(tx, ty) = 平移。比例 1、不平移时不写 transform，和 S07 逐像素一致。
+    function place(s, tx, ty) {
+      T.$('nf').style.transform = (s === 1 && tx === 0 && ty === 0) ? '' : 'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')';
+    }
+    return { C: C, show: show, place: place, span: span };
+  })();
+
+  // ===== 本页：帧脚本 =====
+  // 时刻（秒，本页起算；按录音实测，frame-times.py，2026-10-19）。对应的句子见文件头注释。
+  var MORPH = 0.0;
+  var NOTYET = [63, 66, 70], INK = [22, 22, 22];
+
+  // 旧路线：S06 终帧的位置 → 顶行的位置。[left, top, width, height]
+  var BIG = [[90, 380, 390, 260], [540, 380, 390, 260], [990, 380, 390, 260], [1440, 380, 390, 260]];
+  var SMALL = [[320, 196, 200, 64], [580, 196, 250, 64], [900, 196, 120, 64], [1090, 196, 250, 64]];
+  // ml：标签先到顶行（0.3–0.8 秒），m：四张卡随后缩过去（0.5–1.7 秒）。错开是为了卡片移动时不压住标签。
+  function oldRow(ml, m) {
+    var lane = T.$('laneO');
+    lane.style.left = SF.lerp(90, 60, ml) + 'px';
+    lane.style.top = SF.lerp(270, 196, ml) + 'px';
+    lane.style.fontSize = SF.lerp(44, 34, ml) + 'px';
+    SF.gray(lane, ml);
+    var fade = 1 - T.ease(Math.min(1, m * 2));
+    for (var i = 0; i < 4; i++) {
+      var el = T.$('o' + (i + 1)), b = BIG[i], s = SMALL[i];
+      el.style.left = SF.lerp(b[0], s[0], m) + 'px';
+      el.style.top = SF.lerp(b[1], s[1], m) + 'px';
+      el.style.width = SF.lerp(b[2], s[2], m) + 'px';
+      el.style.height = SF.lerp(b[3], s[3], m) + 'px';
+      el.style.borderWidth = SF.lerp(5, 4, m) + 'px';
+      el.querySelector('.ttl').style.fontSize = SF.lerp(56, 34, m) + 'px';
+      ['.l1', '.sub', '.num'].forEach(function (q) { el.querySelector(q).style.opacity = fade; });
+      SF.gray(el, m);
+    }
+    for (var k = 1; k <= 3; k++) {
+      var l = SF.lerp(BIG[k - 1][0] + BIG[k - 1][2], SMALL[k - 1][0] + SMALL[k - 1][2], m) + 8;
+      var r = SF.lerp(BIG[k][0], SMALL[k][0], m) - 8;
+      var y = SF.lerp(510, 228, m);
+      var a = T.$('oa' + k);
+      SF.arrow(a, l, r, y);
+      a.style.color = T.mix(INK, NOTYET, m);
+    }
+  }
+
+  Stage({
+    duration: 37.0,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.tilt();   // 手写了 data-r、又不做进场动画的元素，先按 data-r 摆好倾角（theme.js 只给自动算角的元素摆）
+      T.$('head').style.opacity = 1 - T.ease(T.p(t, 0.05, 0.3));   // S06 的卡头：标签移上来之前淡出
+      oldRow(T.ease(T.p(t, MORPH, 0.5)), T.ease(T.p(t, MORPH + 0.2, 1.2)));
+
+      // 新流程：整张暗着进场，随口播点亮（时间轴在共用块 NF.show）。
+      NF.show(t);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<!-- S20 · 机制动画（证据表实录，其余示意）· script 137–146「可每个 ticket 都只是局部测试，合起来有没有问题，还没有测过。……同一个问题修了两轮还在，就换更强的模型来仲裁，不让它一直修下去。」
+     证据表三行是示例项目 alarm-notify 的实录（task6-verify.md:16-18，命令只留 scripts/test.sh unit 这一段），标「实录 · 示例项目」；反例、修复环是示意（这次录制没有失败）。
+     - 第 1 句：ticket 1–5 各一个绿勾（示例项目是 5 个功能 ticket + 1 个收尾 ticket；绿 = 局部测试通过），右边问号「合起来呢？」。
+     - 第 2–3 句：末尾接收尾 ticket，第 3 句出「测试的每一层都跑一遍」。
+     - 第 4 句：证据行表头逐格出现（层 · 命令 · 退出码 · 用例数 · 提交号），再出实录三行：
+       unit · scripts/test.sh unit · 0 · 250 · f5a3e61 / integration · scripts/test.sh integration · 0 · 16 · f5a3e61 / e2e · — · 未覆盖；三行出来时「实录 · 示例项目」标签一起出。
+     - 第 5 句：两行的提交号 f5a3e61 一起高亮对齐（e2e 一行没有提交号）。第 6 句：旁边反例卡：三个不同的提交号，叉掉「拼出来的全部通过」。
+     - 第 7 句：反例卡里（同一张卡扩成两行）出一条小时间线（示意）：unit ✓ 在 a1b2c3d → 又改了代码 → integration ✓ 在 d4e5f6a。第 8 句：旁注「unit 没在新代码上跑过」。
+     - 第 9 句：右边修复环：失败 → 退回出问题的 ticket → 修 → 再跑，「再跑」接回「失败」（作者 2026-10-31 第 10 轮评审：「全量再跑」改「再跑」）。
+     - 第 10 句：接回「失败」那一段环上出计数「同一问题第 2 轮还在」→ 升到「换更强的模型仲裁」。
+     原「跑哪些层：按改动落在哪些目录定」、用例数 0、分诊卡、「中间轮」「收口」随口播删掉（2026-10-31 第 9 轮评审）。
+     配色：绿勾、红「失败」只表示测试通过 / 失败；收尾 ticket、修复环是执行一侧，琥珀；表头炭灰；黄只作「当前」描边；不用辅助色。
+     内容都在 y 920 以内，避开字幕带。
+     口播时刻按每分钟 220 字估算（还没录音；2026-10-31 按第 11 轮的 10 句重估：起点 0、8.1、12.2、16.2、27.9、37.4、44.7、52.1、56.7、65.1），录音后用 frame-times.py 对齐。 -->
+<html lang="zh-CN" data-frame-id="S20">
+<head>
+<meta charset="utf-8">
+<title>S20 · 收尾 ticket：全量跑一遍，每层一行证据</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 五个 ticket 一排，每个 140 宽、间距 165；问号贴纸放在第五个右边 */
+  .tk { top: 90px; width: 140px; height: 90px; padding: 0; display: flex; align-items: center; justify-content: center;
+        font-family: var(--display); font-weight: 800; font-size: 28px; }
+  .tk .num { position: absolute; right: -16px; top: -22px; width: 48px; height: 48px; font-size: 30px; background: var(--pass); }
+  #t1 { left: 60px; } #t2 { left: 225px; } #t3 { left: 390px; } #t4 { left: 555px; } #t5 { left: 720px; }
+  #qm { left: 930px; top: 98px; font-size: 40px; }
+
+  #fin { left: 60px; top: 240px; width: 640px; height: 135px; padding: 26px 30px 0; display: flex; align-items: center; gap: 18px; white-space: nowrap; }
+  #fin .tab { background: var(--amber); font-size: 36px; padding: 4px 22px; }
+  #cl1 { font-family: var(--display); font-weight: 800; font-size: 38px; width: 100%; }
+  #cl2 { font-size: 34px; font-weight: 600; }
+  #fin { flex-wrap: wrap; align-content: center; gap: 0 18px; }
+
+  /* 证据表（实录 · 示例项目） */
+  #ev { left: 60px; top: 460px; width: 960px; height: 230px; padding: 0; overflow: visible; }
+  .row { position: absolute; left: 0; right: 0; display: flex; box-sizing: border-box; }
+  .c { box-sizing: border-box; height: 100%; display: flex; align-items: center; padding: 0 14px; font-family: var(--mono); font-weight: 600; font-size: 24px; border-right: 3px solid var(--ink); white-space: nowrap; }
+  .c:last-child { border-right: 0; }
+  .c1 { width: 190px; } .c2 { width: 410px; } .c3 { width: 112px; } .c4 { width: 112px; } .c5 { width: 126px; } .c345 { width: 340px; }
+  .hd .c { background: var(--charcoal); color: #fff; font-family: var(--body); font-weight: 700; font-size: 28px; }
+  .hd { top: 0; height: 50px; border-radius: 4px 4px 0 0; overflow: hidden; }
+  .r1 { top: 50px; height: 56px; } .r2 { top: 106px; height: 56px; } .r3 { top: 162px; height: 56px; }
+  .rr { border-top: 3px solid var(--ink); }
+  #colhl { position: absolute; left: 884px; top: 465px; width: 136px; height: 164px; box-sizing: border-box; pointer-events: none; }
+
+  #ev .tab { z-index: 3; top: -64px; }
+  #cx { left: 60px; top: 755px; width: 960px; height: 155px; padding: 22px 26px; }
+  #cx .tab { font-size: 34px; padding: 2px 20px; }
+  #cx .hs { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  #cx .hs i { font-style: normal; font-family: var(--mono); font-weight: 700; font-size: 26px; padding: 2px 8px; border: 3px solid var(--ink); border-radius: 6px; background: var(--cream); }
+  #cx .tl { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 28px; font-weight: 600; white-space: nowrap; }
+  #cx .tl i { font-style: normal; font-family: var(--mono); font-weight: 700; font-size: 24px; padding: 2px 10px; border: 3px solid var(--ink); border-radius: 6px; background: var(--cream); }
+  #tn { left: 92px; top: 928px; font-size: 30px; }
+  #cx .hs span { margin-left: 18px; font-size: 32px; font-weight: 600; }
+
+  /* 右：修复环（示意），顺时针：失败 → 退回出问题的 ticket → 修 → 再跑 → 接回失败 */
+  .rg { height: 62px; padding: 0 24px; display: flex; align-items: center; justify-content: center; font-size: 36px; background: var(--amber); box-sizing: border-box; }
+  #g0 { left: 1095px; top: 369px; width: 150px; background: var(--fail); }
+  #g1 { left: 1265px; top: 139px; width: 430px; }
+  #g2 { left: 1705px; top: 369px; width: 130px; }
+  #g3 { left: 1380px; top: 599px; width: 200px; }
+  #cnt { left: 1060px; top: 690px; font-size: 30px; padding: 4px 16px; white-space: nowrap; }
+  #esc { left: 1420px; top: 676px; width: 420px; height: 100px; padding: 0; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 40px; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="w1" d="M1170 364 Q1170 175 1256 170"/>
+      <path id="w2" d="M1700 170 Q1770 175 1770 362"/>
+      <path id="w3" d="M1770 438 Q1770 625 1588 630"/>
+      <path id="w4" d="M1374 630 Q1172 630 1170 440"/>
+      <path id="w5" d="M1245 604 V682"/>
+      <path id="w6" d="M1396 726 H1412"/>
+    </g>
+  </svg>
+
+  <div class="card tk" id="t1" data-r="-1.2">ticket 1<span class="num">✓</span></div>
+  <div class="card tk" id="t2" data-r="1">ticket 2<span class="num">✓</span></div>
+  <div class="card tk" id="t3" data-r="-0.8">ticket 3<span class="num">✓</span></div>
+  <div class="card tk" id="t4" data-r="1.1">ticket 4<span class="num">✓</span></div>
+  <div class="card tk" id="t5" data-r="-1">ticket 5<span class="num">✓</span></div>
+  <div class="chip" id="qm" data-r="3">合起来呢？</div>
+
+  <div class="card" id="fin" data-r="-0.8"><div class="tab" data-r="-3">收尾 ticket</div><span id="cl1">全部 ticket 做完以后</span><span id="cl2">测试的每一层都跑一遍</span></div>
+
+  <div class="card" id="ev" data-r="0.6"><div class="tab" data-r="-3" style="font-size:36px">每层一行证据</div>
+    <div class="row hd" id="hd"><div class="c c1" id="h1">层</div><div class="c c2" id="h2">命令</div><div class="c c3" id="h3">退出码</div><div class="c c4" id="h4">用例数</div><div class="c c5" id="h5">提交号</div></div>
+    <div class="row r1" id="r1"><div class="c c1">unit</div><div class="c c2">scripts/test.sh unit</div><div class="c c3">0</div><div class="c c4">250</div><div class="c c5">f5a3e61</div></div>
+    <div class="row r2 rr" id="r2"><div class="c c1">integration</div><div class="c c2">scripts/test.sh integration</div><div class="c c3">0</div><div class="c c4">16</div><div class="c c5">f5a3e61</div></div>
+    <div class="row r3 rr" id="r3"><div class="c c1">e2e</div><div class="c c2">—</div><div class="c c345" style="font-family:var(--body);font-size:28px">未覆盖</div></div>
+    <div class="tab ink" id="rec" data-r="2" style="left:330px;font-size:34px">实录 · 示例项目</div>
+  </div>
+  <div id="colhl"></div>
+
+  <div class="card" id="cx" data-r="-0.6"><div class="tab" data-r="-3">反例 ✗ 拼出来的全部通过</div>
+    <div class="hs"><i>a1b2c3d</i><i>d4e5f6a</i><i>9a8b7c6</i><span>三层各在不同的提交上跑</span></div>
+    <div class="tl" id="tl"><i>unit ✓ 在 a1b2c3d</i><span>→ 又改了代码 →</span><i>integration ✓ 在 d4e5f6a</i></div></div>
+  <div class="tag" id="tn" data-r="-2">▲ unit 没在新代码上跑过</div>
+
+  <div class="chip rg" id="g0" data-r="-1.2">失败</div>
+  <div class="chip rg" id="g1" data-r="1.5">退回出问题的 ticket</div>
+  <div class="chip rg" id="g2" data-r="-1.5">修</div>
+  <div class="chip rg" id="g3" data-r="1.2">再跑</div>
+  <div class="tag" id="cnt" data-r="-3">同一问题第 2 轮还在</div>
+  <div class="card" id="esc" data-r="1">换更强的模型仲裁</div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    base: 0.0,    // 第 1 句：各自绿勾，合起来呢
+    s2: 6.347,      // 第 2 句：收尾 ticket
+    s3: 9.147,     // 第 3 句：测试的每一层都跑一遍
+    s4: 12.667,     // 第 4 句：证据行，逐格
+    s5: 20.747,     // 第 5 句：同一个提交，三行提交号高亮
+    s6: 25.387,     // 第 6 句：反例
+    s7: 29.627,     // 第 7 句：反例时间线
+    s8: 35.627,     // 第 8 句：旁注 unit 没在新代码上跑过
+    s9: 39.147,     // 第 9 句：修复环
+    s10: 46.587     // 第 10 句：第 2 轮还在，换更强的模型仲裁
+  };
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = p >= 0.99 ? 'url(#ah)' : 'none';
+  }
+  function pop(id, p, dy) { T.enter(T.$(id), p, dy === undefined ? 12 : dy); }
+  // 单元格进场：只淡入，不挪位（格子在表里，挪位会错开边线）
+  function show(id, p) { T.$(id).style.opacity = T.ease(p); }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 53.567,
+    init: function () { return T.fonts('合起来呢收尾全部做完以后测试的每一层都跑一遍实录示例项目未覆盖每层命令退出码用例数提交号反例拼出来的通过三层各在不同上跑失败退回出问题修全量再跑同一问题第轮还在换更强的模型仲裁在新代码上没跑过'); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句
+      pop('t1', P(t, AT.base, 0.45), 14); pop('t2', P(t, AT.base + 0.7, 0.45), 14); pop('t3', P(t, AT.base + 1.4, 0.45), 14);
+      pop('t4', P(t, AT.base + 2.1, 0.45), 14); pop('t5', P(t, AT.base + 2.8, 0.45), 14);
+      pop('qm', P(t, AT.base + 4.0, 0.45), -10);
+
+      // 第 2–3 句：收尾 ticket
+      pop('fin', P(t, AT.s2, 0.5), 14);
+      T.$('cl1').style.opacity = E(P(t, AT.s2 + 0.3, 0.4));
+      pop('cl2', P(t, AT.s3, 0.4), 6);
+
+      // 第 4 句：证据行，表头逐格，再出实录三行和标签
+      pop('ev', P(t, AT.s4, 0.45), 12);
+      var hs = [1.2, 2.2, 3.6, 4.6, 6.2];
+      for (var i = 0; i < 5; i++) show('h' + (i + 1), P(t, AT.s4 + hs[i], 0.35));
+      show('r1', P(t, AT.s4 + 1.5, 0.35)); show('r2', P(t, AT.s4 + 1.7, 0.35)); show('r3', P(t, AT.s4 + 1.9, 0.35));
+      pop('rec', P(t, AT.s4 + 1.5, 0.4), -8); // 「留一行证据」时出实录，不等到下一句才出现
+
+      // 第 5 句：提交号一起高亮
+      var g5 = E(P(t, AT.s5, 0.4)) * (1 - E(P(t, AT.s6, 0.4)));
+      var hl = T.$('colhl');
+      hl.style.outline = '7px solid rgba(245,207,74,' + g5 + ')';
+      hl.style.outlineOffset = '2px';
+      hl.style.boxShadow = '0 0 50px rgba(245,207,74,' + (0.5 * g5) + ')';
+      // 第 6 句：反例
+      pop('cx', P(t, AT.s6 + 0.3, 0.5), 14);
+
+      // 第 7 句：反例卡里的时间线，按句内顺序逐段出（unit → 又改了代码 → integration）
+      var tl = T.$('tl').children;
+      show('tl', P(t, AT.s7 + 0.2, 0.3));
+      for (var k = 0; k < 3; k++) tl[k].style.opacity = E(P(t, AT.s7 + 0.3 + k * 2.2, 0.4));
+      // 第 8 句：旁注
+      pop('tn', P(t, AT.s8 + 1.8, 0.45), 8);
+
+      // 第 9 句：修复环
+      pop('g0', P(t, AT.s9, 0.45), 12);
+      wire(T.$('w1'), E(P(t, AT.s9 + 0.8, 0.5))); pop('g1', P(t, AT.s9 + 1.1, 0.45), 12);
+      wire(T.$('w2'), E(P(t, AT.s9 + 2.8, 0.5))); pop('g2', P(t, AT.s9 + 3.1, 0.4), 12);
+      wire(T.$('w3'), E(P(t, AT.s9 + 4.0, 0.5))); pop('g3', P(t, AT.s9 + 4.3, 0.4), 12);
+      wire(T.$('w4'), E(P(t, AT.s9 + 5.2, 0.5)));
+      // 第 10 句：环上计数 → 换更强的模型仲裁
+      wire(T.$('w5'), E(P(t, AT.s10 + 0.2, 0.4))); pop('cnt', P(t, AT.s10 + 0.5, 0.45), -8);
+      wire(T.$('w6'), E(P(t, AT.s10 + 3.2, 0.4))); pop('esc', P(t, AT.s10 + 3.5, 0.5), 12);
+    }
+  });
+</script>
+</body>
+</html>

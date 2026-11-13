@@ -1,0 +1,222 @@
+<!doctype html>
+<!-- S11 · 机制动画（实录 · 示例项目）· script 25–31「你可能会问：规格里不是已经有一份任务清单了吗？……不过每个 ticket 都标着它对应规格里的哪几条需求，能一路追踪，后面细说。」
+     事实来源（2026-10-31 打开原文核过）：
+       左栏 示例项目 demo-temp-monitor 标签 alarm-notify/design-approved-r3 的 openspec/changes/alarm-notify/tasks.md：5 个任务组（## 1–5）、27 个「- [ ]」步骤，与分镜「5 组 · 27 步」一致。
+         摘录行照抄原文，行号是原文行号：第 1、12、17、25、35 行是 5 个组标题，第 3、4 行 1.1、1.2，第 37–41 行 5.1–5.5；长句用「……」截断，第 5–11 行略去，用「⋮」标出。
+         （同目录归档版 archive/2026-10-31-alarm-notify/tasks.md 行号与步骤文字相同，只是步骤已勾成 [x]。）
+       右栏 归档版 tickets.md 的 6 个标题，行号 :43 :61 :74 :92 :114 :126；R-ID 在各标题下第二行（:46 ticket 1、:64 ticket 2 起依此类推，ticket 6 为 all）：
+         ticket 1 配置面三个新键（原标题后半「服务与脚本同一白名单」截掉）· R-ID RUN-01, RUN-03, RUN-05, NTF-03；
+         ticket 2 日志脱敏覆盖推送密钥 · RUN-04；ticket 3 钉钉发送方 · NTF-01, NTF-03, NTF-04, NTF-05, NTF-06, RUN-04；
+         ticket 4 按设备冷却、接入上报与服务装配 · NTF-01, NTF-02, NTF-03, NTF-05, NTF-06, NTF-07, RUN-04, RUN-05；
+         ticket 5 端到端推送证据与项目约定同步 · NTF-01, NTF-02；ticket 6 实现验证（收尾，不计入 3–6 预算）· all。长的 R-ID 只露前两个加「…」。
+       「交给人」小标：tasks.md 5.5 人工真机冒烟，出处 impl-reports/planning-decisions.md（5.5 不作为 implementer 的验收，交给人）。
+     连线（第 6 句）：第 1 组 1.1、1.2 → ticket 1；第 2、3、4 组标题 → ticket 2、3、4；第 5 组拆开：5.1–5.3 → ticket 5，5.4 → ticket 6，5.5 → 交给人。
+     「框出」：分镜要求框出文件名、测试值、需求编号。用奶白细框，不用黄框：黄框是「当前」，按 visual-v4 4.7 要配放大卡，本页字号够读，不放大。
+     颜色：左栏标签蓝（规格一侧，tasks.md），右栏标签与 ticket 琥珀（执行一侧，交给 agent）；需求编号浅蓝（规格里的需求）；窗口深色，「实录」标签墨底；黄只给「当前」。
+     口播时刻（还没录音，按每分钟 220 字估，加句间 0.5 秒；录音后用 frame-times.py 对齐）：
+       第 1 句 t0.0：问题贴纸正中放大，停 1.0 秒，用 0.6 秒缩到左上；t1.8 左栏标签，t2.0 窗口
+       第 2 句 t6.2：「改哪里」t10.9 框文件名；「怎么验证」t12.0 框测试值；「对应哪条需求」t13.0 框需求编号
+       第 3 句 t15.2：t15.0 标签「写怎么做 · 给你在设计门检查」
+       第 4 句 t22.8：右栏标签、「5 个 + 1 个收尾」、6 个 ticket 标题依次落下
+       第 5 句 t30.7：t30.5 标签「一块能单独验收的行为 · 交给一个 agent」
+       第 6 句 t40.7：t43.4 第 1–4 组连线；t47.1 第 5 组拆开连 ticket 5、ticket 6、「交给人」
+       第 7 句 t49.7：t51.5 起每个 ticket 出 R-ID 小标签
+       估计念完 t58.8；时长 59.5 秒。内容整体在 y 940 以内。 -->
+<html lang="zh-CN" data-frame-id="S11">
+<head>
+<meta charset="utf-8">
+<title>S11 · 任务清单和 ticket 不同</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .window { font-variant-ligatures: none; }
+  #headw { left: 90px; top: 56px; transform-origin: 0 0; }
+  #headw .chip { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; }
+
+  .col { font-family: var(--display); font-weight: 800; font-size: 44px; }
+  #cL { left: 60px; top: 172px; background: var(--blue); }
+  #cR { left: 1010px; top: 172px; background: var(--amber); }
+  .lab { font-weight: 600; font-size: 32px; }
+  #sL { left: 60px; top: 254px; }
+  #sR { left: 1010px; top: 254px; }
+
+  /* 左：tasks.md 摘录（实录） */
+  #win { left: 40px; top: 358px; width: 840px; overflow: visible; }
+  #win .tab { left: auto; right: 14px; top: -58px; font-size: 32px; padding: 4px 20px; }
+  #win .bar0 { height: 44px; display: flex; align-items: center; padding: 0 22px; box-sizing: border-box;
+               background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 8px 8px 0 0;
+               font-family: var(--mono); font-size: 21px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #win .bd { padding: 8px 20px 14px; font-family: var(--mono); font-size: 19px; line-height: 26px; color: #e4e0d6; }
+  .ln { display: flex; gap: 12px; }
+  .ln > i { flex: none; width: 34px; text-align: right; font-style: normal; color: var(--unlit); }
+  .ln > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .ln b { color: #fff; font-weight: 700; }
+  .ln .dm { color: var(--unlit); }
+  /* 框出：奶白细框，随口播淡入；需求编号框出后改浅蓝字 */
+  .fl { white-space: nowrap; border-radius: 4px; outline: 2px solid rgba(242,239,230,0); outline-offset: 2px; }
+
+  /* 右：tickets.md 的 6 个标题（实录） */
+  #tl { left: 1010px; top: 358px; width: 870px; height: 538px; padding: 0; overflow: visible; }
+  #tl .tab { left: auto; right: 14px; top: -58px; font-size: 32px; padding: 4px 20px; }
+  .tk { position: absolute; left: 12px; width: 846px; height: 64px; box-sizing: border-box; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+        background: var(--amber-soft); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; opacity: 0;
+        font-weight: 600; font-size: 26px; color: var(--ink); white-space: nowrap; }
+  .tk.hm { height: 56px; background: var(--cream); border-style: dashed; box-shadow: none; }
+  .tk.hm small { font-family: var(--mono); font-size: 20px; font-weight: 600; color: rgba(22,22,22,.7); }
+  .rtag { padding: 0 12px; border: 3px solid var(--ink); border-radius: 6px; background: var(--blue-soft); font-family: var(--mono); font-weight: 700; font-size: 24px; line-height: 1.4; opacity: 0; }
+  #conn { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 10; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="headw"><div class="chip" id="head">规格里不是已经有一份任务清单了吗？</div></div>
+
+  <div class="chip col" id="cL">任务清单 tasks.md</div>
+  <div class="chip lab" id="sL">写怎么做 · 给你在设计门检查</div>
+  <div class="window" id="win">
+    <div class="bar0">alarm-notify / tasks.md（design-approved-r3）· 5 组 · 27 步</div>
+    <div class="bd">
+      <div class="ln" id="rg1"><i>1</i><span><b>## 1. 配置面：三个新键（切片 T1）</b></span></div>
+      <div class="ln" id="rw1"><i>3</i><span>- [ ] 1.1 `<span class="fl" data-g="f">internal/config</span>`：新增常量 `KeyDingTalkWebhook`……（<span class="fl" data-g="v">缺省 10 分钟</span>）<span class="fl" data-g="r">〔RUN-01、NTF-03〕</span></span></div>
+      <div class="ln" id="rw2"><i>4</i><span>- [ ] 1.2 `<span class="fl" data-g="f">internal/config</span>`：新增哨兵错误与校验——……冷却须能被 `time.ParseDuration` 解析且<span class="fl" data-g="v">不小于 10 分钟</span>……<span class="fl" data-g="r">〔RUN-03〕</span></span></div>
+      <div class="ln"><i></i><span class="dm">⋮</span></div>
+      <div class="ln" id="rg2"><i>12</i><span><b>## 2. 脱敏：推送密钥（切片 T2）</b></span></div>
+      <div class="ln" id="rg3"><i>17</i><span><b>## 3. 钉钉发送方（切片 T3）</b></span></div>
+      <div class="ln" id="rg4"><i>25</i><span><b>## 4. 冷却与接入（切片 T4）</b></span></div>
+      <div class="ln" id="rg5"><i>35</i><span><b>## 5. 端到端、约定同步与真机冒烟（切片 T5）</b></span></div>
+      <div class="ln" id="r51"><i>37</i><span>- [ ] 5.1 扩展 `internal/httpapi/e2e_integration_test.go` 的 `TestIntegrationEndToEnd`……〔NTF-01、NTF-02〕</span></div>
+      <div class="ln" id="r52"><i>38</i><span>- [ ] 5.2 `openspec/config.yaml` 本项目 context：……〔C5，proposal Compliance〕</span></div>
+      <div class="ln" id="r53"><i>39</i><span>- [ ] 5.3 `openspec/specs/over-temperature-alarm/spec.md` 的 Purpose：……〔C5〕</span></div>
+      <div class="ln" id="r54"><i>40</i><span>- [ ] 5.4 `scripts/test.sh all` 全绿，贴汇总行；`go vet ./...` 无输出〔全部〕</span></div>
+      <div class="ln" id="r55"><i>41</i><span>- [ ] 5.5 人工真机冒烟（由人执行）：……〔NTF-01、NTF-04、NTF-05，proposal A1〕</span></div>
+    </div>
+    <div class="tab ink">实录 · 示例项目</div>
+  </div>
+
+  <div class="chip col" id="cR">ticket tickets.md</div>
+  <div class="chip lab" id="sR">一块能单独验收的行为 · 交给一个 agent</div>
+  <div class="tag" id="cnt2" style="left:1390px; top:176px; font-size:32px" data-r="2">5 个 + 1 个收尾</div>
+  <div class="card" id="tl" data-r="0">
+    <div class="tab ink">实录 · 示例项目</div>
+    <div class="tk" id="t1" style="top:12px"><span>ticket 1: 配置面三个新键……</span><span class="rtag">RUN-01, RUN-03 …</span></div>
+    <div class="tk" id="t2" style="top:88px"><span>ticket 2: 日志脱敏覆盖推送密钥</span><span class="rtag">RUN-04</span></div>
+    <div class="tk" id="t3" style="top:164px"><span>ticket 3: 钉钉发送方</span><span class="rtag">NTF-01, NTF-03 …</span></div>
+    <div class="tk" id="t4" style="top:240px"><span>ticket 4: 按设备冷却、接入上报与服务装配</span><span class="rtag">NTF-01, NTF-02 …</span></div>
+    <div class="tk" id="t5" style="top:316px"><span>ticket 5: 端到端推送证据与项目约定同步</span><span class="rtag">NTF-01, NTF-02</span></div>
+    <div class="tk" id="t6" style="top:392px"><span>ticket 6: 实现验证（收尾，不计入 3–6 预算）</span><span class="rtag">all</span></div>
+    <div class="tk hm" id="th" style="top:476px"><span>交给人 · 人工真机冒烟</span><small>planning-decisions.md</small></div>
+  </div>
+  <svg id="conn" viewBox="0 0 1920 1080" aria-hidden="true"></svg>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：已按录音实测句子起点对齐（2026-11-03）。
+  var CUE = {
+    head: 0.0, headHold: 0.382, headMove: 0.6,
+    cL: 0.687, win: 0.763,                      // 第 1 句：左栏标签与窗口
+    fF: 4.16, fV: 6.006, fR: 7.684,           // 第 2 句：框文件名 / 测试值 / 需求编号
+    sL: 11.04,                               // 第 3 句：标签
+    cR: 18.08, tl: 18.244, tk: 18.408,           // 第 4 句：右栏标签、「5 个 + 1 个收尾」、6 个 ticket 依次落下（每个晚 0.35 秒）
+    sR: 24.56,                               // 第 5 句：标签
+    lineA: 31.44, lineB: 35.387,               // 第 6 句：第 1–4 组连线；第 5 组拆开连线（「交给人」随第 5.5 条出现）
+    rtag: 40.08                              // 第 7 句：R-ID 小标签，每个晚 0.5 秒
+  };
+  var HEAD_SCALE = 1.5, HEAD_CENTER = [960, 500];
+  var LINES = [];   // 连线：{ path, at }
+  var ROWS = ['t1', 't2', 't3', 't4', 't5', 't6'];
+
+  function pathD(x1, y1, x2, y2) {
+    var mx = (x1 + x2) / 2;
+    return 'M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ' ' + mx + ' ' + y2 + ' ' + x2 + ' ' + y2;
+  }
+  function addLine(x1, y1, x2, y2, at) {
+    var NS = 'http://www.w3.org/2000/svg';
+    var p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', pathD(x1, y1, x2, y2));
+    p.setAttribute('stroke', '#161616'); p.setAttribute('stroke-width', 5); p.setAttribute('fill', 'none');
+    p.setAttribute('stroke-linecap', 'round'); p.setAttribute('opacity', 0.85);
+    p.setAttribute('pathLength', 1); p.setAttribute('stroke-dasharray', 1); p.setAttribute('stroke-dashoffset', 1);
+    T.$('conn').appendChild(p);
+    var d = document.createElementNS(NS, 'circle');
+    d.setAttribute('cx', x1); d.setAttribute('cy', y1); d.setAttribute('r', 8); d.setAttribute('fill', '#161616'); d.setAttribute('opacity', 0);
+    T.$('conn').appendChild(d);
+    LINES.push({ p: p, d: d, at: at });
+  }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 47.140,
+    init: function () {
+      return T.fonts(document.body.textContent).then(function () {
+        // 连线的两端按终态量一次：窗口、ticket 卡都还没有进场位移
+        var xL = 880 + 6, xR = 1010 + 12 - 4;
+        function midY(id) { var r = T.rect(T.$(id)); return Math.round(r.y + r.h / 2); }
+        // 第 1–4 组各连一个 ticket
+        addLine(xL, midY('rw1'), xR, midY('t1'), CUE.lineA);
+        addLine(xL, midY('rw2'), xR, midY('t1'), CUE.lineA + 0.15);
+        addLine(xL, midY('rg2'), xR, midY('t2'), CUE.lineA + 0.4);
+        addLine(xL, midY('rg3'), xR, midY('t3'), CUE.lineA + 0.65);
+        addLine(xL, midY('rg4'), xR, midY('t4'), CUE.lineA + 0.9);
+        // 第 5 组拆开：5.1–5.3 → ticket 5，5.4 → ticket 6，5.5 → 交给人
+        addLine(xL, midY('r51'), xR, midY('t5'), CUE.lineB);
+        addLine(xL, midY('r52'), xR, midY('t5'), CUE.lineB + 0.15);
+        addLine(xL, midY('r53'), xR, midY('t5'), CUE.lineB + 0.3);
+        addLine(xL, midY('r54'), xR, midY('t6'), CUE.lineB + 0.6);
+        addLine(xL, midY('r55'), xR, midY('th'), CUE.lineB + 0.9);
+      });
+    },
+    render: function (t) {
+      // 第 1 句：问题贴纸正中放大，再缩到左上
+      T.enter(T.$('head'), T.p(t, CUE.head, 0.45), -14);
+      var hw = T.$('headw'), hd = T.$('head');
+      var mv = T.ease(T.p(t, CUE.headHold, CUE.headMove));
+      var fx = HEAD_CENTER[0] - HEAD_SCALE * hd.offsetWidth / 2 - 90, fy = HEAD_CENTER[1] - HEAD_SCALE * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + (HEAD_SCALE + (1 - HEAD_SCALE) * mv) + ')';
+
+      // 左栏：标签、窗口
+      T.enter(T.$('cL'), T.p(t, CUE.cL, 0.4), -12);
+      T.enter(T.$('win'), T.p(t, CUE.win, 0.5), 14);
+      // 当前：讲左栏时左标签黄描边，讲右栏时换到右标签
+      T.current(T.$('cL'), T.ease(T.p(t, CUE.cL + 0.4, 0.3)) * (1 - T.ease(T.p(t, CUE.cR - 0.2, 0.3))), 7);
+      T.current(T.$('cR'), T.ease(T.p(t, CUE.cR + 0.4, 0.3)), 7);
+
+      // 第 2 句：框出（奶白细框，需求编号框出后改浅蓝字）
+      var G = { f: CUE.fF, v: CUE.fV, r: CUE.fR };
+      T.all('.fl').forEach(function (el) {
+        var a = T.ease(T.p(t, G[el.getAttribute('data-g')], 0.3));
+        el.style.outlineColor = 'rgba(242,239,230,' + a + ')';
+        if (el.getAttribute('data-g') === 'r') el.style.color = a > 0.5 ? '#8cc8f5' : '';
+        el.style.fontWeight = a > 0.5 ? 700 : '';
+      });
+      // 第 3 句：左标签
+      T.enter(T.$('sL'), T.p(t, CUE.sL, 0.45), -12);
+
+      // 第 4 句：右栏标签、计数、6 个 ticket 依次落下
+      T.enter(T.$('cR'), T.p(t, CUE.cR, 0.4), -12);
+      T.enter(T.$('cnt2'), T.p(t, CUE.cR + 0.3, 0.4), -10);
+      T.enter(T.$('tl'), T.p(t, CUE.tl, 0.45), 14);
+      ROWS.forEach(function (id, i) {
+        var e = T.ease(T.p(t, CUE.tk + i * 0.35, 0.4));
+        T.$(id).style.opacity = e;
+        T.$(id).style.transform = 'translateY(' + ((1 - e) * 12) + 'px)';
+      });
+      // 第 5 句：右标签
+      T.enter(T.$('sR'), T.p(t, CUE.sR, 0.45), -12);
+
+      // 第 6 句：连线擦出；「交给人」随第 5.5 条出现
+      var he = T.ease(T.p(t, CUE.lineB + 0.9, 0.4));
+      T.$('th').style.opacity = he;
+      LINES.forEach(function (L) {
+        var p = T.ease(T.p(t, L.at, 0.7));
+        L.p.setAttribute('stroke-dashoffset', 1 - p);
+        L.d.setAttribute('opacity', p > 0 ? 1 : 0);
+      });
+      // 第 7 句：R-ID 小标签
+      T.all('.rtag').forEach(function (el, i) {
+        el.style.opacity = T.ease(T.p(t, CUE.rtag + i * 0.5, 0.4));
+      });
+    }
+  });
+</script>
+</body>
+</html>

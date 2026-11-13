@@ -1,0 +1,165 @@
+<!doctype html>
+<!-- S03 · 机制动画 · script 8–12「这次是规格自己前后对不上，才撞了出来。……但是规格文档内容也不少，有些还挺复杂，能不能让 AI 帮忙先审一遍呢？」
+     示意画面（右上角「示意」）。上方两格对照，下方接 S01 的最小循环：规格 → 开发，规格和开发之间插进一道「审」。
+     - 第 8 句：左格「规格自己前后对不上」→「测试撞出来」，结果块底色渐变到红（红 = 测试失败）；左格当前（黄描边），到第 9 句开口淡出。
+     - 第 9 句：右格「规格从头到尾错得一致」→「测试全绿」，结果块渐变到绿（绿 = 测试通过），旁边贴「✓ 没人发现？」问号虚线签；右格当前，到第 10 句开口淡出。
+     - 第 10 句：下方出现循环一行，规格 → 开发一条箭头；念到「我们还需要审一遍」时「审」圆片落在规格和开发之间，黄描边（当前），到第 11 句开口淡出。
+     - 第 11 句：「审」下方站一个「人」（角色图，圆环加实心圆点），一条短线连到「审」；人当前到第 12 句开口。
+     - 第 12 句：「人」左边出现一叠很厚的规格文档（四张叠放的奶白卡），再在右边并排出三个 Agent（六边形）。
+     - 内容都在 y 900 以上，避开字幕带（名字贴纸挂在方块下沿外 18px）。
+     配色（2026-10-23，替换上面「不上蓝 / 琥珀」的说法）：规格卡浅蓝、开发卡浅琥珀（规格 / 执行两侧）；「审」是评审，用蓝（同 S06 的「评审」标签）；
+       上方两格的标签蓝（讲的是规格的错）；那叠规格文档浅蓝；人、Agent 保持炭灰中性；结果块红 / 绿照旧；黄 = 当前，同一时刻只有一个。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。第 8 句 0.0，第 9 句 3.76，第 10 句 9.28，第 11 句 14.32，第 12 句 18.88，全页 26.16。 -->
+<html lang="zh-CN" data-frame-id="S03">
+<head>
+<meta charset="utf-8">
+<title>S03 · 错得一致就没人发现：先审一道</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 上方两格 */
+  .cell { top: 150px; width: 800px; height: 250px; padding: 0; }
+  .cell .tab { font-size: 44px; }
+  #cl { left: 100px; } #cr { left: 1020px; }
+  .cell .ln { position: absolute; left: 40px; top: 52px; font-weight: 600; font-size: 40px; color: var(--ink); white-space: nowrap; }
+  .cell .res { position: absolute; left: 40px; top: 132px; padding: 10px 28px; border: 4px solid var(--ink); border-radius: 8px;
+               font-family: var(--display); font-weight: 800; font-size: 50px; color: var(--ink); background: var(--cream); white-space: nowrap; }
+  #why { left: 1450px; top: 285px; }
+
+  /* 下方循环一行 */
+  .st { top: 500px; width: 330px; height: 130px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .st .big { font-size: 56px; }
+  #cs { left: 390px; background: var(--blue-soft); } #cc { left: 1200px; background: var(--amber-soft); }
+  .fa { position: absolute; top: 540px; height: 50px; }
+  #fa1 { left: 740px; width: 440px; }
+  /* 「审」：规格和开发之间的圆片，盖住箭头 */
+  #gate { position: absolute; left: 900px; top: 505px; width: 120px; height: 120px; box-sizing: border-box; border-radius: 50%;
+          background: var(--blue); border: 6px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--display); font-weight: 800; font-size: 70px; color: var(--ink); }
+  #link { position: absolute; left: 957px; top: 628px; width: 6px; height: 62px; background: var(--ink); opacity: .75; }
+
+  /* 角色图：人、Agent */
+  .tile { position: absolute; box-sizing: border-box; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 10px 10px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 84px; height: 84px; margin-top: -22px; }
+  .tile .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+          padding: 6px 18px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1.1; }
+  #human { left: 860px; top: 690px; width: 200px; height: 180px; }
+  .ag { top: 700px; width: 160px; height: 170px; }
+  #a1 { left: 1150px; } #a2 { left: 1340px; } #a3 { left: 1530px; }
+
+  /* 一叠规格文档：四张叠放 */
+  .doc { position: absolute; width: 250px; height: 150px; box-sizing: border-box; background: var(--blue-soft); border: 5px solid var(--ink);
+         border-radius: 8px; box-shadow: 6px 6px 0 var(--ink); }
+  .doc i { position: absolute; left: 24px; height: 12px; border-radius: 6px; background: rgba(22,22,22,.35); }
+  #cl .tab, #cr .tab { background: var(--blue); }
+  #d1 { left: 460px; top: 730px; } #d2 { left: 476px; top: 716px; } #d3 { left: 492px; top: 702px; } #d4 { left: 508px; top: 688px; }
+  .doc b { position: absolute; left: 24px; top: 20px; font-family: var(--display); font-weight: 800; font-size: 38px; color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 上方两格 -->
+  <div class="card cell" id="cl" data-r="-1">
+    <div class="tab" data-r="-2">前后对不上</div>
+    <div class="ln">规格自己前后对不上</div>
+    <div class="res" id="rl">测试撞出来</div>
+  </div>
+  <div class="card cell" id="cr" data-r="1">
+    <div class="tab" data-r="2">从头错到尾</div>
+    <div class="ln">规格从头到尾错得一致</div>
+    <div class="res" id="rr">测试全绿 ✓</div>
+  </div>
+  <div class="tag" id="why" data-r="3.5">没人发现？</div>
+
+  <!-- 下方循环：规格 → 开发 -->
+  <div class="card st" id="cs" data-r="-1"><div class="big">规格</div></div>
+  <div class="card st" id="cc" data-r="-1.5"><div class="big">开发</div></div>
+  <svg class="fa" id="fa1" viewBox="0 0 260 50" aria-hidden="true">
+    <path d="M8 25 H236" fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="8" stroke-linecap="round"/>
+    <polygon points="234,8 260,25 234,42" fill="#161616" fill-opacity=".85"/>
+  </svg>
+  <div id="gate" data-r="0">审</div>
+  <div id="link"></div>
+
+  <!-- 人 -->
+  <div class="tile" id="human" data-r="-1.5">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8">
+      <circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:-3deg">人</div>
+  </div>
+
+  <!-- 一叠规格文档 -->
+  <div class="doc" id="d1" data-r="0"><i style="top:40px;width:130px"></i><i style="top:72px;width:170px"></i><i style="top:104px;width:110px"></i></div>
+  <div class="doc" id="d2" data-r="0"></div>
+  <div class="doc" id="d3" data-r="0"></div>
+  <div class="doc" id="d4" data-r="0"><b>规格文档</b><i style="top:82px;width:170px"></i><i style="top:112px;width:110px"></i></div>
+
+  <!-- 几个 Agent -->
+  <div class="tile ag" id="a1" data-r="1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">Agent</div></div>
+  <div class="tile ag" id="a2" data-r="-1.5"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:-2deg">Agent</div></div>
+  <div class="tile ag" id="a3" data-r="1.5"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:-2deg">Agent</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按录音实测：词首字开始时间减 0.2 秒）。
+  var AT = {
+    cl: 0.0,        // 第 8 句开口：左格落下，当前
+    fail: 2.04,     // 「才撞了出来」：结果块渐变到红
+    cr: 3.56,       // 第 9 句开口：右格落下，当前
+    pass: 6.04,     // 「测试全绿」：结果块渐变到绿
+    why: 7.0,       // 「谁也发现不了」：问号签
+    loop: 9.08,    // 第 10 句开口：循环一行落下
+    arrows: 9.68,  // 规格 → 开发 一条箭头
+    gate: 11.4,     // 「我们还需要审一遍」：「审」圆片落下，当前
+    gateOff: 14.12, // 第 11 句开口：「审」当前淡出
+    human: 15.08,   // 「由人来把关」：人落下，连到「审」，当前
+    humanOff: 18.68, // 第 12 句开口：人当前淡出
+    docs: 19.0,     // 「规格文档内容也不少」：一叠文档
+    agents: 22.84   // 「让 AI 帮忙先审一遍」：几个 Agent
+  };
+
+  Stage({
+    duration: 26.16,
+    init: function () { return T.fonts('示意前后对不上从头错到尾规格自己测试撞出来一致全绿没人发现开发审人规格文档Agent？'); },
+    render: function (t) {
+
+      // 第 8 句：左格；结果块渐变到红（测试失败）
+      T.enter(T.$('cl'), T.p(t, AT.cl, 0.5), 20);
+      T.fill(T.$('rl'), [229, 83, 75], T.p(t, AT.fail, 0.6));
+      T.current(T.$('cl'), T.ease(T.p(t, AT.cl + 0.3, 0.3)) * (1 - T.ease(T.p(t, AT.cr, 0.4))), 10);
+
+      // 第 9 句：右格；结果块渐变到绿（测试通过），问号签
+      T.enter(T.$('cr'), T.p(t, AT.cr, 0.5), 20);
+      T.fill(T.$('rr'), [76, 195, 138], T.p(t, AT.pass, 0.6));
+      T.enter(T.$('why'), T.p(t, AT.why, 0.45), -12);
+      T.current(T.$('cr'), T.ease(T.p(t, AT.cr + 0.3, 0.3)) * (1 - T.ease(T.p(t, AT.loop, 0.4))), 10);
+
+      // 第 10 句：循环一行；「审」落在规格和开发之间
+      T.enter(T.$('cs'), T.p(t, AT.loop, 0.4), 16);
+      T.enter(T.$('cc'), T.p(t, AT.loop + 0.15, 0.4), 16);
+      T.wipe(T.$('fa1'), T.p(t, AT.arrows, 0.6), 'x');
+      T.$('fa1').style.opacity = t >= AT.arrows ? 1 : 0;
+      T.enter(T.$('gate'), T.p(t, AT.gate, 0.4), -20);
+      T.current(T.$('gate'), T.ease(T.p(t, AT.gate + 0.2, 0.3)) * (1 - T.ease(T.p(t, AT.gateOff, 0.4))), 8);
+
+      // 第 11 句：人站在「审」旁边
+      T.wipe(T.$('link'), T.p(t, AT.human - 0.2, 0.3), 'y-up');
+      T.$('link').style.opacity = t >= AT.human - 0.2 ? 0.75 : 0;
+      T.enter(T.$('human'), T.p(t, AT.human, 0.5), 16);
+      T.current(T.$('human'), T.ease(T.p(t, AT.human + 0.3, 0.3)) * (1 - T.ease(T.p(t, AT.humanOff, 0.4))), 10);
+
+      // 第 12 句：一叠规格文档，再并排出几个 Agent
+      var ds = ['d1', 'd2', 'd3', 'd4'];
+      for (var i = 0; i < 4; i++) T.enter(T.$(ds[i]), T.p(t, AT.docs + i * 0.15, 0.4), 14);
+      for (var j = 1; j <= 3; j++) T.enter(T.$('a' + j), T.p(t, AT.agents + (j - 1) * 0.25, 0.45), 12);
+    }
+  });
+</script>
+</body>
+</html>

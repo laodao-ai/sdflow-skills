@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- S17 · 标题卡 · script 67–68「光说不直观，我拿一个小需求试了一遍。……加一个超温告警。」
+     左：演示对象（读温度的小程序，Go，只用标准库）；右：需求。两张都是定下来的事实，倾角小。
+     不上蓝 / 琥珀：这里还没用工具。 -->
+<html lang="zh-CN" data-frame-id="S17">
+<head>
+<meta charset="utf-8">
+<title>S17 · 演示说明</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .box { width: 760px; height: 440px; padding: 0 56px; display: flex; flex-direction: column; justify-content: center; gap: 32px; }
+  .box .big { font-size: 84px; white-space: nowrap; }
+  .chips { display: flex; gap: 24px; }
+  .chips span { padding: 10px 24px; border-radius: 8px; border: 4px solid var(--ink); background: var(--cream); font-family: var(--mono); font-weight: 700; font-size: 38px; color: var(--ink); box-shadow: 6px 6px 0 var(--ink); }
+  .box.dark .chips span { background: var(--cream); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card box" id="a" data-r="-1.5" style="left:150px;top:310px">
+    <div class="tab ink">演示</div>
+    <div class="big">一个读温度<br>的小程序</div>
+    <div class="chips"><span>Go</span><span>只用标准库</span></div>
+  </div>
+  <div class="card box" id="b" data-r="1.5" style="left:1010px;top:330px">
+    <div class="tab ink" style="transform:rotate(2deg)">需求</div>
+    <div class="big">加一个<br>超温告警</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 6,
+    init: function () { return T.fonts('演示需求一个读温度的小程序加超温告警'); },
+    render: function (t) {
+      T.enter(T.$('a'), T.p(t, 0.3, 0.6), 30);
+      T.enter(T.$('b'), T.p(t, 5.04, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

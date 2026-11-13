@@ -1,0 +1,167 @@
+<!doctype html>
+<!-- S01 · 机制动画 · script 1–4「规格写好了，为什么不让 AI 一口气生成代码？……哪条需求做到了，哪些测试是代码写完才补的，你都没法确认。」
+     示意画面。开场：一口气交出去，改了几十个文件，测试全绿，AI 说「做好了」；你说不清是不是真做好了。
+     - 片头：开头盖一层主封面（assets/cover/，和封面同一份组件，接法照第 3 期 S01）。时间按 visual-v4「片头」：
+       0–2.0 秒全显，2.0–2.2 秒淡出，2.2–2.5 秒主卡进场；封面和主卡不交叉淡化。
+       cover.js 不存在时（HAS_COVER 为假）跳过封面，PR 卡从 0.2 秒进场，不留空屏。
+     - PR 卡：「Files changed」数字从 0 一路涨到 47（几十），下面文件一行行出来；旁边测试卡一排逐行变绿（绿 = 测试通过）；
+       AI（Agent 图形，六边形）旁气泡「做好了」。
+     - 第 3 句：气泡旁出一个大问号。
+     - 第 4 句：改动列表上冒出几个小问号，再出两张问题贴纸：「哪条需求在哪？」「哪些测试是后补的？」（虚线贴纸，没定的东西，倾角大；黄实底只给 AI 的猜，不用）。
+     页内元素出现后都留到页末（一页一层）。内容整体在 y 900 以上，避开字幕带。
+     口播时刻（估算，每分钟 220 字，还没录音，录音后按 frame-times.py 对齐）：第 1 句 0.0，第 2 句 5.3（「它改了几十个文件」约 8.7，「测试全绿」约 11.2，「做好了」约 13.5），
+     第 3 句 14.6，第 4 句 17.4（「哪条需求」17.4，「哪些是先写的」约 20.4），念完 27.4，全页 28.4。 -->
+<html lang="zh-CN" data-frame-id="S01">
+<head>
+<meta charset="utf-8">
+<title>S01 · 开场：一口气生成代码，做好了吗</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../../assets/cover/cover.css">
+<style>
+  /* ===== PR 卡 ===== */
+  #pr { left: 80px; top: 150px; width: 900px; height: 730px; padding: 0; }
+  #pr .tab { font-size: 40px; }
+  #pr .lbl { position: absolute; left: 40px; top: 60px; font-size: 38px; font-weight: 600; font-family: var(--mono); }
+  #cnt { position: absolute; left: 480px; top: 22px; font-family: var(--mono); font-weight: 700; font-size: 130px; line-height: 1.1; }
+  #files { position: absolute; left: 40px; top: 190px; width: 820px; }
+  .f { position: relative; height: 56px; box-sizing: border-box; border-bottom: 3px dashed rgba(22,22,22,.3);
+       font-family: var(--mono); font-weight: 500; font-size: 30px; line-height: 52px; white-space: nowrap; }
+  .f .qm { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; box-sizing: border-box; border-radius: 50%;
+           border: 4px dashed var(--ink); background: var(--cream); text-align: center; line-height: 34px;
+           font-family: var(--display); font-weight: 900; font-size: 32px; opacity: 0; }
+
+  /* ===== 测试卡 ===== */
+  #tc { left: 1060px; top: 290px; width: 420px; height: 520px; padding: 0; }
+  #tc .tab { font-size: 40px; }
+  #tests { position: absolute; left: 30px; top: 44px; width: 360px; }
+  .t { height: 54px; box-sizing: border-box; margin-bottom: 10px; padding: 0 14px; border: 4px solid var(--ink); border-radius: 8px;
+       background: var(--cream); font-family: var(--mono); font-weight: 600; font-size: 26px; line-height: 46px; white-space: nowrap; color: var(--ink); }
+  .t b { margin-right: 10px; }
+
+  /* ===== AI、气泡、大问号 ===== */
+  #ag { position: absolute; left: 1650px; top: 650px; width: 150px; height: 150px; }
+  #agn { left: 1655px; top: 815px; font-size: 34px; padding: 6px 20px; }
+  #bb { left: 1510px; top: 470px; width: 330px; height: 120px; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 8px 8px 0 var(--ink); }
+  #bb .big { font-size: 70px; white-space: nowrap; }
+  #bb::before { content: ''; position: absolute; left: 190px; top: 108px; border-left: 22px solid transparent; border-right: 22px solid transparent; border-top: 52px solid var(--ink); }
+  #bb::after  { content: ''; position: absolute; left: 197px; top: 100px; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 40px solid var(--cream); }
+  #q { position: absolute; left: 1585px; top: 70px; font-family: var(--display); font-weight: 900; font-size: 330px; line-height: 1; color: var(--ink); }
+
+  /* ===== 问题贴纸 ===== */
+  .ask { background: var(--cream); font-size: 36px; padding: 8px 22px; }
+  #tq1 { left: 722px; top: 222px; font-size: 34px; }
+  #tq2 { left: 1040px; top: 836px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="pr" data-r="-1">
+    <div class="tab">一个 PR</div>
+    <div class="lbl">Files changed</div>
+    <div id="cnt">0</div>
+    <div id="files">
+      <div class="f">internal/alarm/rule.go</div>
+      <div class="f">internal/alarm/notify.go<span class="qm">?</span></div>
+      <div class="f">internal/alarm/notify_test.go</div>
+      <div class="f">internal/config/config.go<span class="qm">?</span></div>
+      <div class="f">internal/config/config_test.go</div>
+      <div class="f">internal/store/state.go<span class="qm">?</span></div>
+      <div class="f">cmd/server/main.go</div>
+      <div class="f">internal/store/state_test.go<span class="qm">?</span></div>
+      <div class="f">……</div>
+    </div>
+  </div>
+
+  <div class="card" id="tc" data-r="1.2">
+    <div class="tab" data-r="2">测试</div>
+    <div id="tests">
+      <div class="t"><b>✓</b>TestLoadConfig</div>
+      <div class="t"><b>✓</b>TestStartCheck</div>
+      <div class="t"><b>✓</b>TestNotify</div>
+      <div class="t"><b>✓</b>TestRetry</div>
+      <div class="t"><b>✓</b>TestWindow</div>
+      <div class="t"><b>✓</b>TestDedup</div>
+      <div class="t"><b>✓</b>TestQuit</div>
+    </div>
+  </div>
+
+  <!-- AI：六边形图形放在炭灰方块上（visual-v4 第五节） -->
+  <svg id="ag" viewBox="0 0 150 150" aria-hidden="true">
+    <rect x="3" y="3" width="144" height="144" rx="10" fill="#262626" stroke="#161616" stroke-width="5"/>
+    <polygon points="115,75 95,109.6 55,109.6 35,75 55,40.4 95,40.4" fill="none" stroke="#f2efe6" stroke-width="6" stroke-linejoin="round"/>
+    <polygon points="91,75 83,88.9 67,88.9 59,75 67,61.1 83,61.1" fill="#f2efe6"/>
+  </svg>
+  <div class="chip" id="agn" data-r="-2">AI</div>
+  <div class="card" id="bb" data-r="2"><div class="big">做好了</div></div>
+  <div id="q" data-r="0">?</div>
+
+  <div class="tag ask" id="tq1" data-r="-4">哪条需求在哪？</div>
+  <div class="tag ask" id="tq2" data-r="4">哪些测试是后补的？</div>
+
+  <!-- 片头封面，盖在最上层。 -->
+  <div id="cover"></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script src="../../assets/cover/cover.js"></script>
+<script>
+  var HAS_COVER = typeof Cover === 'function';
+  var COVER_END = HAS_COVER ? 2.0 : 0;   // 封面全显到 2.0 秒，2.0–2.2 淡出，2.2 主卡进场；没有封面组件时 0.2 秒进场
+
+  // 口播时刻（秒，画面内，估算）。
+  var AT = {
+    pr: COVER_END + 0.2,    // PR 卡进场
+    cnt0: 5.84, cnt1: 11.0,  // 数字从 0 涨到 47：第 2 句「它改了几十个文件」前后涨完
+    row0: 6.08, rowGap: 0.8, // 文件行逐行出现
+    tc: 10.88,               // 「测试全绿」：测试卡
+    green0: 11.135, greenGap: 0.2,
+    ag: 11.944,               // AI
+    bb: 12.416,               // 「做好了」
+    q: 13.36,                // 第 3 句：大问号
+    qm0: 15.6, qmGap: 0.4,  // 第 4 句：小问号
+    tq1: 15.896,              // 「哪条需求在哪」
+    tq2: 17.555               // 「哪些测试是后补的」
+  };
+  var FILES = 47;
+  var GREEN = [76, 195, 138];
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 21.940,
+    init: function () {
+      var jobs = [T.fonts(T.$('stage').textContent)];
+      if (HAS_COVER) jobs.push(Cover(T.$('cover'), { mode: 'main', base: '../../assets/cover/', brand: '../../../shared/logo.svg' }));
+      return Promise.all(jobs);
+    },
+    render: function (t) {
+      T.tilt();
+      T.$('cover').style.opacity = HAS_COVER ? 1 - T.p(t, COVER_END, 0.2) : 0;
+
+      T.enter(T.$('pr'), T.p(t, AT.pr, 0.3), 20);
+      var c = T.p(t, AT.cnt0, AT.cnt1 - AT.cnt0);
+      T.$('cnt').textContent = Math.round(FILES * Math.pow(c, 1.4));
+      T.all('#files .f').forEach(function (el, i) {
+        T.enter(el, T.p(t, AT.row0 + i * AT.rowGap, 0.3), 8);
+        var qm = el.querySelector('.qm');
+        if (qm) {
+          var k = (i - 1) / 2;   // 第 2、4、6、8 行带小问号：k = 0..3
+          qm.style.opacity = T.ease(T.p(t, AT.qm0 + k * AT.qmGap, 0.3));
+        }
+      });
+
+      T.enter(T.$('tc'), T.p(t, AT.tc, 0.4), 20);
+      T.all('#tests .t').forEach(function (el, i) {
+        T.fill(el, GREEN, T.p(t, AT.green0 + i * AT.greenGap, 0.3));
+      });
+
+      T.$('ag').style.opacity = T.ease(T.p(t, AT.ag, 0.4));
+      T.enter(T.$('agn'), T.p(t, AT.ag, 0.4), 10);
+      T.enter(T.$('bb'), T.p(t, AT.bb, 0.4), 14);
+      T.enter(T.$('q'), T.p(t, AT.q, 0.5), -24);
+      T.enter(T.$('tq1'), T.p(t, AT.tq1, 0.4), 14);
+      T.enter(T.$('tq2'), T.p(t, AT.tq2, 0.4), 14);
+    }
+  });
+</script>
+</body>
+</html>

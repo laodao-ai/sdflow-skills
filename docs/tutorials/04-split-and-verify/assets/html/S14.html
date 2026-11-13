@@ -1,0 +1,177 @@
+<!doctype html>
+<!-- S14 · 机制动画 · script 57–62「切 ticket 的时候也可能出错。举个我自己的例子。……断言，就是测试里检查结果对不对的那几行。……这个问题没有漏过去，是拆完以后的那道检查拦下来的。」
+     实录 · 原文摘要：sdflow 开发仓 openspec/changes/archive/2026-10-24-improve-devenv-field-run-feedback/impl-reports/planning-decisions.md
+     已逐字对过原文（2026-10-30 读）：
+       :3  触发：design.md 无「切片建议」节，也无缺席理由（`T10-choice` 必触发条件 1）。  → 画面「设计里没写切法」
+       :5  `T10-choice` 复核: 切分草案 v1（7 票，1→2→3→4→5→6 全串行，2.1 整条落票 2） | 对抗镜结论 证伪 | 必改：2.1 的四组 references 字面量断言依赖票 4、票 6 的产物，覆盖列未写明拆分，票 2 照 2.1 原文做无法转绿。 | ……
+       :6  …… 切分草案 v2（……票 6 改 Blocked-by 4 与票 5 并行……） | 对抗镜结论 通过 | ……
+     下方窗口里引的是 :5 的「必改」一句，原样，不改字；「证伪」留到 S14a。
+     与分镜的小出入：原文写 v1 是「7 票，1→2→3→4→5→6 全串行」，第 7 票（终版 tickets.md 里是收尾）没写依赖；画面按分镜画成 1→…→7 一条线，7 的箭头是按终版 Blocked-by 1–6 补的。
+     红灯、红色连线：断言转不绿 = 测试没过，属于「测试失败」的红（visual-v4 第二节），不是装饰。
+
+     句子（本画面内第 N 句，估算起点，录音后用 frame-times.py 对齐）：
+       1 句 0.0：问题贴纸「切 ticket 也会出错」正中放大停约 1 秒缩到左上；2.2 秒起右上出处卡（sdflow 开发仓 · change 目录）。
+       2 句 6.8：「设计里没写切法」；9.6 起「初稿 v1」和七个 ticket 一个接一个。
+       3 句 16.1：ticket 2 下面挂「2.1 · 四组断言」；念到第四个、第六个，两条红线连到 ticket 4、ticket 6 的产物，标「还没做出来」。
+       4 句 25.4：「2.1 · 四组断言」格旁出小字「断言：测试里检查结果对不对的那几行」（25.7），留到页末。
+       5 句 31.3：ticket 2 上一个转圈的红灯，旁边「测试永远过不了」。
+       6 句 36.9：原文窗口（planning-decisions.md:5）落下，留到页末。
+     颜色：琥珀 = ticket（执行一侧）；蓝 = 规格一侧（2.1 是任务清单里的一步）；红 = 测试没过；黄 = 当前。内容整体在 y 920 以上。 -->
+<html lang="zh-CN" data-frame-id="S14">
+<head>
+<meta charset="utf-8">
+<title>S14 · 切 ticket 切错的例子</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 56px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+
+  #src { left: 860px; top: 70px; width: 1000px; padding: 14px 28px 16px; }
+  #src .tab { left: -14px; top: -44px; font-size: 32px; padding: 4px 22px; }
+  #src b { display: block; font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1.2; color: var(--ink); }
+  #src span { display: block; margin-top: 4px; font-family: var(--mono); font-weight: 600; font-size: 26px; color: rgba(22,22,22,.8); }
+
+  #no { left: 60px; top: 200px; font-family: var(--display); font-weight: 800; font-size: 46px; padding: 6px 26px; }
+  #v1 { left: 56px; top: 296px; font-size: 38px; }
+
+  .tk { top: 372px; width: 180px; height: 110px; padding: 0; display: flex; align-items: center; justify-content: center;
+        font-family: var(--display); font-weight: 800; font-size: 42px; background: var(--amber-soft); }
+  .ar { position: absolute; top: 400px; width: 82px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 46px; line-height: 1; color: var(--ink); }
+  #ln { position: absolute; left: 0; top: 0; width: 1920px; height: 940px; overflow: visible; }
+
+  #ast { left: 262px; top: 620px; width: 360px; height: 100px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--blue-soft);
+         font-family: var(--display); font-weight: 800; font-size: 42px; }
+  .pr { top: 512px; font-size: 30px; padding: 6px 20px; border-width: 4px; }
+  #p4 { left: 806px; } #p6 { left: 1330px; }
+  .lb { font-size: 28px; padding: 2px 14px; border-width: 3px; background: var(--fail); color: var(--ink); font-weight: 700; }
+  #b4 { left: 700px; top: 604px; } #b6 { left: 1000px; top: 644px; }
+  #lt { left: 480px; top: 330px; width: 88px; height: 88px; }
+  #term { left: 60px; top: 506px; width: 290px; white-space: normal; font-size: 26px; line-height: 1.25; }
+  #no2 { left: 590px; top: 282px; font-size: 32px; }
+
+  /* 原文窗口 */
+  #q { left: 60px; top: 760px; width: 1800px; padding: 0 0 12px; overflow: visible; white-space: normal; font-size: 28px; line-height: 42px; font-variant-ligatures: none; }
+  #q .bar0 { height: 44px; display: flex; align-items: center; padding: 0 28px; box-sizing: border-box; background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0; font-size: 26px; line-height: 1; color: var(--cream); }
+  #q .bd { padding: 10px 28px 2px; color: #e4e0d6; }
+  #q .bd b { color: var(--cream); font-weight: 800; text-decoration: underline; text-decoration-color: var(--cream); text-decoration-thickness: 3px; text-underline-offset: 6px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">切 ticket 也会出错</div></div>
+
+  <!-- 出处卡（引文卡的出处在上） -->
+  <div class="card" id="src" data-r="1"><div class="tab ink" data-r="-2">实录 · 原文摘要</div><b>sdflow 开发仓 · 我自己的例子</b><span>archive/2026-10-24-improve-devenv-field-run-feedback</span></div>
+
+  <div class="chip" id="no" data-r="-1.5">设计里没写切法</div>
+  <div class="tab" id="v1" data-r="-2">初稿 v1</div>
+
+  <svg id="ln" viewBox="0 0 1920 940" aria-hidden="true">
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path id="s2" d="M432 482 V620" stroke="#161616" stroke-opacity=".85" stroke-width="5"/>
+      <path id="s4" d="M956 482 V512" stroke="#161616" stroke-opacity=".85" stroke-width="5"/>
+      <path id="s6" d="M1480 482 V512" stroke="#161616" stroke-opacity=".85" stroke-width="5"/>
+      <path id="r4" d="M622 670 C 800 670, 956 640, 956 566" stroke="#e5534b" stroke-width="6" stroke-dasharray="14 10"/>
+      <path id="r6" d="M622 670 C 1100 760, 1480 700, 1480 566" stroke="#e5534b" stroke-width="6" stroke-dasharray="14 10"/>
+    </g>
+  </svg>
+
+  <!-- 七个 ticket，一个接一个 -->
+  <div class="card tk" id="t1" style="left:80px" data-r="-1">ticket 1</div><div class="ar" id="a1" style="left:260px">→</div>
+  <div class="card tk" id="t2" style="left:342px" data-r="1">ticket 2</div><div class="ar" id="a2" style="left:522px">→</div>
+  <div class="card tk" id="t3" style="left:604px" data-r="-1">ticket 3</div><div class="ar" id="a3" style="left:784px">→</div>
+  <div class="card tk" id="t4" style="left:866px" data-r="1">ticket 4</div><div class="ar" id="a4" style="left:1046px">→</div>
+  <div class="card tk" id="t5" style="left:1128px" data-r="-1">ticket 5</div><div class="ar" id="a5" style="left:1308px">→</div>
+  <div class="card tk" id="t6" style="left:1390px" data-r="1">ticket 6</div><div class="ar" id="a6" style="left:1570px">→</div>
+  <div class="card tk" id="t7" style="left:1652px" data-r="-1">ticket 7</div>
+
+  <!-- 断言与两处还没做出来的产物 -->
+  <div class="card" id="ast" data-r="-1">2.1 · 四组断言</div>
+  <div class="tag" id="term" data-r="-2">断言：测试里检查结果对不对的那几行</div>
+  <div class="tag pr" id="p4" data-r="2">ticket 4 的产物</div>
+  <div class="tag pr" id="p6" data-r="-2">ticket 6 的产物</div>
+  <div class="chip lb" id="b4" data-r="-3">还没做出来</div>
+  <div class="chip lb" id="b6" data-r="3">还没做出来</div>
+
+  <!-- 转圈的红灯 -->
+  <svg id="lt" class="abs" viewBox="0 0 64 64" aria-hidden="true">
+    <circle cx="32" cy="32" r="20" fill="#e5534b" stroke="#161616" stroke-width="5"/>
+    <g id="spin" style="transform-origin:32px 32px"><path d="M32 6 A26 26 0 0 1 58 32" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round"/></g>
+  </svg>
+  <div class="tag" id="no2" data-r="3">测试永远过不了</div>
+
+  <!-- 原文 -->
+  <div class="cmd" id="q">
+    <div class="bar0">planning-decisions.md:5</div>
+    <div class="bd">必改：2.1 的四组 references 字面量断言依赖票 4、票 6 的产物，覆盖列未写明拆分，<b>票 2 照 2.1 原文做无法转绿</b>。</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。已按录音实测句子起点对齐（2026-11-03）。注释写本画面第几句。
+  var CUE = {
+    hold: 0.678, move: 0.5,                     // 1 句：问题贴纸正中停到 0.8 秒，0.5 秒缩到左上
+    src: 1.864,                                 // 1 句：出处卡
+    no: 5.76, v1: 7.627, tk: 8.027, tkGap: 0.35,  // 2 句：设计里没写切法；初稿 v1，七个 ticket 一个个落下
+    ast: 12.96, line2: 13.128, p4: 15.646, r4: 15.814, p6: 17.158, r6: 17.325, lb: 17.745, curEnd: 27.84,   // 3–5 句：断言挂下来，两条红线
+    term: 19.76,                               // 4 句：小字「断言：测试里检查结果对不对的那几行」
+    lt: 23.52, no2: 24.647,                      // 5 句：红灯，「测试永远过不了」
+    q: 27.84                                   // 6 句：原文窗口，留到页末
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function wipePath(id, p) {          // 线从起点擦出：用 clip-path 按 x 方向（起点在左）
+    var el = T.$(id); el.style.opacity = p > 0 ? 1 : 0;
+    el.style.clipPath = 'inset(0 ' + ((1 - p) * 100) + '% 0 0)';
+  }
+  function wipeDown(id, p) { var el = T.$(id); el.style.opacity = p > 0 ? 1 : 0; el.style.clipPath = 'inset(0 0 ' + ((1 - p) * 100) + '% 0)'; }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 33.620,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：问题贴纸
+      T.enter(T.$('hdr'), T.p(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move)), S = 1.5, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+      show('src', t, CUE.src, 14);
+
+      // 2 句
+      show('no', t, CUE.no); show('v1', t, CUE.v1, -8);
+      for (var i = 1; i <= 7; i++) {
+        show('t' + i, t, CUE.tk + (i - 1) * CUE.tkGap, 16);
+        if (i < 7) T.$('a' + i).style.opacity = T.ease(T.p(t, CUE.tk + i * CUE.tkGap - 0.1, 0.35));
+      }
+
+      // 3 句：断言挂在 ticket 2 下面，当前
+      show('ast', t, CUE.ast, 14);
+      T.current(T.$('t2'), on(t, 16.1, CUE.curEnd), 10);
+      wipeDown('s2', T.ease(T.p(t, CUE.line2, 0.4)));
+      show('p4', t, CUE.p4, 8); wipeDown('s4', T.ease(T.p(t, CUE.p4, 0.3)));
+      show('p6', t, CUE.p6, 8); wipeDown('s6', T.ease(T.p(t, CUE.p6, 0.3)));
+      wipePath('r4', T.ease(T.p(t, CUE.r4, 0.7)));
+      wipePath('r6', T.ease(T.p(t, CUE.r6, 0.9)));
+      show('b4', t, CUE.lb, 8); show('b6', t, CUE.lb + 0.3, 8);
+
+      // 4 句：断言的小字解释
+      show('term', t, CUE.term, 8);
+
+      // 5 句：红灯转圈，「测试永远过不了」
+      var lt = T.ease(T.p(t, CUE.lt, 0.4));
+      T.$('lt').style.opacity = lt;
+      T.$('spin').style.transform = 'rotate(' + (t * 300) + 'deg)';
+      show('no2', t, CUE.no2, 8);
+
+      // 6 句：原文窗口，当前到页末
+      T.enter(T.$('q'), T.p(t, CUE.q, 0.5), 14);
+      T.current(T.$('q'), on(t, CUE.q, 999), 10);
+    }
+  });
+</script>
+</body>
+</html>

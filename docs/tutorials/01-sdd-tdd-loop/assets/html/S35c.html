@@ -1,0 +1,155 @@
+<!doctype html>
+<!-- S35c · 机制动画 · script 162–166「我们打开看一眼任务 1。……连失败时会报什么错，都提前写好了。」
+     真实文件，不是示意：演示仓 /Users/demo/sdd-tdd-loop-demo 的 docs/superpowers/plans/2026-10-06-over-temperature-alert.md，
+     Task 1 一段（第 40–66 行，2026-10-06 核过）。S32 是同一件事的示意版，这里是它的原文。
+     - 原文一字不改，Markdown 原样显示（`###`、`**`、反引号、未勾的 `- [ ]` 都照抄）。左边是原文行号，空行不画，所以行号有跳。
+       省掉的部分用「…」：Interfaces 两行、Step 1 后半句、Step 3 后半句；Step 5 下面的 git 命令块（68–71 行）不画。
+     - 窗口是文件摘录，不倾斜；琥珀标签 = Superpowers 产出的计划，标签上写文件路径。
+     - 黄色描边 = 当前讲到的：任务标题（161）→ Files 块（162）→ 五步整块（163）→ Step 1–5 逐个（164）。
+       讲过的步骤描边转灰、字压暗（灰 = 已过去）。
+     - 166：红框框住 Step 2 的「Expected: FAIL to compile, `undefined: IsOverTemp`.」——这是预先写好的测试失败，红色只用在这里。
+     - 右侧中文标签用 S32 的说法（要改的文件、配的测试、写测试 / 跑，失败 / 写代码 / 跑，通过 / 提交），给不看英文的观众对照。 -->
+<html lang="zh-CN" data-frame-id="S35c">
+<head>
+<meta charset="utf-8">
+<title>S35c · 计划原文</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .window { overflow: visible; padding: 50px 40px 24px; color: var(--cream); font-family: var(--mono); font-size: 30px; line-height: 44px; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 28px; margin-left: 14px; }
+  .blk { border-radius: 4px; }
+  .blk + .blk, #steps { margin-top: 16px; }
+  .ln { display: flex; gap: 24px; white-space: pre; }
+  .ln .g { flex: none; width: 2ch; text-align: right; color: var(--unlit); }
+  .ln .x { flex: 1; min-width: 0; }
+  .dim { color: var(--unlit); }
+  .hl { display: inline-block; border-radius: 4px; }
+
+  /* 右侧中文对照标签 */
+  .side { left: 1540px; display: flex; align-items: center; gap: 16px; padding: 6px 22px 6px 8px; font-size: 32px; box-shadow: 6px 6px 0 var(--ink); }
+  .side .num { width: 46px; height: 46px; font-size: 24px; border-width: 4px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win" style="left:70px;top:100px;width:1420px">
+    <div class="tab sp">Superpowers 计划<span class="m">docs/superpowers/plans/2026-10-06-over-temperature-alert.md</span></div>
+
+    <div class="blk" id="bHead" data-shadow="0">
+      <div class="ln"><span class="g">40</span><span class="x">### Task 1: Threshold check in `sensor`</span></div>
+    </div>
+    <div class="blk" id="bFiles" data-shadow="0">
+      <div class="ln"><span class="g">42</span><span class="x">**Files:**</span></div>
+      <div class="ln"><span class="g">43</span><span class="x">- Modify: `sensor/sensor.go`</span></div>
+      <div class="ln"><span class="g">44</span><span class="x">- Test: `sensor/sensor_test.go`</span></div>
+    </div>
+    <div class="blk">
+      <div class="ln dim"><span class="g">46</span><span class="x">**Interfaces:** …</span></div>
+    </div>
+    <div id="steps" data-shadow="0">
+      <div class="blk st" data-shadow="0">
+        <div class="ln"><span class="g">50</span><span class="x">- [ ] **Step 1: Write the failing test** `TestIsOverTemp` …</span></div>
+      </div>
+      <div class="blk st" data-shadow="0">
+        <div class="ln"><span class="g">52</span><span class="x">- [ ] **Step 2: Run to verify it fails**</span></div>
+        <div class="ln"><span class="g">54</span><span class="x">Run: `go test ./sensor`</span></div>
+        <div class="ln"><span class="g">55</span><span class="x"><span class="hl" id="fail" data-shadow="0">Expected: FAIL to compile, `undefined: IsOverTemp`.</span></span></div>
+      </div>
+      <div class="blk st" data-shadow="0">
+        <div class="ln"><span class="g">57</span><span class="x">- [ ] **Step 3: Implement `const MaxCelsius = 80.0` and …</span></div>
+      </div>
+      <div class="blk st" data-shadow="0">
+        <div class="ln"><span class="g">61</span><span class="x">- [ ] **Step 4: Run to verify it passes**</span></div>
+        <div class="ln"><span class="g">63</span><span class="x">Run: `go test ./sensor`</span></div>
+        <div class="ln"><span class="g">64</span><span class="x">Expected: PASS.</span></div>
+      </div>
+      <div class="blk st" data-shadow="0">
+        <div class="ln"><span class="g">66</span><span class="x">- [ ] **Step 5: Commit**</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧中文对照：data-for 指向对齐的原文块 -->
+  <div class="chip side" id="lFiles" data-for="bFiles" data-r="-1.5">要改的文件 · 配的测试</div>
+  <div class="chip side sl" data-r="1.2"><span class="num sp">1</span>写测试</div>
+  <div class="chip side sl" data-r="-1"><span class="num sp">2</span>跑，失败</div>
+  <div class="chip side sl" data-r="1.5"><span class="num sp">3</span>写代码</div>
+  <div class="chip side sl" data-r="-1.2"><span class="num sp">4</span>跑，通过</div>
+  <div class="chip side sl" data-r="1"><span class="num sp">5</span>提交</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 句子开口时刻（秒），按实测（2026-10-06，frame-times.py）：
+  // 162 句 0（打开任务 1；「任务 1」的任字在 1.44），163 句 3.04（要改哪个文件，测试放在哪），164 句 7.28（下面就是那五步），
+  // 165 句 9.20（写测试，跑，看它失败；写代码，跑，看它通过；提交），166 句 15.92（失败时报什么错，提前写好了）。
+  var SAY = [0, 3.04, 7.28, 9.20, 15.92];
+  // 165 句里五步各自被念到的时刻（实测）：写测试 9.20、跑 10.08、写代码 11.76、跑 12.48、提交 14.56。
+  var STEP_AT = [9.20, 10.08, 11.76, 12.48, 14.56];
+
+  // 原文块的「当前」：黄描边贴近文字，不压到相邻块（T.current 外扩 30px，会盖住邻行）。
+  // done 取 0..1：讲过的块描边转灰。
+  function mark(el, g, done) {
+    var a = Math.max(g, done * 0.8);
+    var rgb = g >= done ? '245,207,74' : '160,157,151';
+    el.style.outline = '5px solid rgba(' + rgb + ',' + a + ')';
+    el.style.outlineOffset = '3px';
+    el.style.boxShadow = '0 0 30px rgba(245,207,74,' + (0.5 * g) + ')';
+  }
+  // 讲过的块字压暗。
+  function dimText(el, p) {
+    el.style.color = T.mix([242, 239, 230], [154, 154, 154], T.ease(p));
+  }
+  // 红框：测试预期失败。
+  function redBox(el, g) {
+    el.style.outline = '5px solid rgba(229,83,75,' + g + ')';
+    el.style.outlineOffset = '2px';
+    el.style.boxShadow = '0 0 30px rgba(229,83,75,' + (0.55 * g) + ')';
+  }
+  // 灯：[on, off) 之间亮，开关各 0.3 秒渐变。
+  function lamp(t, on, off) { return T.ease(T.p(t, on, 0.3)) * (1 - T.ease(T.p(t, off, 0.3))); }
+
+  Stage({
+    duration: 17,
+    init: function () {
+      return T.fonts('Superpowers 计划要改的文件配的测试写测试跑，失败写代码跑，通过提交').then(function () {
+        // 中文标签竖直对齐到原文块的中线（窗口未变换时量；各块的 offsetParent 都是窗口）。
+        var win = T.$('win');
+        var blocks = [T.$('bFiles')].concat(T.all('.st'));
+        var labels = [T.$('lFiles')].concat(T.all('.sl'));
+        for (var i = 0; i < labels.length; i++) {
+          var b = blocks[i];
+          labels[i].style.top = (win.offsetTop + b.offsetTop + b.offsetHeight / 2 - labels[i].offsetHeight / 2) + 'px';
+        }
+      });
+    },
+    render: function (t) {
+      // 162：打开计划，任务 1 的标题是当前。
+      T.enter(T.$('win'), T.p(t, 0.1, 0.6), 24);
+      mark(T.$('bHead'), lamp(t, 1.44, SAY[1]), 0);
+
+      // 163：Files 块——要改的文件、测试放哪。
+      mark(T.$('bFiles'), lamp(t, SAY[1], SAY[2]), 0);
+      T.enter(T.$('lFiles'), T.p(t, SAY[1] + 0.2, 0.45), -16);
+
+      // 164：五步整块是当前，五个中文标签依次落下。
+      mark(T.$('steps'), lamp(t, SAY[2], SAY[3]), 0);
+      T.items('.sl', SAY[2] + 0.3, 0.2, t, -16);
+
+      // 165：念到哪步框哪步；讲过的转灰、字压暗。166 开口时全部收掉。
+      var st = T.all('.st');
+      for (var i = 0; i < st.length; i++) {
+        var next = i < st.length - 1 ? STEP_AT[i + 1] : SAY[4];
+        var done = T.ease(T.p(t, next, 0.3)) * (1 - T.ease(T.p(t, SAY[4], 0.4)));
+        mark(st[i], lamp(t, STEP_AT[i], next), done);
+        dimText(st[i], done);
+      }
+
+      // 166：预先写好的失败——IsOverTemp 还不存在。
+      redBox(T.$('fail'), T.ease(T.p(t, SAY[4] + 0.2, 0.4)));
+    }
+  });
+</script>
+</body>
+</html>

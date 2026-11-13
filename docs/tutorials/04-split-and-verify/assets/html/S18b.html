@@ -1,0 +1,289 @@
+<!doctype html>
+<!-- S18b · 录屏证据（卡片）· script 第 11 轮后 11 句：「所以，每个 ticket 做完，SDFlow 都会派 agent 审查，叫双轴审。……不过，顺序只能靠报告和提交记录来核，核不出来的时候，兜底的是改坏验红。」
+     实录 · 示例项目 alarm-notify（demo-temp-monitor 仓 openspec/changes/archive/2026-10-31-alarm-notify/impl-reports/）：
+       breaker-ledger.md:5「T1-r1 … tdd-order:impl-before-test」、:7「T3-r1 … tdd-order:impl-and-test-same-round」（括号里的说明不上画面），:6、:8 复审「已消解」；
+       task1-config-keys-fix1.md：config.go 逐条改坏 8 处，其中「冷却 ParseDuration 错」是等价变异（改了也没有可观察差异，不算漏测），画面只画其余 7 处；
+         「webhook 不可解析」「冷却边界」两处原来测试仍绿（缺口），补测后改坏会红、改回会绿；「生产代码零改动」；
+       task3-dingtalk-sender-fix1.md（找到：/Users/demo/demo-temp-monitor/openspec/changes/archive/2026-10-31-alarm-notify/impl-reports/，表格「变异点」列）：dingtalk.go 变异 M1a–M9 共 15 处，其中 M6b 是等价变异（分支不可达），画面只画其余 14 处；
+         M1a、M1c、M1d、M1e、M2、M9 六处原来测试仍绿（缺口），补测后红、恢复后绿；「未发现生产实现缺陷」。
+     - 第 1 句：标题「SDFlow 加了一道审查」、审查 agent（角色图六边形）、「实录 · 示例项目」与出处；约念到「叫双轴审」时标题旁出小标签「双轴审」。
+     - 第 2 句：「报告」「提交记录」两张卡进审查 agent；出两条指纹：ticket 1 tdd-order:impl-before-test、ticket 3 tdd-order:impl-and-test-same-round。
+     - 第 3 句：ticket 1、ticket 3 两张卡落下，各盖「要修」。
+     - 第 4 句：两张「被测代码」卡（config.go 7 处、dingtalk.go 14 处），一处一处出「改坏」记号（✗），测试抓住的那处随即变红（红 = 测试失败）；出图例第一条（红叉 = 改坏后测试红了 · 测到了）。
+     - 第 5 句：剩下 8 处（ticket 1 两处、ticket 3 六处）变绿（改坏了测试还是绿的），黄框；图例第二条（半红半绿 = 改坏了测试还绿 · 没测到）。第 6 句：每条右边标「没测到 ×2」「没测到 ×6」。
+     - 第 7 句：8 处逐个先变红、再变成左红右绿的两半圆（补测后：改坏会红、改回会绿），右边标「补测后 红→绿」；最后盖「复审通过」。
+     - 第 8 句：小字卡「实现代码没有 bug · 漏的是测试」，下面附两份 fix1 报告的原话。
+     - 第 9 句：反事实一格（虚线，示意）「没有这道审查 → 8 个漏洞带着全绿合进去」。
+     - 第 10 句（新）：右上出 S01 那张虚线问题卡「哪些测试是后补的？」（样式同 S01 的 .tag.ask），被划掉，旁边小字「现在能查出来了」。
+     - 第 11 句：底部一行「顺序核不出来时，兜底：改坏验红」。
+     偏离分镜：分镜写「改坏」的红点；红只表示测试失败，所以「改坏」用中性的 ✗ 记号，红、绿只表示改坏以后测试的结果（visual-v4 第二节）。分镜第 1–2 句只写了 ticket 1 的指纹，画面把 ticket 3 的一起出（两张都判了要修）。
+     配色：红、绿只表示改坏后的测试结果；报告、提交记录、被测代码卡标签是执行一侧，琥珀；「要修」「复审通过」是墨色印章（同 S14a），不用红；审查 agent 炭灰；黄只作「当前」描边；不用辅助色。
+     内容都在 y 920 以内，避开字幕带；右下角 x ≥ 1720、y ≥ 880 不放内容。
+     口播时刻按每分钟 220 字估算（标点算字，英文词算 2 字，句间 0.5 秒；还没录音；2026-10-31 按第 11 轮的 11 句重估），录音后用 frame-times.py 对齐：
+       1 句 0.0 · 2 句 7.9 · 3 句 17.6 · 4 句 22.8 · 5 句 32.5 · 6 句 36.9 · 7 句 43.1 · 8 句 50.7 · 9 句 55.8 · 10 句 62.3 · 11 句 71.0，第 11 句约 80.5 念完。
+     图例：红叉 = 改坏后测试红了 · 测到了；半红半绿 = 改坏了测试还绿 · 没测到（作者 2026-10-31 要求；右侧「补测后 红→绿」标签去掉了同款半色图标，避免一个图标两种意思）。 -->
+<html lang="zh-CN" data-frame-id="S18b">
+<head>
+<meta charset="utf-8">
+<title>S18b · 审查查顺序，改坏验红找出 8 个漏洞</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hdr { left: 60px; top: 40px; font-family: var(--display); font-weight: 800; font-size: 48px; padding: 8px 26px; }
+  #dax { left: 720px; top: 50px; font-size: 34px; padding: 4px 18px; background: var(--amber-soft); }
+  #rec { left: 1190px; top: 52px; font-size: 34px; padding: 4px 20px; }
+  #src0 { left: 1500px; top: 58px; font-family: var(--mono); font-size: 26px; padding: 4px 16px; border-width: 3px; }
+
+  /* 审查带 */
+  .doc { left: 60px; font-size: 34px; padding: 8px 22px; background: var(--amber-soft); }
+  #dr { top: 168px; } #dc { top: 248px; }
+  .tile { position: absolute; box-sizing: border-box; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 10px 10px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 68px; height: 68px; margin-top: -40px; }
+  .tile .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(-2deg); padding: 4px 18px; background: var(--cream); color: var(--ink);
+                white-space: nowrap; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink); font-family: var(--display); font-weight: 800; font-size: 30px; }
+  #ag { left: 410px; top: 156px; width: 220px; height: 150px; }
+  .fp { left: 720px; font-family: var(--mono); font-weight: 700; font-size: 28px; padding: 8px 20px; }
+  .fp i { font-style: normal; font-family: var(--display); font-weight: 800; font-size: 32px; margin-right: 14px; }
+  #f1 { top: 166px; } #f3 { top: 246px; }
+
+  /* 两条：ticket 卡 + 被测代码卡 */
+  .tk { left: 60px; width: 200px; height: 124px; padding: 6px 0 0; display: flex; align-items: flex-start; justify-content: center;
+        font-family: var(--display); font-weight: 800; font-size: 44px; }
+  #t1 { top: 380px; } #t3 { top: 562px; }
+  .fix { position: absolute; left: 120px; padding: 0 14px; border: 6px solid var(--ink); border-radius: 10px; background: rgba(242,239,230,.94); color: var(--ink);
+         font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1.15; opacity: 0; white-space: nowrap; }
+  #x1 { top: 444px; } #x3 { top: 626px; }
+  .cd { left: 300px; width: 1260px; height: 130px; padding: 0; }
+  .cd .tab { font-size: 30px; padding: 2px 16px; top: -32px; background: var(--amber); }
+  .cd .tab code { font-family: var(--mono); font-weight: 700; }
+  .cd .src { position: absolute; right: 18px; top: -26px; font-family: var(--mono); font-size: 22px; padding: 0 12px; background: var(--cream); border: 3px solid var(--ink); border-radius: 6px; color: var(--ink); white-space: nowrap; }
+  #cd1 { top: 370px; height: 146px; } #cd3 { top: 556px; height: 146px; }
+  .ln { position: absolute; left: 24px; right: 24px; top: 48px; height: 4px; background: var(--ink); opacity: .6; }
+  .dt { position: absolute; top: 30px; width: 40px; height: 40px; margin-left: -20px; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--ink); background: var(--cream); }
+  .dt svg { display: block; width: 32px; height: 32px; }
+  .dl { position: absolute; top: 78px; transform: translateX(-50%); text-align: center; white-space: nowrap; font-size: 22px; font-weight: 600; line-height: 1.15; color: var(--ink); }
+  .dl.lo { top: 106px; }
+  .dl.gap { font-weight: 800; }
+  .dl small { display: block; font-family: var(--mono); font-size: 20px; font-weight: 700; }
+  .ns { left: 1595px; font-size: 32px; padding: 4px 16px; }
+  #n1 { top: 382px; } #n3 { top: 568px; }
+  .rg { left: 1595px; font-size: 28px; padding: 4px 14px; }
+  #r1 { top: 448px; } #r3 { top: 634px; }
+
+  /* 下：小字、复审通过、反事实、兜底 */
+  /* 图例：放在 ticket 3 轨道右下方（y 704–824），不挤占下面的小字卡 */
+  .lg { left: 1390px; font-size: 26px; padding: 6px 16px; display: flex; align-items: center; gap: 12px; }
+  .lg .ic { flex: none; width: 36px; height: 36px; box-sizing: border-box; border-radius: 50%; border: 4px solid var(--ink); }
+  .lg .ic svg { display: block; width: 28px; height: 28px; }
+  #lg1 { top: 706px; } #lg2 { top: 770px; }
+  .lg1 .ic { background: rgb(229,83,75); }
+  .lg2 .ic { background: rgb(76,195,138); }  /* 第 5–6 句屏幕上这 8 点是纯绿；补测后（第 7 句）变半红半绿，图例图标随之换 */
+  .lg2.half .ic { background: linear-gradient(90deg, rgb(229,83,75) 50%, rgb(76,195,138) 50%); }
+
+  /* 第 10 句：S01 的虚线问题贴纸再现，被划掉 */
+  #oq { left: 1500px; top: 150px; background: var(--cream); font-size: 36px; padding: 8px 22px; }
+  #oq u { position: absolute; left: 14px; top: 50%; height: 6px; margin-top: -3px; width: 0; background: var(--ink); border-radius: 3px; }
+  #ok { left: 1560px; top: 236px; font-size: 30px; padding: 4px 16px; background: var(--amber-soft); }
+
+  #nb { left: 60px; top: 714px; width: 880px; height: 98px; padding: 8px 26px; }
+  #nb .a { font-size: 36px; font-weight: 700; line-height: 1.2; }
+  #nb .b { font-family: var(--mono); font-size: 22px; color: rgba(22,22,22,.75); white-space: nowrap; }
+  #pass { position: absolute; left: 990px; top: 716px; padding: 0 24px; border: 8px solid var(--ink); border-radius: 12px; background: rgba(242,239,230,.94); color: var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 56px; line-height: 1.15; opacity: 0; white-space: nowrap; transform-origin: 50% 50%; }
+  #cf { position: absolute; left: 60px; top: 828px; box-sizing: border-box; padding: 10px 24px; border: 4px dashed var(--ink); border-radius: 10px; color: var(--ink);
+        font-size: 34px; font-weight: 600; white-space: nowrap; display: flex; align-items: center; gap: 10px; }
+  #cf .g { padding: 0 12px; border: 3px solid var(--ink); border-radius: 6px; background: var(--pass); font-weight: 700; }
+  #bt { left: 900px; top: 824px; font-size: 36px; padding: 8px 24px; background: var(--amber-soft); }
+  #bt b { font-family: var(--display); font-weight: 800; }
+
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="wr" d="M236 196 Q330 196 402 214"/>
+      <path id="wc" d="M290 276 Q340 276 402 250"/>
+      <path id="wo1" d="M640 214 Q680 196 712 196"/>
+      <path id="wo3" d="M640 250 Q680 276 712 276"/>
+    </g>
+  </svg>
+
+  <!-- 第 1 句 -->
+  <div class="chip" id="hdr" data-r="-2">SDFlow 加了一道审查</div>
+  <div class="tab ink" id="rec" data-r="-2">实录 · 示例项目</div>
+  <div class="tag" id="src0" data-r="2">breaker-ledger.md:5,7</div>
+  <div class="chip" id="dax" data-r="2">双轴审</div>
+  <div class="tile" id="ag" data-r="1">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg>
+    <div class="name">审查 agent</div>
+  </div>
+
+  <!-- 第 2 句 -->
+  <div class="chip doc" id="dr" data-r="-1.5">报告</div>
+  <div class="chip doc" id="dc" data-r="1.5">提交记录</div>
+  <div class="chip fp" id="f1" data-r="-1"><i>ticket 1</i>tdd-order:impl-before-test</div>
+  <div class="chip fp" id="f3" data-r="1"><i>ticket 3</i>tdd-order:impl-and-test-same-round</div>
+
+  <!-- 第 3 句 -->
+  <div class="card tk" id="t1" data-r="-1.2">ticket 1</div>
+  <div class="card tk" id="t3" data-r="1">ticket 3</div>
+
+  <!-- 第 4 句起：被测代码 -->
+  <div class="card cd" id="cd1" data-r="0"><div class="tab" data-r="-2">被测代码 <code>config.go</code></div><div class="src">task1-config-keys-fix1.md</div><div class="ln"></div></div>
+  <div class="card cd" id="cd3" data-r="0"><div class="tab" data-r="2">被测代码 <code>dingtalk.go</code></div><div class="src">task3-dingtalk-sender-fix1.md</div><div class="ln"></div></div>
+
+  <div id="x1" class="fix" data-r="-8">要修</div>
+  <div id="x3" class="fix" data-r="6">要修</div>
+
+  <div class="tag ns" id="n1" data-r="-3">没测到 ×2</div>
+  <div class="tag ns" id="n3" data-r="3">没测到 ×6</div>
+  <div class="chip rg" id="r1" data-r="1.5">补测后 红→绿</div>
+  <div class="chip rg" id="r3" data-r="-1.5">补测后 红→绿</div>
+
+  <!-- 图例（第 4、5 句出） -->
+  <div class="chip lg lg1" id="lg1" data-r="-1"><span class="ic"><svg viewBox="0 0 32 32"><path d="M10 10 L22 22 M22 10 L10 22" stroke="#161616" stroke-width="4.5" stroke-linecap="round"/></svg></span>改坏后测试红了 · 测到了</div>
+  <div class="chip lg lg2" id="lg2" data-r="1"><span class="ic"><svg viewBox="0 0 32 32"><path d="M10 10 L22 22 M22 10 L10 22" stroke="#161616" stroke-width="4.5" stroke-linecap="round"/></svg></span>改坏了测试还绿 · 没测到</div>
+
+  <!-- 第 7–10 句 -->
+  <div class="card" id="nb" data-r="-0.6"><div class="a">实现代码没有 bug · 漏的是测试</div>
+    <div class="b">fix1 报告原话：「生产代码零改动」「未发现生产实现缺陷」</div></div>
+  <div id="pass" data-r="-8">复审通过</div>
+  <div id="cf" data-r="0">没有这道审查 → 8 个漏洞带着<span class="g">全绿</span>合进去</div>
+  <!-- 第 10 句 -->
+  <div class="tag ask" id="oq" data-r="4"><span>哪些测试是后补的？</span><u></u></div>
+  <div class="chip" id="ok" data-r="-3">现在能查出来了</div>
+  <div class="chip" id="bt" data-r="1">顺序核不出来时，兜底：<b>改坏验红</b></div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    base: 0.0,    // 第 1 句：标题、审查 agent、实录；后半出「双轴审」
+    s2: 5.52,      // 第 2 句：报告 + 提交记录 → 两条指纹
+    s3: 12.72,     // 第 3 句：ticket 1、3 要修
+    s4: 16.72,     // 第 4 句：被测代码一处一处改坏
+    s5: 24.64,     // 第 5 句：8 处测试还是绿的
+    s6: 27.92,     // 第 6 句：没测到
+    s7: 32.24,     // 第 7 句：补测后先红再绿，复审通过
+    s8: 37.92,     // 第 8 句：实现代码没有 bug
+    s9: 41.68,     // 第 9 句：反事实
+    s10: 45.78,    // 第 10 句：「哪些测试是后补的？」划掉，现在能查出来了
+    s11: 52.44     // 第 11 句：兜底，改坏验红
+  };
+
+  // 改坏的点：等价变异不画（见头注）。gap = 原来测试仍绿的缺口
+  var LANES = [
+    { card: 'cd1', x0: 110, dx: 175, pts: [
+      { l: '合法' }, { l: 'scheme' }, { l: 'host' }, { l: '不可解析', gap: true },
+      { l: '冷却下限' }, { l: '冷却边界', sub: '9m59.999999999s', gap: true }, { l: 'secret' } ] },
+    // 标签取自 task3-dingtalk-sender-fix1.md 的「变异点」列（M1a…M9 的中文说明），不超过 6 字；相邻两点上下错开两行，避免挤在一起
+    { card: 'cd3', x0: 70, dx: 86, stagger: true, pts: [
+      { l: '无问号', gap: true }, { l: '中段&' }, { l: '尾部?', gap: true }, { l: '尾部&', gap: true }, { l: '#片段', gap: true }, { l: '读取上限', gap: true },
+      { l: '冷却0s' }, { l: '冷却0m' }, { l: '@所有人' }, { l: 'UTC' }, { l: '状态上界' }, { l: '泄露URL' }, { l: '跟随重定向' }, { l: '超时错误链', gap: true } ] }
+  ];
+  var CROSS = '<svg viewBox="0 0 32 32"><path d="M10 10 L22 22 M22 10 L10 22" stroke="#161616" stroke-width="4.5" stroke-linecap="round"/></svg>';
+  var DOTS = [], GAPS = [];
+  LANES.forEach(function (ln) {
+    var card = T.$(ln.card);
+    ln.pts.forEach(function (pt, i) {
+      var x = ln.x0 + i * ln.dx;
+      var d = document.createElement('div'); d.className = 'dt'; d.style.left = x + 'px'; d.innerHTML = CROSS;
+      var l = document.createElement('div'); l.className = 'dl' + (ln.stagger && i % 2 ? ' lo' : '') + (pt.gap ? ' gap' : ''); l.style.left = x + 'px';
+      l.innerHTML = pt.l + (pt.sub ? '<small>' + pt.sub + '</small>' : '');
+      card.appendChild(d); card.appendChild(l);
+      var o = { d: d, l: l, gap: !!pt.gap };
+      DOTS.push(o); if (pt.gap) GAPS.push(o);
+    });
+  });
+  var RED = [229, 83, 75], GREEN = [76, 195, 138];
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = p >= 0.99 ? 'url(#ah)' : 'none';
+  }
+  function pop(id, p, dy) { T.enter(T.$(id), p, dy === undefined ? 12 : dy); }
+  function stamp(id, p, r) { var s = T.ease(p), el = T.$(id); el.style.opacity = s; el.style.transform = 'rotate(' + r + 'deg) scale(' + (1 + 1.2 * (1 - s)) + ')'; }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 61.980,
+    init: function () { return T.fonts(T.$('stage').textContent + '合法不可解析冷却下限边界'); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句
+      pop('hdr', P(t, AT.base, 0.45), 14);
+      pop('ag', P(t, AT.base + 0.3, 0.5), 14);
+      pop('rec', P(t, AT.base + 0.8, 0.4), -10);
+      pop('src0', P(t, AT.base + 1.1, 0.4), -8);
+      pop('dax', P(t, AT.base + 4.14, 0.4), -10);
+
+      // 第 2 句：报告 + 提交记录 → 审查 agent → 两条指纹
+      pop('dr', P(t, AT.s2 + 2.6, 0.4)); wire(T.$('wr'), E(P(t, AT.s2 + 3.0, 0.4)));
+      pop('dc', P(t, AT.s2 + 3.4, 0.4)); wire(T.$('wc'), E(P(t, AT.s2 + 3.8, 0.4)));
+      wire(T.$('wo1'), E(P(t, AT.s2 + 4.6, 0.3))); pop('f1', P(t, AT.s2 + 4.62, 0.45));
+      wire(T.$('wo3'), E(P(t, AT.s2 + 4.8, 0.3))); pop('f3', P(t, AT.s2 + 4.82, 0.45));
+
+      // 第 3 句：ticket 1、3 要修
+      pop('t1', P(t, AT.s3, 0.45), 14); pop('t3', P(t, AT.s3 + 0.3, 0.45), 14);
+      stamp('x1', P(t, AT.s3 + 1.6, 0.35), -6); stamp('x3', P(t, AT.s3 + 2.4, 0.35), 5);
+
+      // 第 4 句：被测代码卡，一处一处改坏（✗），抓住的随即变红
+      pop('cd1', P(t, AT.s4, 0.45), 12); pop('cd3', P(t, AT.s4 + 0.3, 0.45), 12);
+      DOTS.forEach(function (o, i) {
+        var at = AT.s4 + 1.2 + i * 0.28;
+        var e = E(P(t, at, 0.3));
+        o.d.style.opacity = e; o.l.style.opacity = e;
+        o.d.style.transform = 'scale(' + (1.6 - 0.6 * e) + ')';
+        if (!o.gap) T.fill(o.d, RED, P(t, at + 0.35, 0.3));
+      });
+      pop('lg1', P(t, AT.s4 + 1.8, 0.4), 8);
+
+      // 第 5 句：剩下 8 处变绿，黄框；第 6 句：没测到
+      pop('lg2', P(t, AT.s5 + 0.6, 0.4), 8);
+      T.$('lg2').classList.toggle('half', t >= AT.s7 + 0.4 + 0.35);
+      var cur = E(P(t, AT.s5 + 0.4, 0.4)) * (1 - E(P(t, AT.s7, 0.4)));
+      GAPS.forEach(function (o, k) {
+        // 第 7 句：逐个先变红，再变成左红右绿（补测后：改坏会红、改回会绿）
+        var at = AT.s7 + 0.4 + k * 0.35;
+        if (t >= at + 0.35) {
+          o.d.style.background = 'linear-gradient(90deg, rgb(229,83,75) 50%, rgb(76,195,138) 50%)';
+        } else if (t >= at) {
+          T.fill(o.d, RED, P(t, at, 0.25), GREEN);
+        } else {
+          o.d.style.background = '';
+          T.fill(o.d, GREEN, P(t, AT.s5 + 0.4, 0.4));
+        }
+        o.d.style.outline = '5px solid rgba(245,207,74,' + cur + ')';
+        o.d.style.outlineOffset = '5px';
+      });
+      pop('n1', P(t, AT.s6 + 2.4, 0.4), -8); pop('n3', P(t, AT.s6 + 2.7, 0.4), -8);
+
+      // 第 7 句
+      pop('r1', P(t, AT.s7 + 1.6, 0.4), 8); pop('r3', P(t, AT.s7 + 2.6, 0.4), 8);
+      stamp('pass', P(t, AT.s7 + 3.9, 0.35), -8); // 「复审」36.32秒，变色完成后盖章
+
+      // 第 8–9 句
+      pop('nb', P(t, AT.s8, 0.45), 12);
+      T.enter(T.$('cf'), P(t, AT.s9, 0.45), 12);
+
+      // 第 10 句：问题贴纸再现，被划掉，旁边小字
+      pop('oq', P(t, AT.s10 + 0.4, 0.45), -12);
+      T.$('oq').querySelector('u').style.width = 'calc((100% - 28px) * ' + E(P(t, AT.s10 + 4.0, 0.5)) + ')';
+      pop('ok', P(t, AT.s10 + 4.8, 0.4), -8);
+
+      // 第 11 句
+      pop('bt', P(t, AT.s11 + 5.5, 0.45), 12);
+    }
+  });
+</script>
+</body>
+</html>

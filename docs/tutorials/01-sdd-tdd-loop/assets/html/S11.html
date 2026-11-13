@@ -1,0 +1,234 @@
+<!doctype html>
+<!-- S11 · 角色图 · script 45–47「写下来，有两个用处。……做完也照着文档对。」
+     接 S07：开场停在 S07 的最后一刻（脑子里的问题、一句话箭头、三张「猜」、Agent 选中），
+     先把这些收掉——它们只属于 S07 那一刻。四个角色块的位置、图形、名字标签原样沿用，
+     观众认得出是同一张图。
+     然后只演新发生的事：
+     1. 「仓库文件」点亮：图形和名字从 unlit 灰变回亮色（和人、Agent 一样），一页需求从它里面抽出来。
+     2. 人 → 文件：三处要猜的地方先露成空格，再一格格填上答案（人当场定）。
+     3. 文件 → Agent：Agent 照着文件做；做完的结果从 Agent 里出来，一条线回指文件，标「照着文档对」。
+     「运行环境」一直 unlit，首期不点亮。
+     黄色描边 + 外发光 = 当前讲到的元素，同一时刻只有一个：仓库文件 → 需求页 → Agent → 对照标记。
+     黄色实底只用于「猜」，这里的「猜」随 S07 收掉后不再出现。倾斜照母版手感，不承载含义。 -->
+<html lang="zh-CN" data-frame-id="S11">
+<head>
+<meta charset="utf-8">
+<title>S11 · 写下来</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 角色块与名字标签：照 S07 原样。 */
+  .tile {
+    position: absolute; width: 290px; height: 270px; box-sizing: border-box;
+    border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+    box-shadow: 12px 12px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .tile svg { width: 120px; height: 120px; margin-top: -30px; }
+  .tile.unlit { color: var(--unlit); }
+  /* -18px keeps the role name above the subtitle band (y >= 940). */
+  .name {
+    position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+    padding: 8px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+    border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1;
+  }
+  .unlit .name { background: #b9b6ae; }
+
+  /* S07 留下来的东西：开场就在，随即收掉。 */
+  .cloud {
+    position: absolute; left: 60px; top: 50px; width: 930px; height: 470px;
+    box-sizing: border-box; border: 4px dashed rgba(255,255,255,.4); border-radius: 46px;
+  }
+  .cloud-tab {
+    position: absolute; left: 96px; top: 26px; padding: 6px 20px; background: var(--ink); color: #fff;
+    font-family: var(--display); font-weight: 800; font-size: 34px; transform: rotate(-3deg);
+  }
+  .dot { position: absolute; box-sizing: border-box; border-radius: 50%; border: 4px dashed rgba(255,255,255,.75); }
+  .req { background: var(--cream-dim); }
+  .say {
+    position: absolute; left: 440px; top: 690px; padding: 14px 28px; border-radius: 10px;
+    font-family: var(--display); font-weight: 800; font-size: 44px; color: var(--ink);
+    background: var(--cream); border: 5px solid var(--ink); white-space: nowrap;
+  }
+  .s07arrow { position: absolute; left: 408px; top: 774px; width: 740px; height: 60px; }
+
+  /* 需求页：从「仓库文件」里抽出来的一页，压在角色块下面。 */
+  .sheet { left: 740px; top: 110px; width: 870px; height: 370px; padding: 0; }
+  .sheet .tab { font-size: 40px; }
+  .line { position: absolute; left: 40px; height: 80px; display: flex; align-items: flex-end; }
+  .line .k { width: 210px; padding-bottom: 12px; font-weight: 600; font-size: 34px; color: #57534d; white-space: nowrap; }
+  /* 空格：要猜的地方先露出来，答案再填进去。 */
+  .slot { position: relative; width: 420px; height: 72px; border-bottom: 5px solid var(--ink); }
+  .slot b {
+    position: absolute; left: 6px; bottom: 6px; white-space: nowrap;
+    font-family: var(--display); font-weight: 800; font-size: 48px; line-height: 1; color: var(--ink);
+  }
+
+  .lines { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+  .result { left: 990px; top: 694px; }
+  .stamp {
+    left: 760px; top: 566px; font-family: var(--display); font-weight: 800; font-size: 40px;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- S07 的最后一刻：脑子里的问题（已变暗）、一句话、三张「猜」。 -->
+  <div class="cloud s07" id="cloud"></div>
+  <div class="cloud-tab s07" id="ctab">你脑子里的</div>
+  <div class="dot s07" style="left:330px;top:536px;width:44px;height:44px"></div>
+  <div class="dot s07" style="left:296px;top:598px;width:26px;height:26px"></div>
+  <div class="chip req s07" data-r="-4" style="left:110px;top:110px">告警发到哪？</div>
+  <div class="chip req s07" data-r="3.5" style="left:480px;top:96px">阈值多少？</div>
+  <div class="chip req s07" data-r="2" style="left:170px;top:240px">80.0 算不算超？</div>
+  <div class="chip req s07" data-r="-3" style="left:580px;top:236px">输出什么格式？</div>
+  <div class="chip req s07" data-r="3" style="left:120px;top:380px">多久查一次？</div>
+  <div class="chip req s07" data-r="-4.5" style="left:490px;top:384px">通知谁？</div>
+
+  <!-- 需求页（压在仓库文件下面，从它里面抽出来）。 -->
+  <div class="card sheet" id="sheet" data-r="-1" data-shadow="10">
+    <div class="tab ink">写下来的需求</div>
+    <div class="line" id="l1" style="top:46px"><span class="k">告警位置</span><span class="slot"><b class="ans">单独一行</b></span></div>
+    <div class="line" id="l2" style="top:144px"><span class="k">阈值</span><span class="slot"><b class="ans">写死 80</b></span></div>
+    <div class="line" id="l3" style="top:242px"><span class="k">正好 80.0</span><span class="slot"><b class="ans">不报警</b></span></div>
+  </div>
+
+  <!-- 角色，照 S07。 -->
+  <div class="tile" id="human" data-r="-1.5" style="left:110px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8">
+      <circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:-3deg">人</div>
+  </div>
+  <div class="tile" id="agent" data-r="1.5" style="left:1170px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round">
+      <polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/>
+      <polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:2deg">Agent</div>
+  </div>
+  <div class="tile unlit" id="repo" data-r="2" style="left:1570px;top:150px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round">
+      <path d="M34 22 H78 L98 42 V102 H34 Z"/><path d="M78 22 V42 H98"/>
+      <path d="M22 34 V112 H84"/><line x1="48" y1="62" x2="84" y2="62"/><line x1="48" y1="80" x2="76" y2="80"/>
+    </svg>
+    <div class="name" id="repoName" style="--r:-2deg">仓库文件</div>
+  </div>
+  <div class="tile unlit" id="runtime" data-r="-1" style="left:1570px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="12" y="22" width="96" height="76" rx="12"/><path d="M32 48 L46 60 L32 72"/><line x1="56" y1="74" x2="82" y2="74"/>
+    </svg>
+    <div class="name" style="--r:1.5deg">运行环境</div>
+  </div>
+
+  <!-- S07 的一句话箭头：被「人 → 文件 → Agent」取代，开场收掉。 -->
+  <svg class="s07arrow s07" viewBox="0 0 740 60">
+    <path d="M28 36 Q 370 18 700 32" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="20" cy="36" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    <polygon points="690,12 738,33 692,54" fill="#f2efe6"/>
+  </svg>
+  <div class="say s07" data-r="-2">加一个超温告警。</div>
+  <div class="guess s07" data-r="-5" style="left:1080px;top:574px"><b>猜</b>阈值 80</div>
+  <div class="guess s07" data-r="4" style="left:1300px;top:500px"><b>猜</b>打日志</div>
+  <div class="guess s07" data-r="-3" style="left:1140px;top:420px"><b>猜</b>每分钟查</div>
+
+  <!-- Agent 做完的结果：像 S07 的贴纸一样贴在 Agent 角上，表示是它产出的。 -->
+  <div class="chip result" id="result" data-r="-2">写好的代码</div>
+
+  <!-- 三条线，沿用 S07 箭头的画法：奶白粗线，尾部圆环，略弯。 -->
+  <svg class="lines" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs>
+      <marker id="hd" viewBox="0 0 12 10" refX="3" refY="5" markerWidth="4.8" markerHeight="4.2" orient="auto" markerUnits="strokeWidth">
+        <path d="M0 0 L12 5 L0 10 Z" fill="#f2efe6"/>
+      </marker>
+    </defs>
+    <!-- 人 → 需求页 -->
+    <g id="a1">
+      <path class="ln" d="M392 622 Q 470 330 712 304" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round" marker-end="url(#hd)"/>
+      <circle class="ring0" cx="392" cy="622" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    </g>
+    <!-- 需求页 → Agent -->
+    <g id="a2">
+      <path class="ln" d="M1262 500 Q 1272 560 1292 606" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round" marker-end="url(#hd)"/>
+      <circle class="ring0" cx="1262" cy="500" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    </g>
+    <!-- 结果 → 回指需求页 -->
+    <g id="a3">
+      <path class="ln" d="M1092 686 Q 1070 600 1090 522" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round" marker-end="url(#hd)"/>
+      <circle class="ring0" cx="1092" cy="686" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    </g>
+  </svg>
+
+  <div class="chip stamp" id="stamp" data-r="-3" data-shadow="7">照着文档对</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var s07 = T.all('.s07');
+  var lines = [T.$('l1'), T.$('l2'), T.$('l3')];
+  var answers = T.all('.ans');
+
+  // 沿线画出：从尾部圆环画到箭头。箭头和圆环在线画到端点附近时才出现。
+  function draw(g, p) {
+    var e = T.ease(p);
+    var path = g.querySelector('.ln');
+    var len = path.getTotalLength();
+    path.style.strokeDasharray = len + ' ' + len;
+    path.style.strokeDashoffset = len * (1 - e);
+    path.setAttribute('marker-end', e > 0.97 ? 'url(#hd)' : 'none');
+    path.style.opacity = e > 0 ? 1 : 0;
+    g.querySelector('.ring0').style.opacity = Math.min(1, e * 4);
+  }
+  // 选中强度：on 时亮起，off 时淡出（off 省略 = 一直亮）。
+  function sel(t, on, off) {
+    var g = T.ease(T.p(t, on, 0.35));
+    if (off !== undefined) g *= 1 - T.ease(T.p(t, off, 0.35));
+    return g;
+  }
+
+  Stage({
+    duration: 15.2,
+    init: function () { return T.fonts('人仓库文件运行环境你脑子里的加一个超温告警。猜写下来的需求单独一行写死不报警照着文档对发到'); },
+    render: function (t) {
+      T.tilt();
+
+      // 0. S07 那一刻的东西收掉。
+      var gone = 1 - T.ease(T.p(t, 0.0, 0.7));
+      s07.forEach(function (el) { el.style.opacity = gone; });
+
+      // 时刻按实测（2026-10-06，frame-times.py），画面内秒数；括号里是对应的口播。
+      // 1. 仓库文件点亮：灰 → 和人、Agent 一样的亮色。0.00（45 句开口「写下来以后」）。
+      var lit = T.ease(T.p(t, 0.0, 0.7));
+      T.$('repo').style.color = T.mix([154, 154, 154], [255, 255, 255], lit);
+      T.$('repoName').style.background = T.mix([185, 182, 174], [242, 239, 230], lit);
+      // 需求页从仓库文件里抽出来。0.88（45 句念到「有两个用处」的「有」）。
+      T.enter(T.$('sheet'), T.p(t, 0.88, 0.7), 0, 300);
+
+      // 2. 人 → 需求页；要猜的三处先露成空格，再填上答案。
+      //    箭头 3.04（46 句开口「第一」）；空格 3.92（念到「要猜的地方」的「要」），间隔 0.3；
+      //    答案 7.04（念到「你当场就能定」的「你」），间隔 0.6。
+      draw(T.$('a1'), T.p(t, 3.04, 0.7));
+      for (var i = 0; i < lines.length; i++) {
+        lines[i].style.opacity = T.ease(T.p(t, 3.92 + i * 0.3, 0.35));
+        T.enter(answers[i], T.p(t, 7.04 + i * 0.6, 0.4), -12);
+      }
+
+      // 3. 需求页 → Agent；做完的结果从 Agent 里出来，回指需求页对照。
+      //    箭头 10.64（47 句念到「AI」）；结果 13.12（念到「做完了」的「做」）；
+      //    回指线 13.84（「也照着它」的「也」）；标记 14.56（念到「核对」的「核」）。
+      draw(T.$('a2'), T.p(t, 10.64, 0.6));
+      T.enter(T.$('result'), T.p(t, 13.12, 0.6), 0, 160);
+      draw(T.$('a3'), T.p(t, 13.84, 0.6));
+      T.enter(T.$('stamp'), T.p(t, 14.56, 0.4), 16);
+
+      // 当前：S07 留下的 Agent 选中先淡出；之后仓库文件 → 需求页 → Agent → 对照标记，同一时刻只有一个。
+      // 切换时刻：仓库文件 0.00–3.04（46 句开口）→ 需求页 3.04–10.64 → Agent 10.64–13.84 → 对照标记 14.56。
+      T.current(T.$('repo'), sel(t, 0.0, 3.04), 12);
+      T.current(T.$('sheet'), sel(t, 3.04, 10.64), 10);
+      T.current(T.$('agent'), Math.max(1 - T.ease(T.p(t, 0.0, 0.5)), sel(t, 10.64, 13.84)), 12);
+      T.current(T.$('stamp'), sel(t, 14.56), 7);
+    }
+  });
+</script>
+</body>
+</html>

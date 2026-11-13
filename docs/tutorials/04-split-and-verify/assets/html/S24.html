@@ -1,0 +1,270 @@
+<!doctype html>
+<!-- S24 · 标题卡 · script 162–167「好，我们回到开头那个问题：规格写好了，为什么不让 AI 一口气生成代码？……最后由收尾的 ticket 全量跑一遍测试、留下证据，才算做完。」
+     模版 channel/design/templates/series-flow.html（data-level="2"，data-done 空，data-current="4"）；S05 的第四步和两章再出现，与 S04、S05、S25 是同一张卡。
+     - 第 1 句：开头问题贴纸先在正中放大出现，停约 1 秒，再用约 0.6 秒缩小移到外框左上（visual-v4 4.8「问题贴纸」）；顶行六步、外框同时落下，第四步不加黄框。
+     - 第 1 句：小字「SDFlow 学习了 Superpowers · Matt Pocock」从贴纸缩到左上后就在（script.md 第 1 句起就在，只上画面；作者 2026-10-31 第 174 条删了这句口播）。
+     - 第 2 句：「因为一口气生成，哪条需求做到了、哪些测试是后补的，你都查不了」，问题卡右侧（同一行，卡下方到「SDFlow 学习了……」小字之间只有 40 多像素，放不下）依次出两张小虚线卡「哪条需求做到了？」「哪些测试是后补的？」（样式同 S01 的 .tag.ask，虚线、奶白底）。留到页末。
+     - 第 3 句：两章下方一行「方法 · 规则 · 约束 → 不跑偏」。原来第 2 句下面那张「一口气写出一大片，没法确认是不是真做好了」随口播删掉。
+     - 第 4 句：①「怎么拆开发任务」一行进场，要点随口播逐个出现：从规格拆出能单独验收的 ticket · 拆完再查；句末打勾。
+     - 第 5–6 句：②「怎么生成代码」一行进场：新 agent · TDD 先红后绿 · 跑相关测试（第 5 句）· 收尾全量 + 证据（第 6 句）；第 6 句末打勾。
+     - 第 6 句后：两章下方落下一行大字「一次只做一个能验收的 ticket，先写测试，再写代码」（本页最亮的一块，琥珀浅），只上画面，不念（作者 2026-10-31 第 127 条删了口播），留约 3 秒到页末。
+       竖直排布：贴纸 205、小字 318、①410、②552、「方法 · 规则 · 约束 → 不跑偏」696、大字 792–904，大字和「方法」一行之间留 30 以上，不叠。
+     打勾的圆片是墨色 ✓（绿只表示测试通过，不用）。页内元素出现后都留到页末（一页一层）。
+     颜色：顶行第四步琥珀浅（同 S04）；两章编号琥珀（实现一侧）；小字虚线；大字卡琥珀浅；其余奶白。
+     口播时刻（估算，每分钟 220 字，还没录音，2026-10-31 按第 11 轮口播重估（6 句），录音后按 frame-times.py 对齐）：第 1 句 0.0，2 句 9.8，3 句 19.1，4 句 26.1，5 句 33.7，6 句 44.0，念完约 51.1；大字 51.3 落下，全页 54.8。外框下沿 926，内容整体在 y 910 以内。 -->
+<html lang="zh-CN" data-frame-id="S24" data-level="2" data-done="" data-current="4" data-ep="off">
+<head>
+<meta charset="utf-8">
+<title>S24 · 系列流程卡 · 总结</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* ===== 模版共用：复制后不改 ===== */
+  /* 纸底（2026-10-20 作者定：只有章节标签页用深色底，其余页面都是纸底）。
+     「没讲到」= 墨色 65% 不透明度，叠在渲染后的纸底 #8b949e 上约 #3f4246，对比度 3.28:1；CSS 写 --notyet，JS 里同值写 NOTYET。
+     透明底的空框（.off）不带硬投影，否则框外会露出一块实心的墨色。 */
+  :root { --notyet: rgba(22,22,22,.65); }
+  .sf-step.off, .node.off, .act.off, .big3.off { box-shadow: none; }
+
+  /* 第一级：六步一行。 */
+  .sf-step { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px; }
+  .sf-step .big { white-space: nowrap; }
+  html[data-level="1"] .sf-step { width: 280px; height: 104px; }
+  html[data-level="1"] .sf-step .big { font-size: 44px; }
+  html[data-level="1"] .sf-step .num { width: 58px; height: 58px; font-size: 30px; }
+  html[data-level="2"] .sf-step { width: 236px; height: 64px; border-width: 4px; padding: 0 12px; gap: 10px; }
+  html[data-level="2"] .sf-step .big { font-size: 36px; }
+  html[data-level="2"] .sf-step .num { width: 44px; height: 44px; font-size: 26px; border-width: 4px; }
+  .sf-step.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .sf-step.off .num { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  /* 期号：括线 + 「第 N 期」。本期那一组用墨，其余用「没讲到」的淡墨。 */
+  .sf-ep { position: absolute; text-align: center; white-space: nowrap; color: var(--notyet);
+           font-family: var(--display); font-weight: 800; }
+  .sf-ep::before { content: ''; display: block; box-sizing: border-box; border: 4px solid currentColor; border-top: none;
+                   border-radius: 0 0 8px 8px; height: 14px; margin: 0 10px 4px; }
+  html[data-level="1"] .sf-ep { font-size: 34px; }
+  html[data-level="2"] .sf-ep { font-size: 26px; line-height: 1.1; }
+  html[data-level="2"] .sf-ep::before { height: 8px; border-width: 3px; margin-bottom: 2px; }
+  .sf-ep.now { color: var(--ink); }
+  html[data-ep="off"] .sf-ep { display: none; }
+  #sf-fan { position: absolute; left: 0; top: 0; width: 1920px; height: 200px; }
+  #sf-frame { position: absolute; left: 40px; top: 172px; width: 1840px; height: 754px; box-sizing: border-box;
+              border: 3px solid rgba(22,22,22,.4); border-radius: 16px; }
+  #sf-fan, #sf-frame, .sf-step, .sf-ep { opacity: 0; }
+  html[data-level="1"] #sf-fan, html[data-level="1"] #sf-frame, html[data-level="1"] #l2 { display: none; }
+
+  /* 第二级的件。 */
+  /* 只铺到字幕带上沿：里面的元素用画布坐标，高度不到 940（渲染前的越界检查会量容器本身）。 */
+  #l2 { position: absolute; left: 0; top: 0; width: 1920px; height: 930px; }
+  .node { display: flex; align-items: center; justify-content: center; padding: 0 22px; white-space: nowrap;
+          font-family: var(--display); font-weight: 800; font-size: 44px; }
+  .node.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .node.past { background: var(--cream-dim); }
+  .lane { font-family: var(--display); font-weight: 800; }
+  .lane.past { background: var(--cream-dim); }
+  .arr { position: absolute; height: 6px; border-radius: 3px; background: currentColor; color: var(--ink); }
+  .arr::after { content: ''; position: absolute; right: -18px; top: -9px;
+                border-left: 20px solid currentColor; border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+  .seg { position: absolute; height: 24px; box-sizing: border-box; border: 5px solid var(--notyet); border-top: none;
+         border-radius: 0 0 12px 12px; }
+  .pdot { position: absolute; width: 58px; height: 58px; box-sizing: border-box; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--mono); font-weight: 700; font-size: 26px;
+          border: 4px solid var(--notyet); color: var(--notyet); background: transparent; }
+  .pdot.done { background: var(--cream-dim); color: var(--ink); border-color: var(--cream-dim); }
+  .pdot.now { background: var(--cream); color: var(--ink); border-color: var(--ink); }
+  /* ===== 模版共用到此 ===== */
+
+  /* ===== 本页 ===== */
+  #sf4 { background: var(--amber-soft); }
+  #sf4 .num { background: var(--amber); }
+  #qw { position: absolute; left: 90px; top: 205px; transform-origin: 0 0; }
+  #qc { position: relative; font-size: 42px; padding: 12px 26px; }
+  .ask { left: 0; top: 250px; background: var(--cream); font-size: 34px; padding: 8px 22px; }
+  #tq1 { left: 1090px; } #tq2 { left: 1440px; }
+  #mth { left: 90px; top: 696px; font-size: 40px; padding: 10px 26px; }
+  #sub { left: 90px; top: 318px; font-size: 34px; padding: 8px 24px; }
+  .chp { left: 90px; width: 1740px; height: 124px; padding: 0 40px; display: flex; align-items: center; gap: 28px; white-space: nowrap; }
+  .chp .ti { font-family: var(--display); font-weight: 800; font-size: 54px; }
+  .chp .dt { font-weight: 600; font-size: 35px; }
+  .chp .dt .s { opacity: 0; }
+  .chp .dt .sep { margin: 0 12px; }
+  #k1 { top: 410px; }
+  #k2 { top: 552px; }
+  #fin { left: 140px; top: 792px; width: 1640px; height: 112px; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--amber-soft); }
+  #fin .big { font-size: 58px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ===== 模版共用：第一级，由下面的脚本按 <html> 属性填 ===== -->
+  <svg id="sf-fan" viewBox="0 0 1920 200" aria-hidden="true"></svg>
+  <div id="sf-frame"></div>
+  <div id="sf"></div>
+  <div id="l2">
+    <div id="qw"><div class="chip" id="qc" data-r="-2">规格写好了，为什么不让 AI 一口气生成代码？</div></div>
+    <div class="tag" id="sub" data-r="-3">SDFlow 学习了 Superpowers · Matt Pocock</div>
+    <div class="card chp" id="k1" data-r="-1"><span class="num sp" id="nm1">1</span><span class="ti">怎么拆开发任务</span><span class="dt"><span class="s">从规格拆出能单独验收的 ticket</span><span class="s sep">·</span><span class="s">拆完再查</span></span></div>
+    <div class="card chp" id="k2" data-r="1"><span class="num sp" id="nm2">2</span><span class="ti">怎么生成代码</span><span class="dt"><span class="s">新 agent</span><span class="s sep">·</span><span class="s">TDD 先红后绿</span><span class="s sep">·</span><span class="s">跑相关测试</span><span class="s sep">·</span><span class="s">收尾全量 + 证据</span></span></div>
+    <div class="tag ask" id="tq1" data-r="-3">哪条需求做到了？</div>
+    <div class="tag ask" id="tq2" data-r="3">哪些测试是后补的？</div>
+    <div class="chip" id="mth" data-r="1.5">方法 · 规则 · 约束 → 不跑偏</div>
+    <div class="card" id="fin" data-r="-1"><div class="big">一次只做一个能验收的 ticket，先写测试，再写代码</div></div>
+  </div>
+</div>
+<script>
+  // ===== 模版共用：按 <html> 属性搭第一级。要在 theme.js 之前跑：自动倾角只认加载时已有的元素。 =====
+  (function () {
+    var STEPS = ['需求明确', '规格编写', '规格评审', '代码实现', '代码评审', '收尾归档'];
+    var EP = [2, 2, 3, 4, 5, 6];   // 每步对应第几期（visual-v4 4.9）
+    var root = document.documentElement;
+    var level = root.getAttribute('data-level') === '2' ? 2 : 1;
+    function list(name) {
+      return (root.getAttribute(name) || '').split(',').map(function (s) { return Number(s.trim()); }).filter(Boolean);
+    }
+    var done = list('data-done'), cur = list('data-current');
+    // 第一级的几何：level 1 放大居中偏上，level 2 缩到顶部一行。两种都左右对称（中心 x 960）。
+    var G = level === 1
+      ? { left: 55, top: 330, w: 280, h: 104, gap: 26, epGap: 26 }
+      : { left: 187, top: 24, w: 236, h: 64, gap: 26, epGap: 24 };
+    var sf = document.getElementById('sf');
+    var html = '';
+    for (var i = 0; i < 6; i++) {
+      var n = i + 1;
+      var st = cur.indexOf(n) >= 0 ? 'now' : done.indexOf(n) >= 0 ? 'done' : 'off';
+      html += '<div class="card sf-step ' + st + '" id="sf' + n + '" data-shadow="' + (level === 1 ? 10 : 7) + '" style="left:' +
+        (G.left + i * (G.w + G.gap)) + 'px;top:' + G.top + 'px"><span class="num">' + n + '</span><span class="big">' + STEPS[i] + '</span></div>';
+    }
+    // 期号：同一期相邻的几步合成一个括线。
+    var a = 0, curL = 9999, curR = 0;
+    while (a < 6) {
+      var b = a;
+      while (b + 1 < 6 && EP[b + 1] === EP[a]) b++;
+      var isNow = false;
+      for (var k = a; k <= b; k++) if (cur.indexOf(k + 1) >= 0) isNow = true;
+      var l = G.left + a * (G.w + G.gap), r = G.left + b * (G.w + G.gap) + G.w;
+      if (isNow) { curL = Math.min(curL, l); curR = Math.max(curR, r); }
+      html += '<div class="sf-ep' + (isNow ? ' now' : '') + '" id="sfe' + EP[a] + '" style="left:' + l + 'px;width:' + (r - l) +
+        'px;top:' + (G.top + G.h + G.epGap) + 'px">第 ' + EP[a] + ' 期</div>';
+      a = b + 1;
+    }
+    sf.innerHTML = html;
+    // 第二级：从「当前」那组的期号括线下沿，两条线连到外框上沿两角。
+    if (level === 2 && curR > 0) {
+      var y0 = G.top + G.h + G.epGap + 32;
+      document.getElementById('sf-fan').innerHTML =
+        '<path d="M' + (curL + 10) + ' ' + y0 + ' L48 174 M' + (curR - 10) + ' ' + y0 + ' L1872 174" fill="none" ' +
+        'stroke="rgba(22,22,22,.4)" stroke-width="3" stroke-linecap="round"/>';
+    }
+    window.SF_LEVEL = level;
+  })();
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // ===== 模版共用：动画小工具 =====
+  var SF = (function () {
+    var DIM = [160, 157, 151], INK = [22, 22, 22], CREAM = [242, 239, 230], NOTYET = [63, 66, 70];
+    // 没讲到 → 讲过：透明底淡墨描边淡墨字 → 奶白底墨描边墨字（同目录页 S05）。里面的 .num 跟着变。
+    function lit(el, p) {
+      var c = T.mix(NOTYET, INK, p);
+      [el].concat(Array.prototype.slice.call(el.querySelectorAll('.num'))).forEach(function (e) {
+        e.style.background = 'rgba(242,239,230,' + p + ')';
+        e.style.borderColor = c;
+        e.style.color = c;
+      });
+    }
+    // 讲过 → 被留下：奶白 → 灰实心。
+    function gray(el, p) { el.style.background = T.mix(CREAM, DIM, p); }
+    // 「当前」描边。a = 硬投影的不透明度（不传 = 1）：透明底的空框传它的点亮进度，免得没讲到时露出实心投影。
+    function cur(el, g, s, a) {
+      // s 传 0 = 不要硬投影（进度点）；不传就读 data-shadow，再没有用 10。
+      T.current(el, g, s != null ? s : parseFloat(el.getAttribute('data-shadow') || '10'));
+      // 浏览器读回来的颜色是 rgb(22, 22, 22) 不是 #161616，两种写法都要认。
+      if (a != null) el.style.boxShadow = el.style.boxShadow.replace(/#161616|rgb\(22, 22, 22\)/g, 'rgba(22,22,22,' + a + ')');
+    }
+    // 横箭头：从 x1 到 x2（箭头尖），竖直中心 y。
+    function arrow(el, x1, x2, y) {
+      el.style.left = x1 + 'px';
+      el.style.width = Math.max(0, x2 - x1 - 18) + 'px';
+      el.style.top = (y - 3) + 'px';
+    }
+    function lerp(a, b, p) { return a + (b - a) * p; }
+    // 第一级进场：tIn 起六步依次落下、期号和外框淡入；tCur 起「当前」那几步加黄框。
+    function l1(t, tIn, tCur) {
+      for (var i = 1; i <= 6; i++) {
+        var el = T.$('sf' + i);
+        T.enter(el, T.p(t, tIn + (i - 1) * 0.08, 0.5), window.SF_LEVEL === 1 ? 20 : 12);
+        if (el.classList.contains('now')) cur(el, T.ease(T.p(t, tCur, 0.4)));
+      }
+      var e = T.ease(T.p(t, tIn + 0.3, 0.6));
+      T.all('.sf-ep').forEach(function (x) { x.style.opacity = e; });
+      T.$('sf-fan').style.opacity = e;
+      T.$('sf-frame').style.opacity = e;
+    }
+    return { lit: lit, gray: gray, cur: cur, arrow: arrow, lerp: lerp, l1: l1 };
+  })();
+  // ===== 模版共用到此 =====
+
+  // ===== 本页：帧脚本 =====
+  function L(id) { return T.$(id); }
+  // 口播时刻（秒，画面内，估算：每分钟 220 字，还没录音）。
+  var AT = {
+    q0: 0.0, hold: 0.765, move: 2.0,                // 问题贴纸：正中放大，停到 1.4 秒，0.6 秒缩小移到左上
+    sub: 1.421,                                     // 第 1 句起：小字「SDFlow 学习了 Superpowers · Matt Pocock」，贴纸落位后就在
+    tq1: 6.56, tq2: 8.631,                         // 第 2 句：「哪条需求做到了」「哪些测试是后补的」
+    mth: 12.922,                                    // 第 3 句：「方法 · 规则 · 约束 → 不跑偏」
+    k1: 18.122, d1: [18.846, 22.377], tick1: 23.825,      // 第 4 句
+    k2: 25.002, d2: [26.1, 27.91, 29.59, 33.402], tick2: 36.319,   // 第 5–6 句（前三段第 5 句，最后一段第 6 句）
+    fin: 36.985                                     // 第 6 句后，不念
+  };
+  var START_SCALE = 1.7;   // 问题贴纸在正中的放大倍数
+
+  function layout() {
+    var w = L('qc').offsetWidth, h = L('qc').offsetHeight, k = START_SCALE;
+    window.QS = { dx: 960 - w * k / 2 - 90, dy: 540 - h * k / 2 - 205 };
+  }
+  function seg(parent, list, t) {
+    var s = L(parent).querySelectorAll('.s'), n = 0;
+    for (var i = 0; i < s.length; i++) {
+      var isSep = s[i].classList.contains('sep');
+      // 分隔点和它后面那一段一起出现：n = 已经数过的段数，正好是后面这一段的序号
+      s[i].style.opacity = T.ease(T.p(t, list[n], 0.35));
+      if (!isSep) n++;
+    }
+  }
+  function tick(id, p) {
+    var e = L(id);
+    e.textContent = p > 0 ? '✓' : (id === 'nm1' ? '1' : '2');
+  }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 39.902,
+    init: function () { return T.fonts(T.$('stage').textContent).then(layout); },
+    render: function (t) {
+      layout();
+      T.tilt();
+      SF.l1(t, 0, 999);   // 第一级缩成顶行；外框、扇线一起淡入；第四步不加黄框
+
+      // 问题贴纸：正中放大 → 缩小移到左上
+      var qp = T.ease(T.p(t, AT.hold, AT.move - AT.hold));
+      var sc = START_SCALE + (1 - START_SCALE) * qp;
+      L('qw').style.transform = 'translate(' + (QS.dx * (1 - qp)) + 'px,' + (QS.dy * (1 - qp)) + 'px) scale(' + sc + ')';
+      T.enter(L('qc'), T.p(t, AT.q0, 0.4), 16);
+
+      T.enter(L('tq1'), T.p(t, AT.tq1, 0.4), 14); T.enter(L('tq2'), T.p(t, AT.tq2, 0.4), 14);
+      T.enter(L('mth'), T.p(t, AT.mth, 0.4), 14);
+      T.enter(L('sub'), T.p(t, AT.sub, 0.4), 12);
+
+      T.enter(L('k1'), T.p(t, AT.k1, 0.4), 14);
+      seg('k1', AT.d1, t);
+      tick('nm1', T.p(t, AT.tick1, 0.3));
+      T.enter(L('k2'), T.p(t, AT.k2, 0.4), 14);
+      seg('k2', AT.d2, t);
+      tick('nm2', T.p(t, AT.tick2, 0.3));
+      T.enter(L('fin'), T.p(t, AT.fin, 0.5), 20);
+    }
+  });
+</script>
+</body>
+</html>

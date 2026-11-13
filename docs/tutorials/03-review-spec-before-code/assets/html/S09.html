@@ -1,0 +1,246 @@
+<!doctype html>
+<!-- S09 · 机制动画（派发流程图）· script 37–48「那这么多角度，每次都全跑吗？……二是再加一个对抗审，专门审太乐观的估计和边界场景。」
+     示意（不加角标，作者 10-23 定），只有重判结果那张小卡是 r3 实录，单独挂「实录 · 示例项目」标签。派发逻辑依据
+     ~/.skills/sdflow-skills/sdflow-spec-review/SKILL.md：
+       :272 广审双镜（CEO 审、工程审）恒跑；:273 按命中的栈和领域决定开哪几个领域镜；
+       :274 对抗镜普通 2 个、高风险 3 个；固定 1 个接地镜（代码审）；
+       :285 主会话判命中哪些 TG，命中高风险 → 再开一次另一个模型（site="hr-tg"），「找领域镜漏的」。
+     r3 实录（示例仓 2e84aeb 的 openspec/changes/alarm-notify/spec-review-report.md）：
+       第 37 行「依据模型判定」16 个 TG，第 37、39 行 hit 4 个（TG-08、16、17、26）→ 小卡「16 种情况 · 其中高风险 4 种」。
+       第 20–31 行派出 8 个镜：strategy、plan-eng、backend + backend-go、devex、对抗 A / B / C、接地；第 47–52 行另一个模型两处 design-voice、hr-tg。
+       和流程图对得上：每次都跑 5 格（CEO 审、工程审、代码审、另一个模型、对抗审 ×2）+ 左路 2 个领域 + 右路加 1 个另一个模型、1 个对抗审。
+     版面（均在 y 940 以上）：左上问题贴纸 → 第一排「每次都跑」五张卡 → 第二排居中「主会话重判」、其下 r3 结果小卡
+       → 从结果小卡分出两路：左「技术领域」、右「高风险？」。右路对抗审那行后面接小注「＋ 估计和边界」。
+     颜色：主会话重判浅蓝（规格一侧的判断）；「另一个模型」两处紫、「对抗审」两处粉（辅助色，本期同色同类；小注也是粉）；
+       其余卡奶白；「高风险？」标签墨底；不用红绿；黄只作「当前」描边，同一时刻只有一个；高风险那路加派的卡前缀「＋」。
+     41 句叠层（10-24 作者定加，10-25 做）：16 张情况小卡，TG 编号 + 中文短名（取自 ~/.sdflow/workflow/trigger-catalog.md 第三节 :36-92 的 TG 标题缩短），高风险 4 张（TG-08、16、17、26）墨底奶白字，t24.58 出、t27.26 高风险变墨底、t29.0 起收起；叠层出现时全页压暗 0.35。
+     句子与动画节点（口播时刻按录音实测，frame-times.py，2026-10-25；节点取词首字实测开始时间减 0.2 秒）。句起点：
+       37 句 t0.0：问题贴纸正中放大，停到 1.6 秒，0.6 秒缩到左上（2.2 秒落位）。
+       38 句 t3.38：t4.14「每次都跑」标签；CEO 审（t6.06）、工程审（t7.10）、代码审（t7.98）、另一个模型（t8.94）、对抗审 ×2（t10.62）随口播逐张进场（当前跟着走）。
+       39 句 t12.50：没有新元素（分镜第 3 句未列）。
+       40 句 t16.02：t15.82 中间「主会话重判：这次碰到了哪几种情况」落下，当前。
+       41 句 t24.58：t24.38 重判格下面 r3 结果小卡「16 种情况 · 其中高风险 4 种」落下，当前。
+       42 句 t29.78：t29.58 从结果小卡分出两路的线（只画线，两路的卡讲到才出）。
+       43 句 t32.58：t32.38 左路「技术领域 → 每个领域一个 agent」落下；念到「Go 后端」（t34.46）Go 后端那张进场，当前。
+       44 句 t38.50：念到「给开发者用的东西」（t40.22）开发体验那张进场，当前。
+       45 句 t45.86：t45.66 右路「高风险？」落下，当前。
+       46 句 t52.10：t51.90「是 →」。
+       47 句 t55.30：t55.74「＋ 另一个模型 · 专找领域漏的」，当前。
+       48 句 t62.42：t62.22「＋ 对抗审 ×2」；念到「再加一个对抗审」（t62.62）×3 弹出；念到「估计和边界」（t65.58）旁边出小注「＋ 估计和边界」，当前留到页末。
+       念完 t67.14；时长 68.34 秒。 -->
+<html lang="zh-CN" data-frame-id="S09">
+<head>
+<meta charset="utf-8">
+<title>S09 · 每次都跑哪几路评审，碰到什么再加派</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #qw { left: 60px; top: 44px; transform-origin: 0 0; }
+  #qw .chip { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; }
+
+  /* 第一排：每次都跑 */
+  #tRun { left: 60px; top: 172px; font-size: 40px; }
+  .rn { top: 248px; width: 330px; height: 94px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .rn .nm { font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.2; white-space: nowrap; }
+  #h0 { left: 60px; } #h1 { left: 426px; } #h2 { left: 792px; } #h3 { left: 1158px; } #h4 { left: 1524px; }
+
+  /* 第二排：重判 */
+  #re { left: 510px; top: 392px; width: 860px; height: 88px; padding: 0; display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 40px; }
+  #res { left: 560px; top: 516px; width: 760px; height: 78px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between;
+         font-weight: 700; font-size: 40px; white-space: nowrap; }
+  #res b { font-family: var(--display); font-weight: 800; font-size: 50px; }
+  #res .src { font-family: var(--mono); font-weight: 500; font-size: 26px; color: rgba(22,22,22,.7); }
+  #resTab { left: 1352px; top: 528px; font-size: 30px; padding: 4px 18px; }
+
+  /* 分路线 */
+  #fork { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+
+  /* 第三排：两路 */
+  .lane { top: 680px; height: 236px; padding: 0; }
+  .lane .tab { font-size: 40px; }
+  #laneL { left: 60px; width: 840px; } #laneR { left: 960px; width: 900px; }
+  .it { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 14px;
+        background: var(--cream); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+        font-weight: 700; font-size: 38px; white-space: nowrap; }
+  .it .a { font-family: var(--display); font-weight: 800; }
+  #iGo { left: 36px; top: 52px; width: 760px; height: 76px; }
+  #iDx { left: 36px; top: 144px; width: 760px; height: 76px; }
+  #yes { position: absolute; left: 30px; top: 98px; font-family: var(--display); font-weight: 800; font-size: 46px; color: var(--ink); white-space: nowrap; }
+  #iMo { left: 150px; top: 52px; width: 720px; height: 76px; }
+  #iHu { left: 150px; top: 144px; width: 450px; height: 76px; }
+  #nt { left: 622px; top: 154px; font-size: 30px; padding: 8px 18px; background: var(--pink-soft); }
+  #x3 { color: var(--ink); }
+  /* 配色：紫 = 另一个模型，粉 = 对抗审，浅蓝 = 主会话重判 */
+  #h3, #iMo { background: var(--violet-soft); }
+  #h4, #iHu { background: var(--pink-soft); }
+  #re { background: var(--blue-soft); }
+  #laneR .tab { background: var(--ink); color: var(--cream); }
+
+  /* 41 句叠层：16 张情况小卡。位置 y 120–900，加投影不过 920。 */
+  #dimO { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: #000; opacity: 0; z-index: 40; pointer-events: none; }
+  #ovl { left: 160px; top: 130px; width: 1600px; height: 770px; padding: 0; z-index: 41; opacity: 0; }
+  #ovTab { left: 40px; top: -30px; font-size: 34px; }
+  #tgs { position: absolute; left: 40px; top: 50px; width: 1520px; height: 680px; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 20px; }
+  .tgc { box-sizing: border-box; border: 4px solid var(--ink); border-radius: 8px; background: var(--cream); color: var(--ink);
+         box-shadow: 5px 5px 0 var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+  .tgc .n { font-family: var(--mono); font-weight: 700; font-size: 28px; }
+  .tgc .m { font-family: var(--display); font-weight: 800; font-size: 46px; white-space: nowrap; }
+  .tgc.hi.on { background: var(--ink); color: var(--cream); box-shadow: 5px 5px 0 rgba(22,22,22,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="qw"><div class="chip" id="q" data-r="-3">每次都全跑吗？</div></div>
+
+  <!-- 第一排：每次都跑 -->
+  <div class="tab" id="tRun" data-r="-2">每次都跑</div>
+  <div class="card rn" id="h0" data-r="-1"><span class="nm">CEO 审</span></div>
+  <div class="card rn" id="h1" data-r="1"><span class="nm">工程审</span></div>
+  <div class="card rn" id="h2" data-r="-1.2"><span class="nm">代码审</span></div>
+  <div class="card rn" id="h3" data-r="1.2"><span class="nm">另一个模型</span></div>
+  <div class="card rn" id="h4" data-r="-1"><span class="nm">对抗审 ×2</span></div>
+
+  <!-- 第二排：主会话重判（居中） -->
+  <div class="card" id="re" data-r="0.8">主会话重判：这次碰到了哪几种情况</div>
+  <div class="card" id="res" data-r="-0.6"><span><b>16</b> 种情况 · 其中高风险 <b>4</b> 种</span><span class="src">报告 :37 :39</span></div>
+  <div class="tab ink" id="resTab" data-r="2">实录 · 示例项目</div>
+
+  <svg id="fork" viewBox="0 0 1920 1080" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="fl" d="M940 600 V630 H780 V670"/>
+      <path id="fr" d="M940 600 V630 H1500 V670"/>
+      <path id="fla" d="M766 654 L780 674 L794 654"/>
+      <path id="fra" d="M1486 654 L1500 674 L1514 654"/>
+    </g>
+  </svg>
+
+  <!-- 第三排：两路 -->
+  <div class="card lane" id="laneL" data-r="-0.6">
+    <div class="tab" data-r="-2">技术领域 → 每个领域一个 agent</div>
+    <div class="it" id="iGo"><span class="a">Go 后端</span> 领域 agent</div>
+    <div class="it" id="iDx"><span class="a">开发体验</span> 领域 agent</div>
+  </div>
+  <div class="card lane" id="laneR" data-r="0.6">
+    <div class="tab" data-r="2">高风险？</div>
+    <div id="yes">是 →</div>
+    <div class="it" id="iMo"><span class="a">＋ 另一个模型</span> · 专找领域漏的</div>
+    <div class="it" id="iHu"><span class="a">＋ 对抗审</span> <span>×2 → <b id="x3">×3</b></span></div>
+    <div class="tag" id="nt" data-r="2">＋ 估计和边界</div>
+  </div>
+
+  <!-- 41 句：16 种情况叠层（短时，约 4 秒后收起）。压暗层在下，叠层在上；高风险 4 张墨底奶白字，其余奶白底 -->
+  <div id="dimO"></div>
+  <div class="card" id="ovl" data-r="0">
+    <div class="tab ink" id="ovTab" data-r="-2">实录 · r3 报告第 37、39 行</div>
+    <div id="tgs">
+    <div class="tgc" data-hi="0"><span class="n">TG-01</span><span class="m">后端服务</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-05</span><span class="m">数据对象</span></div>
+    <div class="tgc hi" data-hi="1"><span class="n">TG-08</span><span class="m">外部依赖</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-10</span><span class="m">跨组件</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-12</span><span class="m">复杂分支</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-14</span><span class="m">新增组件</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-15</span><span class="m">新代码路径</span></div>
+    <div class="tgc hi" data-hi="1"><span class="n">TG-16</span><span class="m">性能要求</span></div>
+    <div class="tgc hi" data-hi="1"><span class="n">TG-17</span><span class="m">敏感数据</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-18</span><span class="m">测试计划</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-19</span><span class="m">多条需求</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-20</span><span class="m">外部影响方</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-22</span><span class="m">未验证前提</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-23</span><span class="m">多个方案</span></div>
+    <div class="tgc hi" data-hi="1"><span class="n">TG-26</span><span class="m">并发共享</span></div>
+    <div class="tgc" data-hi="0"><span class="n">TG-28</span><span class="m">开发者接口</span></div>
+    </div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，画面内，按录音实测：词首字开始时间减 0.2 秒）。注释写全稿句号。
+  var CUE = {
+    qHold: 1.6, qMove: 0.6,                         // 37 句：问题贴纸正中停到 1.6 秒，0.6 秒移到左上
+    run: [6.06, 7.1, 7.98, 8.94, 10.62], runEnd: 12.3,  // 38 句：CEO 审、工程审、代码审、另一个模型、对抗审 ×2 逐张进场
+    re: 15.82, reEnd: 23.98,                        // 40 句：主会话重判落下，当前
+    res: 24.38, resEnd: 29.08,                       // 41 句：r3 结果小卡落下，当前
+    fork: 29.58,                                    // 42 句：分两路的线
+    laneL: 32.38,                                   // 43 句：左路落下
+    go: 34.46, goEnd: 38.1,                          // 43 句「Go 后端」：Go 后端 agent，当前
+    dx: 40.22, dxEnd: 45.26,                         // 44 句「给开发者用的东西」：开发体验 agent，当前
+    laneR: 45.66, laneREnd: 51.5,                    // 45 句：右路「高风险？」，当前
+    yes: 51.9,                                      // 46 句：「是 →」
+    mo: 55.74, moEnd: 61.82,                         // 47 句：另一个模型 · 专找领域漏的，当前
+    ovl: 24.58, hi: 27.26, ovlEnd: 29.0,             // 41 句：16 种情况叠层，念到「其中 4 种」高风险 4 张变墨底，约 4 秒后收起
+    hu: 62.22, x3: 62.62, nt: 65.58                   // 48 句：对抗审 ×2；念到「再加一个对抗审」×3 弹出；念到「估计和边界」小注，当前留到页末
+  };
+  var Q_CENTER = [960, 470], Q_SCALE = 1.6;
+
+  // 当前：一个元素进、上一个出（b 时开始淡出 0.4 秒，相邻两段不重叠）。
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function draw(el, t, start, len) {
+    var L = el.getTotalLength(), p = T.ease(T.p(t, start, len));
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p); el.style.opacity = p > 0 ? 1 : 0;
+  }
+
+  Stage({
+    duration: 68.34,
+    init: function () { return T.fonts(document.body.textContent); },
+    render: function (t) {
+      // 37 句：问题贴纸正中放大，停一下，再缩小移到左上
+      T.enter(T.$('q'), T.p(t, 0.0, 0.45), -16);
+      var qw = T.$('qw'), q = T.$('q');
+      var mv = T.ease(T.p(t, CUE.qHold, CUE.qMove));
+      var sc = Q_SCALE + (1 - Q_SCALE) * mv;
+      var fx = Q_CENTER[0] - Q_SCALE * q.offsetWidth / 2 - 60, fy = Q_CENTER[1] - Q_SCALE * q.offsetHeight / 2 - 44;
+      qw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // 38 句：每次都跑，随口播逐张进场
+      T.enter(T.$('tRun'), T.p(t, 4.14, 0.45), -10);   // 38 句「有几个每次都跑」
+      for (var k = 0; k < 5; k++) {
+        var h = T.$('h' + k);
+        T.enter(h, T.p(t, CUE.run[k], 0.45), 16);
+        T.current(h, on(t, CUE.run[k], k < 4 ? CUE.run[k + 1] - 0.4 : CUE.runEnd), 10);
+      }
+
+      // 40–41 句：主会话重判、r3 结果
+      T.enter(T.$('re'), T.p(t, CUE.re, 0.5), 16);
+      T.current(T.$('re'), on(t, CUE.re + 0.3, CUE.reEnd), 10);
+      T.enter(T.$('res'), T.p(t, CUE.res, 0.5), 16);
+      T.enter(T.$('resTab'), T.p(t, CUE.res + 0.2, 0.45), -10);
+      T.current(T.$('res'), on(t, CUE.res + 0.3, CUE.resEnd), 10);
+
+      // 41 句：叠层（压暗 0.35 + 16 张小卡），收起后回到原画面
+      var ov = T.ease(T.p(t, CUE.ovl, 0.4)) * (1 - T.ease(T.p(t, CUE.ovlEnd, 0.4)));
+      T.$('dimO').style.opacity = 0.35 * ov;
+      T.$('ovl').style.opacity = ov;
+      T.$('ovl').style.display = ov > 0 ? 'block' : 'none';
+      T.all('#tgs .tgc.hi').forEach(function (c, i) {
+        var on = t >= CUE.hi + i * 0.25;
+        c.classList.toggle('on', on);
+      });
+
+      // 42 句：从结果小卡分出两路的线
+      draw(T.$('fl'), t, CUE.fork, 0.7); draw(T.$('fr'), t, CUE.fork, 0.7);
+      T.$('fla').style.opacity = T.ease(T.p(t, CUE.fork + 0.6, 0.2));
+      T.$('fra').style.opacity = T.ease(T.p(t, CUE.fork + 0.6, 0.2));
+
+      // 43–44 句：左路
+      T.enter(T.$('laneL'), T.p(t, CUE.laneL, 0.5), 14);
+      var go = T.$('iGo'), dx = T.$('iDx');
+      go.style.opacity = T.ease(T.p(t, CUE.go, 0.4)); dx.style.opacity = T.ease(T.p(t, CUE.dx, 0.4));
+      T.current(go, on(t, CUE.go, CUE.goEnd), 6);
+      T.current(dx, on(t, CUE.dx, CUE.dxEnd), 6);
+
+      // 45–48 句：右路
+      T.enter(T.$('laneR'), T.p(t, CUE.laneR, 0.5), 14);
+      T.current(T.$('laneR'), on(t, CUE.laneR + 0.3, CUE.laneREnd), 10);
+      T.$('yes').style.opacity = T.ease(T.p(t, CUE.yes, 0.4));
+      var mo = T.$('iMo'), hu = T.$('iHu');
+      mo.style.opacity = T.ease(T.p(t, CUE.mo, 0.4)); hu.style.opacity = T.ease(T.p(t, CUE.hu, 0.4));
+      T.current(mo, on(t, CUE.mo, CUE.moEnd), 6);
+      T.current(hu, on(t, CUE.hu, 999), 6);
+      T.$('x3').style.opacity = T.ease(T.p(t, CUE.x3, 0.35));
+      T.$('nt').style.opacity = T.ease(T.p(t, CUE.nt, 0.4));
+    }
+  });
+</script>
+</body>
+</html>

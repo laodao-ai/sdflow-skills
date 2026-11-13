@@ -1,0 +1,99 @@
+<!doctype html>
+<!-- S21 · 机制动画 · script 81–83「我刚才那几句话，进了规格，变成场景。……都照这几条对。」
+     上：spec.md 的录屏屏上原文摘录（演示仓没提交，文件已不在，只剩录屏里 Claude Code 显示的几行）。
+         原文一字不改：第 9 行后半句被界面截断，开头的「…」和末尾「… +37 lines」照原样保留。
+     中：同一录屏里 AI 对这份规格的汇总，只摘 Scenarios cover 这一句，作四个场景的出处。
+     下：四个场景做成中文标签。场景的 WHEN / THEN 原文没留下，不编。
+     - 「报 / 不报」不是测试结果，不用红绿：实心圆 = 报警，空心圆 = 不报。
+     - 黄色描边 + 外发光 = 当前讲到的东西：先是 Requirement 那一行，再是汇总里的四个数，最后框住四个标签。同一时刻只亮一个。
+     - 窗口是终端屏幕摘录，不倾斜；只让标签和贴纸倾斜。 -->
+<html lang="zh-CN" data-frame-id="S21">
+<head>
+<meta charset="utf-8">
+<title>S21 · spec 场景</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .window { overflow: visible; padding: 50px 40px 24px; color: var(--cream); font-family: var(--mono); font-size: 34px; line-height: 50px; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .ln { display: flex; gap: 24px; }
+  .ln .g { flex: none; width: 2ch; text-align: right; color: var(--unlit); }
+  .ln .x { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .dim { color: var(--unlit); }
+  .hl { display: inline-block; position: relative; border-radius: 4px; }
+
+  .labels { position: absolute; left: 70px; top: 836px; height: 86px; display: flex; gap: 44px; }
+  .labels .chip { position: relative; display: flex; align-items: center; gap: 18px; }
+  .labels .chip b { font-family: var(--mono); font-weight: 700; }
+  .dot { flex: none; width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%; border: 5px solid var(--ink); }
+  .dot.on { background: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="w1" style="left:70px;top:70px;width:1780px">
+    <div class="tab ink">实录<span class="m">specs/over-temperature-alert/spec.md</span></div>
+    <div class="ln"><span class="g">1</span><span class="x"># Spec Delta</span></div>
+    <div class="ln"><span class="g">5</span><span class="x">Flags temperature readings above a fixed safety limit so an over-temperature condition is not lost in the stream of normal readings, without disturbing the normal output.</span></div>
+    <div class="ln"><span class="g">7</span><span class="x">## ADDED Requirements</span></div>
+    <div class="ln"><span class="g">9</span><span class="x"><span class="hl" id="req">### Requirement: Alert on readings above the limit</span></span></div>
+    <div class="ln"><span class="g"></span><span class="x"><span class="dim">…</span> alert line SHALL state the reading and the limit in the form `ALERT: &lt;reading&gt;°C &gt; 80.0°C`, with the reading shown to one decimal place.</span></div>
+    <div class="ln dim"><span class="g">…</span><span class="x">+37 lines</span></div>
+  </div>
+
+  <div class="window" id="w2" style="left:70px;top:690px;width:1780px">
+    <div class="tab ink" style="transform:rotate(2deg)">实录<span class="m" style="font-family:var(--display);font-weight:800;font-size:40px">AI 对这份规格的汇总</span></div>
+    <div class="ln"><span class="x">Scenarios cover <span class="hl sc">81.2</span>, <span class="hl sc">80.1</span>, exactly <span class="hl sc">80.0</span> (no alert), and <span class="hl sc">23.5</span> / -4.0 (no alert).</span></div>
+  </div>
+
+  <div class="labels" id="labels" data-shadow="0">
+    <div class="chip lb" data-r="-2"><span class="dot on"></span><b>81.2</b>→ 报警</div>
+    <div class="chip lb" data-r="1.5"><span class="dot on"></span><b>80.1</b>→ 报警</div>
+    <div class="chip lb" data-r="-1.5"><span class="dot"></span><b>80.0</b>→ 不报</div>
+    <div class="chip lb" data-r="2"><span class="dot"></span><b>23.5</b>→ 不报</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 行内高亮：黄色描边 + 外发光，描边贴近文字，不压到上下行（T.current 的 10px 留空给大卡片用）。
+  function mark(el, g) {
+    el.style.outline = '5px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '4px';
+    el.style.boxShadow = '0 0 30px rgba(245,207,74,' + (0.55 * g) + ')';
+  }
+  // 讲过的数字留一条奶白下划线，表示已经对上了标签（不新增颜色）。
+  function done(el, p) {
+    el.style.textDecoration = p > 0 ? 'underline' : 'none';
+    el.style.textDecorationThickness = '4px';
+    el.style.textUnderlineOffset = '8px';
+    el.style.textDecorationColor = 'rgba(242,239,230,' + p + ')';
+  }
+  var AT = [6.56, 8.40, 10.80, 12.40]; // 82 句里四个数被念到的时刻（按实测，2026-10-06，frame-times.py）
+  var GROUP = 14.88;                   // 83 句开口：这几条一起作准（实测）
+
+  Stage({
+    duration: 16,
+    init: function () { return T.fonts('实录AI 对这份规格的汇总报警不报'); },
+    render: function (t) {
+      // 81：规格进来，Requirement 这一行是当前。
+      T.enter(T.$('w1'), T.p(t, 0.1, 0.6), 24);
+      mark(T.$('req'), T.ease(T.p(t, 3.76, 0.4)) * (1 - T.ease(T.p(t, AT[0], 0.3))));
+      T.enter(T.$('w2'), T.p(t, 4.72, 0.6), 24);
+
+      // 82：四个数依次亮起，对应的中文标签同时落下。
+      var sc = T.all('.sc'), lb = T.all('.lb');
+      for (var i = 0; i < 4; i++) {
+        var next = i < 3 ? AT[i + 1] : GROUP;
+        mark(sc[i], T.ease(T.p(t, AT[i], 0.3)) * (1 - T.ease(T.p(t, next, 0.3))));
+        done(sc[i], T.ease(T.p(t, next, 0.3)));
+        T.enter(lb[i], T.p(t, AT[i], 0.45), -20);
+      }
+
+      // 83：四个标签作为一组成为当前。
+      T.current(T.$('labels'), T.ease(T.p(t, GROUP, 0.4)), 0);
+    }
+  });
+</script>
+</body>
+</html>

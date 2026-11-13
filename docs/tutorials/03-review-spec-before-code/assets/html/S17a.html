@@ -1,0 +1,324 @@
+<!doctype html>
+<!-- S17a · 录屏证据（实录 · 浏览器录屏与终端 r3）· script 126–131「你对哪里有不同意见，划出来，直接写在旁边。……我在意见后面直接写了批准，它还是改完、再审过，才把批准记下来。」（6 句）
+     录像 assets/video/20261024-052237-main-review-review.mp4（OBS 整段，终端与浏览器两个场景轮流出现；不进 git，页面用 ../../assets/video/ 找它）。
+     同一个录像开两个 <video>：左边只取浏览器场景的时刻，右边只取终端场景的时刻，两边各自停帧，render 等两个都 seeked 才返回。
+     时间换算（2026-10-24 抽帧核实）：录像比 cast 早开约 48 秒（不是 53 秒）：粘回回车在录像 1877.0 秒、cast 1828.8 秒；
+       「复制意见」对话框在录像 1826.5 秒弹出，对上评审页记的 05:52:59。墙钟 = 05:23:21 + (录像秒 − 48)。
+     用到的录像段（快进都是 4 倍速，「4 倍速」贴纸只在快进时显示；只取画面在动的段的地方已注明）：
+       浏览器  1364.0–1371.0  意见 1：写「同意推荐，但下限改为 10m 吧」、确定（05:40 后第 1 版页面，划选的是报告「[需拍板]」选项 A「下限定为 1m」）
+               1666.0–1673.5  意见 2：design「External Dependency: DingTalk Robot」节 JSON 示例「该设备 10m0s 内不再重复推送"」，写「这里应该没有 0s，因为冷却时间设置都是按分钟的」
+               1822.0–1830.0  点「复制意见 (2)」，弹出「已复制 2 条意见到剪贴板」（05:52:59）
+               停帧 1825.0    右栏「意见 (2)」两条都在（第 129 句一条一框）
+               2204.2–2208.2  刷新：页头「生成于 2026-10-24T05:58:37-07:00 · 第 4 版」，右栏「已落盘意见 (2)」两条都写「处理：采纳」
+               2226.0–2232.0  点目录跳到页尾，停在「意见与处理记录」与「修改日志」（四版）
+       终端    1871.0–1879.0  粘贴后补一句「Q1 同意推荐，批准」、回车（05:53:50）
+               1902.0–1905.5、1908.5–1909.5、1915.5–1916.6  只取在动的段：路径检查、「路径检查通过，原样追加全文」与 `cat >> …/review/review-notes.md`
+               停帧 2121.0    窄复核（Sonnet 5.5，05:56:59 派出）期间主会话写的去零规则 bug 与「窄复核回执一致」两段
+               停帧 1884.0    回到 05:53:50 粘回的那条消息，末尾「Q1 同意推荐，批准」
+       不剪进来：1939–2045 秒 AI 把场景值 30m 误改成 10m、作者插话改回的一段（分镜定）。
+     录像里去零规则的错是主会话在等窄复核时自己先算出来的，窄复核回执「结论和我的演算吻合」（r3 报告第 143 行记成窄复核发现）。
+       10-25 作者定合句：原第 130、131 两句并为新第 130 句「它改完先自己会再跑一遍窄评审，只审改动的地方，发现了问题，马上改掉。」（30 字，8.2 秒）；两张放大卡仍分两张，在这一句里依次出现：前半句「先自己会再跑一遍窄评审」对主会话自己先算那张，后半句「只审改动的地方，发现了问题」对窄复核回执那张。原第 132 句现为第 131 句，后面的节点整体前移 5.4 秒。
+       放大卡照录像原文；旁注取报告第 144 行。
+     裁切：浏览器源 x 300–1900、y 88–1048，缩 0.55；终端源 x 280–1640、y 96–960（去掉标签栏、输入框和状态栏），缩 0.6。黄框坐标按源画面量。
+     黄框与放大卡（visual-v4 4.7）：黄框先出现，0.4 秒后放大卡从黄框处长出到窗口下方；浏览器一侧的卡用页面浅底，终端一侧用终端深底。
+       黄框讲到下一处就淡出；卡和引线留着，放得下就一起留，放不下时新卡出来前先收起占着它位置的那张，其余的留着。
+       卡都在窗口下方（y 672–915）：浏览器的卡在左（x 50–925），终端的卡在右（x 950 起）。
+       浏览器：两条意见卡放不下（10-24 试过并排各宽 430：卡高 298 / 379px，超出底带；上下叠要 176 + 176px，底带只有约 270px），
+         意见 2 出来前先收起意见 1；意见 2 留到 37.62 秒刷新到第 4 版（原文换掉）收起。
+         第 4 版「已落盘意见」卡在 x 50、宽 875；跳到页尾后右栏还在原处，卡留着，39.35 秒修改日志要这个位置时收起；修改日志卡同宽，留到页末。
+       终端：路径检查卡留到 24.14 秒终端切到窄复核那一屏（原文换掉）收起。
+         窄复核两张卡叠不下（183 + 183px，底带只有约 200px，29.9 秒起上面还有旁注 n1），后半那张出来前先收起前半那张；32.7 秒终端切走，后半那张收起。
+         「Q1 同意推荐，批准」卡宽 480，留到页末。
+       旁注 n1：终端的卡左边在 x 950，引线从黄框左下角往左下走，从 n1 左边过。
+       收「最早」的例外：39.35 秒最早的卡是「Q1 同意推荐，批准」，但它让出的位置放不下修改日志，所以收的是占着左下位置的「已落盘意见」。
+       压暗：每个窗口一层（#db、#dt），在录像之上、黄框之下，洞跟着这个窗口的当前黄框，黄框淡出后洞也压暗；这个窗口有卡就一直压暗约 0.35。
+       引线（visual-v4 4.7，10-24 起）：每张放大卡一根，用 theme.js 的 T.lead，画在 #leads 层（窗口和压暗之上、放大卡之下）；
+       黄色 2px，黄框离卡最近的角 → 卡离黄框最近的角；随卡展开从黄框一端擦出，卡收起时一起缩回黄框。layout() 在卡没有位移和缩放时量矩形。
+     句子与动画节点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒；句起点：126 句 0，127 句 5.62，128 句 11.62，129 句 16.10，
+       130 句 24.34（「窄评审」26.86，「发现了问题」29.90），131 句 32.90（「才把批准记下来」37.82），口播结束 39.14，页时长 40.35）：
+       126 句 浏览器窗口一开口就在：两条意见先后写进对话框、确定，正文出现划选
+       127 句 念到「一键全部复制」点「复制意见」，弹出已复制；念到「粘回会话」终端窗口进场，补一句批准、回车
+       128 句 终端：路径检查、原样追加到 review/review-notes.md，这两行加黄框放大
+       129 句 浏览器回到复制前一刻：右栏意见 1 加黄框放大；念到「推送正文里的 10 分 0 秒」换意见 2
+       130 句 终端停在窄复核那一屏：前半句（到「窄评审」26.86 秒）主会话自己演算出去零规则 bug 那段（10m30s → 10m3）加黄框放大；后半句换到窄复核回来的消息与「窄复核回执一致，结论和我的演算吻合」，加黄框放大；念到「发现了问题」（29.90 秒）下方出旁注「修正后 go run 实测 8 种输入正确」
+       131 句 终端回到粘回的那条消息：「Q1 同意推荐，批准」加黄框放大；念到「才把批准记下来」（37.62 秒）刷新页面到第 4 版，下方出「05:58:26–05:58:37 写锚」；
+         右栏「已落盘意见」两条「处理：采纳」加黄框放大；再跳到页尾，「修改日志」四版加黄框放大，留到页末（口播念完后页面只剩约 1.2 秒，刷新到跳页尾的动画排不下，见上）
+       10-24 作者删去原末句「意见得我自己粘回去……」，以及角上一行「意见要人粘回 · 改得对不对要人看」；原末句的刷新、页尾挪到 131 句末。
+       10-25 合句后按录音实测重对时刻；131 句口播结束后页面只剩约 1.2 秒，刷新、跳页尾与修改日志卡挤在最后 2.5 秒里，刷新提前到 37.62（「才」前 0.2 秒），跳页尾只放末尾 3 秒源画面（0.75 秒），修改日志卡 39.35 出现、页末前展开完。
+       10-25：放大卡字号都 ≥ 28px；修改日志卡四行只写时刻（日期同为 2026-10-24，省掉）才放得进一行；位置上移到 y 636。
+     配色：录屏原样；「实录」标签墨底；放大卡不加色边，重点加粗加下划线；旁注两个小贴纸奶白底墨字；黄只给当前（黄框和它的引线）。
+     一页一层：两个窗口出现后一直在；录像窗口里的内容随实录变，黄框移动，放大卡按上面的规则留和收；最后一帧：左边页尾记录与修改日志 + 修改日志的黄框、引线与放大卡，
+       右边粘回的那条消息与它的放大卡、引线，下方两条旁注。窗口不倾斜，标签和倍速贴纸倾斜。内容整体在 y 930 以内，避开底部字幕带。 -->
+<html lang="zh-CN" data-frame-id="S17a">
+<head>
+<meta charset="utf-8">
+<title>S17a · 划选写意见、复制粘回、窄复核、第 4 版回显（r3 录屏）</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .window { top: 92px; overflow: visible; }
+  .window .tab { top: -50px; font-size: 32px; padding: 4px 20px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 26px; margin-left: 12px; }
+  .window .speed { right: -30px; top: -34px; opacity: 0; font-size: 32px; }
+  .clip { position: absolute; left: 0; top: 0; overflow: hidden; border-radius: 8px; }
+  video { position: absolute; }
+  .hl { position: absolute; box-sizing: border-box; border: 5px solid rgba(245,207,74,0); border-radius: 6px; opacity: 0; }
+  /* 压暗层：洞跟着当前黄框，3000px 阴影压暗洞外，裁切框 overflow 裁掉 */
+  .shade { position: absolute; border-radius: 6px; }   /* 不叫 .dim：.zc .dim 已用作暗色字 */
+
+  /* 浏览器：内尺寸 880 x 528（源 1600 x 960 缩 0.55） */
+  #wb { left: 50px; width: 892px; height: 540px; background: #fff; }
+  #wb .clip { width: 880px; height: 528px; }
+  #vb { left: -165px; top: -48.4px; width: 1056px; height: 594px; }
+  /* 终端：内尺寸 816 x 518（源 1360 x 864 缩 0.6） */
+  #wt { left: 990px; width: 828px; height: 530px; }
+  #wt .clip { width: 816px; height: 518px; }
+  #vt { left: -168px; top: -57.6px; width: 1152px; height: 648px; }
+
+  /* 放大卡：窗口下方，浏览器的在左、终端的在右，放得下就留着（见页头注释） */
+  .zc { position: absolute; top: 712px; box-sizing: border-box; padding: 16px 26px 18px; border: 5px solid var(--ink); border-radius: 10px;
+        box-shadow: 10px 10px 0 var(--ink); opacity: 0; z-index: 8; }
+  .zc.pg { left: 50px; width: 900px; background: var(--cream); color: var(--ink); }
+  .zc.tm { left: 950px; top: 712px; width: 830px; background: var(--term); color: var(--cream); }
+  #z1, #z2 { top: 700px; width: 875px; }   /* 不压右边终端的卡 */
+  #z4 { width: 580px; }   /* 收窄，给右边留空 */
+  #z5 { top: 672px; width: 875px; }
+  #z6 { top: 636px; width: 875px; }   /* 不压右边终端的卡；折行后上移不进字幕带 */
+  .zc .h { font-weight: 600; font-size: 28px; line-height: 1.3; color: #666; margin-bottom: 4px; }
+  .zc.tm .h { color: var(--unlit); font-family: var(--mono); }
+  .zc .q { font-weight: 600; font-size: 30px; line-height: 1.35; padding-left: 16px; border-left: 6px solid #e6d98a; color: #555; margin-bottom: 6px; }
+  .zc .l { font-weight: 600; font-size: 34px; line-height: 1.4; }
+  .zc .m { font-weight: 600; font-size: 28px; line-height: 1.35; }
+  .zc.tm .m { font-size: 28px; }
+  .zc.wide { width: 1300px; }
+  #z6 .m { line-height: 1.3; }
+  .zc .l + .l, .zc .m + .m { margin-top: 4px; }
+  .zc.tm .l, .zc.tm .m { font-family: var(--mono); }
+  .zc code { font-family: var(--mono); font-weight: 600; }
+  .zc b { font-weight: 800; }
+  .zc .k { font-weight: 800; text-decoration: underline; text-decoration-thickness: 4px; text-underline-offset: 6px; }
+  .zc .br { word-break: break-all; }
+  .zc .dim { color: var(--unlit); }
+
+  .note { position: absolute; top: 646px; padding: 4px 16px; border: 4px solid var(--ink); border-radius: 8px; background: var(--cream); color: var(--ink);
+          box-shadow: 6px 6px 0 var(--ink); font-weight: 600; font-size: 28px; white-space: nowrap; opacity: 0; }
+  #n1 { left: 990px; } #n2 { left: 1460px; }
+  #n1 code { font-family: var(--mono); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="wb">
+    <div class="clip">
+      <video id="vb" src="../../assets/video/20261024-052237-main-review-review.mp4" muted preload="auto" playsinline></video>
+      <div class="shade" id="db"></div>
+      <div class="hl" id="b1"></div><div class="hl" id="b2"></div><div class="hl" id="b5"></div><div class="hl" id="b6"></div>
+    </div>
+    <div class="tab ink">实录<span class="m">评审页 design-gate.html</span></div>
+    <div class="speed" id="sb">4 倍速</div>
+  </div>
+
+  <div class="window" id="wt">
+    <div class="clip">
+      <video id="vt" src="../../assets/video/20261024-052237-main-review-review.mp4" muted preload="auto" playsinline></video>
+      <div class="shade" id="dt"></div>
+      <div class="hl" id="b0"></div><div class="hl" id="b3"></div><div class="hl" id="b3b"></div><div class="hl" id="b4"></div>
+    </div>
+    <div class="tab ink">实录<span class="m">终端 · Claude Code</span></div>
+    <div class="speed" id="st">4 倍速</div>
+  </div>
+
+  <!-- 引线（visual-v4 4.7）：每张卡一根，T.lead 画进这一层；z-index 7，在窗口之上、放大卡（8）之下 -->
+  <svg class="abs" id="leads" viewBox="0 0 1920 1080" aria-hidden="true" style="left:0;top:0;width:1920px;height:1080px;z-index:7"></svg>
+
+  <!-- 放大卡：放得下就留着（见页头注释），文字照录像原文 -->
+  <div class="zc tm" id="z0" data-r="0">
+    <div class="m">⏺ 路径检查通过，原样追加全文：</div>
+    <div class="m br dim">$ cat &gt;&gt; /Users/demo/demo-temp-monitor/openspec/changes/alarm-notify/<span class="k" style="color:var(--cream)">review/review-notes.md</span> &lt;&lt;'SDFLOW_NOTES_EOF'</div>
+  </div>
+  <div class="zc pg" id="z1" data-r="0">
+    <div class="h">#1 spec-review-report › [需拍板]</div>
+    <div class="q">选项 A（推荐）：下限定为 1m</div>
+    <div class="l"><span class="k">同意推荐，但下限改为 10m 吧</span></div>
+  </div>
+  <div class="zc pg" id="z2" data-r="0">
+    <div class="h">#2 design › External Dependency: DingTalk Robot（TG-08 / D-4）</div>
+    <div class="q">该设备 10m0s 内不再重复推送"</div>
+    <div class="l"><span class="k">这里应该没有 0s</span>，因为冷却时间设置都是按分钟的</div>
+  </div>
+  <div class="zc tm" id="z3" data-r="0">
+    <div class="h">主会话 · 等窄复核时自己先算</div>
+    <div class="m">⏺ 窄复核在跑。等待期间<span class="k">我自己演算了一遍</span>去零值单位的规则，发现我写的规则有 bug：「先去掉结尾的 0s」<span class="k">会把 10m30s 变成 10m3</span>，因为 30s 也是以 0s 结尾。…</div>
+  </div>
+  <div class="zc tm" id="z3b" data-r="0">
+    <div class="h">› Message from @sdflow-effort-medium</div>
+    <div class="m">⏺ <span class="k">窄复核回执一致，结论和我的演算吻合</span>：除了去零规则这一处 bug（外加没有用例能测出它），其余落点、旧值残留、各处文案的一致性都没有问题。…</div>
+  </div>
+  <div class="zc tm" id="z4" data-r="0">
+    <div class="h">05:53:50 粘回的那条消息，末尾一行</div>
+    <div class="l"><span class="k">Q1 同意推荐，批准</span></div>
+  </div>
+  <div class="zc pg" id="z5" data-r="0">
+    <div class="h">第 4 版 · 已落盘意见（2）</div>
+    <div class="m">① 同意推荐，但下限改为 10m 吧　处理：<span class="k">采纳</span>：Q1 采纳选项 A，冷却下限定为 10m：…</div>
+    <div class="m">② 这里应该没有 0s，因为冷却时间设置都是按分钟的　处理：<span class="k">采纳</span>：消息正文冷却时长去掉末尾零值单位…</div>
+  </div>
+  <div class="zc pg" id="z6" data-r="0">
+    <div class="h">修改日志</div>
+    <div class="m"><b>第 4 版</b> · 05:58:37 · <span class="k">设计门批准</span></div>
+    <div class="m"><b>第 3 版</b> · 05:58:15 · 窄复核修正去零值单位规则</div>
+    <div class="m"><b>第 2 版</b> · 05:56:43 · 处理评审意见 2 条（Q1 冷却下限 10m、正文冷却去零值单位）</div>
+    <div class="m"><b>第 1 版</b> · 05:40:25 · 首次生成</div>
+  </div>
+
+  <div class="note" id="n1" data-r="-1.5">修正后 <code>go run</code> 实测 8 种输入正确</div>
+  <div class="note" id="n2" data-r="1.5">05:58:26–05:58:37 写锚</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 录像怎么放：at 是页内秒。hold = 停在源画面第几秒；play = 依次放这些段，speed 倍速，放完停在最后一段的末尾。
+  var TRACK = {
+    vb: [
+      { at: 0, speed: 4, play: [[1364.0, 1371.0], [1666.0, 1673.5]] },     // 126 句：两条意见
+      { at: 6.7, speed: 4, play: [[1822.0, 1830.0]] },                     // 127 句「一键全部复制」：复制意见
+      { at: 15.9, hold: 1825.0 },                                          // 129 句：复制前一刻，右栏两条意见
+      { at: 37.62, speed: 4, play: [[2204.2, 2208.2]] },                    // 131 句「才把批准记下来」：刷新到第 4 版
+      { at: 38.62, speed: 4, play: [[2229.0, 2232.0]] }                     // 跳到页尾：意见与处理记录、修改日志
+    ],
+    vt: [
+      { at: 0, hold: 1871.0 },
+      { at: 9.14, speed: 4, play: [[1871.0, 1879.0]] },                     // 127 句「粘回会话」：补一句批准、回车
+      { at: 11.14, speed: 4, play: [[1902.0, 1905.5], [1908.5, 1909.5], [1915.5, 1916.6]] },   // 128 句：路径检查、追加
+      { at: 24.14, hold: 2121.0 },                                          // 130 句：窄复核那一屏
+      { at: 32.7, hold: 1884.0 }                                           // 131 句：回到粘回的那条消息
+    ]
+  };
+  // 源画面裁切
+  var CROP = { vb: { x0: 300, y0: 88, s: 0.55 }, vt: { x0: 280, y0: 96, s: 0.6 } };
+  // 黄框（源画面坐标 x1, y1, x2, y2）、在哪个窗口、对应放大卡、时段（页内秒）。
+  // boxEnd 是黄框淡出（讲到下一处，全页同一时刻只有一个黄框），to 是卡和引线收起（收起动画在 to 前 0.35 秒开始），null 留到页末。
+  var KEYS = [
+    { b: 'b0', v: 'vt', z: 'z0', r: [282, 580, 1600, 700],  from: 12.54, boxEnd: 16.2, to: 24.14 },   // 128 句：路径检查通过 + cat >> review-notes.md（1916.6 帧）；24.14 终端换屏，收起
+    { b: 'b1', v: 'vb', z: 'z1', r: [1601, 184, 1890, 311], from: 16.2, to: 19.66 },                 // 129 句：意见 1（1825 帧）；意见 2 要这个位置，收起
+    { b: 'b2', v: 'vb', z: 'z2', r: [1601, 319, 1890, 486], from: 19.66, boxEnd: 24.44, to: 37.62 },   // 「推送正文里的 10 分 0 秒」：意见 2；37.62 刷新，收起
+    { b: 'b3', v: 'vt', z: 'z3', r: [282, 440, 1560, 528],  from: 24.44, to: 26.86 },                 // 130 句前半：主会话自己验出去零规则 bug，10m30s → 10m3（2121 帧）；后半那张要这个位置，收起
+    { b: 'b3b', v: 'vt', z: 'z3b', r: [282, 612, 1350, 724], from: 26.86, to: 32.7 },                // 130 句后半：窄复核回来，回执一致（同一帧）；32.7 终端切走，收起
+    { b: 'b4', v: 'vt', z: 'z4', r: [294, 806, 504, 842],   from: 33.0, boxEnd: 38.62, to: null },   // 131 句：Q1 同意推荐，批准（1884 帧，停到页末），留到页末
+    { b: 'b5', v: 'vb', z: 'z5', r: [1598, 224, 1892, 782], from: 38.62, to: 39.35 },                 // 131 句：第 4 版右栏，两条都「采纳」（2208 帧）；修改日志要这个位置，收起
+    { b: 'b6', v: 'vb', z: 'z6', r: [316, 562, 1156, 968],  from: 39.35, to: null }                  // 修改日志四版（2232 帧），留到页末
+  ];
+  var ON = [];   // 每个黄框当前的亮度，dim() 用
+  var CUE = { term: 8.94, n1: 29.9, n2: 37.82 };   // n1：130 句「发现了问题」；n2：131 句「才把批准记下来」
+  var P = T.p, E = T.ease;
+
+  function srcAt(list, t) {
+    var e = list[0];
+    for (var i = 0; i < list.length; i++) if (list[i].at <= t) e = list[i];
+    if (e.hold !== undefined) return { src: e.hold, fast: false };
+    var left = (t - e.at) * e.speed;
+    for (var j = 0; j < e.play.length; j++) {
+      var a = e.play[j][0], b = e.play[j][1];
+      if (left <= b - a) return { src: a + left, fast: true };
+      left -= b - a;
+    }
+    return { src: e.play[e.play.length - 1][1], fast: false };
+  }
+  // 定位到 sec 秒，等 seeked 再等一帧，确保这一帧已经画到屏上（同 frames/screen.html）
+
+  // Public copy: map source timestamps to the exported excerpts.
+  function publicVideoTime(sec) {
+    var ranges = [[1150.0, 1150.0666666666666, 0], [1173.6, 1174.8666666666666, 0.066667], [1175.2, 1175.6666666666667, 1.333334], [1176.4, 1177.6666666666667, 1.800001], [1178.9, 1179.4666666666667, 3.066668], [1180.7, 1181.5666666666666, 3.6333349999999998], [1184.7, 1187.5666666666666, 4.500001999999999], [1190.6, 1191.8666666666666, 7.366669], [1193.5, 1194.2666666666667, 8.633336], [1199.6, 1205.7666666666667, 9.400003], [1207.1, 1207.4666666666667, 15.56667], [1215.7, 1216.5666666666666, 15.933337], [1217.2, 1218.9666666666667, 16.800004], [1225.2, 1226.9666666666667, 18.566671], [1231.2, 1232.3666666666666, 20.333337999999998], [1236.4, 1237.4666666666667, 21.500004999999998], [1249.0, 1252.5666666666666, 22.566671999999997], [1254.8, 1255.7666666666667, 26.133338999999996], [1256.3, 1257.0666666666666, 27.100005999999997], [1263.6, 1264.4666666666667, 27.866673], [1273.4, 1275.5666666666666, 28.73334], [1275.9, 1276.5666666666666, 30.900007], [1277.7, 1278.1666666666667, 31.566674], [1279.9, 1280.4666666666667, 32.033341], [1282.0, 1282.5666666666666, 32.600008], [1288.1, 1290.2666666666667, 33.166675000000005], [1298.6, 1299.5666666666666, 35.333342], [1299.9, 1300.8666666666666, 36.300009], [1307.4, 1308.1666666666667, 37.266676000000004], [1308.6, 1310.4666666666667, 38.033343], [1310.8, 1311.4666666666667, 39.90001], [1364.0, 1371.0666666666666, 40.566677], [1666.0, 1673.5666666666666, 47.633344], [1822.0, 1830.0666666666666, 55.200011], [1871.0, 1879.0666666666666, 63.266678000000006], [1884.0, 1884.0666666666666, 71.33334500000001], [1902.0, 1905.5666666666666, 71.400012], [1908.5, 1909.5666666666666, 74.966679], [1915.5, 1916.6666666666667, 76.033346], [2121.0, 2121.0666666666666, 77.200013], [2204.2, 2208.266666666667, 77.26668], [2229.0, 2232.0666666666666, 81.33334699999999]];
+    for (var i=0;i<ranges.length;i++) { var r=ranges[i]; if(sec>=r[0]-0.001 && sec<=r[1]+0.001) return r[2]+sec-r[0]; }
+    throw new Error("Unexported video time: "+sec);
+  }
+
+  function seekVideo(video, sec) {
+    sec = publicVideoTime(sec);
+    return new Promise(function (resolve) {
+      function painted() { requestAnimationFrame(function () { requestAnimationFrame(function () { resolve(); }); }); }
+      if (Math.abs(video.currentTime - sec) < 0.001 && video.readyState >= 2) { painted(); return; }
+      video.addEventListener('seeked', painted, { once: true });
+      video.currentTime = sec;
+    });
+  }
+  function loaded(video) {
+    return new Promise(function (resolve) {
+      if (video.readyState >= 1) { resolve(); return; }
+      video.addEventListener('loadedmetadata', function () { resolve(); }, { once: true });
+    });
+  }
+
+  // 黄框摆到裁切框里；放大卡记下从黄框中心长出的位移；每张卡配一根引线（T.lead）
+  var GEO = [];
+  function layout() {
+    KEYS.forEach(function (c, i) {
+      var b = T.$(c.b), r = c.r, cr = CROP[c.v], pad = 5;
+      b.style.left = ((r[0] - cr.x0) * cr.s - pad) + 'px';
+      b.style.top = ((r[1] - cr.y0) * cr.s - pad) + 'px';
+      b.style.width = ((r[2] - r[0]) * cr.s + 2 * pad) + 'px';
+      b.style.height = ((r[3] - r[1]) * cr.s + 2 * pad) + 'px';
+      var z = T.$(c.z); z.style.transform = 'none';   // 卡没有位移和缩放时量
+      var box = T.rect(b), card = T.rect(z);
+      GEO[i] = { dx: (box.x + box.w / 2) - (card.x + card.w / 2), dy: (box.y + box.h / 2) - (card.y + card.h / 2), lead: T.lead(box, card) };
+    });
+  }
+  // 压暗：每个窗口一层。时段按这个窗口的卡在画面上的时段并起来（相隔不到 0.5 秒的也并上），交接时压暗不断
+  var DIM = { vb: 'db', vt: 'dt' }, SPANS = { vb: [], vt: [] };
+  KEYS.forEach(function (c) {
+    var list = SPANS[c.v], last = list[list.length - 1];
+    if (last && (last.to === null || c.from - last.to < 0.5)) last.to = (last.to === null || c.to === null) ? null : Math.max(last.to, c.to);
+    else list.push({ from: c.from, to: c.to });
+  });
+  function dim(v, t) {
+    var d = 0, cur = null;
+    SPANS[v].forEach(function (s) {
+      d = Math.max(d, E(P(t, s.from + 0.4, 0.6)) * (s.to === null ? 1 : 1 - E(P(t, s.to - 0.35, 0.3))));
+    });
+    KEYS.forEach(function (c, i) { if (c.v === v && (cur === null || c.from <= t)) cur = i; });
+    var b = T.$(KEYS[cur].b), m = T.$(DIM[v]);   // 洞放在这个窗口当前黄框的位置
+    m.style.left = b.style.left; m.style.top = b.style.top; m.style.width = b.style.width; m.style.height = b.style.height;
+    m.style.boxShadow = '0 0 0 3000px rgba(22,22,22,' + (0.35 * d) + ')';
+    m.style.background = 'rgba(22,22,22,' + (0.35 * d * (1 - ON[cur])) + ')';   // 黄框淡出后，洞里也压暗
+  }
+  function key(i, t) {
+    var c = KEYS[i], g = GEO[i];
+    var out = c.to === null ? 0 : E(P(t, c.to - 0.35, 0.3));
+    var boxOut = c.boxEnd === undefined ? out : E(P(t, c.boxEnd - 0.3, 0.3));
+    var on = E(P(t, c.from, 0.3)) * (1 - boxOut);
+    var inn = E(P(t, c.from + 0.4, 0.6)), k = inn * (1 - out);
+    var b = T.$(c.b);
+    ON[i] = on;
+    b.style.opacity = on > 0.01 ? 1 : 0;
+    b.style.borderColor = 'rgba(245,207,74,' + on + ')';
+    b.style.boxShadow = '0 0 22px rgba(245,207,74,' + (0.6 * on) + ')';   // 压暗在 .shade 层，见 dim()
+    var z = T.$(c.z), s = 0.3 + 0.7 * inn;
+    z.style.opacity = k;
+    z.style.transform = 'translate(' + ((1 - inn) * g.dx) + 'px,' + ((1 - inn) * g.dy) + 'px) scale(' + s + ')';
+    // 引线：和卡同步展开，卡收起时一起缩回黄框
+    T.leadDraw(g.lead, k);
+  }
+
+  Stage({
+    duration: 40.35,
+    init: function () {
+      return Promise.all([loaded(T.$('vb')), loaded(T.$('vt')),
+        T.fonts('实录评审页终端倍速路径检查通过原样追加全文需拍板选项推荐下限定为同意但改吧该设备内不再重复推送这里应该没有因冷却时间设置都是按分钟的窄复核在跑等待期间我自己演算了一遍去零值单位规则发现写有先掉结尾会把变成也以回执一致结论和吻合除这处外加用例能测出它粘消息末行批准第版已落盘意见处理采纳消息正文时长修改日志设计门首次生成条实测种输入正确锚要人对看主会话只审动来其余落旧残留各文案性问题')])
+        .then(layout);
+    },
+    render: function (t) {
+      // 浏览器窗口一开口就在；终端念到「粘回会话」才进场
+      T.enter(T.$('wb'), P(t, 0, 0.4), 14);
+      T.enter(T.$('wt'), P(t, CUE.term, 0.45), 16);
+      var sb = srcAt(TRACK.vb, t), st = srcAt(TRACK.vt, t);
+      T.$('sb').style.opacity = sb.fast ? 1 : 0;
+      T.$('st').style.opacity = st.fast && t >= CUE.term ? 1 : 0;
+      for (var i = 0; i < KEYS.length; i++) key(i, t);
+      dim('vb', t); dim('vt', t);
+      T.enter(T.$('n1'), P(t, CUE.n1, 0.45), 12);
+      T.enter(T.$('n2'), P(t, CUE.n2, 0.45), 12);
+      return Promise.all([seekVideo(T.$('vb'), sb.src), seekVideo(T.$('vt'), st.src)]);
+    }
+  });
+</script>
+</body>
+</html>

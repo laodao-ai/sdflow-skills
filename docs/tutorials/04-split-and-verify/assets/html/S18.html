@@ -1,0 +1,187 @@
+<!doctype html>
+<!-- S18 · 录屏证据（卡片）· script 第 11 轮后 7 句：「TDD 的规则很明确了，但是 AI 就是会跑偏怎么办？……两个 ticket 交上来的，都是代码加测试，测试全绿。」
+     实录 · 示例项目 alarm-notify（会话记录 d7a0febb，归档 openspec/changes/archive/2026-10-31-alarm-notify/）：
+       Task 1 子代理 agent-a41379：L49 09:10:33 改 internal/config/config.go，L65 09:11:29 写 notify_test.go（相隔 56 秒）；
+       Task 1 报告 impl-reports/task1-config-keys.md:28「实现顺序为先写生产代码后补测试」（画面截到这一句，括号里的补充不上）；
+       Task 3 子代理 agent-abd59f L128「测试代码与实现是同一轮写的，没有先红后绿」；
+       Task 2、4 先红后绿，Task 5 只改测试（录制索引 02-执行与收尾.md「实际结果」）。
+     - 第 1 句：问题贴纸「规定了 TDD，照做了吗？」正中放大停到约 5.6 秒，0.6 秒缩到左上（script.md 第 2 句才出右上标签，第 3 句才出 ticket，所以第 1 句只有标题；停久一点，避免小标题孤零零挂在空页上）。
+     - 第 2 句（口播「就有两个 ticket 跑偏了」）：右上「实录 · 示例项目」与出处「会话记录 d7a0febb」。
+     - 第 3 句：5 个写代码的 ticket（ticket 1–5）一排落下，上方一条「同一个模型 · Opus 5.5 high」（作者 2026-10-31 第 154 条：画面上 Task 一律写 ticket）。
+     - 第 4 句（新）：ticket 2、4 下出「先红后绿」，ticket 5 下出「只改测试」，ticket 1、3 下各出一个红色小标签「没有先红后绿」。
+     - 第 5 句：ticket 1 下出时间线「09:10:33 改 config.go → 56 秒后 → 09:11:29 写 notify_test.go」，出处小字；再出报告原文（黑底窗口，顶栏 task1-config-keys.md:28，口播不念）。
+     - 第 6 句：ticket 3 下出原文（黑底窗口，顶栏 agent-abd59f L128）。
+     - 第 7 句：ticket 1、3 下各出一排绿测试「测试全绿」。
+     配色：绿只表示测试通过（全绿那排、「先红后绿」里的小绿点），红只用在「先红后绿」里的小红点和「没有先红后绿」的红底小标签；改代码、写测试是执行一侧，琥珀浅底；「实录」标签墨底白字；原文用黑底代码窗口（visual-v4 4.7）；不用辅助色。
+     内容都在 y 920 以内，避开字幕带。
+     口播时刻按每分钟 220 字估算（标点算字，英文词算 2 字，句间 0.5 秒；还没录音；2026-10-31 按第 11 轮的 7 句重估），录音后用 frame-times.py 对齐：
+       1 句 0.0 · 2 句 7.0 · 3 句 13.3 · 4 句 20.6 · 5 句 27.9 · 6 句 35.0 · 7 句 42.5，第 7 句约 48.5 念完。 -->
+<html lang="zh-CN" data-frame-id="S18">
+<head>
+<meta charset="utf-8">
+<title>S18 · 规定了 TDD，照做了吗</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 46px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+  #rec { left: 1190px; top: 60px; font-size: 34px; padding: 4px 20px; }
+  #src0 { left: 1500px; top: 66px; font-family: var(--mono); font-size: 26px; padding: 4px 16px; border-width: 3px; }
+
+  #same { left: 60px; top: 172px; width: 1778px; height: 64px; padding: 0; display: flex; align-items: center; justify-content: center;
+          font-family: var(--display); font-weight: 800; font-size: 40px; }
+
+  /* 5 个 ticket：列左边 60 + 362·i，宽 330 */
+  .tk { top: 270px; width: 330px; height: 84px; padding: 0; display: flex; align-items: center; justify-content: center;
+        font-family: var(--display); font-weight: 800; font-size: 44px; }
+  #t1 { left: 60px; } #t2 { left: 422px; } #t3 { left: 784px; } #t4 { left: 1146px; } #t5 { left: 1508px; }
+  .lb { top: 378px; font-size: 32px; padding: 6px 18px; display: flex; align-items: center; gap: 10px; }
+  .lb i { display: inline-block; width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--ink); }
+  .lb i.r { background: var(--fail); } .lb i.g { background: var(--pass); }
+  #l2 { left: 482px; } #l4 { left: 1206px; } #l5 { left: 1588px; }
+  /* ticket 1、3 下的红底小标签：线挪到卡左侧，标签放在线右边 */
+  .lb.bad { background: var(--fail); }
+  #l1 { left: 130px; } #l3 { left: 850px; }
+
+  /* ticket 1：时间线 */
+  .tl { left: 60px; font-size: 34px; padding: 8px 22px; background: var(--amber-soft); display: flex; align-items: baseline; gap: 16px; }
+  .tl b { font-family: var(--mono); font-weight: 700; font-size: 32px; }
+  .tl code { font-family: var(--mono); font-weight: 700; font-size: 32px; }
+  #tl1 { top: 452px; } #tl2 { top: 582px; }
+  #dt { left: 92px; top: 529px; font-size: 24px; padding: 0 12px; }
+  #src1 { left: 60px; top: 658px; font-family: var(--mono); font-size: 24px; padding: 2px 14px; border-width: 3px; }
+
+  /* 报告原文：黑底窗口，顶栏写出处 */
+  .q { position: absolute; box-sizing: border-box; padding: 10px 26px 16px; background: var(--term); color: var(--cream);
+       border: 5px solid var(--ink); border-radius: 12px; box-shadow: 10px 10px 0 var(--ink); }
+  .q .bar { font-family: var(--mono); font-size: 26px; color: var(--unlit); }
+  .q .tx { margin-top: 6px; font-weight: 600; white-space: nowrap; }
+  #q1 { left: 60px; top: 714px; width: 690px; } #q1 .tx { font-size: 38px; }
+  #q3 { left: 784px; top: 470px; width: 840px; } #q3 .tx { font-size: 44px; line-height: 1.35; }
+
+  /* 第 5 句：一排绿测试 */
+  .gr { position: absolute; top: 856px; display: flex; align-items: center; gap: 10px; }
+  .gr i { display: block; width: 44px; height: 44px; box-sizing: border-box; border-radius: 8px; background: var(--pass); border: 4px solid var(--ink);
+          box-shadow: 4px 4px 0 var(--ink); }
+  .gr i svg { display: block; width: 36px; height: 36px; }
+  .gr .chip { position: static; margin-left: 12px; font-size: 30px; padding: 2px 16px; }
+  #g1 { left: 60px; } #g3 { left: 784px; }
+
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="w1" d="M100 358 V446"/>
+      <path id="w3" d="M820 358 V461"/>
+    </g>
+  </svg>
+
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">规定了 TDD，照做了吗？</div></div>
+  <div class="tab ink" id="rec" data-r="-2">实录 · 示例项目</div>
+  <div class="tag" id="src0" data-r="2">会话记录 d7a0febb</div>
+
+  <!-- 第 3 句：ticket 上方一条 -->
+  <div class="card" id="same" data-r="0.3">同一个模型 · Opus 5.5 high</div>
+
+  <!-- 第 3 句：5 个写代码的 ticket -->
+  <div class="card tk" id="t1" data-r="-1.2">ticket 1</div>
+  <div class="card tk" id="t2" data-r="1">ticket 2</div>
+  <div class="card tk" id="t3" data-r="-0.8">ticket 3</div>
+  <div class="card tk" id="t4" data-r="1.2">ticket 4</div>
+  <div class="card tk" id="t5" data-r="-1">ticket 5</div>
+
+  <!-- 第 4 句：对照标签 -->
+  <div class="chip lb bad" id="l1" data-r="-2">没有先红后绿</div>
+  <div class="chip lb bad" id="l3" data-r="2">没有先红后绿</div>
+  <div class="chip lb" id="l2" data-r="2"><i class="r"></i><i class="g"></i>先红后绿</div>
+  <div class="chip lb" id="l4" data-r="-2"><i class="r"></i><i class="g"></i>先红后绿</div>
+  <div class="chip lb" id="l5" data-r="2">只改测试</div>
+
+  <!-- 第 5 句：ticket 1 -->
+  <div class="chip tl" id="tl1" data-r="-1"><b>09:10:33</b><span>改 <code>config.go</code></span></div>
+  <div class="tag" id="dt" data-r="-3">↓ 56 秒后</div>
+  <div class="chip tl" id="tl2" data-r="1"><b>09:11:29</b><span>写 <code>notify_test.go</code></span></div>
+  <div class="tag" id="src1" data-r="-2">agent-a41379 L49、L65</div>
+  <div class="q" id="q1"><div class="bar">task1-config-keys.md:28</div><div class="tx">实现顺序为先写生产代码后补测试</div></div>
+
+  <!-- 第 6 句：ticket 3 -->
+  <div class="q" id="q3"><div class="bar">agent-abd59f L128</div><div class="tx">测试代码与实现是同一轮写的，<br>没有先红后绿</div></div>
+
+  <!-- 第 7 句：全绿 -->
+  <div class="gr" id="g1"><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span class="chip" id="gl1" data-r="-2">测试全绿</span></div>
+  <div class="gr" id="g3"><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i><svg viewBox="0 0 36 36"><path d="M9 19 L15 25 L27 11" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span class="chip" id="gl3" data-r="2">测试全绿</span></div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    hold: 4.291, move: 0.6,   // 第 1 句：问题贴纸正中停到 5.6 秒，0.6 秒缩到左上
+    s1: 5.44,                // 第 2 句：右上实录标签与出处
+    s2: 9.44,               // 第 3 句：5 个 ticket、上方一条模型
+    lab: 15.12,              // 第 4 句：先红后绿 / 只改测试 / 没有先红后绿
+    s3: 22.64,               // 第 5 句：ticket 1 时间线、报告原文
+    s4: 28.32,               // 第 6 句：ticket 3 原文
+    s5: 33.52                // 第 7 句：全绿
+  };
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = p >= 0.99 ? 'url(#ah)' : 'none';
+  }
+  function pop(id, p, dy) { T.enter(T.$(id), p, dy === undefined ? 12 : dy); }
+  // 黑底窗口、一排绿测试不倾斜，只淡入下落
+  function rise(id, p) { var e = T.ease(p); var el = T.$(id); el.style.opacity = e; el.style.transform = 'translateY(' + (1 - e) * 14 + 'px)'; }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 38.820,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句：问题贴纸
+      T.enter(T.$('hdr'), P(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = E(P(t, AT.hold, AT.move)), S = 1.5, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 46;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+      // 第 2 句：右上实录标签与出处
+      pop('rec', P(t, AT.s1, 0.4), -10);
+      pop('src0', P(t, AT.s1 + 0.4, 0.4), -8);
+
+      // 第 3 句：5 个 ticket，上方一条模型
+      for (var i = 1; i <= 5; i++) pop('t' + i, P(t, AT.s2 + 0.2 + (i - 1) * 0.25, 0.45), 14);
+      pop('same', P(t, AT.s2 + 2.46, 0.5), -12); // 「同一个模型」12.08秒，提前0.18秒淡入
+
+      // 第 4 句：对照标签（ticket 2、4 先红后绿；ticket 5 只改测试；ticket 1、3 没有）
+      pop('l2', P(t, AT.lab + 0.4, 0.4), -8); pop('l4', P(t, AT.lab + 0.9, 0.4), -8); pop('l5', P(t, AT.lab + 1.6, 0.4), -8);
+      pop('l1', P(t, AT.lab + 3.4, 0.4), -8); pop('l3', P(t, AT.lab + 3.9, 0.4), -8);
+
+      // 第 5 句：ticket 1
+      wire(T.$('w1'), E(P(t, AT.s3 + 0.3, 0.4)));
+      pop('tl1', P(t, AT.s3 + 0.5, 0.45));
+      pop('dt', P(t, AT.s3 + 2.8, 0.4), -8);
+      pop('tl2', P(t, AT.s3 + 3.6, 0.45));
+      pop('src1', P(t, AT.s3 + 4.2, 0.4), -8);
+      rise('q1', P(t, AT.s3 + 5.0, 0.5));
+
+      // 第 6 句：ticket 3
+      wire(T.$('w3'), E(P(t, AT.s4 + 0.2, 0.4)));
+      rise('q3', P(t, AT.s4 + 0.5, 0.5));
+
+      // 第 7 句：ticket 1、3 各一排绿测试
+      rise('g1', P(t, AT.s5 + 2.0, 0.4)); rise('g3', P(t, AT.s5 + 2.3, 0.4));
+      pop('gl1', P(t, AT.s5 + 3.2, 0.4), -8); pop('gl3', P(t, AT.s5 + 3.4, 0.4), -8);
+    }
+  });
+</script>
+</body>
+</html>

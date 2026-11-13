@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- S23 · 第 10 轮（2026-11-08），口播 145–151。
+     回到开头问题，随后复用锁的三个入口、密钥转义的对象，不引入新案例。两张案例卡分别对应「调用路径是否接全」「错误信息是否绕过脱敏」。随后出现主张「新的 agent · 不同角度 · 整体改动与调用路径」；最终用三个短问题收束报告检查：依据是什么／修复怎样验证／还有什么没完成。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S23">
+<head>
+<meta charset="utf-8">
+<title>S23 · 测试全过了，为什么还要代码评审？</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+.frame-title {left:60px;top:48px;font-family:var(--display);font-size:48px;font-weight:800}
+.cue {opacity:0}
+.card {font-size:36px;line-height:1.45}
+.card h2 {font-family:var(--display);font-size:46px;margin:0 0 18px;line-height:1.2}
+.card p {margin:10px 0 0}
+.card small {display:block;font-size:27px;line-height:1.4;margin-top:12px}
+.label {display:inline-block;padding:4px 14px;border:3px solid var(--ink);border-radius:5px;background:var(--cream);font-size:30px;font-weight:700;margin-bottom:14px}
+.label.blue {background:var(--blue)} .label.amber {background:var(--amber)}
+.label.violet {background:var(--violet)}
+.arrow {position:absolute;color:var(--ink);font-size:68px;font-weight:800;text-align:center}
+.source {font-family:var(--mono);font-size:26px;line-height:1.4}
+.code {background:var(--term);color:var(--cream);font-family:var(--mono);font-size:38px;padding:15px 22px;border-radius:8px;white-space:pre-wrap}
+.underline {text-decoration:underline;text-decoration-color:var(--yellow);text-decoration-thickness:5px;text-underline-offset:6px}
+
+.card{padding:20px 28px;font-size:34px;line-height:1.35}.card h2{font-size:40px;margin-bottom:12px}.card p{margin-top:8px}.card small{font-size:28px;line-height:1.3;margin-top:10px}.label{font-size:26px;padding:3px 12px;margin-bottom:10px}.chip.cue{box-sizing:border-box}.source{font-size:26px}#tested{top:190px!important}#lock,#secret{top:350px!important;padding:16px 24px}#method{top:610px!important;font-size:34px;padding:8px 22px}#judge{top:710px!important;padding:12px 24px}#check{top:865px!important;font-size:34px!important;padding:8px 20px;transform-origin:0 0}</style>
+</head>
+<body>
+<div id="stage">
+<div class="chip cue frame-title" data-at="0">测试全过了，为什么还要代码评审？</div>
+<div id="tested" data-r="-0.5" class="card cue" data-at="2.409" style="left:70px;top:180px;width:1770px;">
+<h2>测试通过：已有测试检查的情况通过了</h2>
+</div>
+<div id="lock" class="card cue" data-at="10.72" style="left:70px;top:340px;width:850px;">
+<span class="label amber">开头那把锁</span>
+<h2>打开 → 锁 → 工作区</h2>
+<p>新建、删除：有没有接上？</p>
+</div>
+<div id="secret" class="card cue" data-at="13.533" style="left:1010px;top:340px;width:830px;">
+<span class="label amber">密钥脱敏</span>
+<h2>错误信息 → 转义 → 日志</h2>
+<p>有没有绕过脱敏？</p>
+</div>
+<div id="method" data-r="-0.5" class="chip cue" data-at="19.28" style="left:70px;top:565px;width:1770px;">新的 agent · 不同角度 · 整体改动与调用路径</div>
+<div id="judge" data-r="-0.5" class="card cue" data-at="28.24" style="left:70px;top:670px;width:1770px;">对照目标核实；该修的修，留下的写明原因<small>人定目标 · 踩过的坑写进清单</small>
+</div>
+<div id="check" data-r="-0.5" class="chip cue" data-at="39.84" style="left:70px;top:845px;width:1600px;font-size:36px">看报告：依据是什么？怎么验证？还有什么没完成？</div>
+</div>
+<script src="lib/stage.js">
+</script>
+<script src="theme.js">
+</script>
+<script>
+var SENTENCE_STARTS=[0, 5.6, 10.72, 19.28, 28.24, 35.6, 39.84];
+// 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({duration: 48.560,init:function(){return Promise.all([T.fonts(T.$('stage').textContent),...Array.from(document.images).map(function(im){return im.decode?im.decode():Promise.resolve();})]).then(function(){});},render:function(t){
+T.tilt();
+var heading=document.querySelector('.frame-title');
+var move=T.ease(T.p(t,1,.6));var scale=1.35-.35*move;heading.style.left=(60+(960-heading.offsetWidth*1.35/2-60)*(1-move))+'px';heading.style.top=(48+(470-heading.offsetHeight*1.35/2-48)*(1-move))+'px';heading.style.transformOrigin='0 0';
+document.querySelectorAll('.cue').forEach(function(el){T.enter(el,T.p(t,Number(el.dataset.at),.45),12);if(el===heading)el.style.transform+=' scale('+scale+')';});
+
+}});
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!doctype html>
+<!-- S11b · 标题卡 · script 72–74「最后是另一个模型。它不从头再审一遍，只回答一个问题：这份规格漏了什么？每次用另一个模型审一次，看整体的设计；命中高风险，再审一次，专找领域审漏的。」
+     10-24 按一页一层拆页：原 S11a 后半的报告节选拆到 S11c；原第 4 句「走同一套核对和裁决」与相应的「并进同一套核对和裁决」那条线删去。内容出现后留到页末，不淡出。
+     说明卡是示意（不加角标）。事实来源：
+       - 另一个模型只问「这份规格漏了什么？」：~/.sdflow/hack/outside-voice.sh:309（「找它【漏了】什么」）。
+       - 每次一次看整体设计（design-voice）：sdflow-spec-review/SKILL.md:372-373；命中高风险再一次专找领域漏的（hr-tg voice）：同文件 :285。
+     最后一帧：上方「另一个模型」大卡（不从头再审一遍 / 这份规格漏了什么？ / outside-voice.sh:309）；下面两张并排卡：「每次：看整体设计（design-voice）」「高风险：专找领域漏的（hr-tg voice）」，
+       两张卡各一条箭头连到上面大卡；hr-tg voice 卡黄框（当前）。
+     动画（每句，共 3 句，全稿第 72–74 句）：
+     - 第 1 句「最后是另一个模型」73：0.0 「另一个模型」卡落下（开头就有内容）；下面两张卡讲到时才进场（10-24 新规则：不放空壳）。
+     - 第 2 句「它不从头再审一遍，只回答一个问题：这份规格漏了什么？」74：2.6 卡里先出「不从头再审一遍」，5.8 再出问题一行，问题一行当前（到 8.44）。
+     - 第 3 句「每次用另一个模型审一次，看整体的设计；命中高风险，再审一次，专找领域审漏的」75：8.44 左卡 design-voice 进场并当前（到 12.2）；12.2 右卡 hr-tg voice 进场并当前，留到页末；两条箭头随各卡进场画出。
+     颜色（2026-10-23）：另一个模型一律紫：「另一个模型」标签、两张来源卡浅紫；黄 = 当前，同一时刻只有一个。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。第 1 句 0.0，2 句 2.8，3 句 8.64（念完 15.68）；时长 16.88 秒。
+     内容都在 y 940 以上，避开字幕带。 -->
+<html lang="zh-CN" data-frame-id="S11b">
+<head>
+<meta charset="utf-8">
+<title>S11b · 另一个模型：这份规格漏了什么</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #ov { left: 90px; top: 150px; width: 1740px; height: 280px; padding: 0; }
+  #ov .tab { background: var(--violet); font-size: 46px; }
+  #ov .l1 { position: absolute; left: 50px; top: 52px; font-weight: 600; font-size: 40px; white-space: nowrap; }
+  #ov .qq { position: absolute; left: 50px; top: 114px; font-family: var(--display); font-weight: 800; font-size: 78px; white-space: nowrap; line-height: 1.2; }
+  #ov .src { position: absolute; left: 50px; top: 224px; font-family: var(--mono); font-weight: 500; font-size: 30px; white-space: nowrap; }
+  .hb { top: 560px; width: 820px; height: 330px; padding: 0; background: var(--violet-soft); }
+  #h1 { left: 90px; } #h2 { left: 1010px; }
+  .hb .tab { font-size: 48px; background: var(--violet); }
+  .hb .big { position: absolute; left: 44px; top: 64px; font-family: var(--display); font-weight: 800; font-size: 66px; white-space: nowrap; }
+  .hb .nm { position: absolute; left: 44px; top: 170px; font-family: var(--mono); font-weight: 700; font-size: 40px; white-space: nowrap; }
+  .hb .src { position: absolute; left: 44px; top: 244px; font-family: var(--mono); font-weight: 500; font-size: 30px; white-space: nowrap; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="w1" d="M500 540 V470 M484 488 L500 466 L516 488"/>
+      <path id="w2" d="M1420 540 V470 M1404 488 L1420 466 L1436 488"/>
+    </g>
+  </svg>
+
+  <div class="card" id="ov" data-r="-0.6">
+    <div class="tab" data-r="-2">另一个模型</div>
+    <div class="l1" id="ol">不从头再审一遍</div>
+    <div class="qq" id="oq">这份规格漏了什么？</div>
+    <div class="src">outside-voice.sh:309</div>
+  </div>
+  <div class="card hb" id="h1" data-r="0.8">
+    <div class="tab" data-r="-2">每次</div>
+    <div class="big">看整体设计</div>
+    <div class="nm">design-voice</div>
+    <div class="src">SKILL.md:372-373</div>
+  </div>
+  <div class="card hb" id="h2" data-r="-0.8">
+    <div class="tab" data-r="2">高风险</div>
+    <div class="big">专找领域漏的</div>
+    <div class="nm">hr-tg voice</div>
+    <div class="src">SKILL.md:285</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒；注释写的是本页第几句（全稿 73–75）。
+  var CUE = {
+    ov: 0.0,                              // 72 句一开口：「另一个模型」卡
+    ol: 2.6, oq: 5.8,                     // 73 句：「不从头再审一遍」；问题一行
+    oqCur: 5.9, oqEnd: 8.44,              // 73 句：问题一行当前
+    h1: 8.44, h1End: 12.2,                // 74 句：design-voice 进场，当前
+    h2: 12.2                              // 74 句：hr-tg voice 进场，当前，留到页末
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.3)) * (1 - T.ease(T.p(t, b, 0.3))); }
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+  function draw(p, pr) {
+    var L = p.getTotalLength();
+    p.style.strokeDasharray = L; p.style.strokeDashoffset = L * (1 - pr);
+    p.style.opacity = pr > 0 ? 1 : 0;
+  }
+
+  Stage({
+    duration: 16.88,
+    init: function () { return T.fonts(document.body.textContent); },
+    render: function (t) {
+      T.enter(T.$('ov'), T.p(t, CUE.ov, 0.45), 20);
+      T.enter(T.$('ol'), T.p(t, CUE.ol, 0.45), 10);
+      T.enter(T.$('oq'), T.p(t, CUE.oq, 0.45), 10);
+      cur(T.$('ov'), on(t, CUE.oqCur, CUE.oqEnd), 10);
+
+      T.enter(T.$('h1'), T.p(t, CUE.h1, 0.45), 18);
+      T.enter(T.$('h2'), T.p(t, CUE.h2, 0.45), 18);
+      cur(T.$('h1'), on(t, CUE.h1, CUE.h1End), 10);
+      cur(T.$('h2'), T.ease(T.p(t, CUE.h2, 0.3)), 10);
+
+      draw(T.$('w1'), T.ease(T.p(t, CUE.h1, 0.6)));
+      draw(T.$('w2'), T.ease(T.p(t, CUE.h2, 0.6)));
+    }
+  });
+</script>
+</body>
+</html>

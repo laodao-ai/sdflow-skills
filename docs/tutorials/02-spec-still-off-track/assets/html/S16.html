@@ -1,0 +1,249 @@
+<!doctype html>
+<!-- S16 · 录屏证据 · script 40–45「我们看一个例子，我拿一个温度监控的示例项目，提了一句需求：超温了要通知到值班的人。……我答的是：要 @所有人，开搞。」
+     放法（作者 2026-10-18 定，visual-v4 §4.8「录屏回放」）：每段先快进（上限 4 倍速，角标显示实际倍速，只在快进时显示），
+     放到要加框的那一行就停住，冻结在该帧，这句念完再进下一段。「开搞」之后不放。
+     cast 20261017-033923-main-spec-explore-memo（主线 main-spec 第一段 explore），按播放器时间（已含 idle_time_limit 2 秒压缩）切五段：
+       段 A  口播 0–11.2      cast 5.5 停住                     人输入的命令刚回车（第 40 句）；输入框那几行在窗口裁掉的范围外
+       段 B  口播 11.2–22.1   cast 41→49.0  4 倍速，13.2 停住   AI 读仓、写出现状（第 41 句）；cast 5.5–41 是 AI 读代码思考，剪掉
+       段 C  口播 22.1–30.8   cast 69.1→75.0 4 倍速，23.6 停住  AI 的问题与「这个只有你知道」（第 42 句）；cast 49–69.1 是长回复中段与作者回滚看回复，剪掉
+       段 D  口播 30.8–44.1   cast 211.5→214.2 4 倍速，31.5 停住 AI 回完「你说『开搞』」（第 43、44 句），停在 AI 回完的帧（Crunched … done）；
+                                                              cast 75–211.5 是人答「A，有值班群，只缺推送」（这句口播 2026-10-18 删去）、调研与「钉钉」那一问，剪掉
+       段 E  口播 44.1 起     cast 219.4→220.0 1 倍速，44.7 停住  人的「要 @所有人，开搞」进到对话里（第 45 句）；停在最后一帧
+     段 A→B、B→C、C→D 之间 0.3 秒淡出再淡入，不硬切；D→E 两帧相同（cast 214.2–219.4 画面不动），直接接上。
+     说明：录屏里人在 AI 还没回完时就把「要 @所有人，开搞」打进了输入框，所以没有「AI 回完、输入框空着」的帧；
+     输入框在窗口裁掉的范围外，第 44 句停的 214.2 这一帧看上去就是 AI 回完、等人回复。
+     - 窗口：top 72、整体缩到 0.947，只露前 30 行（visual-v4 §4.1）。播放器的播放键、加载圈全部隐藏。
+       2026-10-19 第七轮改稿：窗口底部再裁掉约 90px（.clip 高 872 → 782，.window 高 908 → 818），录屏底部 Claude Code 的状态行与提示
+       （「Envisioning…」「Tip: Use /voice…」）不再露出，画面最后停在人输入「要 @所有人，开搞」那一行；cast 文件不改。
+     - 加框（黄色 = 当前，讲下一个时降成灰框；框按行文字在 DOM 里找，不写死坐标）。时刻按录音实测（frame-times.py，2026-10-19）：
+         BOXES 里 at = 该框亮起的口播秒，next = 下一个框亮起的秒。
+         ① 40 句 人输入的命令（6.96，念到「超温了」）  ② 41 句 AI 现状段「所以这次不是补一个小功能，而是把一条明确的 Non-Goal 收回来」（13.2，念到「收回当初的一条决定」）
+         ③ 42 句 问题「系统需不需要自己知道谁在值班？」（20.8，念到「系统」）  ④ 42 句「这个只有你知道」（两行，23.52，念到「这个需求只有我知道」）
+         ⑤ 43 句 AI「这个回答之后，我觉得探索已经够了。你说『开搞』，我就进 /sdflow-spec」（27.36，念到「AI 说」）
+         ⑥ 44 句 ⑤里「你说『开搞』」几个字（31.6，第 44 句开口）；⑥ 亮起时 ⑤ 直接淡出，不留灰框，免得两层框叠在同一行
+         ⑦ 45 句 人「要 @所有人，开搞」（36.48，念到「要 @所有人」），念完后一直停在这一帧
+       原「A，有值班群，只缺推送」框与「开搞」两字框不再加（作者 2026-10-18 定）。「钉钉」那一问不放、不加框。
+     - 2026-10-19 第五轮改稿：原第 50、51 句（小改动、澄清）移到 S16a，本页不再缩小窗口、不放小卡；窗口保持原位，画面在最后一句念完后停在最后一帧。
+     - 2026-10-19 第六轮改稿：第 43 句（现第 40 句）改成「我们看一个例子，一句需求：超温了要通知到值班的人。」，比原句长约 2.8 秒，之后的节点整体后移 2.8 秒。
+     - 2026-10-19 第七轮改稿：全稿句号按 139 句重排。第 40 句改成「我们看一个例子，我拿一个温度监控的示例项目，提了一句需求：超温了要通知到值班的人。」，
+       比第六轮的句子多 15 字（约 4.3 秒），第 40 句之后的节点整体后移 4.3 秒（段起点、BOXES、DURATION）。念到「温度监控的示例项目」（约 3.0 秒）时，
+       左上「实录」标签后补一行小字「示例项目 · 温度监控」（#proj，示例项目在这里第一次出现）。第 45 句估算到约 46.8 秒，DURATION 取 48。
+     - 2026-10-19 录音后重定：按录音实测（frame-times.py，2026-10-19）。段起点取各句开口（第 41 句 9.84、第 42 句 19.84、第 43 句 26.00、第 45 句 35.68），
+       DURATION 取本页实测时长 39.3，「示例项目 · 温度监控」小字改到念到「温度监控」（2.88）。 -->
+<html lang="zh-CN" data-frame-id="S16">
+<head>
+<meta charset="utf-8">
+<title>S16 · 探索实录</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 起始状态等于首期终端画面：left 150、top 72、以顶边中点为原点缩到 0.947。
+     这里用左上角为原点 + translate 43px 等效；窗口全程不动。 */
+  .window { left: 150px; top: 72px; width: 1620px; height: 818px; padding: 18px 20px; overflow: visible; transform-origin: 0 0; transform: translate(43px, 0) scale(0.947); }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 782px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: 0; width: 1580px; height: 1004px; }
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  /* 启动横幅里的模型与套餐行（「… with high effort · Claude Pro」）用终端底色盖住，同首期 S18（2026-10-19 脱敏扫描）。 */
+  .mask { position: absolute; left: 0; width: 1580px; background: #1b1b1d; display: none; }
+  .qbox { position: absolute; box-sizing: border-box; border: 5px solid transparent; border-radius: 8px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .window .speed { right: -30px; top: -34px; opacity: 0; }
+  /* 「示例项目 · 温度监控」：跟在「实录」标签后面的一行小字，念到「温度监控的示例项目」时出现。 */
+  .window .proj { position: absolute; left: 340px; top: -56px; background: var(--cream); padding: 2px 14px; white-space: nowrap; opacity: 0;
+                  border: 3px dashed var(--ink); border-radius: 6px; font-weight: 600; font-size: 28px; color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip" id="clip">
+      <div id="term"></div>
+      <div class="mask" id="mask"></div>
+    </div>
+    <div class="speed" id="spd">4 倍速</div>
+    <div class="tab ink">实录<span class="m">main-spec</span></div>
+    <div class="proj" id="proj">示例项目 · 温度监控</div>
+  </div>
+
+</div>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/20261017-033923-main-spec-explore-memo.js"></script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var CAST = '20261017-033923-main-spec-explore-memo';
+  // 播放段：t0 = 口播秒（画面从 0 算，按录音实测：各段在对应句子开口时开始），c0→c1 = cast 播放器时间，v = 倍速（>1 时快进中显示角标）。
+  // 放到 c1 就停住，直到下一段的 t0。dip: false = 和上一段画面相同，不淡出淡入。
+  var SEGS = [
+    { t0: 0,    c0: 5.5,   c1: 5.5,   v: 1 },             // A 40 句：命令
+    { t0: 9.84, c0: 41,     c1: 49.0,  v: 4 },             // B 41 句：现状段
+    { t0: 19.84, c0: 69.1,  c1: 75.0,  v: 4 },             // C 42 句：问题与「这个只有你知道」
+    { t0: 26.0, c0: 211.5, c1: 214.2, v: 4 },             // D 43、44 句：「你说『开搞』」，AI 回完
+    { t0: 35.68, c0: 219.4, c1: 220.0, v: 1, dip: false }  // E 45 句：「要 @所有人，开搞」
+  ];
+  var DIP = 0.15;  // 段与段之间：边界前后各 0.15 秒淡出 / 淡入
+  var DURATION = 39.3;  // 本页实测时长，第 45 句念完后停在最后一帧
+
+  // 加框。parts：每块一个框，find = 用来找行的文字，phrase = 框住行内哪几个字（省略 = 整行）。
+  // at / next：口播秒（见文件头的 ①–⑦）。fadeOut: true = 下一个亮起时直接淡出，不降成灰框。
+  var BOXES = [
+    { id: 'q1', at: 6.96, next: 13.2,  parts: [{ find: '/opsx:explore 超温了' }] },
+    { id: 'q2', at: 13.2, next: 20.8, parts: [{ find: '所以这次不是补一个小功能', phrase: '所以这次不是补一个小功能，而是把一条明确的 Non-Goal 收回来。' }] },
+    { id: 'q3', at: 20.8, next: 23.52, parts: [{ find: '系统需不需要自己知道谁在值班？' }] },
+    { id: 'q4', at: 23.52, next: 27.36, parts: [{ find: '这个只有你', phrase: '这个只有你' }, { find: '知道。定下来之后', phrase: '知道' }] },
+    { id: 'q5', at: 27.36, next: 31.6, fadeOut: true, parts: [{ find: '这个回答之后', phrase: '这个回答之后，我觉得探索已经够了。你说「开搞」，我就进 /sdflow-spec' }] },
+    { id: 'q6', at: 31.6, next: 36.48, parts: [{ find: '这个回答之后', phrase: '你说「开搞」' }] },
+    { id: 'q7', at: 36.48, parts: [{ find: '要 @所有人，开搞', phrase: '要 @所有人，开搞' }] }
+  ];
+
+  var player;
+  var boxEls = {};  // id -> [div, ...]
+
+  function segAt(t) {
+    var s = SEGS[0];
+    for (var i = 0; i < SEGS.length; i++) if (t >= SEGS[i].t0) s = SEGS[i];
+    return s;
+  }
+  function castAt(t) {
+    var s = segAt(t);
+    return Math.min(s.c0 + (t - s.t0) * s.v, s.c1);
+  }
+  // 正在快进：倍速 > 1，且还没放到这段的 c1。
+  function fastAt(t) {
+    var s = segAt(t);
+    return s.v > 1 && s.c0 + (t - s.t0) * s.v < s.c1;
+  }
+  // 段间淡出再淡入：返回 0..1（1 = 完全可见）。第一段的起点不淡。
+  function dipAt(t) {
+    var v = 1;
+    for (var i = 1; i < SEGS.length; i++) {
+      if (SEGS[i].dip === false) continue;
+      var d = Math.abs(t - SEGS[i].t0);
+      if (d < DIP) v = Math.min(v, d / DIP);
+    }
+    return v;
+  }
+
+  function lines() { return T.all('#term .ap-line'); }
+  function findLine(L, text) {
+    for (var i = 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 窗口缩放比：屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放。
+  function scaleK() { return T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth; }
+  // 一行的上下沿与左右沿（.clip 内的布局 px）。
+  function lineRect(el) {
+    var clip = T.$('clip').getBoundingClientRect(), k = scaleK(), r = el.getBoundingClientRect();
+    return { left: (r.left - clip.left) / k, right: (r.right - clip.left) / k, top: (r.top - clip.top) / k, bottom: (r.bottom - clip.top) / k };
+  }
+  // 行内一段文字的矩形：按文字节点拼起来找位置，不依赖字宽。找不到就退回整行。
+  function phraseRect(el, phrase) {
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var nodes = [], full = '', n;
+    while ((n = walker.nextNode())) { nodes.push({ node: n, start: full.length }); full += n.nodeValue; }
+    var idx = full.indexOf(phrase);
+    if (idx < 0) return lineRect(el);
+    var end = idx + phrase.length;
+    function locate(pos, isEnd) {
+      for (var i = 0; i < nodes.length; i++) {
+        var a = nodes[i].start, b = a + nodes[i].node.nodeValue.length;
+        if (pos > a && pos <= b || (!isEnd && pos >= a && pos < b)) return { node: nodes[i].node, off: pos - a };
+      }
+      var last = nodes[nodes.length - 1];
+      return { node: last.node, off: last.node.nodeValue.length };
+    }
+    var s = locate(idx, false), e = locate(end, true);
+    var range = document.createRange();
+    range.setStart(s.node, s.off);
+    range.setEnd(e.node, e.off);
+    var clip = T.$('clip').getBoundingClientRect(), k = scaleK(), rs = range.getClientRects();
+    var out = { left: 1e9, right: -1e9, top: 1e9, bottom: -1e9 };
+    for (var i = 0; i < rs.length; i++) {
+      out.left = Math.min(out.left, (rs[i].left - clip.left) / k);
+      out.right = Math.max(out.right, (rs[i].right - clip.left) / k);
+      out.top = Math.min(out.top, (rs[i].top - clip.top) / k);
+      out.bottom = Math.max(out.bottom, (rs[i].bottom - clip.top) / k);
+    }
+    return out.left > out.right ? lineRect(el) : out;
+  }
+
+  function overlays(t, vis) {
+    var L = lines();
+    var plan = findLine(L, 'with high effort');
+    var mask = T.$('mask');
+    if (plan >= 0) {
+      var m = lineRect(L[plan]);
+      mask.style.display = 'block';
+      mask.style.top = (m.top - 2) + 'px';
+      mask.style.height = (m.bottom - m.top + 4) + 'px';
+    } else {
+      mask.style.display = 'none';
+    }
+    BOXES.forEach(function (b) {
+      var on = T.ease(T.p(t, b.at, 0.35));
+      var next = b.next === undefined ? 0 : T.ease(T.p(t, b.next, 0.35));
+      var g = on * (1 - next);
+      b.parts.forEach(function (part, pi) {
+        var box = boxEls[b.id][pi];
+        var i = findLine(L, part.find);
+        if (i < 0 || on <= 0) { box.style.opacity = 0; return; }
+        var r = part.phrase ? phraseRect(L[i], part.phrase) : lineRect(L[i]);
+        box.style.left = (r.left - 8) + 'px';
+        box.style.width = (r.right - r.left + 16) + 'px';
+        box.style.top = (r.top - 3) + 'px';
+        box.style.height = (r.bottom - r.top + 6) + 'px';
+        box.style.opacity = vis;
+        // 黄色只给当前这一个；下一个亮起后降成灰框（讲过了）。
+        if (b.fadeOut) {
+          box.style.borderColor = 'rgba(245,207,74,' + g + ')';
+        } else {
+          box.style.borderColor = next > 0 ? T.mix([245, 207, 74], [120, 118, 112], next) : 'rgba(245,207,74,' + g + ')';
+        }
+        box.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.45 * g) + '), inset 0 0 24px rgba(245,207,74,' + (0.25 * g) + ')';
+      });
+    });
+  }
+
+  Stage({
+    duration: DURATION,
+    init: function () {
+      BOXES.forEach(function (b) {
+        boxEls[b.id] = b.parts.map(function () {
+          var d = document.createElement('div');
+          d.className = 'qbox';
+          T.$('clip').appendChild(d);
+          return d;
+        });
+      });
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS[CAST] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      return T.fonts('实录倍速示例项目温度监控');
+    },
+    render: function (t) {
+      // 倍速角标：只在快进时显示，写这段的实际倍速；放到要加框的那一行停住后隐藏。
+      var s = segAt(t), spd = T.$('spd');
+      spd.textContent = s.v + ' 倍速';
+      spd.style.opacity = (fastAt(t) ? 1 : 0) * dipAt(t);
+      spd.style.transform = 'rotate(3deg)';
+
+      // 「示例项目 · 温度监控」：第 40 句念到「温度监控」（实测 2.88 秒）出现，停到页尾。
+      T.$('proj').style.opacity = T.ease(T.p(t, 2.88, 0.4));
+      T.$('proj').style.transform = 'rotate(-1deg)';
+
+      var vis = dipAt(t);
+      T.$('term').style.opacity = vis;
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位框。
+      return Promise.resolve(player.seek(castAt(t)))
+        .then(function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); })
+        .then(function () { overlays(t, vis); });
+    }
+  });
+</script>
+</body>
+</html>

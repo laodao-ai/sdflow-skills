@@ -1,0 +1,129 @@
+<!doctype html>
+<!-- S16 · 机制动画 · script 64–66「默认的用法，其实就一条命令：`/opsx:propose`……四个文档分别是提案、规格、设计和任务。」
+     一条命令分出四个文件，口播报到哪个名字点亮哪个。只点亮名字，不配说明：各管什么改在 S22a 用真实目录讲（2026-10-06）。
+     - 蓝：整帧都是 OpenSpec（命令卡的标签、分叉箭头）。
+     - 文件卡先以暗底出现（建出来了，还没讲），报到哪个点亮哪个：底色回到奶白。
+     - 黄色描边 + 外发光：当前讲到的文件，讲到下一个就淡出。
+     - 八角贴纸「停下，不写代码」沿用 S38 的写法，墨色，不用红（红只表示测试失败）。
+     - 文件名写法跟 S38 一致：proposal / specs/ / design / tasks。 -->
+<html lang="zh-CN" data-frame-id="S16">
+<head>
+<meta charset="utf-8">
+<title>S16 · propose 四个文档</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .cmd.big-cmd { left: 90px; top: 420px; font-size: 46px; padding: 30px 44px; }
+  .cmd.big-cmd .tab { font-family: var(--display); white-space: nowrap; }
+  .need { left: 130px; top: 600px; }
+
+  .stop { position: absolute; left: 160px; top: 678px; width: 225px; height: 225px; }
+  .stop svg { position: absolute; inset: 0; }
+  .stop span {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; font-family: var(--display); font-weight: 800; font-size: 42px;
+    line-height: 1.15; color: var(--ink);
+  }
+
+  .fcard {
+    left: 870px; width: 560px; height: 170px; padding: 0 36px;
+    display: flex; align-items: center; gap: 30px;
+  }
+  .fname {
+    flex: none; width: 230px; box-sizing: border-box; padding: 10px 0; text-align: center;
+    background: var(--cream); border: 4px solid var(--ink); border-radius: 6px; box-shadow: 5px 5px 0 var(--ink);
+    font-family: var(--mono); font-size: 36px; color: var(--ink);
+  }
+  .cn { flex: none; font-family: var(--display); font-weight: 800; font-size: 62px; line-height: 1; }
+
+  .fan { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 分叉箭头：从命令卡右沿到四张文件卡左沿。蓝 = OpenSpec。 -->
+  <svg class="fan" viewBox="0 0 1920 1080">
+    <g class="br"><path class="o" d="M548 490 Q 700 300 846 195" pathLength="1" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+      <path class="i" d="M548 490 Q 700 300 846 195" pathLength="1" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round"/>
+      <polygon class="h" points="828,170 870,186 840,222" fill="#43a0ed" stroke="#161616" stroke-width="5" stroke-linejoin="round"/></g>
+    <g class="br"><path class="o" d="M548 490 Q 700 400 846 405" pathLength="1" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+      <path class="i" d="M548 490 Q 700 400 846 405" pathLength="1" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round"/>
+      <polygon class="h" points="834,382 874,405 834,428" fill="#43a0ed" stroke="#161616" stroke-width="5" stroke-linejoin="round"/></g>
+    <g class="br"><path class="o" d="M548 490 Q 700 600 846 615" pathLength="1" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+      <path class="i" d="M548 490 Q 700 600 846 615" pathLength="1" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round"/>
+      <polygon class="h" points="834,592 874,616 834,638" fill="#43a0ed" stroke="#161616" stroke-width="5" stroke-linejoin="round"/></g>
+    <g class="br"><path class="o" d="M548 490 Q 690 760 846 825" pathLength="1" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+      <path class="i" d="M548 490 Q 690 760 846 825" pathLength="1" fill="none" stroke="#43a0ed" stroke-width="11" stroke-linecap="round"/>
+      <polygon class="h" points="830,800 872,830 832,850" fill="#43a0ed" stroke="#161616" stroke-width="5" stroke-linejoin="round"/></g>
+  </svg>
+
+  <div class="cmd big-cmd" id="cmd" data-r="-1.5"><div class="tab os">OpenSpec</div>/opsx:propose</div>
+  <div class="chip need" id="need" data-r="-3">后面跟你的需求</div>
+
+  <div class="stop" id="stop" data-r="-7">
+    <svg viewBox="0 0 210 210"><polygon points="62,4 148,4 206,62 206,148 148,206 62,206 4,148 4,62" fill="#161616"/>
+      <polygon points="64,10 146,10 200,64 200,146 146,200 64,200 10,146 10,64" fill="#f2efe6"/>
+      <polygon points="68,20 142,20 190,68 190,142 142,190 68,190 20,142 20,68" fill="none" stroke="#161616" stroke-width="5"/></svg>
+    <span>停下，<br>不写代码</span>
+  </div>
+
+  <div class="card fcard" id="f0" data-r="-1.2" style="top:110px">
+    <div class="fname">proposal</div><div class="cn">提案</div>
+  </div>
+  <div class="card fcard" id="f1" data-r="1" style="top:320px">
+    <div class="fname">specs/</div><div class="cn">规格</div>
+  </div>
+  <div class="card fcard" id="f2" data-r="-0.8" style="top:530px">
+    <div class="fname">design</div><div class="cn">设计</div>
+  </div>
+  <div class="card fcard" id="f3" data-r="1.4" style="top:740px">
+    <div class="fname">tasks</div><div class="cn">任务</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var CREAM = [242, 239, 230], DIM = [160, 157, 151];
+  // 每个文件点亮的时刻：66 句逐个报名字（提案 13.68、规格 14.72、设计 15.44、任务 16.40）。按实测（2026-10-06，frame-times.py）。
+  var LIT = [13.68, 14.72, 15.44, 16.40];
+
+  // 箭头沿路径画出：pathLength=1，dashoffset 从 1 到 0；箭头头部最后出现。
+  // 没开始画时整组隐藏：长度为 0 的虚线段带圆头，会在终点留一个圆点。
+  function draw(g, p) {
+    g.style.visibility = p > 0 ? 'visible' : 'hidden';
+    var e = T.ease(p);
+    g.querySelectorAll('path').forEach(function (path) {
+      path.style.strokeDasharray = '1 1';
+      path.style.strokeDashoffset = String(1 - e);
+    });
+    g.querySelector('.h').style.opacity = T.ease(T.p(p, 0.8, 0.2));
+  }
+
+  Stage({
+    duration: 17,
+    init: function () { return T.fonts('停下，不写代码提案规格设计任务'); },
+    render: function (t) {
+      // 64：命令，后面跟需求。
+      T.enter(T.$('cmd'), T.p(t, 0.2, 0.6), 30);
+      T.enter(T.$('need'), T.p(t, 4.64, 0.5), 16);
+
+      // 65：建出四个文件（先暗着），然后停下，等你看。
+      var brs = T.all('.br');
+      var cards = T.all('.fcard');
+      for (var i = 0; i < 4; i++) {
+        draw(brs[i], T.p(t, 7.52 + i * 0.2, 0.6));
+        T.enter(cards[i], T.p(t, 7.92 + i * 0.2, 0.5), 20);
+      }
+      T.enter(T.$('stop'), T.p(t, 9.20, 0.6), 24);
+
+      // 66：逐个点亮名字；黄框跟着走。
+      for (var j = 0; j < 4; j++) {
+        var on = T.p(t, LIT[j], 0.5);
+        cards[j].style.background = T.mix(DIM, CREAM, T.ease(on));
+        var off = j < 3 ? T.ease(T.p(t, LIT[j + 1], 0.4)) : 0;
+        T.current(cards[j], T.ease(T.p(t, LIT[j], 0.4)) * (1 - off), 10);
+      }
+    }
+  });
+</script>
+</body>
+</html>

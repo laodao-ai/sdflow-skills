@@ -1,0 +1,173 @@
+<!doctype html>
+<!-- S20 · 第 11 轮（2026-11-09），口播 122–129。
+     卡片（实录 · 示例项目）：第 1 句末左下落下一个「人」（圆环加圆点，炭灰方块），第 2 句出「① 定目标」；第 3–5 句一行「目标 → 设计门（规格交给你批准的那一步），人批」，连一根箭头到「① 定目标」；第 6–7 句右侧一张实录卡（实录 · 示例项目，`code-review-report.md:95-97`、`:103`）：「这次：3 条按设计门定过的取舍裁掉」，三行「停机时不等还没发完的推送」「推送不限并发数」「密钥很短时宁可误伤」，第 7 句第一行黄框，旁注「设计里写了 → 评审照着判」；第 8 句出「② 写清单」，箭头连到右下小卡「踩过的坑 → 清单里加一条 → 下次领域视角就查」。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S20">
+<head>
+<meta charset="utf-8">
+<title>S20 · 人在哪：定目标、写清单</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #headw { left: 60px; top: 30px; transform-origin: 0 0; }
+  #headw .chip { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 50px; padding: 6px 28px; }
+
+  /* 卡底：设计门（第 3–5 句） */
+  #gate { left: 100px; top: 470px; width: 620px; height: 140px; padding: 0; }
+  #gate .l1 { position: absolute; left: 30px; top: 16px; display: flex; align-items: center; gap: 12px; font-family: var(--display); font-weight: 900; font-size: 44px; white-space: nowrap; }
+  #gate .l1 .chip { position: relative; font-size: 40px; padding: 0 16px; background: var(--blue); box-shadow: 5px 5px 0 var(--ink); }
+  #gate .l2 { position: absolute; left: 30px; top: 94px; font-size: 28px; font-weight: 600; white-space: nowrap; }
+
+  /* 主卡：实录 · 示例项目（第 6–7 句） */
+  #ex { left: 1010px; top: 250px; width: 850px; height: 310px; padding: 0; }
+  #ex .tab { font-size: 28px; padding: 2px 18px; top: -30px; }
+  #ex .t { position: absolute; left: 26px; top: 20px; font-size: 34px; font-weight: 700; white-space: nowrap; }
+  .x { position: absolute; font-size: 28px; font-weight: 600; padding: 2px 14px; border-width: 3px; box-shadow: 5px 5px 0 var(--ink); }
+  #x1 { left: 26px; top: 86px; } #x2 { left: 26px; top: 166px; } #x3 { left: 26px; top: 246px; }
+  #exn { left: 450px; top: 88px; font-size: 28px; padding: 2px 14px; }
+  #exs { position: absolute; left: 300px; top: -30px; font-family: var(--mono); font-size: 22px; color: var(--ink); white-space: nowrap; }
+
+  /* 放大卡：x1 那一行放大（visual-v4 4.7），z-index 高于引线层 20 */
+  #zoom { left: 230px; top: 250px; width: 710px; height: 130px; padding: 0; z-index: 25; display: flex; align-items: center; justify-content: center;
+          font-family: var(--display); font-weight: 800; font-size: 50px; white-space: nowrap; }
+  #zoom u { text-decoration-thickness: 5px; text-underline-offset: 8px; }
+
+  /* 人与两件事 */
+  .tile { position: absolute; box-sizing: border-box; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 10px 10px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 70px; height: 70px; margin-top: -18px; }
+  .tile .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+          padding: 4px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1.1; }
+  #hu { left: 70px; top: 740px; width: 170px; height: 130px; }
+  .job { font-family: var(--display); font-weight: 800; font-size: 36px; padding: 2px 18px; }
+  #j1 { left: 280px; top: 742px; } #j2 { left: 280px; top: 830px; }
+
+  /* 清单小卡（右下，不进角标区） */
+  #ck { left: 1010px; top: 826px; width: 690px; height: 100px; padding: 0; display: flex; flex-direction: column; justify-content: center; padding-left: 26px; }
+  #ck div { font-size: 32px; font-weight: 700; white-space: nowrap; line-height: 1.3; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; overflow: visible; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path id="a1" d="M420 610 V732" marker-end="url(#ah)" pathLength="1"/>
+      <path id="a2" d="M520 866 H990" marker-end="url(#ah)" pathLength="1"/>
+    </g>
+  </svg>
+
+  <div class="card" id="gate" data-r="-0.8">
+    <div class="l1">目标 →<span class="chip" data-r="-2">设计门</span>，人批</div>
+    <div class="l2" id="g2">设计门：规格交给你批准的那一步</div>
+  </div>
+
+  <div class="card" id="ex" data-r="0.6">
+    <div class="tab ink">实录 · 示例项目</div>
+    <div class="t">这次：3 条按设计门定过的取舍裁掉</div>
+    <div class="chip x" id="x1" data-r="-1">停机时不等还没发完的推送</div>
+    <div class="chip x" id="x2" data-r="1">推送不限并发数</div>
+    <div class="chip x" id="x3" data-r="1">密钥很短时宁可误伤</div>
+    <div class="tag" id="exn" data-r="-3">设计里写了 → 评审照着判</div>
+    <div id="exs">code-review-report.md:95-97 · :103</div>
+  </div>
+
+  <div class="tile" id="hu">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="9"><circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/></svg>
+    <div class="name" style="--r:-2deg">人</div>
+  </div>
+  <div class="chip job" id="j1" data-r="-1.5">① 定目标</div>
+  <div class="chip job" id="j2" data-r="1.5">② 写清单</div>
+
+  <div class="card" id="zoom" data-r="-0.8"><u>停机时不等还没发完的推送</u></div>
+
+  <div class="card" id="ck" data-r="-0.6">
+    <div>踩过的坑 → 清单里加一条</div>
+    <div>→ 下次领域视角就查</div>
+  </div>
+
+  <div class="abs" id="headw"><div class="chip" id="head">中途不问你，那人在哪？</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，本画面内）：按每分钟 220 字、汉字 1 字、英文词 2 字、句间 0.2 秒估，录音后按实测改。
+  // 估算各句起止：1 句 0.0–4.1，2 句 4.3–7.0，3 句 7.2–14.0，4 句 14.2–20.8，5 句 21.0–24.8，6 句 25.0–32.9，7 句 33.1–36.9，8 句 37.1–44.2。
+  var CUE = {
+    head: 0, headHold: 0.891, headMove: 0.6,   // 1 句：问题贴纸
+    hu: 2.316,                                   // 1 句末：人（只有标题不超过 3 秒）
+    j1: 3.92,                                   // 2 句：① 定目标
+    gate: 15.6, a1: 16.1,                       // 3 句：设计门一行，箭头连到 ① 定目标
+    g2: 16.8,                                  // 4 句：设计门 = 规格交给你批准的那一步（5 句无新元素）
+    ex: 22.88, exs: 23.276, x0: 24.86, xGap: 0.5,  // 6 句：实录卡，三条取舍随口播逐条出现
+    cur: 30.8, zoom: 31.344, exn: 31.67,          // 7 句：第一行黄框、放大卡（带引线）、旁注
+    j2: 35.152, a2: 35.859, ck: 36.768,              // 8 句：② 写清单、箭头、清单小卡
+    end: 43.232                                  // 末句结束 44.2 + 1 秒
+  };
+  var HEAD_SCALE = 1.5, HEAD_CENTER = [960, 480];
+  var lead = null;
+
+  function draw(el, p) { el.style.strokeDasharray = 1; el.style.strokeDashoffset = 1 - T.ease(p); el.style.opacity = p > 0 ? 1 : 0; }
+  function show(el, p, dy) { T.enter(el, p, dy === undefined ? 10 : dy); }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: CUE.end,
+    init: function () {
+      return T.fonts(T.$('stage').textContent).then(function () {
+        // 引线端点要在卡片没有位移、没有倾角时量
+        var els = ['ex', 'x1', 'zoom'].map(T.$);
+        els.forEach(function (e) { e.style.transform = 'none'; });
+        lead = T.lead(T.rect(T.$('x1')), T.rect(T.$('zoom')));
+      });
+    },
+    render: function (t) {
+      T.tilt();
+      // 1 句：问题贴纸
+      T.enter(T.$('head'), T.p(t, CUE.head, 0.45), -14);
+      var hw = T.$('headw'), hd = T.$('head');
+      var mv = T.ease(T.p(t, CUE.headHold, CUE.headMove));
+      var fx = HEAD_CENTER[0] - HEAD_SCALE * hd.offsetWidth / 2 - 60, fy = HEAD_CENTER[1] - HEAD_SCALE * hd.offsetHeight / 2 - 30;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + (HEAD_SCALE + (1 - HEAD_SCALE) * mv) + ')';
+
+      // 1 句末：人；2 句：① 定目标
+      var ph = T.ease(T.p(t, CUE.hu, 0.45));
+      T.$('hu').style.opacity = ph;
+      T.$('hu').style.transform = 'translateY(' + (1 - ph) * 14 + 'px)';
+      show(T.$('j1'), T.p(t, CUE.j1, 0.4));
+
+      // 3–5 句：目标 → 设计门，人批；箭头连到 ① 定目标
+      T.enter(T.$('gate'), T.p(t, CUE.gate, 0.5), 14);
+      draw(T.$('a1'), T.p(t, CUE.a1, 0.5));
+      show(T.$('g2'), T.p(t, CUE.g2, 0.4));
+
+      // 6 句：实录卡与三条取舍
+      T.enter(T.$('ex'), T.p(t, CUE.ex, 0.5), 14);
+      for (var i = 1; i <= 3; i++) show(T.$('x' + i), T.p(t, CUE.x0 + (i - 1) * CUE.xGap, 0.35));
+      show(T.$('exs'), T.p(t, CUE.exs, 0.4), 0);
+
+      // 7 句：第一行黄框（留到页末）、放大卡与引线、旁注；实录其余部分压暗
+      var g = T.ease(T.p(t, CUE.cur, 0.4));
+      T.current(T.$('x1'), g, 5);
+      var zp = T.p(t, CUE.zoom, 0.6), ze = T.ease(zp);
+      var z = T.$('zoom');
+      z.style.opacity = ze;
+      z.style.transform = 'translate(' + ((1 - ze) * 60) + 'px,' + ((1 - ze) * 30) + 'px) scale(' + (0.6 + 0.4 * ze) + ') rotate(' + (-0.8 * ze) + 'deg)';
+      z.style.transformOrigin = '100% 100%';
+      T.leadDraw(lead, zp);
+      var dim = 1 - 0.35 * ze;
+      ['x2', 'x3'].forEach(function (id, k) { var el = T.$(id); el.style.opacity = el.style.opacity * dim; });
+      T.$('exn').style.opacity = 0;
+      show(T.$('exn'), T.p(t, CUE.exn, 0.4), -8);
+
+      // 8 句：② 写清单 → 清单小卡
+      show(T.$('j2'), T.p(t, CUE.j2, 0.4));
+      draw(T.$('a2'), T.p(t, CUE.a2, 0.7));
+      T.enter(T.$('ck'), T.p(t, CUE.ck, 0.45), 12);
+    }
+  });
+</script>
+</body>
+</html>

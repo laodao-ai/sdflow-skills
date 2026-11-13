@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- S04 · 机制动画 · script 10–15「其实这两个不是二选一，是互补的。……其实我一开始，就是两个一起用的。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     示意画面（右上角「示意」）。两栏：
+     - 第 10 句：一开口两栏名字卡就落下（左 OpenSpec 蓝，右 grill-me 奶白；0.2 / 0.5 秒，不留空屏，visual-v4 §4.8，作者 2026-10-18 定），中间出「互补」。
+     - 第 11 句：左栏 OpenSpec｜规格的生命周期：写成规格 / 归档 / 规格变了怎么办。左栏当前。
+     - 第 12 句：右栏 grill-me｜怎么问，把需求问清楚（作者 2026-10-17 改字）。右栏当前。
+     - 第 13 句：右栏下挂 grill-with-docs｜再记 ADR（决策 + 理由）、术语表。该卡当前。
+     - 第 14 句：下方出 Matt 的流程一行：grill-me → to-spec → to-tickets → implement（深色卡 + 等宽字，是别人的流程）；
+       句末再出一行：反对「框架接管流程」，不是反对写规格（只上画面，不念；作者 2026-10-18 删去对应口播）。
+     - 第 15 句「其实我一开始，就是两个一起用的。」（2026-10-18 从原交界句拆出，收住网友的问题，留本页）：
+       左栏 OpenSpec、右栏 grill-with-docs 同时加「当前」描边，「互补」下方出一张奶白贴纸「我一开始：两个一起用」（两行）。
+       问句「那当时是怎么配合的呢？」归 S06（script-rules.md 第 2 条），本页不再把「互补」换成「+」。
+     - 两栏 2026-10-18 各收窄到 720（中缝 820–1100）：两栏同时标「当前」时描边外圈各伸出 20，中缝要放得下贴纸。
+     颜色：蓝 = OpenSpec（规格一侧）；grill-me 管问，不是规格也不是执行，用奶白；贴纸是定下来的事实，奶白不用黄（黄实底只给「猜」）；
+     不用琥珀 / 红 / 绿。
+     内容整体在 y 920 以上（备注一行下沿 904，加投影 914）。
+     口播时刻按录音实测（frame-times.py，2026-10-19；画面内秒数）：见 AT、CUR。 -->
+<html lang="zh-CN" data-frame-id="S04">
+<head>
+<meta charset="utf-8">
+<title>S04 · 互补</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #L { left: 100px; top: 120px; width: 720px; height: 500px; }
+  /* 顶边压到 140，避开右上「示意」角标。 */
+  #R { left: 1100px; top: 140px; width: 720px; height: 190px; }
+  #R2 { left: 1100px; top: 400px; width: 720px; height: 240px; }
+  .name { font-family: var(--display); font-weight: 800; font-size: 72px; line-height: 1.1; }
+  .sub { font-weight: 700; font-size: 44px; margin-top: 8px; }
+  #L .sub { color: var(--blue-soft); }
+  .row { display: flex; align-items: center; gap: 24px; margin-top: 22px; font-weight: 600; font-size: 42px; }
+  #L .num { background: var(--blue); }
+  #R2 .name { font-size: 56px; }
+  #R2 .line { font-weight: 600; font-size: 40px; margin-top: 8px; }
+
+  /* 中间「互补」。 */
+  .mid { left: 892px; top: 300px; width: 136px; height: 100px; box-sizing: border-box; padding: 0; display: flex; align-items: center; justify-content: center; }
+  #both { width: 150px; left: 885px; font-size: 50px; font-weight: 800; font-family: var(--display); }
+  #link { left: 1456px; top: 330px; width: 8px; height: 70px; background: var(--ink); }
+  /* 第 15 句：「互补」下方的贴纸，两行，放在中缝（x 859–1061）。 */
+  #first { left: 859px; top: 440px; width: 202px; box-sizing: border-box; padding: 10px 12px; white-space: normal; text-align: center;
+           font-size: 34px; line-height: 1.3; }
+
+  /* 上内边距 28：把等宽字压到卡的下半，卡头「Matt Pocock 的流程」标签不压字。 */
+  .flow { left: 100px; top: 700px; width: 1720px; height: 108px; padding: 28px 44px 0; display: flex; align-items: center; gap: 28px;
+          font-family: var(--mono); font-weight: 700; font-size: 44px; }
+  .flow .arrow { color: var(--cream-dim); }
+  .flow .tab { font-family: var(--display); font-size: 40px; }
+  .note { left: 100px; top: 830px; width: 1720px; height: 74px; padding: 0 44px; display: flex; align-items: center; box-sizing: border-box;
+          font-weight: 700; font-size: 44px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="mock">示意</div>
+
+  <div class="card os" id="L" data-r="-1">
+    <div class="name">OpenSpec</div>
+    <div class="sub" id="lsub">规格的生命周期</div>
+    <div class="row" id="l1"><span class="num">1</span>写成规格</div>
+    <div class="row" id="l2"><span class="num">2</span>归档</div>
+    <div class="row" id="l3"><span class="num">3</span>规格变了怎么办</div>
+  </div>
+
+  <div class="card" id="R" data-r="1">
+    <div class="name">grill-me</div>
+    <div class="sub" id="rsub">怎么问，把需求问清楚</div>
+  </div>
+  <div class="abs" id="link"></div>
+  <div class="card" id="R2" data-r="-1">
+    <div class="name">grill-with-docs</div>
+    <div class="line" id="d1">再记 ADR（决策 + 理由）</div>
+    <div class="line" id="d2">还有术语表</div>
+  </div>
+
+  <div class="card mid" id="both" data-r="2">互补</div>
+  <div class="chip" id="first" data-r="-1.5">我一开始：两个一起用</div>
+
+  <div class="card dark flow" id="flow" data-r="-0.6">
+    <span class="tab ink" style="left:-14px;top:-40px;background:var(--cream);color:var(--ink)">Matt Pocock 的流程</span>
+    <span id="f1">grill-me</span><span class="arrow">→</span><span id="f2">to-spec</span><span class="arrow">→</span><span id="f3">to-tickets</span><span class="arrow">→</span><span id="f4">implement</span>
+  </div>
+  <div class="card note" id="note" data-r="0.6">反对「框架接管流程」，不是反对写规格</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 每个动画节点对应的口播（秒，画面内，按录音实测 frame-times.py，2026-10-19）。
+  var AT = {
+    names: 0.2,    // 第 10 句一开口：两栏名字卡落下（原 1.0「这两个」，2026-10-18 提前，开头 0.5 秒内要有主体）
+    both: 2.5,     // 第 10 句「是互补的」：中间出「互补」
+    lsub: 5.8,     // 第 11 句「规格的生命周期」
+    l1: 7.8,       // 「怎么写成规格」
+    l2: 9.1,       // 「做完怎么归档」
+    l3: 10.5,      // 「以后规格变了又怎么办」
+    rsub: 13.2,    // 第 12 句「grill-me 管的是怎么问」
+    r2: 20.8,      // 第 13 句「加强版叫 grill-with-docs」
+    d1: 27.4,      // 「也就是 ADR」前后，决策和理由
+    d2: 30.2,      // 「再把用到的词记进术语表」
+    flow: 35.2,    // 第 14 句「Matt Pocock」：流程一行（四步间隔 0.3）
+    note: 41.5,    // 第 14 句末「整理成 spec」之后：第二行（只上画面，不念）
+    first: 43.6,   // 第 15 句「就是两个一起用的」（开口 42.4，「就」43.6）：贴纸
+  };
+  // 当前段落：[元素, 开始, 结束]。第 15 句（42.4–44.72）左栏和 grill-with-docs 同时当前，句末前淡出。
+  var CUR = [['L', 4.4, 13.2], ['R', 13.2, 20.8], ['R2', 20.8, 33.3], ['flow', 33.3, 42.4], ['L', 42.4, 44.5], ['R2', 42.4, 44.5]];
+
+  Stage({
+    duration: 45.2,
+    init: function () { return T.fonts('规格的生命周期写成归档变了怎么办怎么问，把需求清楚再记决定决策理由、术语表还有互补流程反对框架接管不是我一开始：两个一起用'); },
+    render: function (t) {
+      T.enter(T.$('L'), T.p(t, AT.names, 0.5), 24);
+      T.enter(T.$('R'), T.p(t, AT.names + 0.3, 0.5), 24);
+      T.enter(T.$('both'), T.p(t, AT.both, 0.4), -14);
+
+      // 左栏内容
+      T.enter(T.$('lsub'), T.p(t, AT.lsub, 0.4), 10);
+      T.enter(T.$('l1'), T.p(t, AT.l1, 0.4), 10);
+      T.enter(T.$('l2'), T.p(t, AT.l2, 0.4), 10);
+      T.enter(T.$('l3'), T.p(t, AT.l3, 0.4), 10);
+      // 右栏内容
+      T.enter(T.$('rsub'), T.p(t, AT.rsub, 0.4), 10);
+      T.wipe(T.$('link'), T.p(t, AT.r2 - 0.4, 0.4), 'y');
+      T.enter(T.$('R2'), T.p(t, AT.r2, 0.5), 20);
+      T.enter(T.$('d1'), T.p(t, AT.d1, 0.4), 10);
+      T.enter(T.$('d2'), T.p(t, AT.d2, 0.4), 10);
+      // Matt 的流程：整行落下，四步依次点亮（先暗后亮）。
+      T.enter(T.$('flow'), T.p(t, AT.flow, 0.5), 20);
+      ['f1', 'f2', 'f3', 'f4'].forEach(function (id, i) {
+        T.$(id).style.opacity = 0.25 + 0.75 * T.ease(T.p(t, AT.flow + 0.3 + i * 0.3, 0.3));
+      });
+      T.enter(T.$('note'), T.p(t, AT.note, 0.5), 20);
+      T.enter(T.$('first'), T.p(t, AT.first, 0.5), 16);
+
+      // 讲到谁，谁当前；讲下一个时淡出。同一个元素有两段（L、R2），取两段里大的那个。
+      var G = {};
+      CUR.forEach(function (c) {
+        var g = T.ease(T.p(t, c[1], 0.4)) * (1 - T.ease(T.p(t, c[2], 0.4)));
+        G[c[0]] = Math.max(G[c[0]] || 0, g);
+      });
+      Object.keys(G).forEach(function (id) { T.current(T.$(id), G[id], 10); });
+    }
+  });
+</script>
+</body>
+</html>

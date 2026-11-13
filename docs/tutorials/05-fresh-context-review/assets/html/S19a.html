@@ -1,0 +1,184 @@
+<!doctype html>
+<!-- S19a · 机制动画 · script 第 116–121 句「SDFlow 有一个专门的 skill，叫 sdflow-issues。……这次评审记的 T48 就是一条 todo：真机冒烟测试还没做。」（6 句；2026-11-02 第 7 轮作者定加，替换原 S21；2026-11-09 第 11 轮删首句问题与问题贴纸）
+     句子映射：
+       1 SDFlow 有一个专门的 skill，叫 sdflow-issues。  2 问题分两个池：bug 是坏了的，todo 是没坏、但可以做得更好的。
+       3 一个问题一个文件，修完了带上提交号关掉。  4 代码评审过程中记问题，就是调用这个 skill。
+       5 你平时发现问题，也可以直接跟 AI 说，用它记一条。  6 这次评审记的 T48 就是一条 todo：真机冒烟测试还没做。
+     内容：
+       右上 skill 名卡 /sdflow-issues（命令小写，炭灰底奶白等宽字，命令卡的样子），0 秒出现，不留空屏；卡下三行常用说法小字（墨色虚线说明 .tag）。
+       左：两个池并排。颜色：bug 粉、todo 紫，只用来区分并列的两组，旁边有文字说明，不借红（红只表示测试失败）。
+       中下：目录树 openspec/issues/{open/{bug,todo}, closed}。文件小牌「一个问题一个文件」从 open 一行滑到 closed 一行，竖箭头旁小字「修完带提交号关掉」。
+       第 4 句「代码评审」小牌的箭头指到 skill 卡；第 5 句对话气泡「帮我记一条 todo」的箭头指到同一张卡。
+       右下：实录文件卡（实录 · 示例项目），openspec/issues/open/todo/T48.md · 提交 5a89c76：frontmatter 四行 + summary 一行（缩写，非原文逐字）。
+     黄框：同一时刻一处。s1 skill 卡 → s2 bug 池 → todo 池 → s3 树卡 → s4/s5 skill 卡 → s6 先「id: T48」一行，再「pool: todo」一行（留到页末）。
+     口播时刻（还没录音，按每分钟 220 字估；录音后用 frame-times.py 对齐）：
+       1 句 t0.0：skill 卡 + 黄框；t2.7/3.1/3.5 三行常用说法
+       2 句 t5.7：t7.3 bug 池；t9.3 todo 池
+       3 句 t14.1：t14.2 目录树卡；t14.8 文件小牌；t17.6 closed 一行 + 竖箭头 + 小字；t18.0–19.0 小牌滑到 closed
+       4 句 t19.7：t19.8 「代码评审」小牌；t20.2 箭头
+       5 句 t25.1：t27.2 气泡；t27.6 箭头
+       6 句 t31.2：t31.3 实录卡；t31.9 id 行；t33.7 pool 行；t34.3 status；t34.7 source_change；t36.0 summary
+       时长 39.1 秒。内容整体在 y 930 以内。 -->
+<html lang="zh-CN" data-frame-id="S19a">
+<head>
+<meta charset="utf-8">
+<title>S19a · 问题池：sdflow-issues</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+
+  /* 右上：skill 名卡 + 常用说法 */
+  #skill { left: 1380px; top: 70px; width: 480px; height: 150px; padding: 0; display: flex; align-items: center; justify-content: center;
+           font-family: var(--mono); font-weight: 700; font-size: 42px; letter-spacing: -0.5px; }
+  .say { left: 1380px; font-size: 30px; padding: 8px 22px; }
+  #s1 { top: 246px; } #s2 { top: 322px; } #s3 { top: 398px; }
+
+  /* 触发方：代码评审小牌、对话气泡 */
+  #rev { left: 960px; top: 56px; font-family: var(--display); font-weight: 800; font-size: 38px; }
+  #say { left: 960px; top: 160px; font-weight: 700; font-size: 34px; border-radius: 30px; }
+
+  /* 左：两个池 */
+  .pool { top: 200px; height: 180px; padding: 0; }
+  .pool b { position: absolute; left: 36px; top: 20px; font-family: var(--display); font-weight: 800; font-size: 72px; line-height: 1; color: var(--ink); white-space: nowrap; }
+  .pool span { position: absolute; left: 36px; top: 112px; font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1.1; color: var(--ink); white-space: nowrap; }
+  #pb { left: 60px; width: 300px; background: var(--pink-soft); }
+  #pt { left: 390px; width: 520px; background: var(--violet-soft); }
+
+  /* 中下：目录树 */
+  #tree { left: 60px; top: 450px; width: 940px; height: 440px; padding: 0; }
+  .row { position: absolute; left: 40px; font-family: var(--mono); font-weight: 600; font-size: 38px; line-height: 1; color: var(--ink); white-space: pre; }
+  #r0 { top: 52px; } #r1 { top: 124px; } #r2 { top: 196px; } #r3 { top: 268px; } #r4 { top: 340px; }
+  #file { left: 340px; top: 99px; display: flex; align-items: center; gap: 12px; font-family: var(--display); font-weight: 800; font-size: 30px; padding: 10px 22px; }
+  #file svg { flex: none; }
+  #cap { left: 735px; top: 196px; font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1.25; color: var(--ink); white-space: nowrap; }
+
+  /* 右下：实录文件卡 */
+  #rec { left: 1030px; top: 480px; width: 830px; height: 417px; padding: 0; }
+  #rec .tab { font-size: 32px; padding: 4px 22px; }
+  #rpath { position: absolute; left: 30px; top: 24px; font-family: var(--mono); font-weight: 600; font-size: 26px; color: var(--ink); white-space: pre; }
+  #rpath i { font-style: normal; color: rgba(22,22,22,.7); }
+  #rhr { position: absolute; left: 30px; right: 30px; top: 68px; border-top: 4px dashed rgba(22,22,22,.6); }
+  .fm { position: absolute; left: 30px; font-family: var(--mono); font-weight: 700; font-size: 36px; line-height: 1.2; color: var(--ink); white-space: pre; border-radius: 6px; }
+  #f1 { top: 88px; } #f2 { top: 150px; } #f3 { top: 212px; } #f4 { top: 274px; }
+  #f5 { top: 346px; font-size: 32px; font-weight: 600; }
+
+  #ov { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; z-index: 6; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="ov" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker>
+    </defs>
+    <line id="a1" x1="1180" y1="98" x2="1370" y2="98" pathLength="1" stroke="#161616" stroke-width="7" stroke-linecap="round" marker-end="url(#ah)"/>
+    <line id="a2" x1="1300" y1="200" x2="1370" y2="200" pathLength="1" stroke="#161616" stroke-width="7" stroke-linecap="round" marker-end="url(#ah)"/>
+    <line id="a3" x1="775" y1="586" x2="775" y2="805" pathLength="1" stroke="#161616" stroke-width="7" stroke-linecap="round" marker-end="url(#ah)"/>
+  </svg>
+
+  <div class="card dark" id="skill" data-r="1">/sdflow-issues</div>
+  <div class="tag say" id="s1" data-r="-2">记一下这个 bug</div>
+  <div class="tag say" id="s2" data-r="2">列一下待办</div>
+  <div class="tag say" id="s3" data-r="-2">把 Txx 关了</div>
+
+  <div class="chip" id="rev" data-r="-1.5">代码评审</div>
+  <div class="chip" id="say" data-r="2">帮我记一条 todo</div>
+
+  <div class="card pool" id="pb" data-r="-1"><b>bug</b><span>坏了</span></div>
+  <div class="card pool" id="pt" data-r="1"><b>todo</b><span>没坏，但可以更好</span></div>
+
+  <div class="card" id="tree" data-r="0.4">
+    <div class="row" id="r0">openspec/issues/</div>
+    <div class="row" id="r1">├─ open/</div>
+    <div class="row" id="r2">│  ├─ bug/</div>
+    <div class="row" id="r3">│  └─ todo/</div>
+    <div class="row" id="r4">└─ closed/</div>
+    <div class="chip" id="file" data-r="-1.5"><svg width="30" height="38" viewBox="0 0 30 38"><path d="M3 2 H19 L27 10 V36 H3 Z" fill="#f2efe6" stroke="#161616" stroke-width="3" stroke-linejoin="round"/><path d="M19 2 V10 H27" fill="none" stroke="#161616" stroke-width="3" stroke-linejoin="round"/><path d="M8 18 H22 M8 24 H22 M8 30 H17" stroke="#161616" stroke-width="3" stroke-linecap="round"/></svg>一个问题一个文件</div>
+    <div class="abs" id="cap">修完带提交号<br>关掉</div>
+  </div>
+
+  <div class="card" id="rec" data-r="-0.6">
+    <div class="tab ink" data-r="-2">实录 · 示例项目</div>
+    <div id="rpath">openspec/issues/open/todo/T48.md <i>· 提交 5a89c76</i></div>
+    <div id="rhr"></div>
+    <div class="fm" id="f1">id: T48</div>
+    <div class="fm" id="f2">pool: todo</div>
+    <div class="fm" id="f3">status: OPEN</div>
+    <div class="fm" id="f4">source_change: alarm-notify</div>
+    <div class="fm" id="f5">summary: tasks 5.5 人工真机冒烟尚未执行</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：按每分钟 220 字估，录音后按实测改。注释写本画面第几句。
+  var CUE = {
+    skill: 0, say: [1.915, 2.199, 2.482],                // 1 句：skill 卡、三行常用说法（第 11 轮删问题贴纸）
+    pb: 6.11, pt: 7.749,                              // 2 句：bug 池、todo 池
+    tree: 11.76, file: 12.24, closed: 14.48, slide: 14.8, slideLen: 1.0,   // 3 句：目录树、文件小牌、closed 一行与箭头、滑动
+    rev: 16.239, a1: 16.553,                           // 4 句：代码评审小牌与箭头
+    say6: 22.19, a2: 22.531,                          // 5 句：对话气泡与箭头
+    rec: 25.683, f1: 26.181, f2: 27.676, f3: 28.174, f4: 28.506, f5: 29.586,   // 6 句：实录卡
+    end: 32.16
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function fade(id, t, a) { var e = T.ease(T.p(t, a, 0.4)), el = T.$(id); el.style.opacity = e; el.style.transform = 'translateY(' + ((1 - e) * 8) + 'px)'; }
+  function draw(id, t, a) { var l = T.$(id), p = T.ease(T.p(t, a, 0.4)); l.style.opacity = p > 0 ? 1 : 0; l.setAttribute('stroke-dasharray', 1); l.setAttribute('stroke-dashoffset', 1 - p); }
+  // 行内黄框：同 T.current，但间距收小，相邻两行不互相盖住
+  function rowCur(el, g) {
+    el.style.outline = '6px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '6px';
+    el.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.4 * g) + ')';
+  }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: CUE.end,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：skill 卡与三行常用说法
+      show('skill', t, CUE.skill, 14);
+      CUE.say.forEach(function (a, i) { show('s' + (i + 1), t, a, 8); });
+
+      // 2 句：两个池
+      show('pb', t, CUE.pb, 14);
+      show('pt', t, CUE.pt, 14);
+
+      // 3 句：目录树，文件小牌从 open 滑到 closed
+      show('tree', t, CUE.tree, 14);
+      var cl = T.ease(T.p(t, CUE.closed, 0.4));
+      ['r0', 'r1', 'r2', 'r3'].forEach(function (id) { T.$(id).style.opacity = T.ease(T.p(t, CUE.tree + 0.2, 0.4)); });
+      T.$('r4').style.opacity = cl;
+      T.$('cap').style.opacity = cl;
+      draw('a3', t, CUE.closed);
+      var f = T.$('file'), sl = T.ease(T.p(t, CUE.slide, CUE.slideLen));
+      var p0 = T.p(t, CUE.file, 0.45), e0 = T.ease(p0);
+      f.style.opacity = e0;
+      f.style.top = (99 + (315 - 99) * sl + (1 - e0) * 12) + 'px';
+      f.style.transform = 'rotate(' + (-1.5 + (1 - e0) * -3) + 'deg)';
+
+      // 4 句：代码评审小牌 → skill 卡；5 句：对话气泡 → skill 卡
+      show('rev', t, CUE.rev, 10);
+      draw('a1', t, CUE.a1);
+      show('say', t, CUE.say6, 10);
+      draw('a2', t, CUE.a2);
+
+      // 6 句：实录文件卡
+      show('rec', t, CUE.rec, 14);
+      fade('rpath', t, CUE.rec + 0.1);
+      T.$('rhr').style.opacity = T.ease(T.p(t, CUE.rec + 0.1, 0.4));
+      ['f1', 'f2', 'f3', 'f4', 'f5'].forEach(function (id, i) { fade(id, t, CUE['f' + (i + 1)]); });
+
+      // 黄框：同一时刻一处
+      T.current(T.$('skill'), Math.max(on(t, CUE.skill, CUE.pb), on(t, CUE.a1, CUE.rec)), 10);
+      T.current(T.$('pb'), on(t, CUE.pb, CUE.pt), 10);
+      T.current(T.$('pt'), on(t, CUE.pt, CUE.tree), 10);
+      T.current(T.$('tree'), on(t, CUE.tree, CUE.rev), 10);
+      rowCur(T.$('f1'), on(t, CUE.f1, CUE.f2));
+      rowCur(T.$('f2'), T.ease(T.p(t, CUE.f2, 0.4)));
+    }
+  });
+</script>
+</body>
+</html>

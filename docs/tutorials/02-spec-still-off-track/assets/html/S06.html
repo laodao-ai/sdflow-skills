@@ -1,0 +1,249 @@
+<!doctype html>
+<!-- S06 · 机制动画 · 系列流程卡（第二级的上一行） · script 16–20「我当时的流程是四步。……第四步，把问出来的结果记成 ADR 和术语表，再回头去改那四个文档。」
+     复制自 channel/design/templates/series-flow.html（data-level="2"）。S06–S08 是同一张卡（storyboard「约定 · 导航画面」），
+     三页同一元素的位置前后接得上：本页的四步（y 490–750，2026-10-19 第七轮下移 110 让内容垂直居中）在 S07 开头缩小变灰，移到第二级的顶行（x 320–1340，y 196–260）。
+     - 第一级（六步一行）S06–S08 都不出场（系列位置单开一页 S08b），所以本页不调用 SF.l1。
+     - 第 16 句「我当时的流程是四步。」（2026-10-19 第五轮改稿：原问句「那当时是怎么配合的呢？」删去，本页从这句起）：
+       一开口卡头出「一开始：OpenSpec + grill-with-docs」，四步先放空框（只有淡墨描边，没有字和编号）。卡头在 S07 开场淡出。
+     - 旧流程四步卡，随口播逐步点亮（空框 → 填上字、讲过 + 当前，讲下一步时上一步的「当前」淡出）：
+       ① /opsx:explore 探索，定边界和方向 → ② OpenSpec 生成四个文档 → ③ /grill-with-docs 拷问 → ④ 记 ADR、术语表，回改四个文档。
+     - 三页共有的卡片手写 data-r（不走自动倾角）：自动倾角按帧 ID 算，各页不同，切页时会跳。
+     - 纸底（2026-10-20 作者定：只有章节标签页用深色底，系列流程卡不用），不上蓝 / 琥珀（visual-v4 4.9）。旧流程是作者自己的流程，不是示意，不标「示意」。
+     - 动画节点（按录音实测，frame-times.py，2026-10-19；集中在 ROW、LIT、OFF）：
+       0.0 第 16 句开口：卡头与四个空框进场；ROW 0.6 第 16 句念到「流程」：行首标签「原来的流程」进场；
+       LIT[0] 2.56 第 17 句「第一步」、LIT[1] 12.16 第 18 句「第二步」、LIT[2] 20.08 第 19 句「第三步」、LIT[3] 28.48 第 20 句「第四步」：对应那张卡填字、点亮并成为当前，前一个箭头跟着点亮；
+       OFF 34.7 第 20 句念完（34.72）：第四步的「当前」淡出，四张都停在讲过的状态，接 S07。本页 35.9 秒。
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排；卡头、行首标签、四步卡、箭头整体下移 110px（原压在上半屏），内容在画面里垂直居中；秒数不动。 -->
+<html lang="zh-CN" data-frame-id="S06" data-level="2" data-done="" data-current="1,2">
+<head>
+<meta charset="utf-8">
+<title>S06 · 系列流程卡 · 旧流程四步</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* ===== 模版共用：复制后不改 ===== */
+  /* 纸底（2026-10-20 作者定：只有章节标签页用深色底，其余页面都是纸底）。
+     「没讲到」= 墨色 65% 不透明度，叠在渲染后的纸底 #8b949e 上约 #3f4246，对比度 3.28:1；CSS 写 --notyet，JS 里同值写 NOTYET。
+     透明底的空框（.off）不带硬投影，否则框外会露出一块实心的墨色。 */
+  :root { --notyet: rgba(22,22,22,.65); }
+  .sf-step.off, .node.off, .act.off, .big3.off { box-shadow: none; }
+
+  /* 第一级：六步一行。 */
+  .sf-step { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px; }
+  .sf-step .big { white-space: nowrap; }
+  html[data-level="1"] .sf-step { width: 280px; height: 104px; }
+  html[data-level="1"] .sf-step .big { font-size: 44px; }
+  html[data-level="1"] .sf-step .num { width: 58px; height: 58px; font-size: 30px; }
+  html[data-level="2"] .sf-step { width: 236px; height: 64px; border-width: 4px; padding: 0 12px; gap: 10px; }
+  html[data-level="2"] .sf-step .big { font-size: 36px; }
+  html[data-level="2"] .sf-step .num { width: 44px; height: 44px; font-size: 26px; border-width: 4px; }
+  .sf-step.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .sf-step.off .num { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  /* 期号：括线 + 「第 N 期」。本期那一组用墨，其余用「没讲到」的淡墨。 */
+  .sf-ep { position: absolute; text-align: center; white-space: nowrap; color: var(--notyet);
+           font-family: var(--display); font-weight: 800; }
+  .sf-ep::before { content: ''; display: block; box-sizing: border-box; border: 4px solid currentColor; border-top: none;
+                   border-radius: 0 0 8px 8px; height: 14px; margin: 0 10px 4px; }
+  html[data-level="1"] .sf-ep { font-size: 34px; }
+  html[data-level="2"] .sf-ep { font-size: 26px; line-height: 1.1; }
+  html[data-level="2"] .sf-ep::before { height: 8px; border-width: 3px; margin-bottom: 2px; }
+  .sf-ep.now { color: var(--ink); }
+  #sf-fan { position: absolute; left: 0; top: 0; width: 1920px; height: 200px; }
+  #sf-frame { position: absolute; left: 40px; top: 172px; width: 1840px; height: 754px; box-sizing: border-box;
+              border: 3px solid rgba(22,22,22,.4); border-radius: 16px; }
+  #sf-fan, #sf-frame, .sf-step, .sf-ep { opacity: 0; }
+  html[data-level="1"] #sf-fan, html[data-level="1"] #sf-frame, html[data-level="1"] #l2 { display: none; }
+
+  /* 第二级的件。 */
+  /* 只铺到字幕带上沿：里面的元素用画布坐标，高度不到 940（渲染前的越界检查会量容器本身）。 */
+  #l2 { position: absolute; left: 0; top: 0; width: 1920px; height: 930px; }
+  .node { display: flex; align-items: center; justify-content: center; padding: 0 22px; white-space: nowrap;
+          font-family: var(--display); font-weight: 800; font-size: 44px; }
+  .node.off { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  .node.past { background: var(--cream-dim); }
+  .lane { font-family: var(--display); font-weight: 800; }
+  .lane.past { background: var(--cream-dim); }
+  .arr { position: absolute; height: 6px; border-radius: 3px; background: currentColor; color: var(--ink); }
+  .arr::after { content: ''; position: absolute; right: -18px; top: -9px;
+                border-left: 20px solid currentColor; border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+  .seg { position: absolute; height: 24px; box-sizing: border-box; border: 5px solid var(--notyet); border-top: none;
+         border-radius: 0 0 12px 12px; }
+  .pdot { position: absolute; width: 58px; height: 58px; box-sizing: border-box; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--mono); font-weight: 700; font-size: 26px;
+          border: 4px solid var(--notyet); color: var(--notyet); background: transparent; }
+  .pdot.done { background: var(--cream-dim); color: var(--ink); border-color: var(--cream-dim); }
+  .pdot.now { background: var(--cream); color: var(--ink); border-color: var(--ink); }
+  /* ===== 模版共用到此 ===== */
+
+  /* ===== 本页 ===== */
+  /* 旧流程的一张卡：编号压在左上角，上一行工具 / 命令，中间步骤名，下一行说明。S07 里缩成只剩步骤名。 */
+  .old { display: block; padding: 0; overflow: visible; }
+  .old .num { position: absolute; left: -26px; top: -26px; }
+  .old .l1, .old .ttl, .old .sub { position: absolute; left: 0; right: 0; text-align: center; white-space: nowrap; }
+  .old .l1 { top: 40px; font-family: var(--mono); font-weight: 700; font-size: 32px; }
+  .old .ttl { top: 50%; transform: translateY(-50%); font-family: var(--display); font-weight: 800; font-size: 56px; }
+  .old .sub { bottom: 36px; font-family: var(--body); font-weight: 600; font-size: 34px; }
+  .old .l1.cn { font-family: var(--body); font-weight: 600; font-size: 34px; }
+  .arr.oa { color: var(--notyet); }
+  /* 卡头：S06 独有，S07 开场淡出（S07 里有同样的一份）。 */
+  .hd { position: absolute; left: 90px; top: 260px; white-space: nowrap; color: var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 60px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- ===== 模版共用：第一级，由下面的脚本按 <html> 属性填 ===== -->
+  <svg id="sf-fan" viewBox="0 0 1920 200" aria-hidden="true"></svg>
+  <div id="sf-frame"></div>
+  <div id="sf"></div>
+
+  <div id="l2">
+    <div class="hd" id="head">一开始：OpenSpec + grill-with-docs</div>
+    <div class="chip lane" id="laneO" data-r="-2" style="left:90px;top:380px;font-size:44px">原来的流程</div>
+    <div class="card node old off" id="o1" data-r="-1.2" style="left:90px;top:490px;width:390px;height:260px">
+      <span class="num">1</span><span class="l1">/opsx:explore</span><span class="ttl">探索</span><span class="sub">定边界和方向</span></div>
+    <div class="arr oa" id="oa1"></div>
+    <div class="card node old off" id="o2" data-r="1.4" style="left:540px;top:490px;width:390px;height:260px">
+      <span class="num">2</span><span class="l1">OpenSpec</span><span class="ttl">生成四个文档</span><span class="sub">提案·规格·设计·任务</span></div>
+    <div class="arr oa" id="oa2"></div>
+    <div class="card node old off" id="o3" data-r="-1.5" style="left:990px;top:490px;width:390px;height:260px">
+      <span class="num">3</span><span class="l1">/grill-with-docs</span><span class="ttl">拷问</span><span class="sub">一条一条问我</span></div>
+    <div class="arr oa" id="oa3"></div>
+    <div class="card node old off" id="o4" data-r="1.1" style="left:1440px;top:490px;width:390px;height:260px">
+      <span class="num">4</span><span class="l1 cn">记 ADR、术语表</span><span class="ttl">回改四个文档</span><span class="sub">再回头改一遍</span></div>
+  </div>
+</div>
+<script>
+  // ===== 模版共用：按 <html> 属性搭第一级。要在 theme.js 之前跑：自动倾角只认加载时已有的元素。 =====
+  (function () {
+    var STEPS = ['需求明确', '规格编写', '规格评审', '代码实现', '代码评审', '收尾归档'];
+    var EP = [2, 2, 3, 4, 5, 6];   // 每步对应第几期（visual-v4 4.9）
+    var root = document.documentElement;
+    var level = root.getAttribute('data-level') === '2' ? 2 : 1;
+    function list(name) {
+      return (root.getAttribute(name) || '').split(',').map(function (s) { return Number(s.trim()); }).filter(Boolean);
+    }
+    var done = list('data-done'), cur = list('data-current');
+    // 第一级的几何：level 1 放大居中偏上，level 2 缩到顶部一行。两种都左右对称（中心 x 960）。
+    var G = level === 1
+      ? { left: 55, top: 330, w: 280, h: 104, gap: 26, epGap: 26 }
+      : { left: 187, top: 24, w: 236, h: 64, gap: 26, epGap: 24 };
+    var sf = document.getElementById('sf');
+    var html = '';
+    for (var i = 0; i < 6; i++) {
+      var n = i + 1;
+      var st = cur.indexOf(n) >= 0 ? 'now' : done.indexOf(n) >= 0 ? 'done' : 'off';
+      html += '<div class="card sf-step ' + st + '" id="sf' + n + '" data-shadow="' + (level === 1 ? 10 : 7) + '" style="left:' +
+        (G.left + i * (G.w + G.gap)) + 'px;top:' + G.top + 'px"><span class="num">' + n + '</span><span class="big">' + STEPS[i] + '</span></div>';
+    }
+    // 期号：同一期相邻的几步合成一个括线。
+    var a = 0, curL = 9999, curR = 0;
+    while (a < 6) {
+      var b = a;
+      while (b + 1 < 6 && EP[b + 1] === EP[a]) b++;
+      var isNow = false;
+      for (var k = a; k <= b; k++) if (cur.indexOf(k + 1) >= 0) isNow = true;
+      var l = G.left + a * (G.w + G.gap), r = G.left + b * (G.w + G.gap) + G.w;
+      if (isNow) { curL = Math.min(curL, l); curR = Math.max(curR, r); }
+      html += '<div class="sf-ep' + (isNow ? ' now' : '') + '" id="sfe' + EP[a] + '" style="left:' + l + 'px;width:' + (r - l) +
+        'px;top:' + (G.top + G.h + G.epGap) + 'px">第 ' + EP[a] + ' 期</div>';
+      a = b + 1;
+    }
+    sf.innerHTML = html;
+    // 第二级：从「当前」那组的期号括线下沿，两条线连到外框上沿两角。
+    if (level === 2 && curR > 0) {
+      var y0 = G.top + G.h + G.epGap + 32;
+      document.getElementById('sf-fan').innerHTML =
+        '<path d="M' + (curL + 10) + ' ' + y0 + ' L48 174 M' + (curR - 10) + ' ' + y0 + ' L1872 174" fill="none" ' +
+        'stroke="rgba(22,22,22,.4)" stroke-width="3" stroke-linecap="round"/>';
+    }
+    window.SF_LEVEL = level;
+  })();
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // ===== 模版共用：动画小工具 =====
+  var SF = (function () {
+    var DIM = [160, 157, 151], INK = [22, 22, 22], CREAM = [242, 239, 230], NOTYET = [63, 66, 70];
+    // 没讲到 → 讲过：透明底淡墨描边淡墨字 → 奶白底墨描边墨字（同目录页 S05）。里面的 .num 跟着变。
+    function lit(el, p) {
+      var c = T.mix(NOTYET, INK, p);
+      [el].concat(Array.prototype.slice.call(el.querySelectorAll('.num'))).forEach(function (e) {
+        e.style.background = 'rgba(242,239,230,' + p + ')';
+        e.style.borderColor = c;
+        e.style.color = c;
+      });
+    }
+    // 讲过 → 被留下：奶白 → 灰实心。
+    function gray(el, p) { el.style.background = T.mix(CREAM, DIM, p); }
+    // 「当前」描边。a = 硬投影的不透明度（不传 = 1）：透明底的空框传它的点亮进度，免得没讲到时露出实心投影。
+    function cur(el, g, s, a) {
+      // s 传 0 = 不要硬投影（进度点）；不传就读 data-shadow，再没有用 10。
+      T.current(el, g, s != null ? s : parseFloat(el.getAttribute('data-shadow') || '10'));
+      // 浏览器读回来的颜色是 rgb(22, 22, 22) 不是 #161616，两种写法都要认。
+      if (a != null) el.style.boxShadow = el.style.boxShadow.replace(/#161616|rgb\(22, 22, 22\)/g, 'rgba(22,22,22,' + a + ')');
+    }
+    // 横箭头：从 x1 到 x2（箭头尖），竖直中心 y。
+    function arrow(el, x1, x2, y) {
+      el.style.left = x1 + 'px';
+      el.style.width = Math.max(0, x2 - x1 - 18) + 'px';
+      el.style.top = (y - 3) + 'px';
+    }
+    function lerp(a, b, p) { return a + (b - a) * p; }
+    // 第一级进场：tIn 起六步依次落下、期号和外框淡入；tCur 起「当前」那几步加黄框。
+    function l1(t, tIn, tCur) {
+      for (var i = 1; i <= 6; i++) {
+        var el = T.$('sf' + i);
+        T.enter(el, T.p(t, tIn + (i - 1) * 0.08, 0.5), window.SF_LEVEL === 1 ? 20 : 12);
+        if (el.classList.contains('now')) cur(el, T.ease(T.p(t, tCur, 0.4)));
+      }
+      var e = T.ease(T.p(t, tIn + 0.3, 0.6));
+      T.all('.sf-ep').forEach(function (x) { x.style.opacity = e; });
+      T.$('sf-fan').style.opacity = e;
+      T.$('sf-frame').style.opacity = e;
+    }
+    return { lit: lit, gray: gray, cur: cur, arrow: arrow, lerp: lerp, l1: l1 };
+  })();
+  // ===== 模版共用到此 =====
+
+  // ===== 本页：帧脚本 =====
+  // 第 16 句念到「流程」：行首标签进场。
+  var ROW = 0.6;
+  // 四步点亮的时刻：第 17–20 句念到「第一步」「第二步」「第三步」「第四步」（按录音实测，frame-times.py，2026-10-19）。
+  var LIT = [2.56, 12.16, 20.08, 28.48];
+  // 第 20 句念完（34.72）：第四步的「当前」淡出。
+  var OFF = 34.7;
+  var NOTYET = [63, 66, 70], INK = [22, 22, 22], CREAM = [242, 239, 230], PAPER = [139, 148, 158];   // 纸底渲染后约 #8b949e
+
+  Stage({
+    duration: 35.9,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.tilt();   // 手写了 data-r、又不做进场动画的元素，先按 data-r 摆好倾角（theme.js 只给自动算角的元素摆）
+      T.enter(T.$('head'), T.p(t, 0, 0.5), 16);
+      T.enter(T.$('laneO'), T.p(t, ROW, 0.5), 16);
+      for (var i = 0; i < 4; i++) {
+        var el = T.$('o' + (i + 1));
+        T.enter(el, T.p(t, 0.15 + i * 0.12, 0.5), 20);
+        var lit = T.ease(T.p(t, LIT[i], 0.4));
+        SF.lit(el, lit);
+        // 编号圆片压在卡的边框上：没讲到时用纸底色填，免得边框从圆片里穿过去。
+        el.querySelector('.num').style.background = T.mix(PAPER, CREAM, lit);
+        // 空框：编号和字在点亮时才出现。
+        ['.num', '.l1', '.ttl', '.sub'].forEach(function (q) { el.querySelector(q).style.opacity = lit; });
+        var end = i < 3 ? LIT[i + 1] : OFF;
+        SF.cur(el, lit * (1 - T.ease(T.p(t, end, 0.3))), 10, lit);
+      }
+      // 卡与卡之间的箭头：跟着后一张卡点亮，从淡墨变墨色。
+      for (var k = 1; k <= 3; k++) {
+        var a = T.$('oa' + k);
+        SF.arrow(a, 90 + (k - 1) * 450 + 390 + 8, 90 + k * 450 - 8, 620);
+        a.style.opacity = T.ease(T.p(t, 0.5 + k * 0.1, 0.4));
+        a.style.color = T.mix(NOTYET, INK, T.ease(T.p(t, LIT[k], 0.4)));
+      }
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- S45 · 标题卡 · script 223「一句话：OpenSpec 管做什么，Superpowers 管怎么做对。」
+     两栏分工，沿用 S03 的卡片尺寸。蓝 = OpenSpec，琥珀 = Superpowers，这一帧两个工具都直接涉及，所以两种色都用。
+     卡片是定下来的结论，倾角 ±1.5–2°。
+     时刻按实测（2026-10-06，frame-times.py）：左卡在 223 句念到 OpenSpec（1.52 秒），右卡在念到 Superpowers（3.36 秒）。 -->
+<html lang="zh-CN" data-frame-id="S45">
+<head>
+<meta charset="utf-8">
+<title>S45 · 两栏分工</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .duo { width: 760px; height: 400px; display: flex; align-items: center; padding: 40px 56px 32px; }
+  .duo .big { font-size: 112px; }
+  .duo .tab { font-size: 46px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card duo os" id="c1" data-r="-2" style="left:150px;top:330px">
+    <div class="tab os">OpenSpec</div>
+    <div class="big">做什么</div>
+  </div>
+  <div class="card duo sp" id="c2" data-r="1.5" style="left:1010px;top:350px">
+    <div class="tab sp">Superpowers</div>
+    <div class="big">怎么做对</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 4,
+    init: function () { return T.fonts('做什么怎么对'); },
+    render: function (t) {
+      T.enter(T.$('c1'), T.p(t, 1.52, 0.6), 30);
+      T.enter(T.$('c2'), T.p(t, 3.36, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

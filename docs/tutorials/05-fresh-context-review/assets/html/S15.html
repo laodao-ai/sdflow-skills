@@ -1,0 +1,129 @@
+<!doctype html>
+<!-- S15 · 第 13 轮（2026-11-09），口播 82–90。
+     第 1 句三张小结贴纸「明确规则用工具查」「分角度读代码」「跑出来验证」随口播在正中依次出，第 2 句一起缩到左上（第 13 轮从页末移到开头，和对比分开）。
+     第 2–3 句下方出两栏对比卡「Claude Code 团队 vs SDFlow」（实录 · 原文摘要），右上文章标题与日期。三行随口播亮：
+     ①第 4 句「一样」：几个新的 agent 同时找问题，两栏合成一格，原文小字「Several agents look for bugs at the same time.」；
+     第 5 句出分隔条「不一样的有两处」；②第 6–7 句「判真假」：另一组 agent 投票，票够才报 ｜ 脚本核引用，再逐条判；
+     ③第 8–9 句「审多深」：按仓库风险分快审 · 标准 · 深审 ｜ 不分档，除历史视角外每次派齐。
+     动画节点按口播估算（每分钟 220 字），录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S15">
+<head>
+<meta charset="utf-8">
+<title>S15 · Claude Code 团队 vs SDFlow · 怎么审</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 本章小结：三张贴纸随口播在正中出，第 2 句一起缩到左上 */
+  #sw { left: 60px; top: 60px; transform-origin: 0 0; display: flex; align-items: center; gap: 18px; }
+  #sw .chip { position: relative; font-family: var(--display); font-weight: 800; white-space: nowrap; }
+  #st { font-size: 30px; padding: 6px 16px; }
+  .sp { font-size: 40px; padding: 8px 20px; }
+
+  /* 出处卡 */
+  #src { left: 1250px; top: 78px; width: 610px; padding: 12px 24px 14px; }
+  #src .tab { left: -14px; top: -44px; font-size: 30px; padding: 4px 20px; }
+  #src b { display: block; font-family: var(--display); font-weight: 800; font-size: 29px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  #src span { display: block; margin-top: 4px; font-family: var(--mono); font-weight: 600; font-size: 24px; color: rgba(22,22,22,.8); }
+
+  /* 对比表：标签列 + 两栏 */
+  #tb { position: absolute; left: 60px; top: 236px; width: 1800px; display: grid; grid-template-columns: 190px 790px 790px; column-gap: 15px; row-gap: 20px; align-items: stretch; }
+  .hd { box-sizing: border-box; height: 62px; display: flex; align-items: center; justify-content: center; border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--ink); }
+  #h1 { background: var(--charcoal); color: var(--cream); } #h2 { background: var(--amber); }
+  .lb { box-sizing: border-box; display: flex; align-items: center; padding: 4px 6px; font-weight: 800; font-size: 34px; line-height: 1.2; color: var(--ink); }
+  .ce { box-sizing: border-box; padding: 8px 18px; background: var(--cream); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px;
+        font-weight: 600; font-size: 34px; line-height: 1.3; min-height: 124px; display: flex; flex-direction: column; justify-content: center; }
+  .ce.wide { grid-column: 2 / 4; align-items: center; text-align: center; }
+  .qt { display: block; margin-top: 4px; font-style: italic; font-weight: 600; font-size: 26px; line-height: 1.3; color: rgba(22,22,22,.8); }
+  /* 分隔条：「不一样的有两处」 */
+  .sep { grid-column: 1 / 4; display: flex; align-items: center; gap: 18px; }
+  .sep .chip { position: relative; font-family: var(--display); font-weight: 800; font-size: 34px; padding: 4px 20px; white-space: nowrap; }
+  .sep i { flex: 1; border-top: 4px dashed rgba(22,22,22,.55); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="sw">
+    <div class="chip ink" id="st" data-r="-2">怎么审 · 小结</div>
+    <div class="chip sp" id="p1" data-r="-1.5">明确规则用工具查</div>
+    <div class="chip sp" id="p2" data-r="1">分角度读代码</div>
+    <div class="chip sp" id="p3" data-r="-1">跑出来验证</div>
+  </div>
+
+  <div class="card" id="src" data-r="1"><div class="tab ink" data-r="-2">实录 · 原文摘要</div><b>How the Claude Code team does code review</b><span>Anthropic · 2026-10-15</span></div>
+
+  <div id="tb">
+    <div></div><div class="hd" id="h1">Claude Code 团队</div><div class="hd" id="h2">SDFlow</div>
+
+    <div class="lb" id="l1">一样</div>
+    <div class="ce wide" id="c1"><div>几个新的 agent，同时找问题</div><i class="qt" id="q1">Several agents look for bugs at the same time.</i></div>
+
+    <div class="sep" id="sep"><span class="chip" data-r="-1.5">不一样的有两处</span><i></i></div>
+
+    <div class="lb" id="l2">① 判真假</div>
+    <div class="ce" id="c2"><div>另一组 agent 投票，票够才报</div><i class="qt" id="q2">a separate group votes on each finding</i></div>
+    <div class="ce" id="d2">脚本核引用，再逐条判</div>
+
+    <div class="lb" id="l3">② 审多深</div>
+    <div class="ce" id="c3">按仓库风险分三档：快审 · 标准 · 深审</div>
+    <div class="ce" id="d3">不分档，除历史视角外每次派齐</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按口播字数估算，还没有录音。注释写本画面第几句。
+  var CUE = {
+    p: [0, 3.119, 5.545], up: 9.122,                 // 1 句：小结三张贴纸在正中依次出；2 句前缩到左上
+    h: 9.68,                                   // 2 句：两个列头
+    src: 13.6,                                 // 3 句：出处卡
+    c1: 19.2, q1: 19.606,                        // 4 句：一样
+    sep: 24.48,                                 // 5 句：不一样的有两处
+    c2: 26.72, q2: 27.185, d2: 34.806,              // 6、7 句：判真假
+    c3: 39.36, d3: 46.297                         // 8、9 句：审多深
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function fade(id, t, a) {
+    var e = T.ease(T.p(t, a, 0.35)), el = T.$(id);
+    el.style.opacity = e; el.style.transform = 'translateY(' + ((1 - e) * 10) + 'px)';
+  }
+  function part(id, t, a) { T.$(id).style.opacity = T.ease(T.p(t, a, 0.35)); }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 51.360,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：小结贴纸在正中依次出（标签随第一张），2 句前一起缩到左上
+      T.enter(T.$('st'), T.p(t, CUE.p[0], 0.45), -12);
+      ['p1', 'p2', 'p3'].forEach(function (id, i) { T.enter(T.$(id), T.p(t, CUE.p[i], 0.45), -12); });
+      var sw = T.$('sw'), mv = T.ease(T.p(t, CUE.up, 0.6)), S = 1.15, sc = S + (1 - S) * mv;
+      var fx = 960 - S * sw.offsetWidth / 2 - 60, fy = 470 - S * sw.offsetHeight / 2 - 60;
+      sw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // 2–3 句：列头、出处卡
+      fade('h1', t, CUE.h); fade('h2', t, CUE.h + 0.3);
+      show('src', t, CUE.src, 14);
+
+      // 4 句：一样
+      fade('l1', t, CUE.c1); fade('c1', t, CUE.c1); part('q1', t, CUE.q1);
+      T.current(T.$('c1'), on(t, CUE.c1, CUE.sep), 5);
+
+      // 5 句：分隔条
+      fade('sep', t, CUE.sep);
+
+      // 6–7 句：判真假
+      fade('l2', t, CUE.c2); fade('c2', t, CUE.c2); part('q2', t, CUE.q2); fade('d2', t, CUE.d2);
+      T.current(T.$('c2'), on(t, CUE.c2, CUE.d2), 5);
+      T.current(T.$('d2'), on(t, CUE.d2, CUE.c3), 5);
+
+      // 8–9 句：审多深
+      fade('l3', t, CUE.c3); fade('c3', t, CUE.c3); fade('d3', t, CUE.d3);
+      T.current(T.$('c3'), on(t, CUE.c3, CUE.d3), 5);
+      T.current(T.$('d3'), on(t, CUE.d3, 999), 5);
+    }
+  });
+</script>
+</body>
+</html>

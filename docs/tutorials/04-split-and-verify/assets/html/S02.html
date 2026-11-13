@@ -1,0 +1,120 @@
+<!doctype html>
+<!-- S02 · 机制动画 · script 5「那规格批准了以后，怎么保证生成的代码是对的呢？」
+     示意画面。一张卡：规格 → 审 → 人拍板 → 锁住，末格「开工」亮起；随后右边一个 Agent 写代码，文件一个个冒出来，文件堆上打一个问号。
+     - 一张奶白卡里四格（规格一侧：蓝浅底）排成一行，箭头相连，格子随开口逐个落下（开头 0.5 秒内就有内容）；
+       末格「开工」是执行一侧（琥珀），第 5 句念到「怎么一步一步」时落下，加黄色「当前」描边。
+     - 「开工」之后右边出一个 Agent（六边形图形放在炭灰方块上，visual-v4 第五节），一条箭头从卡指向它；
+       文件（奶白小贴纸，等宽文件名）一个个冒出来，堆在 Agent 下方；末尾文件堆上打一个大问号（墨色，不用红）。
+     - 页内元素出现后都留到页末。内容整体在 y 900 以上，避开字幕带。
+     口播时刻（估算，每分钟 220 字，还没录音，录音后按 frame-times.py 对齐）：第 5 句 0.0，「怎么一步一步」约 2.5，念完 5.5，全页 6.6。 -->
+<html lang="zh-CN" data-frame-id="S02">
+<head>
+<meta charset="utf-8">
+<title>S02 · 规格批准以后，怎么生成代码</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #flow { left: 60px; top: 400px; width: 1180px; height: 280px; padding: 0; }
+  .nd { display: flex; align-items: center; justify-content: center; height: 130px; top: 475px; padding: 0 26px; white-space: nowrap;
+        font-family: var(--display); font-weight: 800; font-size: 54px; background: var(--blue-soft); }
+  #go { top: 460px; font-size: 62px; padding: 16px 32px; background: var(--amber); }
+  .arr { position: absolute; height: 6px; border-radius: 3px; background: var(--ink); opacity: .85; }
+  .arr::after { content: ''; position: absolute; right: -18px; top: -9px;
+                border-left: 20px solid var(--ink); border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+  #ag { position: absolute; left: 1470px; top: 360px; width: 160px; height: 160px; }
+  #agn { left: 1478px; top: 538px; font-size: 34px; padding: 6px 20px; }
+  .file { font-family: var(--mono); font-weight: 600; font-size: 30px; padding: 8px 18px; }
+  #q { position: absolute; left: 1715px; top: 600px; font-family: var(--display); font-weight: 900; font-size: 300px; line-height: 1; color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="flow" data-r="-1"></div>
+  <div class="card nd" id="n0" data-r="1">规格</div>
+  <div class="arr" id="a0"></div>
+  <div class="card nd" id="n1" data-r="-1.5">审</div>
+  <div class="arr" id="a1"></div>
+  <div class="card nd" id="n2" data-r="1">人拍板</div>
+  <div class="arr" id="a2"></div>
+  <div class="card nd" id="n3" data-r="-1">锁住</div>
+  <div class="arr" id="a3"></div>
+  <div class="chip" id="go" data-r="-1.5">开工</div>
+
+  <div class="arr" id="a4"></div>
+  <svg id="ag" viewBox="0 0 150 150" aria-hidden="true">
+    <rect x="3" y="3" width="144" height="144" rx="10" fill="#262626" stroke="#161616" stroke-width="5"/>
+    <polygon points="115,75 95,109.6 55,109.6 35,75 55,40.4 95,40.4" fill="none" stroke="#f2efe6" stroke-width="6" stroke-linejoin="round"/>
+    <polygon points="91,75 83,88.9 67,88.9 59,75 67,61.1 83,61.1" fill="#f2efe6"/>
+  </svg>
+  <div class="chip" id="agn" data-r="-2">Agent</div>
+
+  <div class="chip file" id="f0" data-r="-4" style="left:1330px;top:625px">config.go</div>
+  <div class="chip file" id="f1" data-r="3" style="left:1525px;top:672px">notify.go</div>
+  <div class="chip file" id="f2" data-r="-2" style="left:1360px;top:705px">rule.go</div>
+  <div class="chip file" id="f3" data-r="4" style="left:1520px;top:750px">state.go</div>
+  <div class="chip file" id="f4" data-r="-3" style="left:1330px;top:790px">main.go</div>
+  <div class="chip file" id="f5" data-r="2" style="left:1400px;top:840px">notify_test.go</div>
+  <div id="q" data-r="0">?</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播时刻（秒，画面内，估算）。
+  var AT = {
+    n0: 0.0, nGap: 0.35,   // 四格逐个落下
+    go: 1.735,               // 「怎么一步一步」：开工
+    ag: 2.264,               // Agent 与箭头
+    f0: 2.716, fGap: 0.3,    // 文件一个个冒出来
+    q: 4.225                 // 文件堆上的问号
+  };
+  var ROW = ['n0', 'n1', 'n2', 'n3'];
+
+  function arrow(el, x1, x2, y) {
+    el.style.left = x1 + 'px';
+    el.style.width = Math.max(0, x2 - x1 - 18) + 'px';
+    el.style.top = (y - 3) + 'px';
+  }
+  // 排位：宽度依赖字体，字体加载后每帧重算。四格 + 开工在大卡里居中。
+  function layout() {
+    var gap = 60, w = T.$('go').offsetWidth + gap, i, x;
+    ROW.forEach(function (id) { w += T.$(id).offsetWidth + gap; });
+    w -= gap;
+    x = 60 + (1180 - w) / 2;
+    var pos = [];
+    ROW.forEach(function (id) {
+      var e = T.$(id);
+      e.style.left = x + 'px';
+      pos.push({ l: x, r: x + e.offsetWidth });
+      x += e.offsetWidth + gap;
+    });
+    for (i = 0; i < 3; i++) arrow(T.$('a' + i), pos[i].r + 8, pos[i + 1].l - 8, 540);
+    T.$('go').style.left = x + 'px';
+    arrow(T.$('a3'), pos[3].r + 8, x - 8, 540);
+    arrow(T.$('a4'), 1240 + 16, 1470 - 10, 440);
+  }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 4.980,
+    init: function () { return T.fonts(T.$('stage').textContent).then(layout); },
+    render: function (t) {
+      layout();
+      T.tilt();
+      T.enter(T.$('flow'), T.p(t, 0, 0.3), 14);
+      ROW.forEach(function (id, i) {
+        T.enter(T.$(id), T.p(t, AT.n0 + i * AT.nGap, 0.35), 16);
+        if (i < 3) T.$('a' + i).style.opacity = T.ease(T.p(t, AT.n0 + (i + 1) * AT.nGap, 0.3));
+      });
+      T.$('a3').style.opacity = T.ease(T.p(t, AT.go - 0.1, 0.3));
+      T.enter(T.$('go'), T.p(t, AT.go, 0.4), 14);
+      T.current(T.$('go'), T.ease(T.p(t, AT.go + 0.3, 0.4)), 7);
+
+      T.$('a4').style.opacity = T.ease(T.p(t, AT.ag, 0.3));
+      T.$('ag').style.opacity = T.ease(T.p(t, AT.ag + 0.1, 0.4));
+      T.enter(T.$('agn'), T.p(t, AT.ag + 0.1, 0.4), 10);
+      for (var i = 0; i < 6; i++) T.enter(T.$('f' + i), T.p(t, AT.f0 + i * AT.fGap, 0.35), -18);
+      T.enter(T.$('q'), T.p(t, AT.q, 0.5), -24);
+    }
+  });
+</script>
+</body>
+</html>

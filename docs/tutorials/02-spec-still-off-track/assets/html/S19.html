@@ -1,0 +1,255 @@
+<!doctype html>
+<!-- S19 · 机制动画 · script 61–68「举一个我自己项目里的例子，是我在做的一个数据处理工具，可以从 Excel 批量导入数据。……所以，推荐是 AI 给的，可用户的体验是什么，得由你来判断。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排；第 61 句「那是在做的」→「是我在做的」，不调时刻
+     示意卡片（作者 2026-10-18 定）：场景改写自作者 mqtt-console 项目里一次「批量导入部分成功」的真实决策，实际决策更复杂，所以右上角标「示意」（.mock），不标「实录」。
+     源码私有，只转述机制，页面文字不提 MQTT、订阅、ADR、pack。
+     布局分三区，元素各在各的区，同一张卡不在两处出现：
+       左上：Excel 样式的十行导入表（行的状态都在这张表里变）
+       右侧：问答列，从上往下 问题 → AI 推荐 → 我的回答
+       下方横带：两条分支并排，右边三方面「系统 · 用户 · 开发」+「得由你来判断」
+     颜色：黄实底只给「AI 举例」「AI 推荐」；蓝底只给「我的回答」；其余奶白。
+       红 / 绿只表示测试失败 / 通过（作者 2026-10-18 按视觉规范改）：格式不对的行用深色底（charcoal）标出，导入结果也不用红绿；分支结果同样，深色 = 被拒 / 有问题，奶白 = 通过。
+     层次：第 67 句起上半区整体压到 0.35，焦点在下方横带；黄色当前描边全页只有第 68 句的「用户」一处。
+     句子与动画节点（时刻按录音实测，frame-times.py，2026-10-19，集中在下面的 CUE 常量里）：
+       61 句 一开口 → 左上导入表卡进场（表头 + 十行淡空壳，visual-v4 §4.8「不留空屏」）；念到「Excel 批量导入数据」十行逐行出字
+       62 句 AI 问到一种情况：一批十条数据，其中有几条格式不对 → 卡角「AI 举例」；念到「格式不对」时第 3、4、8 行变深色标出
+       63 句 是整批都拒绝，还是格式对的先导入？ → 右列第一张：问题
+       64 句 顺着现有代码，推荐整批拒绝 → 右列第二张：黄色「AI 推荐：整批拒绝」（旁注「顺着现有代码」作者 2026-10-17 删去，口播已说）
+       65 句 没选它的推荐 → 推荐划掉、右侧出打叉圆片，卡变灰，留在原位
+       66 句 我的回答：不应该全部失败，格式对的照常导入，格式不对的标出来，写清哪一行、错在哪 → 右列第三张「我的回答」；
+          「格式对的照常导入」七行「结果」列出「已导入」；「写清哪一行、错在哪」三条标出的行「结果」列出原因
+       67 句 同一个问题，选的不一样，后面要做的东西就完全不一样 → 上半区压暗；下方两条分支并排
+       68 句 所以，推荐是 AI 给的，可用户的体验是什么，得由你来判断 → 分支右侧三方面，「用户」加黄框（对到「用户的体验」）；「得由你来判断」
+     原第 70 句「写成了一篇 ADR」作者 2026-10-18 删去，ADR 贴纸与节点一并删去。
+     内容整体在 y 940 以上，避开字幕带。 -->
+<html lang="zh-CN" data-frame-id="S19">
+<head>
+<meta charset="utf-8">
+<title>S19 · 批量导入：整批拒绝还是格式对的先导入</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 上半区容器：第 67 句整体压暗 */
+  #top { left: 0; top: 0; width: 1920px; height: 620px; }
+
+  /* 左上：Excel 样式的十行导入表 */
+  #pack { left: 60px; top: 122px; width: 940px; padding: 40px 26px 24px; }
+  #tbl { border: 3px solid var(--ink); border-bottom: 0; }
+  .tr { display: flex; height: 46px; box-sizing: border-box; border-bottom: 3px solid var(--ink); background: var(--cream); color: var(--ink); }
+  .tr.h { background: var(--cream-dim); font-weight: 700; }
+  .td { box-sizing: border-box; height: 43px; display: flex; align-items: center; padding: 0 12px; font-size: 34px; font-weight: 600; white-space: nowrap;
+        border-right: 3px solid var(--ink); }
+  /* 数字列用窄体，十一位手机号才放得下 */
+  .c2, .c3 { font-family: var(--display); }
+  .td:last-child { border-right: 0; }
+  .c0 { width: 76px; justify-content: center; padding: 0; }
+  .c1 { width: 112px; }
+  .c2 { width: 236px; }
+  .c3 { width: 208px; }
+  .c4 { width: 266px; }
+  /* 「AI 举例」贴在卡的右上角外沿，压在卡内容之上 */
+  #ai { right: -24px; top: -46px; z-index: 3; }
+
+  /* 右侧问答列 */
+  #q { left: 1040px; top: 160px; }
+  #rec { left: 1040px; top: 278px; }
+  #rec .line { position: absolute; left: 10px; right: 10px; top: 50%; height: 6px; margin-top: -3px; background: var(--ink); }
+  /* 打叉圆片放在推荐卡右边的空处，不压字 */
+  #recX {
+    left: 1400px; top: 282px; width: 64px; height: 64px; border-radius: 50%; box-sizing: border-box;
+    background: var(--ink); border: 4px solid var(--ink); color: var(--cream);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--display); font-weight: 800; font-size: 40px;
+  }
+  #au { left: 1040px; top: 392px; width: 800px; padding: 20px 36px 22px; }
+  #au .who { font-family: var(--display); font-weight: 800; font-size: 34px; color: var(--blue-soft); margin-bottom: 4px; }
+  #au .say { font-weight: 600; font-size: 38px; line-height: 1.4; white-space: normal; }
+
+  /* 下方横带：两条分支 */
+  .branch { position: absolute; left: 80px; display: flex; align-items: center; gap: 18px; height: 100px; }
+  #b1 { top: 716px; }
+  #b2 { top: 826px; }
+  .branch .lab { position: relative; width: 240px; height: 90px; display: flex; align-items: center; justify-content: center;
+                 padding: 0; font-family: var(--display); font-weight: 800; font-size: 46px; }
+  .branch .cell { position: relative; height: 84px; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center;
+                  font-weight: 600; font-size: 38px; white-space: nowrap; }
+  .cell.bad { background: var(--charcoal); color: var(--cream); }
+  .arr { font-family: var(--mono); font-weight: 700; font-size: 44px; color: var(--ink); }
+
+  /* 下方横带：三方面 */
+  #asp0 { left: 1250px; top: 826px; }
+  #asp1 { left: 1410px; top: 826px; }
+  #asp2 { left: 1570px; top: 826px; }
+  #judge { left: 1470px; top: 742px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="mock" id="real">示意</div>
+
+  <div class="abs" id="top">
+    <!-- 左上：十行导入表 -->
+    <div class="card" id="pack" data-r="-1">
+      <div class="tab">一批数据</div>
+      <div class="guess" id="ai" data-r="4">AI 举例</div>
+      <div id="tbl"></div>
+    </div>
+
+    <!-- 右侧问答列：问题 / AI 推荐 / 我的回答 -->
+    <div class="chip" id="q" data-r="-1">整批拒绝，还是格式对的先导入？</div>
+    <div class="guess" id="rec" data-r="2"><b>AI 推荐</b>整批拒绝<span class="line" id="recLine"></span></div>
+    <div class="abs" id="recX">✕</div>
+    <div class="card os" id="au" data-r="0.6">
+      <div class="who">我的回答</div>
+      <div class="say">不应该全部失败，格式对的照常导入，格式不对的标出来，写清哪一行、错在哪</div>
+    </div>
+  </div>
+
+  <!-- 下方横带：两条分支 -->
+  <div class="branch" id="b1">
+    <div class="card lab" id="b1l" data-r="-1">整批拒绝</div>
+    <span class="arr" id="b1a0">→</span>
+    <div class="card cell bad" id="b1c0" data-r="0.6">10 行全部失败</div>
+  </div>
+  <div class="branch" id="b2">
+    <div class="card lab" id="b2l" data-r="1">部分成功</div>
+    <span class="arr" id="b2a0">→</span>
+    <div class="card cell" id="b2c0" data-r="-0.6">7 行导入</div>
+    <span class="arr" id="b2a1">+</span>
+    <div class="card cell bad" id="b2c1" data-r="0.6">3 行标出 · 带原因</div>
+  </div>
+
+  <!-- 下方横带：三方面 -->
+  <div class="chip" id="asp0" data-r="-1.5">系统</div>
+  <div class="chip" id="asp1" data-r="1.5">用户</div>
+  <div class="chip" id="asp2" data-r="-1.5">开发</div>
+  <div class="tag" id="judge" data-r="3">得由你来判断</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 十行示意数据（编的）。bad 非空 = 格式不对，值是原因。
+  var ROWS = [
+    ['1', '张伟', '13800138001', '2026-03-02', ''],
+    ['2', '李娜', '13900139002', '2026-03-05', ''],
+    ['3', '王磊', '1370013700', '2026-03-08', '手机号少一位'],
+    ['4', '刘洋', '13600136004', '03-12', '日期格式不对'],
+    ['5', '赵敏', '13500135005', '2026-03-12', ''],
+    ['6', '陈静', '13700137006', '2026-03-15', ''],
+    ['7', '杨帆', '13200132007', '2026-03-18', ''],
+    ['8', '黄磊', '135001350088', '2026-03-20', '手机号多一位'],
+    ['9', '周婷', '13100131009', '2026-03-22', ''],
+    ['10', '吴强', '13300133010', '2026-03-25', '']
+  ];
+  (function () {
+    var tbl = document.getElementById('tbl');
+    function tr(cls, cells) {
+      var r = document.createElement('div');
+      r.className = 'tr ' + cls;
+      cells.forEach(function (c, i) {
+        var d = document.createElement('div'); d.className = 'td c' + i;
+        var s = document.createElement('span'); s.textContent = c; d.appendChild(s); r.appendChild(d);
+      });
+      tbl.appendChild(r); return r;
+    }
+    tr('h', ['行号', '姓名', '手机号', '日期', '结果']);
+    ROWS.forEach(function (x, i) { var r = tr('', x.slice(0, 4).concat([x[4] || '已导入'])); r.id = 'r' + (i + 1); });
+  })();
+
+  // 节点时刻（秒）。按录音实测（frame-times.py，2026-10-19）。注释写的是对应全稿第几句（新句号）。
+  var CUE = {
+    pack: 0.2,        // 61 句一开口（visual-v4 §4.8 不留空屏）
+    real: 0.4,        // 61 句开口后，右上角「示意」
+    fill: 6.4,        // 61 句「Excel 批量导入数据」，十行逐行出字
+    fillGap: 0.1,
+    ai: 9.1,         // 62 句「AI 问到一种情况」，卡角「AI 举例」
+    bad: [13.5, 13.9, 14.3],  // 62 句「几条格式不对」，第 3、4、8 行逐行变深色
+    q: 15.8,          // 63 句「是整批都拒绝」
+    rec: 21.9,        // 64 句「推荐整批拒绝」
+    cross: 26.5,      // 65 句「没选它的推荐」，划掉、打叉、变灰
+    au: 28.5,         // 66 句「我的回答是」，右列第三张
+    ok: 31.8,         // 66 句「格式对的照常导入」，七行「结果」列出「已导入」
+    okGap: 0.08,
+    why: [35.7, 36.3, 36.9],  // 66 句「写清哪一行、错在哪」，三条标出的行列出原因
+    dim: 38.5,        // 67 句开口，上半区压暗
+    br1: 40.0,        // 67 句「选的不一样」，整批拒绝那一条分支
+    br2: 41.2,        // 67 句「后面要做的东西」，部分成功那一条分支
+    asp: 45.0,        // 68 句「推荐是 AI 给的」，三方面
+    user: 47.0,       // 68 句「可用户的体验是什么」，「用户」加黄框
+    judge: 48.5       // 68 句「得由你来判断」
+  };
+  var BAD_ROWS = [3, 4, 8];  // 格式不对的行号
+  var OK_ROWS = [1, 2, 5, 6, 7, 9, 10];
+  var CREAM = [242, 239, 230], CHAR = [38, 38, 38], INK = [22, 22, 22];
+  var YELLOW = [245, 207, 74], DIM = [160, 157, 151];  // theme.css 的 --yellow、--cream-dim
+  var TOP_DIM = 0.35;  // 第 67 句起上半区的不透明度
+  var SHELL = 0.45;    // 数据行点亮前的空壳不透明度（visual-v4 §4.8「不留空屏」）
+
+  // 一行格子：t0 起每 gap 秒进一个（含箭头）
+  function chain(ids, t0, gap, t) {
+    for (var i = 0; i < ids.length; i++) T.enter(T.$(ids[i]), T.p(t, t0 + i * gap, 0.4), 14);
+  }
+  function cells(row) { return row.querySelectorAll('.td span'); }
+
+  Stage({
+    duration: 49.9,
+    init: function () { return T.fonts('示意一批数据举例行号姓名手机号日期结果已导入少多位格式不对整拒绝还是的先推荐顺着现有代码我回答不应该全部失败照常标出来写清哪一错在哪条带原因系统用户开发三方面后果摆得由你来判断体验'); },
+    render: function (t) {
+      T.enter(T.$('real'), T.p(t, CUE.real, 0.45), -14);
+
+      // 左上：导入表。进场时十行是淡空壳（不写字），到 CUE.fill 逐行出字
+      T.enter(T.$('pack'), T.p(t, CUE.pack, 0.5), 20);
+      T.enter(T.$('ai'), T.p(t, CUE.ai, 0.4), -16);
+      for (var i = 1; i <= 10; i++) {
+        var row = T.$('r' + i);
+        var lit = T.ease(T.p(t, CUE.fill + (i - 1) * CUE.fillGap, 0.35));
+        var spans = cells(row);
+        row.style.opacity = SHELL + (1 - SHELL) * lit;
+        for (var c = 0; c < 4; c++) spans[c].style.opacity = lit;
+        spans[4].style.opacity = 0;  // 「结果」列先空着，第 66 句才出
+        row.style.background = 'rgb(' + CREAM.join(',') + ')';
+        row.style.color = 'rgb(' + INK.join(',') + ')';
+      }
+      // 62 句：格式不对的三行变深色（charcoal，不用红）
+      for (var b = 0; b < 3; b++) {
+        var br = T.$('r' + BAD_ROWS[b]);
+        var k = T.ease(T.p(t, CUE.bad[b], 0.4));
+        br.style.background = T.mix(CREAM, CHAR, k);
+        br.style.color = T.mix(INK, CREAM, k);
+      }
+
+      // 右侧问答列
+      T.enter(T.$('q'), T.p(t, CUE.q, 0.45), -16);
+      T.enter(T.$('rec'), T.p(t, CUE.rec, 0.45), -16);
+
+      // 65 句：推荐划掉，右侧出打叉圆片，卡从黄变灰，留在原位
+      var cr = T.p(t, CUE.cross, 0.4);
+      T.strike(T.$('recLine'), cr);
+      T.$('recX').style.opacity = T.ease(T.p(t, CUE.cross + 0.3, 0.25));
+      T.$('rec').style.background = T.mix(YELLOW, DIM, T.ease(cr));
+
+      T.enter(T.$('au'), T.p(t, CUE.au, 0.5), 20);
+
+      // 66 句：格式对的七行「结果」出「已导入」；标出的三行出原因
+      for (var j = 0; j < OK_ROWS.length; j++) {
+        cells(T.$('r' + OK_ROWS[j]))[4].style.opacity = T.ease(T.p(t, CUE.ok + j * CUE.okGap, 0.4));
+      }
+      for (var w = 0; w < 3; w++) {
+        cells(T.$('r' + BAD_ROWS[w]))[4].style.opacity = T.ease(T.p(t, CUE.why[w], 0.4));
+      }
+
+      // 67 句：上半区整体压暗，焦点移到下方横带
+      T.$('top').style.opacity = 1 - (1 - TOP_DIM) * T.ease(T.p(t, CUE.dim, 0.6));
+
+      // 67 句：两条分支并排
+      chain(['b1l', 'b1a0', 'b1c0'], CUE.br1, 0.25, t);
+      chain(['b2l', 'b2a0', 'b2c0', 'b2a1', 'b2c1'], CUE.br2, 0.25, t);
+
+      // 68 句：三方面，只有「用户」加黄框
+      for (var m = 0; m < 3; m++) T.enter(T.$('asp' + m), T.p(t, CUE.asp + 0.25 + m * 0.2, 0.4), 12);
+      T.current(T.$('asp1'), T.ease(T.p(t, CUE.user, 0.4)), 7);
+      T.enter(T.$('judge'), T.p(t, CUE.judge, 0.4), 12);
+    }
+  });
+</script>
+</body>
+</html>

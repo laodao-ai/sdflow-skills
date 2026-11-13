@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- S28b（原 S20b、S24d） · 标题卡 · script 192–193「最后，再向大家推荐一句「魔法咒语」，非常有用。……有没有更简洁、更合适、更便宜的方案？」
+     「一句话『魔法咒语』」章第 1 页（原 S18 前半）。定位：流程之外的经验，不是流程里的一步，角上标「流程之外 · 我自己的习惯」。
+     10-25 作者意见：删去原第 193 句「看报告的时候，要是对 AI 的推荐有疑虑，怎么办？」和画面上的问题贴纸「对推荐有疑虑，怎么办？」；
+       原第 194 句改为「最后，再向大家推荐一句「魔法咒语」，非常有用」。
+     - 第 192 句：开口时角上标签进场；不放空壳，大卡到第 193 句开口时才进场。
+     - 第 193 句：那句话放大成一张大卡，逐段出现；念到「第一性原理」「目标」「更简洁、更合适、更便宜」时三处依次当前
+       （黄描边，一次一个；上一处淡出结束才点亮下一处，最后一处留到页末）。
+     配色（2026-10-25 改）：紫只留给「另一个模型」，本章不用紫。角标「流程之外 · 我自己的习惯」用奶白标签，卡上小标用墨底白字，三处重点词用墨色粗字加墨色下划线；其余奶白 / 墨。
+     颜色：黄只给「当前」描边；不用黄实底。
+     内容整体在 y 800 以内，避开底部字幕带（y ≥ 940）。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。
+       第 192 句 0.00，第 193 句 4.96，念完 14.40；页内时长 15.60。 -->
+<html lang="zh-CN" data-frame-id="S28b">
+<head>
+<meta charset="utf-8">
+<title>S28b · 一句魔法咒语</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #note { right: 64px; top: 52px; }
+
+  #big { left: 90px; top: 320px; width: 1740px; height: 520px; padding: 0 70px; display: flex; align-items: center; }
+  #big .tab { left: 40px; top: -62px; font-size: 40px; }
+  #big .big { font-size: 66px; line-height: 2.05; white-space: nowrap; }
+  /* 三处重点：行内块，当前高亮在这里自绘（卡是奶白底，空隙填奶白，不能用 T.current 的纸色空隙） */
+  .hl { display: inline-block; padding: 0 12px; margin: 0 9px; border-radius: 8px; font-weight: 800; border-bottom: 8px solid var(--ink); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="tag" id="note" data-r="3">流程之外 · 我自己的习惯</div>
+
+  <div class="card" id="big" data-r="-0.6">
+    <div class="tab ink" id="bigtab" data-r="-2">很有用的一句话</div>
+    <div class="big">
+      <span class="sg" data-i="0">按</span><span class="hl sg" id="h1" data-i="0">第一性原理</span><span class="sg" data-i="1">，从这次需求的</span><span class="hl sg" id="h2" data-i="2">目标</span><span class="sg" data-i="3">出发，</span><br>
+      <span class="sg" data-i="3">重新调研一下，</span><br>
+      <span class="sg" data-i="4">有没有</span><span class="hl sg" id="h3" data-i="5">更简洁、更合适、更便宜</span><span class="sg" data-i="6">的方案？</span>
+    </div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），词首字开始时间减 0.2 秒。
+  var AT = {
+    shell: 0,                                // 第 192 句开口（0.00，不能小于 0）：角上标签进场
+    tab: 4.76,                               // 第 193 句开口（4.96）：大卡与卡上小标进场
+    seg: [4.76, 6.52, 7.48, 7.8, 10.52, 10.92, 13.64], // 按 / 从这次需求的 / 目标 / 出发，重新调研一下 / 有没有 / 更简洁… / 的方案
+    h1: 5.08, h2: 7.48, h3: 10.92            // 三处当前的起点（第一性原理 5.28、目标 7.68、更简洁 11.12）；上一处在下一处起点前 0.3 秒淡出完
+  };
+  var P = T.p, E = T.ease;
+
+  // 当前：黄描边 7px，空隙 4px 填奶白（卡底色）（不加墨边，作者 10-24 定）；g 取 0..1
+  function cur(el, g) {
+    el.style.boxShadow = '0 0 0 4px rgba(242,239,230,' + g + '), 0 0 0 11px rgba(245,207,74,' + g + ')';
+  }
+  // 起点 a 点亮，终点 b 开始淡出（0.3 秒），b 为空表示留到页末
+  function gate(t, a, b) { return E(P(t, a, 0.3)) * (b === undefined ? 1 : 1 - E(P(t, b, 0.3))); }
+
+  Stage({
+    duration: 15.6,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 第 192 句开口：角上标签；第 193 句开口：大卡
+      T.enter(T.$('note'), P(t, AT.shell, 0.45), -12);
+      T.enter(T.$('big'), P(t, AT.tab, 0.5), 16);
+
+      // 第 193 句：逐段出现
+      var segs = T.all('.sg');
+      for (var i = 0; i < segs.length; i++) {
+        var lit = E(P(t, AT.seg[parseInt(segs[i].getAttribute('data-i'), 10)], 0.4));
+        segs[i].style.opacity = lit;
+      }
+
+      // 三处依次当前：同一时刻只有一个
+      cur(T.$('h1'), gate(t, AT.h1, AT.h2 - 0.3));
+      cur(T.$('h2'), gate(t, AT.h2, AT.h3 - 0.3));
+      cur(T.$('h3'), gate(t, AT.h3));
+    }
+  });
+</script>
+</body>
+</html>

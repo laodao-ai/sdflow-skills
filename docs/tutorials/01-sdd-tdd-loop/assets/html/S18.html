@@ -1,0 +1,138 @@
+<!doctype html>
+<!-- S18 · 终端 · script 69–76「我只跟它说了一句：加一个超温告警。……只不过这次，它没有猜，而是问了。」
+     cast 01-openspec-explore-ff 回放秒 12–34，1.5 倍速（标「1.5 倍速」），放完停在最后一帧。
+     2026-10-06 由 1 倍改 1.5 倍：前 20 回放秒是 AI 读代码，1 倍时口播念到「第一个问题」画面还没出问题。
+     - 启动横幅（含「Opus 5.5 is still your default」）：每次 seek 后查行文字，横幅还在屏上就用底色盖住。
+     - 只露前 30 行：底部 4 行状态栏（模型名、用量）不进画面。
+     - 三个问题依次加黄框（= 当前），框左挂编号贴纸：①告警发到哪（A/B/C）②阈值 ③80.0 边界。
+       框的位置按行文字在 DOM 里找，不写死坐标。
+     - 加框排在 cast 放完之后。按实测（2026-10-07，frame-times.py）：第一个 17.50 秒、第二个 23.18 秒、
+       第三个 27.98 秒（72、73 句之间的停顿 2026-10-07 剪短 2.88 秒），各对上口播「第一个」「第二个」「第三个」的开口处。三个问题在 cast 31.97 秒（画面约 13.3 秒）已同时出现在屏上。
+     窗口本身不倾斜，只让标签倾斜（终端要能读）。 -->
+<html lang="zh-CN" data-frame-id="S18">
+<head>
+<meta charset="utf-8">
+<title>S18 · opsx:explore</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 让出底部字幕带（y ≥ 940，visual-v4 §4.1）：窗口上移、整体缩到 0.947，30 行都留着。 */
+  .window { left: 150px; top: 72px; width: 1620px; height: 908px; padding: 18px 20px; overflow: visible; transform: scale(0.947); transform-origin: 50% 0; }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 872px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: 0; width: 1580px; height: 1004px; }
+  /* 播放器暂停时会画播放按钮和加载圈；画面不可交互，全部藏掉。 */
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  /* 终端底色跟随主题，盖过 cast 自带的底色。 */
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  .mask { position: absolute; left: 0; width: 1580px; background: #1b1b1d; display: none; }
+  .qbox { position: absolute; left: 6px; width: 1568px; box-sizing: border-box; border: 5px solid transparent; border-radius: 8px; opacity: 0; }
+  .qnum { position: absolute; left: -46px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+  .window .speed { right: -30px; top: -34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="window" id="win">
+    <div class="clip">
+      <div id="term"></div>
+      <div class="mask" id="mask"></div>
+      <div class="qbox" id="b1"></div>
+      <div class="qbox" id="b2"></div>
+      <div class="qbox" id="b3"></div>
+    </div>
+    <div class="num qnum" id="n1" data-r="-6">1</div>
+    <div class="num qnum" id="n2" data-r="5">2</div>
+    <div class="num qnum" id="n3" data-r="-4">3</div>
+    <div class="speed" id="spd">1.5 倍速</div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+  </div>
+</div>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/01-openspec-explore-ff.js"></script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var CAST_START = 12, CAST_END = 34, SPEED = 1.5;
+  var PLAY = (CAST_END - CAST_START) / SPEED;
+  var HOLD = 14;  // duration = 28.67 秒，盖住第三个框的过渡结束（27.98 + 0.35）
+  var player;
+
+  // 三个问题：起始行与结束行的文字特征。at / next 是口播实测秒（画面从 0 算）。
+  var QUESTIONS = [
+    { box: 'b1', num: 'n1', from: 'A) Marker on the line', to: "program's contract", at: 17.50, next: 23.18 },
+    { box: 'b2', num: 'n2', from: 'Threshold:', to: null, at: 23.18, next: 27.98 },
+    { box: 'b3', num: 'n3', from: 'Boundary:', to: null, at: 27.98 }
+  ];
+
+  function lines() { return T.all('#term .ap-line'); }
+  function find(L, text, after) {
+    for (var i = after || 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 行在 .clip 里的上下沿（px，按 1920 宽的舞台坐标）。
+  function span(L, i0, i1) {
+    var clip = document.querySelector('.clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { top: (L[i0].getBoundingClientRect().top - clip.top) / k, bottom: (L[i1].getBoundingClientRect().bottom - clip.top) / k };
+  }
+
+  function overlays(t) {
+    var L = lines();
+    // 横幅还在屏上：从第 0 行盖到「/model.」那一行。
+    var banner = find(L, 'is still your default');
+    var mask = T.$('mask');
+    if (banner >= 0) {
+      var m = span(L, 0, Math.min(banner + 1, L.length - 1));
+      mask.style.display = 'block';
+      mask.style.top = m.top + 'px';
+      mask.style.height = (m.bottom - m.top) + 'px';
+    } else {
+      mask.style.display = 'none';
+    }
+    QUESTIONS.forEach(function (q) {
+      var i0 = find(L, q.from);
+      var box = T.$(q.box), num = T.$(q.num);
+      if (i0 < 0) { box.style.opacity = 0; num.style.opacity = 0; return; }
+      box.style.opacity = 1;
+      var i1 = q.to ? find(L, q.to, i0) : i0 + 1;
+      if (i1 < 0) i1 = i0;
+      var s = span(L, i0, i1);
+      box.style.top = s.top + 'px';
+      box.style.height = (s.bottom - s.top) + 'px';
+      // 黄色只给当前这一个；下一个亮起后，这个降成淡奶白框（讲过了）。
+      var on = T.ease(T.p(t, q.at, 0.35));
+      var next = q.next === undefined ? 0 : T.ease(T.p(t, q.next, 0.35));
+      var g = on * (1 - next);
+      box.style.borderColor = next > 0 ? T.mix([245, 207, 74], [120, 118, 112], next) : 'rgba(245,207,74,' + g + ')';
+      box.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.45 * g) + '), inset 0 0 24px rgba(245,207,74,' + (0.25 * g) + ')';
+      // 编号贴在框左沿外（.window 坐标 = .clip 坐标 + 18）。
+      num.style.top = (s.top + 18 - 10) + 'px';
+      T.enter(num, T.p(t, q.at, 0.35), -14);
+    });
+  }
+
+  Stage({
+    duration: PLAY + HOLD,
+    init: function () {
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS['01-openspec-explore-ff'] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      return T.fonts('实录倍速');
+    },
+    render: function (t) {
+      T.enter(T.$('spd'), T.p(t, 0, 0.4), -12);
+      var castTime = Math.min(CAST_START + t * SPEED, CAST_END);
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位遮罩和框。
+      return Promise.resolve(player.seek(castTime))
+        .then(function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); })
+        .then(function () { overlays(t); });
+    }
+  });
+</script>
+</body>
+</html>

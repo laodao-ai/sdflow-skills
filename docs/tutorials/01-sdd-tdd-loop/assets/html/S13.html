@@ -1,0 +1,207 @@
+<!doctype html>
+<!-- S13 · 角色图 · script 52–54「还有一个好处。……当时为什么这么定。」
+     接 S11：开场停在 S11 的最后一刻（三条线、写好的代码、「照着文件对」选中），
+     先把那次的动作收掉，需求页和已点亮的「仓库文件」留着——文件留在仓库里。
+     然后：
+     1. 左上一条时间刻度，游标从「这次」推到「下次再改」，表示时间往后推一格。不写日期。
+     2. 需求页同时引出两条线：文件 → 人、文件 → Agent（和 S11 的「人 → 文件」方向相反，这次是读）。
+     3. 两条线的起点贴上「当时为什么这么定」，这句话就是两边读到的东西。
+     「运行环境」一直 unlit，首期不点亮。
+     黄色描边 + 外发光 = 当前讲到的元素，同一时刻只有一个：仓库文件 → 「当时为什么这么定」。
+     游标用奶白，不用黄：黄色只给「当前」和「猜」。刻度是实线：白色虚线在这套里是注意事项。 -->
+<html lang="zh-CN" data-frame-id="S13">
+<head>
+<meta charset="utf-8">
+<title>S13 · 留在仓库里</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 角色块与名字标签：照 S07。 */
+  .tile {
+    position: absolute; width: 290px; height: 270px; box-sizing: border-box;
+    border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+    box-shadow: 12px 12px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .tile svg { width: 120px; height: 120px; margin-top: -30px; }
+  .tile.unlit { color: var(--unlit); }
+  /* -18px keeps the role name above the subtitle band (y >= 940). */
+  .name {
+    position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+    padding: 8px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+    border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1;
+  }
+  .unlit .name { background: #b9b6ae; }
+
+  /* 需求页：照 S11 终态。 */
+  .sheet { left: 740px; top: 110px; width: 870px; height: 370px; padding: 0; }
+  .sheet .tab { font-size: 40px; }
+  .line { position: absolute; left: 40px; height: 80px; display: flex; align-items: flex-end; }
+  .line .k { width: 210px; padding-bottom: 12px; font-weight: 600; font-size: 34px; color: #57534d; white-space: nowrap; }
+  .slot { position: relative; width: 420px; height: 72px; border-bottom: 5px solid var(--ink); }
+  .slot b {
+    position: absolute; left: 6px; bottom: 6px; white-space: nowrap;
+    font-family: var(--display); font-weight: 800; font-size: 48px; line-height: 1; color: var(--ink);
+  }
+
+  .lines { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+  .result { left: 990px; top: 694px; }
+  .stamp { left: 760px; top: 566px; font-family: var(--display); font-weight: 800; font-size: 40px; }
+
+  /* 时间刻度：一条墨色实线，两个刻度，一个游标。 */
+  .rule { position: absolute; left: 120px; top: 327px; width: 540px; height: 6px; background: #161616; border-radius: 3px; }
+  .tick { position: absolute; top: 306px; width: 6px; height: 48px; background: #161616; border-radius: 3px; }
+  .when { font-family: var(--display); font-weight: 800; font-size: 40px; }
+  .cursor {
+    position: absolute; left: 0; top: 0; width: 48px; height: 48px; box-sizing: border-box; border-radius: 50%;
+    background: var(--cream); border: 5px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
+  }
+
+  /* 两边读到的那句话：墨底白字贴纸，压在需求页下沿、两条线的起点上。 */
+  .why {
+    position: absolute; left: 796px; top: 474px; padding: 10px 28px; border-radius: 8px; white-space: nowrap;
+    background: var(--ink); color: #fff; border: 5px solid var(--ink); box-shadow: 7px 7px 0 #0b0b0b;
+    font-family: var(--display); font-weight: 800; font-size: 50px; line-height: 1.15;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 需求页（压在仓库文件下面）。 -->
+  <div class="card sheet" id="sheet" data-r="-1" data-shadow="10">
+    <div class="tab ink">写下来的需求</div>
+    <div class="line" style="top:46px"><span class="k">告警位置</span><span class="slot"><b>单独一行</b></span></div>
+    <div class="line" style="top:144px"><span class="k">阈值</span><span class="slot"><b>写死 80</b></span></div>
+    <div class="line" style="top:242px"><span class="k">正好 80.0</span><span class="slot"><b>不报警</b></span></div>
+  </div>
+
+  <!-- 角色，照 S07；仓库文件已在 S11 点亮。 -->
+  <div class="tile" id="human" data-r="-1.5" style="left:110px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8">
+      <circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:-3deg">人</div>
+  </div>
+  <div class="tile" id="agent" data-r="1.5" style="left:1170px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round">
+      <polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/>
+      <polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:2deg">Agent</div>
+  </div>
+  <div class="tile" id="repo" data-r="2" style="left:1570px;top:150px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round">
+      <path d="M34 22 H78 L98 42 V102 H34 Z"/><path d="M78 22 V42 H98"/>
+      <path d="M22 34 V112 H84"/><line x1="48" y1="62" x2="84" y2="62"/><line x1="48" y1="80" x2="76" y2="80"/>
+    </svg>
+    <div class="name" style="--r:-2deg">仓库文件</div>
+  </div>
+  <div class="tile unlit" id="runtime" data-r="-1" style="left:1570px;top:640px">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="12" y="22" width="96" height="76" rx="12"/><path d="M32 48 L46 60 L32 72"/><line x1="56" y1="74" x2="82" y2="74"/>
+    </svg>
+    <div class="name" style="--r:1.5deg">运行环境</div>
+  </div>
+
+  <!-- S11 的最后一刻：写好的代码、对照标记。开场收掉。 -->
+  <div class="chip result s11" data-r="-2">写好的代码</div>
+
+  <!-- 时间刻度。 -->
+  <div class="rule" id="rule"></div>
+  <div class="tick" id="tick1" style="left:167px"></div>
+  <div class="tick" id="tick2" style="left:577px"></div>
+  <div class="chip when" id="w1" data-r="-2" style="left:96px;top:200px">这次</div>
+  <div class="chip when" id="w2" data-r="2" style="left:456px;top:196px">下次再改</div>
+  <div class="cursor" id="cursor"></div>
+
+  <svg class="lines" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs>
+      <marker id="hd" viewBox="0 0 12 10" refX="3" refY="5" markerWidth="4.8" markerHeight="4.2" orient="auto" markerUnits="strokeWidth">
+        <path d="M0 0 L12 5 L0 10 Z" fill="#f2efe6"/>
+      </marker>
+    </defs>
+    <!-- S11 的三条线（开场收掉）。 -->
+    <g class="s11">
+      <path d="M392 622 Q 470 330 712 304" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round" marker-end="url(#hd)"/>
+      <circle cx="392" cy="622" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+      <path d="M1262 500 Q 1272 560 1292 606" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round" marker-end="url(#hd)"/>
+      <circle cx="1262" cy="500" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+      <path d="M1092 686 Q 1070 600 1090 522" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round" marker-end="url(#hd)"/>
+      <circle cx="1092" cy="686" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    </g>
+    <!-- 需求页 → 人（读）。 -->
+    <g id="r1">
+      <path class="ln" d="M830 496 Q 520 500 410 612" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round" marker-end="url(#hd)"/>
+      <circle class="ring0" cx="830" cy="496" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    </g>
+    <!-- 需求页 → Agent（读）。 -->
+    <g id="r2">
+      <path class="ln" d="M1336 494 Q 1340 556 1316 608" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round" marker-end="url(#hd)"/>
+      <circle class="ring0" cx="1336" cy="494" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    </g>
+  </svg>
+
+  <div class="chip stamp s11" id="stamp" data-r="-3" data-shadow="7">照着文件对</div>
+  <div class="why" id="why" data-r="-1.5">当时为什么这么定</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  var s11 = T.all('.s11');
+
+  // 沿线画出：从尾部圆环画到箭头。
+  function draw(g, p) {
+    var e = T.ease(p);
+    var path = g.querySelector('.ln');
+    var len = path.getTotalLength();
+    path.style.strokeDasharray = len + ' ' + len;
+    path.style.strokeDashoffset = len * (1 - e);
+    path.setAttribute('marker-end', e > 0.97 ? 'url(#hd)' : 'none');
+    path.style.opacity = e > 0 ? 1 : 0;
+    g.querySelector('.ring0').style.opacity = Math.min(1, e * 4);
+  }
+  function sel(t, on, off) {
+    var g = T.ease(T.p(t, on, 0.35));
+    if (off !== undefined) g *= 1 - T.ease(T.p(t, off, 0.35));
+    return g;
+  }
+
+  Stage({
+    duration: 9.2,
+    init: function () { return T.fonts('人仓库文件运行环境写下来的需求单独一行写死不报警照着对这次下次再改当时为什么这么定'); },
+    render: function (t) {
+      T.tilt();
+
+      // 0. S11 那次的动作收掉，需求页留在仓库里。
+      var gone = 1 - T.ease(T.p(t, 0.0, 0.7));
+      s11.forEach(function (el) { el.style.opacity = gone; });
+
+      // 1. 时间刻度出现，游标在「这次」。
+      T.wipe(T.$('rule'), T.p(t, 0.7, 0.5));
+      T.$('tick1').style.opacity = T.ease(T.p(t, 0.8, 0.3));
+      T.enter(T.$('w1'), T.p(t, 0.9, 0.4), 14);
+      // 时刻按实测（2026-10-06，frame-times.py），画面内秒数；括号里是对应的口播。
+      // 0–1. 的时刻（收掉 S11、刻度出现）不挂具体口播，原样。
+      // 2. 时间往后推一格：游标滑到「下次再改」。游标 / 刻度 4.00（54 句开口「下次」）；标签 4.56（念到「再改」的「再」）。
+      var move = T.ease(T.p(t, 4.0, 0.9));
+      var cur = T.$('cursor');
+      cur.style.opacity = T.ease(T.p(t, 0.9, 0.3));
+      cur.style.transform = 'translate(' + (146 + 410 * move) + 'px,306px)';
+      T.$('tick2').style.opacity = T.ease(T.p(t, 4.0, 0.3));
+      T.enter(T.$('w2'), T.p(t, 4.56, 0.4), 14);
+
+      // 3. 人和 Agent 都从同一份文件读。5.84（念到「你和 AI」的「你」）、6.08（「AI」）。
+      draw(T.$('r1'), T.p(t, 5.84, 0.6));
+      draw(T.$('r2'), T.p(t, 6.08, 0.6));
+      // 4. 读到的是：当时为什么这么定。8.00（念到「当时为什么这么定」的「当」）。
+      T.enter(T.$('why'), T.p(t, 8.0, 0.45), 18);
+
+      // 当前：S11 的对照标记先淡出；之后仓库文件（53 句开口 1.36，到 4.00 为止）→ 「当时为什么这么定」。
+      T.current(T.$('stamp'), 1 - T.ease(T.p(t, 0.0, 0.5)), 7);
+      T.current(T.$('repo'), sel(t, 1.36, 4.0), 12);
+      T.current(T.$('why'), sel(t, 8.0), 7);
+    }
+  });
+</script>
+</body>
+</html>

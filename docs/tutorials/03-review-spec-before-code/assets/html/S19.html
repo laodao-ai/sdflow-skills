@@ -1,0 +1,172 @@
+<!doctype html>
+<!-- S19 · 角色图 · script 132–134「评审能把问题摆出来、给出推荐，可哪个为主，最后要做成什么样，预期在我这里。……要是每次都按推荐点，选错一个方案，后面的路就全变了。」
+     角色图：人、Agent、仓库文件、运行环境四个角色（图形照 visual-v4 §五，写法照第 2 期 S30）。人与 Agent 点亮，仓库文件里是那份报告，运行环境不点亮。
+     Agent 一侧：「把问题摆出来」「给推荐」「写清后果」；人一侧：「判主次」「定要做成什么样」，加黄框（「质疑前提」10-23 晚移到 S28d，原 S20d）。
+     第 134 句下方一条路分叉成两条，标「选不同的方案」。
+     句子与动画节点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒；句起点：132 句 0，133 句 7.60，134 句 14.56，全页 20.16）：
+       132 句 四个角色已在（运行环境未点亮）；Agent 为当前，三条依次出现；念到「可哪个为主」人点亮，人一侧两条依次出现并加黄框
+       133 句 Agent 为当前，写进仓库文件（那份报告）；念到「不是替我定」人再次为当前
+       134 句 下方一条路，念到「选错一个方案」时分叉，标「选不同的方案」
+     配色（2026-10-23）：角色图沿用奶白 / 墨底，不为角色上色；只给规格一侧的两处点蓝：「那份报告」浅蓝（评审报告），「选不同的方案」饱和蓝（方案是规格里拍板的东西，也是这页末句的重点）；分叉的两条路保持墨。黄只给「当前」。内容整体在 y 900 以内，避开底部字幕带。 -->
+<html lang="zh-CN" data-frame-id="S19">
+<head>
+<meta charset="utf-8">
+<title>S19 · 预期在人这里</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .tile {
+    position: absolute; top: 140px; width: 290px; height: 270px; box-sizing: border-box;
+    border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+    box-shadow: 12px 12px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .tile svg { width: 120px; height: 120px; margin-top: -30px; }
+  .name {
+    position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+    padding: 8px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+    border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1;
+  }
+  #human { left: 90px; } #agent { left: 560px; } #repo { left: 1030px; } #env { left: 1500px; }
+
+  /* 角色下方的注记：一列贴纸 */
+  .notes { position: absolute; top: 460px; width: 400px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .notes .chip { position: relative; font-size: 38px; }
+  #nh { left: 35px; } #na { left: 505px; } #nr { left: 975px; }
+
+  .arrow { position: absolute; width: 170px; height: 60px; }
+  #fork { left: 0; top: 0; width: 1920px; height: 1080px; }
+  #nr1 { background: var(--blue-soft); }
+  #fk { background: var(--blue); }
+  #fk { left: 1030px; top: 798px; font-family: var(--display); font-weight: 800; font-size: 36px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="tile" id="human" data-r="-1.5">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8">
+      <circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:-3deg">人</div>
+  </div>
+  <div class="tile" id="agent" data-r="1.5">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round">
+      <polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/>
+      <polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:2deg">Agent</div>
+  </div>
+  <div class="tile" id="repo" data-r="2">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round">
+      <path d="M34 22 H78 L98 42 V102 H34 Z"/><path d="M78 22 V42 H98"/>
+      <path d="M22 34 V112 H84"/><line x1="48" y1="62" x2="84" y2="62"/><line x1="48" y1="80" x2="76" y2="80"/>
+    </svg>
+    <div class="name" style="--r:-2deg">仓库文件</div>
+  </div>
+  <div class="tile" id="env" data-r="-2">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="14" y="24" width="92" height="72" rx="10"/>
+      <path d="M32 50 L48 60 L32 70"/><line x1="56" y1="76" x2="82" y2="76"/>
+    </svg>
+    <div class="name" style="--r:3deg">运行环境</div>
+  </div>
+
+  <!-- Agent -> 仓库文件：写下来（主箭头：奶白，尾部圆环） -->
+  <svg class="arrow" id="aw" viewBox="0 0 170 60" style="left:860px;top:230px">
+    <path d="M26 36 Q 85 20 138 32" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="18" cy="36" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    <polygon points="128,12 168,33 130,54" fill="#f2efe6"/>
+  </svg>
+
+  <div class="notes" id="nh">
+    <div class="chip" id="nh1" data-r="-2">判主次</div>
+    <div class="chip" id="nh2" data-r="2">定要做成什么样</div>
+  </div>
+  <div class="notes" id="na">
+    <div class="chip" id="na1" data-r="2">把问题摆出来</div>
+    <div class="chip" id="na2" data-r="-2">给推荐</div>
+    <div class="chip" id="na3" data-r="2">写清后果</div>
+  </div>
+  <div class="notes" id="nr">
+    <div class="chip" id="nr1" data-r="-2">那份报告</div>
+  </div>
+
+  <!-- 一条路分叉成两条 -->
+  <svg class="abs" id="fork" viewBox="0 0 1920 1080" aria-hidden="true">
+    <circle id="f0" cx="210" cy="830" r="12" fill="#161616" opacity="0"/>
+    <path id="ft" pathLength="1" d="M210 830 H700" fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="8" stroke-linecap="round"/>
+    <path id="fu" pathLength="1" d="M700 830 C 820 830, 860 780, 980 780 H 1500" fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="8" stroke-linecap="round"/>
+    <path id="fd" pathLength="1" d="M700 830 C 820 830, 860 880, 980 880 H 1500" fill="none" stroke="#161616" stroke-opacity=".75" stroke-width="8" stroke-linecap="round"/>
+    <polygon id="hu" points="1496,762 1530,780 1496,798" fill="#161616" opacity="0"/>
+    <polygon id="hd" points="1496,862 1530,880 1496,898" fill="#161616" opacity="0"/>
+  </svg>
+  <div class="chip" id="fk">选不同的方案</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），取词首字实测开始时间减 0.2 秒。
+  var CUE = {
+    roles: [0.0, 0.35, 0.7, 1.05],            // 开头四个角色依次进场
+    na: [0.92, 1.72, 2.4],                     // 132 句「摆出来」「给出推荐」，Agent 为当前
+    human: 2.76, nh: [3.24, 3.72], humanEnd: 7.4,      // 132 句「可哪个为主」：人点亮，两条注记
+    agentOn: 7.7, aw: 11.48, nr: 11.9,         // 133 句「找出来、写下来」
+    decide: 12.36, decideEnd: 14.36,            // 133 句「不是替我定」：人再次为当前
+    trunk: 14.76, fork: 16.28, fk: 16.84         // 134 句
+  };
+  var P = T.p, E = T.ease;
+
+  function gate(t, from, to) { return E(P(t, from, 0.4)) * (1 - E(P(t, to, 0.4))); }
+  // 一组注记的黄框：只描边加光晕，不带硬投影（外框没有底色）。
+  function ring(el, g) {
+    el.style.outline = '7px solid rgba(245,207,74,' + g + ')';
+    el.style.outlineOffset = '12px';
+    el.style.borderRadius = '14px';
+    el.style.boxShadow = '0 0 50px rgba(245,207,74,' + (0.4 * g) + ')';
+  }
+  function wire(id, t, at, len) { var el = T.$(id); el.setAttribute('stroke-dasharray', 1); el.setAttribute('stroke-dashoffset', 1 - E(P(t, at, len || 0.5))); }
+
+  Stage({
+    duration: 20.16,
+    init: function () { return T.fonts('人仓库文件运行环境把问题摆出来给推荐写清后果判主次定要做成什么样那份报告选不同的方案'); },
+    render: function (t) {
+      T.enter(T.$('human'), P(t, CUE.roles[0], 0.6), 30);
+      T.enter(T.$('agent'), P(t, CUE.roles[1], 0.6), 30);
+      T.enter(T.$('repo'), P(t, CUE.roles[2], 0.6), 30);
+      T.enter(T.$('env'), P(t, CUE.roles[3], 0.6), 30);
+
+      // 点亮：人（念到「可哪个为主」亮）、Agent、仓库文件（写进去时亮）；运行环境一直不亮
+      var lit = function (id, at, base) { var el = T.$(id); el.style.opacity = parseFloat(el.style.opacity) * (base + (1 - base) * E(P(t, at, 0.4))); };
+      lit('human', CUE.human, 0.3);
+      lit('repo', CUE.aw, 0.3);
+      T.$('env').style.opacity = 0.3 * parseFloat(T.$('env').style.opacity);
+
+      // Agent 一侧：三条
+      T.enter(T.$('na1'), P(t, CUE.na[0], 0.4), 12);
+      T.enter(T.$('na2'), P(t, CUE.na[1], 0.4), 12);
+      T.enter(T.$('na3'), P(t, CUE.na[2], 0.4), 12);
+      // 人一侧：两条，整组加黄框
+      T.enter(T.$('nh1'), P(t, CUE.nh[0], 0.4), 12);
+      T.enter(T.$('nh2'), P(t, CUE.nh[1], 0.4), 12);
+      ring(T.$('nh'), Math.max(gate(t, CUE.nh[1] + 0.3, CUE.humanEnd), gate(t, CUE.decide, CUE.decideEnd)));
+
+      // 当前：Agent（摆问题、给推荐）-> 人（判主次）-> Agent（写下来）-> 人（不是替我定）
+      T.current(T.$('agent'), Math.max(gate(t, CUE.na[0], CUE.human), gate(t, CUE.agentOn, CUE.decide)), 12);
+      T.current(T.$('human'), Math.max(gate(t, CUE.human, CUE.agentOn), gate(t, CUE.decide, CUE.decideEnd)), 12);
+
+      // 133 句：写进仓库文件（那份报告）
+      T.wipe(T.$('aw'), P(t, CUE.aw, 0.7));
+      T.enter(T.$('nr1'), P(t, CUE.nr, 0.4), 12);
+
+      // 134 句：一条路 -> 分叉
+      T.$('f0').setAttribute('opacity', E(P(t, CUE.trunk, 0.3)));
+      wire('ft', t, CUE.trunk, 1.2);
+      wire('fu', t, CUE.fork, 0.8); wire('fd', t, CUE.fork, 0.8);
+      T.$('hu').setAttribute('opacity', E(P(t, CUE.fork + 0.7, 0.3)));
+      T.$('hd').setAttribute('opacity', E(P(t, CUE.fork + 0.7, 0.3)));
+      T.enter(T.$('fk'), P(t, CUE.fk, 0.4), 12);
+    }
+  });
+</script>
+</body>
+</html>

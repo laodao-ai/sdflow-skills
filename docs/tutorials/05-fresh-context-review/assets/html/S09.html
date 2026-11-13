@@ -1,0 +1,291 @@
+<!doctype html>
+<!-- S09 · 第 10 轮（2026-11-08），口播 37–43。
+     三层清单按口播从通用、后端到 Go 出现，层卡与条目一起长出；本例「共享状态并发」单独突出。完整条目和 12／3／6 条数保留为次要资料。其他技术栈在解释按栈选择时再出现。两个领域视角的示意与示例项目实际只有 backend·go 的截图分开，截图关键行保留放大卡和黄色引线。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S09">
+<head>
+<meta charset="utf-8">
+<title>S09 · 领域清单分三层</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #pick {left:610px;top:40px;padding:12px 24px;font-size:32px}
+  #hd { left: 60px; top: 40px; font-family: var(--display); font-weight: 800; font-size: 42px; background: var(--blue); }
+
+  /* ===== 清单塔（S10 同一份） ===== */
+  .tower { position: absolute; left: 60px; top: 146px; width: 1100px; display: flex; flex-direction: column; gap: 10px; }
+  .lrow { display: flex; gap: 14px; align-items: stretch; }
+  .lyr { position: relative; width: 656px; box-sizing: border-box; padding: 8px 18px; display: flex; align-items: center; gap: 16px;
+         background: var(--blue-soft); color: var(--ink); border: 5px solid var(--ink); border-radius: 10px; box-shadow: 8px 8px 0 var(--ink); }
+  #lBase { width: 1100px; }
+  .lyr .nm { flex: none; width: 150px; font-family: var(--display); font-weight: 800; font-size: 46px; line-height: 1.05; white-space: nowrap; }
+  .lyr .nm small { display: block; margin-top: 2px; font-family: var(--body); font-weight: 600; font-size: 28px; }
+  .lyr .its { flex: 1; display: flex; flex-wrap: wrap; gap: 10px 10px; }
+  /* 其他领域：只有名字和条数，浅一档，不展开条目（同层右侧并排） */
+  .side { flex: none; width: 430px; display: flex; gap: 10px; align-items: stretch; }
+  .sb { flex: 1; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+        background: color-mix(in srgb, var(--blue-soft) 55%, var(--cream)); color: rgba(22,22,22,.72); border: 3px solid rgba(22,22,22,.5); border-radius: 8px; white-space: nowrap; }
+  /* 嵌入式跨在 ESP32、ML307C 两格下面：顶层三格各宽 (430-20)/3，两格加一道 gap。 */
+  .sb.wide { flex: none; width: calc((430px - 20px) * 2 / 3 + 10px); }
+  .sb b { font-family: var(--display); font-weight: 800; font-size: 28px; line-height: 1.1; }
+  .sb small { font-weight: 600; font-size: 26px; line-height: 1.1; }
+  .it { display: inline-block; padding: 4px 14px; background: var(--cream); border: 3px solid var(--ink); border-radius: 7px;
+        font-weight: 600; font-size: 28px; line-height: 1.25; white-space: nowrap; color: var(--ink); }
+
+  /* ===== 第 5 句：一个改动 → 两个领域视角 → 两列塔（示意） ===== */
+  #chg { left: 1290px; top: 70px; width: 470px; height: 96px; padding: 0 22px; display: flex; align-items: center; gap: 16px; font-size: 34px; font-weight: 600; }
+  #chg .tab { background: var(--amber); font-size: 34px; padding: 2px 18px; top: -36px; }
+  #chg .chip { position: static; font-size: 32px; padding: 4px 18px; box-shadow: 5px 5px 0 var(--ink); }
+  #eg { left: 1560px; top: 10px; font-size: 26px; padding: 2px 14px; border-width: 3px; }
+  .tile { position: absolute; box-sizing: border-box; width: 150px; height: 104px; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 10px 10px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 56px; height: 56px; margin-top: -24px; }
+  .tile .name { position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%) rotate(var(--r, -2deg));
+          padding: 3px 14px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 28px; line-height: 1.1; }
+  #gA { left: 1250px; top: 230px; } #gB { left: 1580px; top: 230px; }
+  .mb { position: absolute; width: 230px; height: 56px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+        background: var(--blue-soft); color: var(--ink); border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+        font-family: var(--display); font-weight: 800; font-size: 32px; white-space: nowrap; }
+  #mGo { left: 1210px; top: 380px; } #mBe { left: 1210px; top: 444px; } #mBa1 { left: 1210px; top: 508px; }
+  #mFe { left: 1540px; top: 444px; } #mBa2 { left: 1540px; top: 508px; }
+  .cap { position: absolute; top: 580px; width: 230px; text-align: center; font-size: 28px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+  #capA { left: 1210px; } #capB { left: 1540px; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+
+  /* ===== 实录卡（示例项目），塔下方左侧。报告截图按 1920x1080 的 CSS 坐标算，裁 x 312 起、y 70–202，缩 1.15 ===== */
+  #rc { left: 60px; top: 748px; width: 1095px; height: 164px; overflow: visible; background: #fff; }
+  #rc .tab { left: -12px; top: -50px; font-size: 32px; padding: 4px 20px; }
+  .clip { position: absolute; left: 0; top: 0; width: 1083px; height: 152px; overflow: hidden; border-radius: 8px; }
+  #shot { position: absolute; left: -358.8px; top: -80.5px; width: 2208px; height: 1242px; }
+  .hl { position: absolute; box-sizing: border-box; border: 4px solid rgba(245,207,74,0); border-radius: 6px; opacity: 0; }
+  #one { left: 1210px; top: 860px; font-size: 30px; }
+  /* 压暗层（4.7）：两处黄框同时亮，用 evenodd 挖两个洞（路径在 layoutBoxes 里按黄框位置写）；黄框淡出过程中洞里由 .dh 补暗，淡完不挖洞 */
+  #dim { position: absolute; left: 0; top: 0; width: 1083px; height: 152px; background: #161616; opacity: 0; }
+  .dh { position: absolute; border-radius: 6px; }
+
+  /* 放大卡（4.7）：右侧和下方没有空处（#tk、#one、塔、字幕带），卡放在实录卡里已压暗的行上（标题行、「命中 TG」行），不压两处黄框。
+     奶白底、不加色边，同 S17；z-index 高于引线层（7） */
+  .zc { position: absolute; box-sizing: border-box; padding: 4px 16px; background: var(--cream); color: var(--ink);
+        border: 4px solid var(--ink); border-radius: 8px; box-shadow: 5px 5px 0 var(--ink); opacity: 0; z-index: 8;
+        font-family: var(--mono); font-weight: 600; font-size: 28px; line-height: 1.3; white-space: nowrap; }
+  .zc b { font-weight: 800; text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 5px; }
+  #z1 { left: 380px; top: 762px; }   /* 标题「命中范围」右边，「栈」黄框右上 */
+  #z2 { left: 676px; top: 790px; }   /* 「命中 TG」行上，「清单」黄框右边 */
+
+  /* ===== 第 6–7 句小卡，右下 ===== */
+  #tk { left: 1210px; top: 670px; width: 590px; padding: 16px 26px; }
+  #tk .l { font-size: 32px; font-weight: 600; line-height: 1.45; white-space: nowrap; }
+  #tk2 { height: 0; overflow: hidden; }   /* 第 7 句才长出来，之前卡只有一行高，不留空行 */
+#tw .its{opacity:.8}#iSh{font-weight:800}#tk .l{font-size:29px}#one{top:840px!important}</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="pick" data-r="0.5">代码技术栈 → 选择所需清单</div>
+  <div class="chip" id="hd" data-r="-1.5">领域视角的清单 · 三层</div>
+
+  <!-- 清单塔 -->
+  <div class="tower" id="tw">
+    <div class="lrow"><div class="lyr" id="lGo" data-r="0"><span class="nm">Go<small>6 条</small></span><div class="its">
+      <span class="it">错误包装</span><span class="it">Context 传播</span><span class="it">Goroutine 生命周期</span><span class="it">defer</span><span class="it">类型断言</span><span class="it" id="iSh">共享状态并发</span>
+    </div></div>
+      <div class="side" id="sGo" data-r="0"><div class="sb"><b>React</b><small>7 条</small></div><div class="sb"><b>ESP32</b><small>8 条</small></div><div class="sb"><b>ML307C</b><small>7 条</small></div></div>
+    </div>
+    <div class="lrow"><div class="lyr" id="lBe" data-r="0"><span class="nm">后端<small>3 条</small></span><div class="its">
+      <span class="it">数据库操作</span><span class="it">HTTP Handler</span><span class="it">数据库竞态</span>
+    </div></div>
+      <div class="side" id="sBe" data-r="0"><div class="sb"><b>前端</b><small>8 条</small></div><div class="sb wide"><b>嵌入式</b><small>6 条</small></div></div>
+    </div>
+    <div class="lyr" id="lBase" data-r="0"><span class="nm">通用<small>12 条</small></span><div class="its">
+      <span class="it">错误处理</span><span class="it">错误路径</span><span class="it">空值</span><span class="it">资源清理</span><span class="it">并发与互斥</span><span class="it">整数与类型转换</span><span class="it">日志</span><span class="it">魔法数字</span><span class="it">测试质量</span><span class="it">命令注入</span><span class="it">枚举完备</span><span class="it">测试被削弱</span>
+    </div></div>
+  </div>
+
+  <!-- 第 5 句：示意 -->
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-opacity=".8" stroke-width="6" stroke-linecap="round">
+      <path class="w" d="M1430 172 C 1400 195, 1340 208, 1325 222"/>
+      <path class="w" d="M1600 172 C 1630 195, 1650 208, 1655 222"/>
+    </g>
+  </svg>
+  <div class="tag" id="eg" data-r="-3">例：开头那次</div>
+  <div class="card" id="chg" data-r="1"><div class="tab" data-r="-2">一个改动</div>碰到<span class="chip" data-r="-2">Go</span><span class="chip" data-r="2">前端</span></div>
+  <div class="tile" id="gA" data-r="-1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">领域视角</div></div>
+  <div class="tile" id="gB" data-r="1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:-2deg">领域视角</div></div>
+  <div class="mb" id="mGo" data-r="0">Go</div>
+  <div class="mb" id="mBe" data-r="0">后端</div>
+  <div class="mb" id="mBa1" data-r="0">通用</div>
+  <div class="mb" id="mFe" data-r="0">前端</div>
+  <div class="mb" id="mBa2" data-r="0">通用</div>
+  <div class="cap" id="capA">通用 + 后端 + Go</div>
+  <div class="cap" id="capB">通用 + 前端</div>
+
+  <!-- 实录卡（示例项目）：网页版评审报告截图的裁切 -->
+  <svg class="abs" id="leads" viewBox="0 0 1920 1080" aria-hidden="true" style="left:0;top:0;width:1920px;height:1080px;z-index:7;pointer-events:none"></svg>
+  <div class="window" id="rc">
+    <div class="clip">
+      <img id="shot" src="img/report-scope.png" alt="">
+      <div id="dim"></div><div class="dh" id="dh1"></div><div class="dh" id="dh2"></div>
+      <div class="hl" id="hb1"></div><div class="hl" id="hb2"></div>
+    </div>
+    <div class="tab ink">实录 · 示例项目</div>
+  </div>
+  <div class="zc" id="z1">栈：<b>backend·go</b></div>
+  <div class="zc" id="z2"><div>清单：base <b>CR-01~CR-12</b> 全集</div><div>+ <b>CR-BE-01~03</b> + <b>CR-GO-01~06</b></div></div>
+  <div class="tag" id="one" data-r="3">这次只有一个领域视角</div>
+
+  <!-- 第 6–7 句 -->
+  <div class="card" id="tk" data-r="1">
+    <div class="l" id="tk1">每个 ticket 的双轴审也用这套清单</div>
+    <div class="l" id="tk2">整体评审还要连起调用路径</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算；录音后按实测对齐）。
+  var AT = {
+    "hd": 0.099,
+    "lyr": 0.397,
+    "base": 4.8,
+    "baseIt": 4.8,
+    "be": 10.24,
+    "go": 13.534,
+    "focus": 16.725,
+    "chg": 22.726,
+    "ag": 23.634,
+    "col": 24.541,
+    "rc": 29.755,
+    "hb": 30.194,
+    "one": 30.633,
+    "zc": 30.633,
+    "tk1": 35.638,
+    "tk2": 38.399,
+    "end": 44.96
+};
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+  }
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.3)) * (1 - T.ease(T.p(t, b - 0.3, 0.3))); }
+  function cur(el, g, size) {
+    T.current(el, g, size || 0.001);
+    if (g === 0) { el.style.outline = 'none'; el.style.boxShadow = size ? size + 'px ' + size + 'px 0 #161616' : 'none'; }
+  }
+  // 报告截图：坐标按截图的 CSS 像素（1920x1080 视口，滚到「命中范围」h3 在 y 80）。裁切 x 312 起、y 70 起，缩 1.15。
+  // 黄框 = 截图坐标 x1, y1, x2, y2（用 getBoundingClientRect 量的文字范围）。
+  var X0 = 312, Y0 = 70, SC = 1.15;
+  var HB = [['hb1', [360, 124, 554, 142]], ['hb2', [360, 178, 827, 196]]];   // 列表第 1 行「栈：backend·go（TG-01）」、第 3 行「清单：…」
+  // 等截图解码完再置 __ready，避免截到空白的实录卡
+  function imgReady() {
+    var img = T.$('shot');
+    if (img.decode) return img.decode().catch(function () {});
+    return new Promise(function (resolve) {
+      if (img.complete) { resolve(); return; }
+      img.addEventListener('load', resolve, { once: true });
+      img.addEventListener('error', resolve, { once: true });
+    });
+  }
+  // 放大卡：hb1 → z1，hb2 → z2
+  var ZC = [['hb1', 'z1', 'dh1'], ['hb2', 'z2', 'dh2']];
+  var GEO = [];
+  // 压暗层两种形状：黄框亮着时挖两个洞；黄框淡完后整块不挖洞。
+  // 网页截图是白底，洞边的抗锯齿缝在白底上看得见，所以淡完不再靠 .dh 补洞。
+  var DIM_FULL = 'path(evenodd, "M0 0 H1083 V152 H0 Z")', DIM_HOLED = DIM_FULL;
+  function layoutBoxes() {
+    var holes = '';
+    HB.forEach(function (h) {
+      var b = T.$(h[0]), r = h[1], pad = 3;
+      var x = (r[0] - X0) * SC - pad, y = (r[1] - Y0) * SC - pad, w = (r[2] - r[0]) * SC + 2 * pad, hh = (r[3] - r[1]) * SC + 2 * pad;
+      b.style.left = x + 'px'; b.style.top = y + 'px'; b.style.width = w + 'px'; b.style.height = hh + 'px';
+      holes += ' M' + x + ' ' + y + ' H' + (x + w) + ' V' + (y + hh) + ' H' + x + ' Z';
+    });
+    // 压暗层挖两个洞（两处黄框同时亮）；洞里的补暗块和黄框同位
+    DIM_HOLED = 'path(evenodd, "M0 0 H1083 V152 H0 Z' + holes + '")';
+    ZC.forEach(function (c, i) {
+      var b = T.$(c[0]), d = T.$(c[2]);
+      d.style.left = b.style.left; d.style.top = b.style.top; d.style.width = b.style.width; d.style.height = b.style.height;
+      // 放大卡从黄框那一处长出：起点 = 黄框中心；引线在卡没有位移和缩放时量（同 S17）
+      var z = T.$(c[1]); z.style.transform = 'none';
+      var box = T.rect(b), card = T.rect(z);
+      GEO[i] = { dx: (box.x + box.w / 2) - (card.x + card.w / 2), dy: (box.y + box.h / 2) - (card.y + card.h / 2), lead: T.lead(box, card) };
+    });
+  }
+  function items(sel, start, gap, t) {
+    T.all(sel).forEach(function (el, i) { var p = T.ease(T.p(t, start + i * gap, 0.3)); el.style.opacity = p; el.style.transform = 'translateY(' + ((1 - p) * 8) + 'px)'; });
+  }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: AT.end,
+    init: function () { return Promise.all([imgReady(), T.fonts(T.$('stage').textContent)]).then(layoutBoxes); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句：标题、三层由下往上
+      T.enter(T.$('hd'), P(t, AT.hd, 0.45), -12);
+      T.enter(T.$('pick'), P(t, 1, 0.45), 12);
+      ['lBase', 'lBe', 'lGo'].forEach(function (id, i) { T.enter(T.$(id), P(t, [AT.base,AT.be,AT.go][i], 0.5), 16); });
+      // 其他领域的块跟各自那一层一起落下（中层 = 第 2 个，顶层 = 第 3 个）
+      T.enter(T.$('sBe'), P(t, AT.chg, 0.5), 16);
+      T.enter(T.$('sGo'), P(t, AT.chg, 0.5), 16);
+
+      // 第 2–4 句：逐层当前、条目出现
+      cur(T.$('lBase'), on(t, AT.base, AT.be), 8);
+      cur(T.$('lBe'), on(t, AT.be, AT.go), 8);
+      cur(T.$('lGo'), on(t, AT.go, AT.chg), 8);
+      items('#lBase .it', AT.base, 0.03, t);
+      items('#lBe .it', AT.be, 0.03, t);
+      items('#lGo .it', AT.go, 0.03, t);
+      T.$('iSh').style.background=t>=AT.focus?'var(--ink)':''; T.$('iSh').style.color=t>=AT.focus?'var(--cream)':'';
+
+      // 第 5 句：改动 → 两个领域视角 → 两列塔
+      T.enter(T.$('chg'), P(t, AT.chg, 0.45), 14);
+      T.enter(T.$('eg'), P(t, AT.chg + 0.4, 0.4), -8);
+      T.all('.w').forEach(function (w, i) { wire(w, E(P(t, AT.ag - 0.3 + i * 0.15, 0.5))); });
+      T.enter(T.$('gA'), P(t, AT.ag, 0.45), 12);
+      T.enter(T.$('gB'), P(t, AT.ag + 0.3, 0.45), 12);
+      ['mBa1', 'mBe', 'mGo'].forEach(function (id, i) { T.enter(T.$(id), P(t, AT.col + i * 0.2, 0.4), 12); });
+      ['mBa2', 'mFe'].forEach(function (id, i) { T.enter(T.$(id), P(t, AT.col + 0.3 + i * 0.2, 0.4), 12); });
+      T.$('capA').style.opacity = E(P(t, AT.col + 0.8, 0.4));
+      T.$('capB').style.opacity = E(P(t, AT.col + 0.9, 0.4));
+      cur(T.$('chg'), on(t, AT.chg + 0.2, AT.rc), 10);
+
+      // 第 5 句末：实录卡，两行黄框一起亮，到第 6 句开始前淡出
+      T.enter(T.$('rc'), P(t, AT.rc, 0.5), 14);
+      T.enter(T.$('one'), P(t, AT.one, 0.4), -8);
+      var hg = on(t, AT.hb, AT.tk1);
+      HB.forEach(function (h) {
+        var b = T.$(h[0]);
+        b.style.opacity = hg > 0.001 ? 1 : 0;
+        b.style.borderColor = 'rgba(245,207,74,' + hg + ')';
+        b.style.boxShadow = '0 0 24px rgba(245,207,74,' + (0.6 * hg) + ')';
+      });
+      // 放大卡与引线：黄框后 0.4 秒从黄框处长出，留到页末（黄框淡出后卡和引线留着）
+      // 压暗：卡出来起一直压暗约 0.35，黄框保持亮
+      var dk = E(P(t, AT.zc + 0.4, 0.6));
+      T.$('dim').style.opacity = 0.35 * dk;
+      var lit = hg > 0.001;
+      T.$('dim').style.clipPath = lit ? DIM_HOLED : DIM_FULL;
+      ZC.forEach(function (c, i) {
+        var k = E(P(t, AT.zc, 0.6)), z = T.$(c[1]), g = GEO[i];
+        z.style.opacity = k;
+        z.style.transform = 'translate(' + ((1 - k) * g.dx) + 'px,' + ((1 - k) * g.dy) + 'px) scale(' + (0.3 + 0.7 * k) + ')';
+        T.leadDraw(g.lead, k);
+        // 黄框淡出过程中，洞里跟着压暗；淡完由整块压暗层接手
+        T.$(c[2]).style.background = lit ? 'rgba(22,22,22,' + (0.35 * dk * (1 - hg)) + ')' : 'transparent';
+      });
+
+      // 第 6–7 句
+      T.enter(T.$('tk'), P(t, AT.tk1, 0.45), 14);
+      var k2 = E(P(t, AT.tk2, 0.4));
+      T.$('tk2').style.height = (46 * k2) + 'px';
+      T.$('tk2').style.opacity = k2;
+      cur(T.$('tk'), on(t, AT.tk1 + 0.2, 999), 10);
+    }
+  });
+</script>
+</body>
+</html>

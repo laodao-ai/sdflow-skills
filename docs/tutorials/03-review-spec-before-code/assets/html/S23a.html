@@ -1,0 +1,165 @@
+<!doctype html>
+<!-- S23a · 标题卡（论文卡）· script 161–168「那为什么还要请另一个模型来审呢？……所以我请另一个模型，不是因为它更准，是因为它看到的不一样。」
+     第 6 章第 3 页。两篇论文都是引用，不是项目记录，不标「实录」「示意」。
+     第一篇（2026-10-24 核对摘要）：Shefa、Salado、Wach，《Two Truths and A Lie? Benchmarking Off-the-Shelf LLMs for Requirements Quality Assessment》，arXiv 2609.03230，2026-09；
+       10 个模型（OpenAI 与 Anthropic）评审需求文档，100 次独立运行；Anthropic 最好的模型，专家找出的问题，中位数 47%；调 temperature 变化不大，论文判断是模型固有的短板，不是随机。
+     第二篇：Tae-Eun Song，《When Does a Second Model Help?》（全名 When Does a Second Model Help? Cross-Model Review in LLM Verification），arXiv 2610.01471，2026-10（2026-10-23 核对摘要）；
+       另一个模型找到的错误与同一模型换个会话找到的只有一部分重合（Jaccard 41.2%，画面只写「只有一部分重合」）。
+     限定：两篇都是预印本，角上标「两篇都是预印本」，第二篇出现时进场。
+     - 第 161 句：问题贴纸「为什么还要另一个模型？」先在屏幕正中放大，停约 1 秒，再约 0.6 秒缩小移到左上（visual-v4 4.8）。
+     - 第 162 句：左上论文卡 1（题目、作者、arXiv、日期），念到「10 个模型」时下一行「10 个模型 · OpenAI 与 Anthropic · 需求文档评审 · 100 次独立运行」。
+     - 第 163 句：右上大字「47%」，下附「只查到专家找出问题的 47%（中位数）」。
+     - 第 164 句：左中一行「调 temperature 变化不大 → 模型固有的短板，不是随机」，两段随口播出现，165 句留着。
+     - 第 166 句（「10 月另一篇论文也测过。」）：左下论文卡 2 与角上限定「两篇都是预印本」出现。
+     - 第 167 句：右下两个圆部分重叠，标「只有一部分重合」（原一句 10-25 拆成第 166、167 两句）。另一个模型用紫（圆、末句卡）。
+     - 第 168 句：底部大字「不是更准，是看到的不一样」（一页一层：前面的内容都留着）。
+     句子起点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒）：161 句 0，162 句 3.44，163 句 12.56，164 句 18.48，165 句 24.32，166 句 28.40，167 句 32.40，168 句 39.44，念完 44.08；页时长 45.28。
+     内容整体在 y 870 以内（末句黄框连外发光不过 920），避开底部字幕带。
+     配色：紫 = 另一个模型（圆 A 浅紫、末句卡紫区底配奶白字）；其余奶白 / 墨；黄只给「当前」。 -->
+<html lang="zh-CN" data-frame-id="S23a">
+<head>
+<meta charset="utf-8">
+<title>S23a · 另一个模型：看到的不一样</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #fin { background: var(--violet-fill); color: var(--cream); }
+  #q { left: 70px; top: 24px; font-size: 42px; }
+  #lim { right: 64px; top: 50px; }
+
+  /* 论文卡 1（左上） */
+  #p1 { left: 70px; top: 170px; width: 1110px; height: 286px; padding: 0; }
+  #p2 { left: 70px; top: 626px; width: 1110px; height: 132px; padding: 0; }
+  .paper .tab { font-size: 36px; }
+  .pen { position: absolute; left: 34px; width: 1050px; font-family: var(--display); font-weight: 800; color: var(--ink); line-height: 1.15; }
+  .pmeta { position: absolute; left: 34px; font-weight: 600; font-size: 36px; color: var(--ink); white-space: nowrap; }
+  .pmeta .m { font-family: var(--mono); font-weight: 600; font-size: 33px; }
+  #p1 .pen { top: 40px; font-size: 42px; }
+  #p1 .pmeta { top: 140px; }
+  #p1 .pscope { position: absolute; left: 34px; top: 196px; width: 1050px; font-weight: 600; font-size: 34px; line-height: 1.3; color: var(--ink); }
+  #p2 .pen { top: 20px; font-size: 44px; }
+  #p2 .pmeta { top: 78px; }
+
+  /* 47% */
+  #big { left: 1260px; top: 170px; width: 590px; height: 286px; padding: 0 30px; display: flex; flex-direction: column; justify-content: center; }
+  #big .n { font-family: var(--display); font-weight: 900; font-size: 140px; line-height: 1; }
+  #big .nt { font-weight: 600; font-size: 34px; line-height: 1.3; margin-top: 4px; }
+
+  /* temperature 那一行 */
+  #cmp { left: 70px; top: 482px; width: 1110px; height: 80px; padding: 0 30px; display: flex; align-items: center; font-family: var(--display); font-weight: 800; font-size: 40px; white-space: nowrap; }
+  #cmp .rt { opacity: 0; }
+
+  /* 圆 */
+  #venn { left: 0; top: 0; width: 1920px; height: 1080px; }
+  .vl { position: absolute; width: 230px; text-align: center; font-weight: 600; font-size: 34px; line-height: 1.25; color: var(--ink); }
+  #la { left: 1236px; top: 613px; width: 140px; text-align: right; } #lb { left: 1716px; top: 613px; width: 140px; text-align: left; }
+  #ov { left: 1400px; top: 472px; font-size: 36px; }
+
+  #fin { left: 70px; top: 790px; width: 1780px; height: 80px; padding: 0 40px; display: flex; align-items: center; justify-content: center; }
+  #fin .big { font-size: 62px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="q" data-r="-3.5">为什么还要另一个模型？</div>
+  <div class="tag" id="lim" data-r="3.5">两篇都是预印本</div>
+
+  <div class="card paper" id="p1" data-r="-0.5">
+    <div class="tab ink" data-r="-2">论文 1</div>
+    <div class="pen">Two Truths and A Lie? Benchmarking Off-the-Shelf LLMs for Requirements Quality Assessment</div>
+    <div class="pmeta">Shefa、Salado、Wach<span class="m"> · arXiv 2609.03230 · 2026-09</span></div>
+    <div class="pscope" id="p1s">10 个模型 · OpenAI 与 Anthropic · 需求文档评审 · 100 次独立运行</div>
+  </div>
+
+  <div class="card" id="big" data-r="0.8">
+    <div class="n">47%</div>
+    <div class="nt" id="bn">只查到专家找出问题的<br>47%（中位数）</div>
+  </div>
+
+  <div class="card" id="cmp" data-r="-0.5"><span>调 temperature 变化不大</span><span class="rt" id="rt">&nbsp;→&nbsp;模型固有的短板，不是随机</span></div>
+
+  <div class="card paper" id="p2" data-r="0.5">
+    <div class="tab ink" data-r="-2">论文 2</div>
+    <div class="pen">When Does a Second Model Help?</div>
+    <div class="pmeta">Tae-Eun Song<span class="m"> · arXiv 2610.01471 · 2026-10</span></div>
+  </div>
+
+  <svg class="abs" id="venn" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><clipPath id="clA"><circle cx="1480" cy="655" r="90"/></clipPath></defs>
+    <g id="cA"><circle cx="1480" cy="655" r="90" fill="rgba(205,189,247,.9)" stroke="#161616" stroke-width="5"/></g>
+    <g id="cB"><circle cx="1610" cy="655" r="90" fill="rgba(242,239,230,.75)" stroke="#161616" stroke-width="5"/></g>
+    <g id="lens"><circle cx="1610" cy="655" r="90" fill="rgba(22,22,22,.3)" clip-path="url(#clA)"/></g>
+  </svg>
+  <div class="vl" id="la">另一个<br>模型</div>
+  <div class="vl" id="lb">同一模型<br>换个会话</div>
+  <div class="chip" id="ov" data-r="2">只有一部分重合</div>
+
+  <div class="card" id="fin" data-r="0.3"><div class="big">不是更准，是看到的不一样</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），取词首字实测开始时间减 0.2 秒。
+  var CUE = {
+    hold: 1.0, move: 0.6,                     // 161 句：问题贴纸居中停 1 秒，再 0.6 秒移到左上
+    p1: 3.24, scope: 7.64, p1End: 12.06,       // 162 句：论文卡 1，念到「10 个模型」出下一行
+    big: 14.68, bn: 15.0, big2: 16.44,         // 163 句：念到「专家找出的问题」「一半左右」时大字与说明
+    cmp: 18.28, rt: 20.44, cmpEnd: 27.9,       // 164 句：调 temperature 变化不大；论文的判断是…；165 句留着
+    p2: 28.2, lim: 28.6,                      // 166 句：第二张论文卡、「两篇都是预印本」
+    ca: 32.2, cb: 33.96, lens: 36.4, ov: 36.6, ovEnd: 38.94,   // 167 句：两个圆部分重叠，标「只有一部分重合」
+    fin: 41.08                                // 168 句：念到「不是因为它更准」时大字
+  };
+  var P = T.p, E = T.ease;
+
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function gate(t, from, to) { return E(P(t, from, 0.4)) * (1 - E(P(t, to, 0.4))); }
+
+  Stage({
+    duration: 45.28,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 161 句：问题贴纸，正中放大 -> 缩小移到左上
+      var q = T.$('q'), r = parseFloat(q.getAttribute('data-r'));
+      var w = q.offsetWidth, h = q.offsetHeight;
+      var fx = 70 + w / 2, fy = 24 + h / 2;
+      var a = E(P(t, 0, 0.4));
+      var m = E(P(t, CUE.hold, CUE.move));
+      q.style.opacity = a;
+      q.style.transform = 'translate(' + ((960 - fx) * (1 - m)) + 'px,' + ((460 - fy) * (1 - m)) + 'px) scale(' + lerp(1.7, 1, m) + ') rotate(' + (r * (1 + (1 - a))) + 'deg)';
+
+      // 162 句：论文卡 1
+      T.enter(T.$('p1'), P(t, CUE.p1, 0.45), 16);
+      T.$('p1s').style.opacity = E(P(t, CUE.scope, 0.4));
+      T.$('p1').style.height = (200 + 86 * E(P(t, CUE.scope, 0.4))) + 'px';   // 下一行没念到前，卡不留空
+      T.current(T.$('p1'), gate(t, CUE.p1 + 0.3, CUE.p1End), 10);
+
+      // 163 句：47%
+      T.enter(T.$('big'), P(t, CUE.big, 0.45), 16);
+      T.$('bn').style.opacity = E(P(t, CUE.bn, 0.4));
+      T.current(T.$('big'), gate(t, CUE.big2, CUE.cmp), 10);
+
+      // 164–165 句：一行，两段随口播
+      T.enter(T.$('cmp'), P(t, CUE.cmp, 0.45), 16);
+      T.$('rt').style.opacity = E(P(t, CUE.rt, 0.4));
+      T.current(T.$('cmp'), gate(t, CUE.cmp + 0.3, CUE.cmpEnd), 10);
+
+      // 166 句：论文卡 2；167 句：两个圆部分重叠
+      T.enter(T.$('p2'), P(t, CUE.p2, 0.45), 16);
+      T.enter(T.$('lim'), P(t, CUE.lim, 0.45), -12);
+      T.enter(T.$('venn'), P(t, CUE.ca, 0.45), 0);
+      var pa = E(P(t, CUE.ca, 0.45)), pb = E(P(t, CUE.cb, 0.45));
+      T.$('cA').setAttribute('opacity', pa);
+      T.$('cB').setAttribute('opacity', pb);
+      T.$('lens').setAttribute('opacity', E(P(t, CUE.lens, 0.5)));
+      T.$('la').style.opacity = pa;
+      T.$('lb').style.opacity = pb;
+      T.enter(T.$('ov'), P(t, CUE.ov, 0.45), 12);
+      T.current(T.$('ov'), gate(t, CUE.ov + 0.3, CUE.ovEnd), 8);
+
+      // 168 句：大字，前面的内容都留着
+      T.enter(T.$('fin'), P(t, CUE.fin, 0.5), 16);
+      T.current(T.$('fin'), E(P(t, CUE.fin + 0.4, 0.4)), 10);
+    }
+  });
+</script>
+</body>
+</html>

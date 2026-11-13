@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- S12 · 第 10 轮（2026-11-08），口播 57–64。
+     工具版图（示意，一张图带过，不逐个介绍；口播没讲工具在哪个时机跑，所以不画时机轴）：五类随第 2 句逐行亮：「代码风格与正确性：lint、类型检查」「安全 · 源码扫描」「安全 · 依赖漏洞」「安全 · 密钥泄露」「性能基准」，每类放两三个工具名小字（golangci-lint、ESLint、Semgrep、CodeQL、govulncheck、Dependabot、gitleaks、benchstat）；第 3 句右边一个「设为合并门槛」的闸门。第 4 句 SDFlow 卡从版图上移开，旁注「lint、类型检查交给 CI」，角标 `sdflow-code-review/SKILL.md:356`；第 4–5 句旁边两行小字「lint：查代码风格和常见错误」「CI：每次提交自动跑检查」。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S12">
+<head>
+<meta charset="utf-8">
+<title>S12 · 工具版图</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #hw { left: 60px; top: 56px; transform-origin: 0 0; }
+  #hdr { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; padding: 10px 28px; }
+
+  /* 版图：数据图卡，不倾斜 */
+  #map { left: 60px; top: 170px; width: 1000px; height: 460px; padding: 0; }
+  .th { position: absolute; top: 14px; width: 160px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 32px; line-height: 1.2; color: var(--ink); }
+  .row { position: absolute; left: 0; width: 1000px; height: 84px; border-top: 3px dashed rgba(22,22,22,.45); }
+  .row .nm { position: absolute; left: 30px; top: 8px; font-weight: 800; font-size: 34px; line-height: 1.2; color: var(--ink); white-space: nowrap; }
+  .row .tl { position: absolute; left: 30px; top: 46px; font-family: var(--mono); font-weight: 600; font-size: 26px; line-height: 1.2; color: rgba(22,22,22,.8); white-space: nowrap; }
+  .row .dt { position: absolute; top: 25px; width: 34px; height: 34px; border-radius: 50%; background: var(--ink); }
+
+  /* 闸门 */
+  #gate { left: 1440px; top: 190px; width: 420px; height: 230px; padding: 0; text-align: center; }
+  #gate svg { position: absolute; left: 90px; top: 18px; width: 240px; height: 110px; }
+  #gate b { position: absolute; left: 0; right: 0; top: 140px; font-family: var(--display); font-weight: 800; font-size: 54px; line-height: 1.1; color: var(--ink); }
+  #arr { position: absolute; left: 1080px; top: 270px; width: 350px; height: 30px; }
+
+  /* SDFlow 卡：先落在版图上，再移到右侧 */
+  #sd { left: 700px; top: 330px; width: 330px; height: 100px; padding: 0; display: flex; align-items: center; justify-content: center;
+        font-family: var(--display); font-weight: 800; font-size: 58px; }
+  #sdn { left: 1440px; top: 568px; font-size: 34px; }
+  .sr { position: absolute; padding: 4px 14px; border: 3px solid var(--ink); border-radius: 6px; background: var(--cream); color: var(--ink);
+        font-family: var(--mono); font-weight: 600; font-size: 26px; line-height: 1.2; white-space: nowrap; }
+  #sdr { left: 1330px; top: 635px; }
+
+  /* 两行小字 */
+  #t5 { left: 60px; top: 730px; }
+  #t6 { left: 60px; top: 835px; }
+
+  /* 实录小卡 */
+  #rec { left: 1090px; top: 770px; width: 770px; padding: 22px 30px 24px; }
+  #rec .tab { left: -14px; top: -44px; font-size: 32px; padding: 4px 22px; }
+  #rec p { margin: 0; font-weight: 600; font-size: 34px; line-height: 1.35; }
+  #rec code { display: inline-block; white-space: nowrap; font-family: var(--mono); font-weight: 700; font-size: 30px; }
+  #recr { left: 1420px; top: 738px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="hw"><div class="chip" id="hdr" data-r="-2">扫：现成的工具</div></div>
+
+  <div class="card" id="map" data-r="0">
+
+    <div class="row" id="r1" style="top:14px"><div class="nm">代码风格与正确性：lint、类型检查</div><div class="tl">golangci-lint · ESLint</div></div>
+    <div class="row" id="r2" style="top:98px"><div class="nm">安全 · 源码扫描</div><div class="tl">Semgrep · CodeQL</div></div>
+    <div class="row" id="r3" style="top:182px"><div class="nm">安全 · 依赖漏洞</div><div class="tl">govulncheck · Dependabot</div></div>
+    <div class="row" id="r4" style="top:266px"><div class="nm">安全 · 密钥泄露</div><div class="tl">gitleaks</div></div>
+    <div class="row" id="r5" style="top:350px"><div class="nm">性能基准</div><div class="tl">benchstat</div></div>
+  </div>
+
+  <svg id="arr" viewBox="0 0 350 30" aria-hidden="true"><path d="M2 15 H340 M328 4 L342 15 L328 26" fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div class="card" id="gate" data-r="1">
+    <svg viewBox="0 0 240 110" aria-hidden="true">
+      <rect x="24" y="30" width="22" height="80" fill="#161616"/>
+      <rect x="194" y="30" width="22" height="80" fill="#161616"/>
+      <rect x="24" y="44" width="192" height="20" fill="#f2efe6" stroke="#161616" stroke-width="5"/>
+      <path d="M52 44 L82 64 M92 44 L122 64 M132 44 L162 64 M172 44 L192 58" stroke="#161616" stroke-width="6"/>
+    </svg>
+    <b>设为合并门槛</b>
+  </div>
+
+  <div class="card dark" id="sd" data-r="-1.5">SDFlow</div>
+  <div class="tag" id="sdn" data-r="3">lint、类型检查交给 CI</div>
+  <div class="sr" id="sdr" data-r="-2">sdflow-code-review/SKILL.md:356</div>
+
+  <div class="tag" id="t5" data-r="-3">lint：查代码风格和常见错误</div>
+  <div class="tag" id="t6" data-r="3">CI：每次提交自动跑检查</div>
+
+  <div class="card" id="rec" data-r="1"><div class="tab ink" data-r="-2">实录 · 示例项目</div>
+    <p>这次：对抗视角自己跑了 <code>go test -race -count=3</code>，无 DATA RACE</p></div>
+  <div class="sr" id="recr" data-r="2">code-review-report.md:115</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒），按口播字数估算，还没有录音。注释写本画面第几句。
+  var CUE = {
+    hold: 1.641, move: 0.5,                         // 1 句：问题贴纸
+    map: 1.52, th: 1.52, rows: [1.52, 3.28, 4.32, 5.36, 7.2],   // 随第 2 句列举出场，在合并门槛前展示完整工具版图
+    gate: 9.84,                                    // 3 句：闸门
+    sd: 16.56, sdMove: 17.16, sdn: 18.0,            // 卡先落定，再移到右侧，避免移动节点早于出场
+    t5: 19.099, t6: 25.868,                           // 4 句 lint 小字、5 句 CI 小字（第 11 轮删 lint 定义句）
+    rec: 31.51                                     // 6 句
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function show(id, t, a, dy) { T.enter(T.$(id), T.p(t, a, 0.45), dy === undefined ? 12 : dy); }
+  function fade(el, t, a) {
+    var e = T.ease(T.p(t, a, 0.4));
+    el.style.opacity = e; el.style.transform = 'translateY(' + ((1 - e) * 8) + 'px)';
+  }
+
+  // 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({
+    duration: 48.070,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 1 句：问题贴纸
+      T.enter(T.$('hdr'), T.p(t, 0, 0.45), -14);
+      var hw = T.$('hw'), hd = T.$('hdr');
+      var mv = T.ease(T.p(t, CUE.hold, CUE.move)), S = 1.5, sc = S + (1 - S) * mv;
+      var fx = 960 - S * hd.offsetWidth / 2 - 60, fy = 470 - S * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+
+      // 2 句：版图卡 + 时机 + 五类逐行
+      var map = T.$('map'), me = T.ease(T.p(t, CUE.map, 0.45));
+      map.style.opacity = me; map.style.transform = 'translateY(' + ((1 - me) * 14) + 'px)';
+      var shown = 0;
+      for (var j = 0; j < 5; j++) { fade(T.$('r' + (j + 1)), t, CUE.rows[j]); shown += T.ease(T.p(t, CUE.rows[j], 0.4)); }
+      // 没讲到的行不先放出空壳：卡底随行逐步放开，全部出来后连投影一起露出
+      map.style.clipPath = shown >= 4.999 ? 'inset(-30px -30px -30px -30px)' : 'inset(-30px -30px ' + (460 - (14 + 84 * shown)) + 'px -30px)';
+
+      // 3 句：闸门
+      show('gate', t, CUE.gate, 14);
+      T.$('arr').style.opacity = T.ease(T.p(t, CUE.gate + 0.2, 0.4));
+
+      // 4 句：SDFlow 卡先落在版图上，再移到右侧
+      var sd = T.$('sd'), se = T.ease(T.p(t, CUE.sd, 0.45)), mvs = T.ease(T.p(t, CUE.sdMove, 0.8));
+      sd.style.opacity = se;
+      sd.style.transform = 'translate(' + (mvs * 735) + 'px,' + (mvs * 120 +(1 - se) * 14) + 'px) rotate(' + (-1.5 + (1 - se) * -3) + 'deg)';
+      T.current(sd, on(t, CUE.sd, CUE.t5), 10);
+      show('sdn', t, CUE.sdn, 8);
+      show('sdr', t, CUE.sdn + 0.3, 8);
+
+      // 4、5 句：两行小字
+      show('t5', t, CUE.t5, 8); T.current(T.$('t5'), on(t, CUE.t5, CUE.t6), 6);
+      show('t6', t, CUE.t6, 8); T.current(T.$('t6'), on(t, CUE.t6, CUE.rec), 6);
+
+      // 6 句：实录小卡
+      show('rec', t, CUE.rec, 14);
+      show('recr', t, CUE.rec + 0.3, 8);
+    }
+  });
+</script>
+</body>
+</html>

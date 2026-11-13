@@ -1,0 +1,156 @@
+<!doctype html>
+<!-- S27 · 机制动画 · script 112–117「这就是第二种情况了：它说做完了，为什么其实不对？……测试全过，什么都说明不了。」
+     示意画面（右上角「示意」）。上下两段：
+     - 上段沿用 S02：通用对话框里 AI 回「Done! All tests pass.」（照分镜原文英文），旁边你自己跑，红色 FAIL。
+       讲到「是它自己判断的」时，AI 那句是当前（黄框）。
+     - 下段：代码 → 照着写测试。代码和测试大部分用灰条（不编代码），只写出出错的那一行。
+       错在 80.0 这个边界：规格要求 80.0 不报（S10），代码写成 >=，测试照代码写成「80.0 → 报警」。
+       两处用同样的墨框 + 「错」贴纸标出，下面一道括线连起来写「同一处」，让人看出错在同一个地方。
+       「错」用墨色，不用红（红只表示测试失败）。
+     - 最后两边各贴一个绿勾 = 测试通过。绿只用在这里。 -->
+<html lang="zh-CN" data-frame-id="S27">
+<head>
+<meta charset="utf-8">
+<title>S27 · 测试跟着错</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* 上段：对话 + 终端（同 S02，缩小）。 */
+  .chat { left: 110px; top: 150px; width: 840px; height: 250px; padding: 0; }
+  .who {
+    position: absolute; width: 96px; height: 96px; box-sizing: border-box; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--display); font-weight: 800; font-size: 42px;
+    background: var(--ink); color: #fff; border: 5px solid var(--cream); box-shadow: 6px 6px 0 #000;
+  }
+  .bubble {
+    position: absolute; padding: 18px 32px; border-radius: 10px; white-space: nowrap;
+    background: var(--cream); color: var(--ink); border: 5px solid var(--ink); box-shadow: 8px 8px 0 #000;
+    font-family: var(--display); font-weight: 800; font-size: 54px; line-height: 1.15;
+  }
+  .window { left: 1080px; top: 150px; width: 740px; height: 250px; padding: 40px 44px; overflow: visible; }
+  .window .tab { left: -14px; top: -44px; font-size: 38px; }
+  .prompt { display: flex; align-items: center; gap: 22px; }
+  .prompt .p { font-family: var(--mono); font-weight: 700; font-size: 40px; color: var(--unlit); }
+  .bar { height: 18px; border-radius: 9px; background: var(--cream-dim); }
+  .result {
+    position: absolute; left: 44px; right: 44px; bottom: 36px; height: 96px; box-sizing: border-box;
+    display: flex; align-items: center; padding: 0 30px; border-radius: 8px;
+    background: var(--fail); color: var(--ink); border: 5px solid var(--ink);
+    font-family: var(--mono); font-weight: 800; font-size: 52px; letter-spacing: 2px;
+  }
+
+  /* 下段：代码 → 照着写测试。 */
+  .src { top: 470px; width: 680px; height: 300px; padding: 70px 40px 30px; }
+  .src .tab { font-size: 40px; }
+  .src .bar { background: #c9c5bb; margin-bottom: 30px; }
+  .line { font-family: var(--mono); font-weight: 700; font-size: 44px; line-height: 1; white-space: nowrap; margin-bottom: 30px;
+    font-variant-ligatures: none; }  /* 关连字：>= 要原样显示成两个字符 */
+  /* 出错的地方：墨框（不是红）。 */
+  .bad { position: relative; display: inline-block; padding: 6px 12px; margin: -6px -12px; border-radius: 6px; }
+  .bad .box { position: absolute; inset: 0; border: 5px solid var(--ink); border-radius: 6px; }
+  .bad .x {
+    position: absolute; left: calc(100% + 22px); top: -4px; padding: 4px 16px; border-radius: 6px;
+    background: var(--ink); color: #fff; font-family: var(--display); font-weight: 800; font-size: 36px;
+  }
+  .copy { position: absolute; left: 800px; top: 550px; width: 320px; height: 160px; }
+  .copy .chip { left: 70px; top: 0; font-family: var(--display); font-weight: 800; font-size: 40px; }
+  .copy svg { position: absolute; left: 0; top: 80px; width: 320px; height: 70px; }
+  .brace { position: absolute; left: 440px; top: 900px; width: 1040px; height: 90px; }
+  .same { left: 820px; top: 950px; font-family: var(--display); font-weight: 800; font-size: 44px; }
+  /* 绿勾 = 测试通过。 */
+  .ok { position: absolute; width: 96px; height: 96px; box-sizing: border-box; border-radius: 50%;
+    background: var(--pass); border: 5px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); }
+  .ok svg { position: absolute; left: 14px; top: 14px; width: 58px; height: 58px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="mock">示意</div>
+
+  <div class="card dark chat" id="chat" data-shadow="10">
+    <div class="who" id="ai" style="left:40px;top:76px">AI</div>
+    <div class="bubble" id="say" data-r="-1.5" data-shadow="8" style="left:170px;top:70px">Done! All tests pass.</div>
+  </div>
+  <div class="window" id="term" data-shadow="16">
+    <div class="tab" data-r="2" id="ttab">你自己跑</div>
+    <div class="prompt"><span class="p">$</span><div class="bar ln" style="width:300px"></div></div>
+    <div class="result" id="fail">FAIL</div>
+  </div>
+
+  <div class="card src" id="code" data-r="-1.2" style="left:110px">
+    <div class="tab">代码</div>
+    <div class="bar" style="width:62%"></div>
+    <div class="bar" style="width:84%;margin-left:40px"></div>
+    <div class="line" style="margin-left:40px">temp <span class="bad"><span class="box mk"></span>&gt;= 80.0<span class="x mk" data-r="6">错</span></span></div>
+  </div>
+
+  <div class="copy" id="copy">
+    <div class="chip" data-r="-3">照着写</div>
+    <svg viewBox="0 0 320 70">
+      <path d="M28 38 Q 150 20 270 34" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+      <circle cx="20" cy="38" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+      <polygon points="262,12 312,34 264,56" fill="#f2efe6"/>
+    </svg>
+  </div>
+
+  <div class="card src" id="test" data-r="1.2" style="left:1140px">
+    <div class="tab" style="transform:rotate(2deg)">测试</div>
+    <div class="bar" style="width:56%"></div>
+    <div class="line">81.2 → 报警</div>
+    <div class="line"><span class="bad"><span class="box mk"></span>80.0 → 报警<span class="x mk" data-r="-5">错</span></span></div>
+  </div>
+
+  <!-- 括线：两处错连在一起。 -->
+  <svg class="brace" id="brace" style="top:780px" viewBox="0 0 1040 90">
+    <path d="M6 6 V40 Q6 50 16 50 H1024 Q1034 50 1034 40 V6" fill="none" stroke="#161616" stroke-width="8" stroke-linecap="round"/>
+    <line x1="520" y1="50" x2="520" y2="70" stroke="#161616" stroke-width="8" stroke-linecap="round"/>
+  </svg>
+  <div class="chip same" id="same" data-r="-2" style="top:822px">错在同一处</div>
+
+  <div class="ok" id="ok1" style="left:720px;top:430px"><svg viewBox="0 0 58 58"><path d="M8 30 L23 45 L50 12" fill="none" stroke="#161616" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="ok" id="ok2" style="left:1750px;top:430px"><svg viewBox="0 0 58 58"><path d="M8 30 L23 45 L50 12" fill="none" stroke="#161616" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 22.18,
+    init: function () { return T.fonts('你自己跑代码照着写测试报警错在同一处'); },
+    render: function (t) {
+      // 1. 它说做完了；你自己跑，红色失败。
+      T.enter(T.$('chat'), T.p(t, 0.0, 0.4), 20);
+      T.enter(T.$('ai'), T.p(t, 0.2, 0.4), 10);
+      T.enter(T.$('say'), T.p(t, 0.4, 0.5), 16);
+      T.enter(T.$('term'), T.p(t, 1.2, 0.4), 16);
+      T.enter(T.$('ttab'), T.p(t, 1.4, 0.4), 10);
+      T.all('.ln').forEach(function (el) { T.wipe(el, T.p(t, 1.6, 0.3), 'x'); });
+      T.enter(T.$('fail'), T.p(t, 2.1, 0.35), 12);
+
+      // 2. 「做完了」是它自己判断的：AI 那句是当前（是@7.44）。下段开始时（先写代码，先@13.92）淡出。
+      //    时刻按实测（2026-10-07，frame-times.py）。112 句从 S26a 移来，之后各时刻 +5.68。1. 段 0–2.1 秒的示意对应 112 句「它说做完了，为什么其实不对」，留在开头。
+      T.current(T.$('say'), T.ease(T.p(t, 7.44, 0.35)) * (1 - T.ease(T.p(t, 13.92, 0.4))));
+
+      // 3. 先写代码，再照着代码写测试。
+      T.enter(T.$('code'), T.p(t, 13.92, 0.5), 24);   // 先写代码：先@13.92
+      T.enter(T.$('copy'), T.p(t, 15.12, 0.4), 0, -30);   // 照着代码：照@15.12
+      T.wipe(T.$('copy').querySelector('svg'), T.p(t, 15.12, 0.5), 'x');
+      T.enter(T.$('test'), T.p(t, 15.84, 0.5), 24);   // 写测试：写@15.84
+
+      // 4. 代码错了，测试跟着一起错：两处墨框 + 「错」，括线连成「同一处」。
+      var marks = T.all('.mk');
+      marks.forEach(function (el, i) {
+        var at = i < 2 ? 16.72 : 17.60;   // 前两个属于代码（代码一错：代@16.72），后两个属于测试（测试也跟着一起错：测@17.60）
+        if (el.classList.contains('x')) T.enter(el, T.p(t, at + 0.15, 0.35), -12);
+        else el.style.opacity = T.ease(T.p(t, at, 0.3));
+      });
+      T.wipe(T.$('brace'), T.p(t, 17.92, 0.6), 'x');   // 跟着一起错：跟@17.92
+      T.enter(T.$('same'), T.p(t, 18.24, 0.4), 12);   // 一起错：一@18.24
+
+      // 5. 测试全过：两边都打绿勾。
+      T.enter(T.$('ok1'), T.p(t, 21.12, 0.35), -20);   // 测试全过：测@21.12
+      T.enter(T.$('ok2'), T.p(t, 21.52, 0.35), -20);   // 全过：全@21.52
+    }
+  });
+</script>
+</body>
+</html>

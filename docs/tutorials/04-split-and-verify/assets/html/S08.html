@@ -1,0 +1,208 @@
+<!doctype html>
+<!-- S08 · 录屏证据（实录 · 原文）· script 22–24「后来，Superpowers 也往 Matt 这边靠了，计划里不再写完整代码，只记决策。……SDFlow 也走这条路，下面看它具体怎么拆。」
+     事实来源（2026-10-30 打开原文核过）：
+       ~/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.0/RELEASE-NOTES.md 第 51 行「## v6.4.2 (2026-09-25)」，第 53 行整段，英文逐字照抄，
+       只在句子之间插入换行（不改字），让每个加框的片段各占一行；窗口里行号只在第 51、53 行写，续行不写号。
+       三处加框原文：
+         ① Plans now record the decisions an implementer needs (signatures, test assertions, the spec's values) instead of writing out the code
+         ② would sometimes try to implement the entire project while designing the plan
+         ③ a quarter of the time ④ about a third of the tokens
+       script.md「来源与限定」写的是 RN:51-60（整节 6.4.2），本页只截 51 与 53 两行。
+       中文是按原意译的（原文没有中文），作者录前对一遍：
+         ① 计划现在记录执行者需要的决定（签名、测试断言、规格里的值），不再把代码写出来。
+         ② 有时会在设计计划的时候，试图把整个项目都实现一遍。 ③ 时间只用四分之一 ④ token 约用三分之一
+     放大卡（visual-v4 4.7）：黄框 → 约 0.4 秒后放大卡从黄框长出，0.6 秒展开；卡用终端深底，等宽 28px，英文下面附一行中文，重点一句加粗加下划线；
+       卡出现时窗口压暗 0.35；每张卡一根黄色引线（T.lead）。
+       摆位：窗口下方有一块空地，左栏 x 60–1000、右栏 x 1020–1860，顶边 640，底边不过 930。
+       ① 卡左栏，② 卡右栏，两张并排；③④ 两张数字卡出来时左栏放不下，先收起 ① 卡（收起时引线一起缩回），③④ 在左栏上下叠放，留到页末；② 卡一直留着。
+       每张卡停留：① 约 12 秒，② 到页末约 13 秒，③ ④ 到页末约 8、7 秒。
+     「先放箭头」：卡左上一个箭头从 Superpowers 指向 Matt 一侧，标「6.4.2 · 2026-09」；第 3 句 SDFlow 小卡排到 Matt 一侧（和 Matt Pocock 名字贴纸一起放进一个虚线框）。
+     颜色：Superpowers 琥珀，Matt Pocock 紫（辅助色，S06–S08 同），SDFlow 炭灰底奶白字；黄只给「当前」，同一时刻一处；窗口深色，「实录」标签墨底。
+     口播时刻（还没录音，按每分钟 220 字估，加句间 0.5 秒；录音后用 frame-times.py 对齐）：
+       第 1 句 t0.0：Superpowers 贴纸与原文窗口落下；t2.9「Matt」：Matt Pocock 贴纸、箭头、版本标签；t5.0「计划里不再写完整代码」：黄框 ①，t5.4 放大卡
+       第 2 句 t10.6：t14.0「会顺手把整个项目实现一遍」：黄框 ②，t14.4 放大卡；t18.0「又慢」：收 ① 卡，黄框 ③，t18.4 放大卡；t19.3「又费 token」：黄框 ④，t19.7 放大卡
+       第 3 句 t20.9：SDFlow 小卡落下，t21.3 虚线框把它和 Matt Pocock 圈在一起
+       估计念完 t26.4；时长 27.4 秒。内容整体在 y 940 以内。 -->
+<html lang="zh-CN" data-frame-id="S08">
+<head>
+<meta charset="utf-8">
+<title>S08 · Superpowers 6.4.2：计划只记决策</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .window, .zoom { font-variant-ligatures: none; }
+  .name { font-family: var(--display); font-weight: 800; font-size: 46px; }
+  #cSP { left: 90px; top: 62px; background: var(--amber); }
+  #cMP { left: 1010px; top: 62px; background: var(--violet); }
+  #ver { left: 520px; top: 34px; font-family: var(--display); font-weight: 800; font-size: 38px; }
+  #arrow { position: absolute; left: 440px; top: 118px; width: 540px; height: 40px; overflow: visible; }
+  #grp { position: absolute; left: 980px; top: 36px; width: 880px; height: 130px; box-sizing: border-box; border: 5px dashed var(--ink); border-radius: 14px; opacity: 0; }
+  #sdf { left: 1370px; top: 66px; width: 440px; height: 84px; padding: 0 28px; display: flex; align-items: center; gap: 16px; white-space: nowrap; }
+  #sdf .n { font-family: var(--display); font-weight: 800; font-size: 46px; }
+  #sdf .s { font-weight: 600; font-size: 32px; }
+
+  /* 原文窗口（实录）：墨底、等宽、不倾斜 */
+  #win { left: 40px; top: 250px; width: 1840px; overflow: visible; }
+  #win .tab { top: -60px; font-size: 34px; padding: 4px 22px; }
+  #win .bar0 { height: 44px; display: flex; align-items: center; padding: 0 26px; box-sizing: border-box;
+               background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 8px 8px 0 0;
+               font-family: var(--mono); font-size: 22px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #win .bd { padding: 10px 24px 14px; font-family: var(--mono); font-size: 21px; line-height: 31px; color: #e4e0d6; }
+  .ln { display: flex; gap: 14px; }
+  .ln > i { flex: none; width: 44px; text-align: right; font-style: normal; color: var(--unlit); }
+  .ln > span { flex: 1; min-width: 0; white-space: pre; }
+  .ln b { color: #fff; font-weight: 700; }
+  .ln .dm { color: var(--unlit); }
+  #dim { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 8px; background: #000; opacity: 0; pointer-events: none; }
+  .fb { position: absolute; box-sizing: border-box; border: 5px solid transparent; border-radius: 6px; opacity: 0; pointer-events: none; }
+
+  /* 放大卡：位置和尺寸由脚本从黄框插值到终点；内容按终点尺寸排版，起点处被裁掉 */
+  .zoom { position: absolute; box-sizing: border-box; overflow: hidden; opacity: 0; z-index: 30;
+          padding: 18px 36px; background: var(--term); border: 5px solid var(--ink); border-radius: 10px; box-shadow: 8px 8px 0 var(--ink); }
+  .zoom .en { font-family: var(--mono); font-size: 28px; line-height: 42px; color: #cfcbc2; }
+  .zoom .en b { color: var(--cream); font-weight: 800; text-decoration: underline; text-decoration-color: var(--cream); text-decoration-thickness: 3px; text-underline-offset: 7px; }
+  .zoom .zh { margin-top: 8px; font-family: var(--body); font-weight: 600; font-size: 28px; line-height: 40px; color: var(--cream); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip name" id="cSP">Superpowers</div>
+  <div class="tag" id="ver">6.4.2 · 2026-09</div>
+  <svg id="arrow" viewBox="0 0 540 40" aria-hidden="true"><g id="arrG" stroke="#161616" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 22 C140 6 340 34 520 20"/><path d="M498 6 L522 20 L496 34"/></g></svg>
+  <div id="grp"></div>
+  <div class="chip name" id="cMP">Matt Pocock</div>
+  <div class="card dark" id="sdf" data-r="1.2"><span class="n">SDFlow</span><span class="s">也走这条路</span></div>
+
+  <div class="window" id="win">
+    <div class="bar0">superpowers 7.0.0 / RELEASE-NOTES.md:51-53</div>
+    <div class="bd">
+      <div class="ln"><i>51</i><span><b>## v6.4.2 (2026-09-25)</b></span></div>
+      <div class="ln"><i>53</i><span>`writing-plans` produces leaner plans, faster.</span></div>
+      <div class="ln"><i></i><span id="sF1">Plans now record the decisions an implementer needs (signatures, test assertions, the spec's values)
+instead of writing out the code.</span></div>
+      <div class="ln"><i></i><span>Some frontier models, including Opus 5.5, could get overzealous during plan writing and, with certain prompting,</span></div>
+      <div class="ln"><i></i><span><span id="sF2">would sometimes try to implement the entire project while designing the plan.</span> The new skill keeps planning focused on the plan.</span></div>
+      <div class="ln"><i></i><span>When we reproduced the original report, the scratch builds went away,</span></div>
+      <div class="ln"><i></i><span>and plans took <span id="sF3">a quarter of the time</span> and <span id="sF4">about a third of the tokens</span>. Thanks to Harper Reed for the report and session bundle. (#2333)</span></div>
+    </div>
+    <div id="dim"></div>
+    <div class="tab ink">实录 · 原文</div>
+  </div>
+  <div class="fb" id="f1"></div>
+  <div class="fb" id="f2"></div>
+  <div class="fb" id="f3"></div>
+  <div class="fb" id="f4"></div>
+
+  <div class="zoom" id="z1">
+    <div class="en">Plans now record the decisions an implementer needs (signatures, test assertions, the spec's values) <b>instead of writing out the code</b>.</div>
+    <div class="zh">计划现在记录执行者需要的决定（签名、测试断言、规格里的值），不再把代码写出来。</div>
+  </div>
+  <div class="zoom" id="z2">
+    <div class="en">… <b>try to implement the entire project</b> while designing the plan.</div>
+    <div class="zh">有时会在设计计划的时候，试图把整个项目都实现一遍。</div>
+  </div>
+  <div class="zoom" id="z3">
+    <div class="en"><b>a quarter of the time</b></div>
+    <div class="zh">时间只用四分之一</div>
+  </div>
+  <div class="zoom" id="z4">
+    <div class="en"><b>about a third of the tokens</b></div>
+    <div class="zh">token 约用三分之一</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：已按录音实测句子起点对齐（2026-11-03）。
+  var CUE = {
+    win: 0.0, sp: 0.05,           // 第 1 句：Superpowers 贴纸、原文窗口
+    mp: 1.458, arrow: 1.559, ver: 1.76, // 「Matt」：Matt Pocock 贴纸、箭头、版本标签
+    b1: 2.514, z1: 2.715, z1End: 12.188, // 第 1 句后半：黄框 ① 与放大卡；卡在 18.0 收起
+    b2: 7.04, z2: 7.555,          // 第 2 句「会顺手把整个项目实现一遍」
+    b3: 12.445, z3: 12.96,          // 「又慢」
+    b4: 13.99, z4: 14.504,          // 「又费 token」
+    sdf: 15.92, grp: 16.496         // 第 3 句：SDFlow 小卡，虚线框
+  };
+  var YELLOW = '245,207,74';
+  // 放大卡终点（舞台坐标）：z1 左栏、z2 右栏；z3、z4 左栏上下叠放（z1 收起后占它的位置）
+  var ZEND = {
+    z1: { x: 60, y: 640, w: 940, h: 250 },
+    z2: { x: 1020, y: 640, w: 840, h: 176 },
+    z3: { x: 60, y: 640, w: 560, h: 124 },
+    z4: { x: 60, y: 786, w: 620, h: 124 }
+  };
+  var LEAD = {};
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.3)) * (1 - T.ease(T.p(t, b, 0.3))); }
+  function frame(box, target, g) {
+    var r = T.rect(target);
+    box.style.left = (r.x - 8) + 'px'; box.style.top = (r.y - 4) + 'px';
+    box.style.width = (r.w + 16) + 'px'; box.style.height = (r.h + 8) + 'px';
+    box.style.opacity = g > 0.001 ? 1 : 0;
+    box.style.borderColor = 'rgba(' + YELLOW + ',' + g + ')';
+    box.style.boxShadow = '0 0 36px rgba(' + YELLOW + ',' + (0.45 * g) + ')';
+  }
+  // 卡从黄框 from 长到终点 end；z 0..1
+  function grow(zm, from, end, z) {
+    if (z <= 0.001) { zm.style.opacity = 0; return; }
+    zm.style.left = (from.x + (end.x - from.x) * z) + 'px';
+    zm.style.top = (from.y + (end.y - from.y) * z) + 'px';
+    zm.style.width = (from.w + (end.w - from.w) * z) + 'px';
+    zm.style.height = (from.h + (end.h - from.h) * z) + 'px';
+    zm.style.opacity = Math.min(1, z * 4);
+  }
+  var FROM = {};
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 23.406,
+    init: function () {
+      return T.fonts(document.body.textContent).then(function () {
+        // 黄框、放大卡的起点、引线都按终态量一次：此时窗口还没有进场位移
+        ['1', '2', '3', '4'].forEach(function (k) {
+          var r = T.rect(T.$('sF' + k));
+          var box = { x: r.x - 8, y: r.y - 4, w: r.w + 16, h: r.h + 8 };
+          FROM['z' + k] = box;
+          LEAD['z' + k] = T.lead(box, ZEND['z' + k]);
+        });
+      });
+    },
+    render: function (t) {
+      // 第 1 句：Superpowers 贴纸、窗口
+      T.enter(T.$('cSP'), T.p(t, CUE.sp, 0.45), 14);
+      T.enter(T.$('win'), T.p(t, CUE.win, 0.45), 14);
+      // 箭头、Matt Pocock 贴纸、版本标签
+      T.enter(T.$('cMP'), T.p(t, CUE.mp, 0.45), 14);
+      T.wipe(T.$('arrG'), T.p(t, CUE.arrow, 0.5), 'x');
+      T.$('arrow').style.opacity = t >= CUE.arrow ? 1 : 0;
+      T.enter(T.$('ver'), T.p(t, CUE.ver, 0.4), -12);
+
+      // 黄框：同一时刻一处
+      var f1 = on(t, CUE.b1, CUE.b2 - 0.2), f2 = on(t, CUE.b2, CUE.b3 - 0.2), f3 = on(t, CUE.b3, CUE.b4 - 0.2), f4 = T.ease(T.p(t, CUE.b4, 0.3));
+      if (t >= CUE.win + 0.5) {
+        frame(T.$('f1'), T.$('sF1'), f1);
+        frame(T.$('f2'), T.$('sF2'), f2);
+        frame(T.$('f3'), T.$('sF3'), f3);
+        frame(T.$('f4'), T.$('sF4'), f4);
+      }
+
+      // 放大卡：① 在 z1End 收起；引线随卡展开、收起
+      var g1 = T.ease(T.p(t, CUE.z1, 0.6)) * (1 - T.ease(T.p(t, CUE.z1End, 0.4)));
+      grow(T.$('z1'), FROM.z1, ZEND.z1, g1); T.leadDraw(LEAD.z1, g1);
+      var g2 = T.ease(T.p(t, CUE.z2, 0.6));
+      grow(T.$('z2'), FROM.z2, ZEND.z2, g2); T.leadDraw(LEAD.z2, g2);
+      var g3 = T.ease(T.p(t, CUE.z3, 0.6));
+      grow(T.$('z3'), FROM.z3, ZEND.z3, g3); T.leadDraw(LEAD.z3, g3);
+      var g4 = T.ease(T.p(t, CUE.z4, 0.6));
+      grow(T.$('z4'), FROM.z4, ZEND.z4, g4); T.leadDraw(LEAD.z4, g4);
+      // 有卡在画面上，压暗就一直在
+      T.$('dim').style.opacity = 0.35 * T.ease(T.p(t, CUE.z1, 0.4));
+
+      // 第 3 句：SDFlow 小卡排到 Matt 一侧，虚线框把两张圈在一起
+      T.enter(T.$('sdf'), T.p(t, CUE.sdf, 0.5), 14);
+      T.$('grp').style.opacity = T.ease(T.p(t, CUE.grp, 0.4));
+    }
+  });
+</script>
+</body>
+</html>

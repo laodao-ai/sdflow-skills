@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- S10 · 第 10 轮（2026-11-08），口播 44–47。
+     左右都突出 CR-GO-06「共享状态并发」，不以清单数量作对比。左为 ticket 4 的局部改动与原报告「Go 领域清单 CR-GO-01~06 全过」；右为锁与打开、新建、删除的调用关系，突出删除绕过锁，并附 C4 原文。底部限定「这次记录：逐 ticket 漏接线，整体评审发现遗漏」，不宣称控制变量实验或必然查出。
+     动画节点按口播估算，录音后按实测对齐。 -->
+<html lang="zh-CN" data-frame-id="S10">
+<head>
+<meta charset="utf-8">
+<title>S10 · 同一检查项，回看实际调用路径</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+.frame-title {left:60px;top:48px;font-family:var(--display);font-size:48px;font-weight:800}
+.cue {opacity:0}
+.card {font-size:36px;line-height:1.45}
+.card h2 {font-family:var(--display);font-size:46px;margin:0 0 18px;line-height:1.2}
+.card p {margin:10px 0 0}
+.card small {display:block;font-size:27px;line-height:1.4;margin-top:12px}
+.label {display:inline-block;padding:4px 14px;border:3px solid var(--ink);border-radius:5px;background:var(--cream);font-size:30px;font-weight:700;margin-bottom:14px}
+.label.blue {background:var(--blue)} .label.amber {background:var(--amber)}
+.label.violet {background:var(--violet)}
+.arrow {position:absolute;color:var(--ink);font-size:68px;font-weight:800;text-align:center}
+.source {font-family:var(--mono);font-size:26px;line-height:1.4}
+.code {background:var(--term);color:var(--cream);font-family:var(--mono);font-size:38px;padding:15px 22px;border-radius:8px;white-space:pre-wrap}
+.underline {text-decoration:underline;text-decoration-color:var(--yellow);text-decoration-thickness:5px;text-underline-offset:6px}
+.routes{font-family:var(--mono);font-size:34px;line-height:1.65}
+.card{padding:20px 28px;font-size:34px;line-height:1.35}.card h2{font-size:40px;margin-bottom:12px}.card p{margin-top:8px}.card small{font-size:28px;line-height:1.3;margin-top:10px}.label{font-size:26px;padding:3px 12px;margin-bottom:10px}.chip.cue{box-sizing:border-box}.source{font-size:26px}#left,#right{top:210px!important}#result{top:775px!important;padding:16px 28px}#result small{font-size:26px}</style>
+</head>
+<body>
+<div id="stage">
+<div class="chip cue frame-title" data-at="0">同一检查项，回看实际调用路径</div>
+<div id="left" class="card cue" data-at="1.792" style="left:70px;top:220px;width:760px;">
+<span class="label amber">第四个 ticket</span>
+<h2>局部改动</h2>
+<span class="label blue">CR-GO-06 · 共享状态并发</span>
+<div class="code">Go 领域清单
+CR-GO-01~06 全过</div>
+<small class="source">task4-dual-axis-verdict.md:11</small>
+</div>
+<div id="right" class="card cue" data-at="6.64" style="left:1000px;top:220px;width:840px;">
+<span class="label amber">整体评审</span>
+<h2>把入口与锁连起来看</h2>
+<span class="label blue">CR-GO-06 · 共享状态并发</span>
+<div class="routes">打开 → 锁 → 工作区<br>新建 ─────→ 工作区<br>
+<b class="underline">删除 ─────→ 工作区</b>
+</div>
+<small class="source">C4 · delete 无锁检查<br>code-review-report.md:35</small>
+</div>
+<div id="result" class="card cue" data-at="13.84" style="left:70px;top:770px;width:1550px;">
+<h2>这次逐 ticket 漏接线，整体评审发现遗漏</h2>
+<small>实录 · 原文摘要 · mqtt-console；描述本次结果，不作控制变量归因。</small>
+</div>
+</div>
+<script src="lib/stage.js">
+</script>
+<script src="theme.js">
+</script>
+<script>
+var SENTENCE_STARTS=[0, 6.64, 13.84, 18.16];
+// 2026-11-10：节点按作者原声 voice.srt 实测句子起点重排（render/audio-tools/retime-frames.py）。
+  Stage({duration: 22.640,init:function(){return Promise.all([T.fonts(T.$('stage').textContent),...Array.from(document.images).map(function(im){return im.decode?im.decode():Promise.resolve();})]).then(function(){});},render:function(t){
+T.tilt();
+var heading=document.querySelector('.frame-title');
+var move=T.ease(T.p(t,1,.6));var scale=1.35-.35*move;heading.style.left=(60+(960-heading.offsetWidth*1.35/2-60)*(1-move))+'px';heading.style.top=(48+(470-heading.offsetHeight*1.35/2-48)*(1-move))+'px';heading.style.transformOrigin='0 0';
+document.querySelectorAll('.cue').forEach(function(el){T.enter(el,T.p(t,Number(el.dataset.at),.45),12);if(el===heading)el.style.transform+=' scale('+scale+')';});
+
+}});
+</script>
+</body>
+</html>

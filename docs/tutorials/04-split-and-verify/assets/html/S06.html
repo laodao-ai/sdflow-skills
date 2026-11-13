@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- S06 · 机制动画 · script 15–17「先来看看，规格批准了，如何让 AI 拆分成合适的开发任务？……你看我以前用它写的一份计划，代码其实就写得差不多了。」
+     事实来源（2026-10-30 打开原文核过）：
+       mqtt-console 仓 openspec/changes/archive/2026-07-04-command-pack-with-variables/
+         tasks.md 72 行（wc -l）；superpowers-plan.md 1111 行（wc -l），22 段代码（行首围栏行 44 个 ÷ 2），6 个 Task，与 script.md「来源与限定」一致；
+         superpowers-plan.md:32-60 摘录行照抄，行号是原文行号；33、36–41 行（第二个文件名、doc.go、Interfaces）和 46–54 行（import 与空行）略去，用「⋮」标出，不改字。
+       原文里反引号、** 保持原样（窗口里是 Markdown 源码）。
+     颜色：Superpowers 琥珀（执行一侧），tasks.md 蓝（规格一侧），Matt Pocock 紫（辅助色，本期 S06–S08 起固定指 Matt Pocock，旁边有名字）。
+     标注：卡右上「实录 · 原文摘要」（作者 2026-10-27 定 mqtt-console 计划可上画面）；窗口顶栏写来源文件与行号 superpowers-plan.md:32-60（visual-v4 4.7 原文引用）。
+     黄框框住的是 Go 测试代码那一段，原文就在窗口里，不另放放大卡（这里是原文引用，不是实录里的小字）。
+     右边不放 Matt Pocock：作者 2026-10-31 第 179 条去掉名字贴纸（原「右格先留灰」），Matt Pocock 从下一页 S07 才出场。
+     口播时刻（还没录音，按每分钟 220 字估，加句间 0.4 秒；录音后用 frame-times.py 对齐）：
+       第 1 句 t0.0：问题贴纸正中放大，停 1.0 秒，用 0.6 秒缩到左上
+       第 1 句后半（原第 2 句 2026-10-31 删掉）：Superpowers 名字贴纸（Matt Pocock 贴纸 2026-10-31 第 179 条删掉）（t3.4 起，提前 0.8 秒，避免页上只有标题超过 3 秒）（中间那行「答案相反」2026-10-31 第 129 条删掉）
+       第 3 句 t9.4：「实录 · 原文摘要」卡落下，任务清单细条 → 计划长条（t10.4 擦出）
+       第 4 句 t17.0：原文窗口落下；t20.6「代码其实就写得差不多了」黄框框住 Go 测试代码
+       估计念完 t23.5；时长 24.4 秒。内容整体在 y 940 以内。 -->
+<html lang="zh-CN" data-frame-id="S06">
+<head>
+<meta charset="utf-8">
+<title>S06 · 旧计划：测试和代码都写进计划</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #headw { left: 90px; top: 56px; transform-origin: 0 0; }
+  #headw .chip { left: 0; top: 0; font-family: var(--display); font-weight: 800; font-size: 52px; }
+
+  .name { font-family: var(--display); font-weight: 800; font-size: 46px; }
+  #cSP { left: 90px; top: 182px; background: var(--amber); }
+
+  /* 数量对比卡：细条 → 长条。条宽按行数比例：72 : 1111 ≈ 36 : 560 */
+  #plan { left: 90px; top: 336px; width: 1740px; height: 104px; padding: 0 36px; display: flex; align-items: center; gap: 22px; white-space: nowrap; }
+  #plan .tab { top: -50px; font-size: 34px; padding: 4px 22px; }
+  #plan .lab { font-weight: 600; font-size: 34px; }
+  #plan .num2 { font-family: var(--display); font-weight: 800; font-size: 38px; }
+  #plan .bar { height: 30px; border: 4px solid var(--ink); border-radius: 6px; box-sizing: border-box; flex: none; }
+  #bT { width: 36px; background: var(--blue); }
+  #bP { width: 560px; background: var(--amber); }
+  #plan .arr { flex: none; width: 90px; height: 30px; }
+
+  /* 原文窗口：黑底、等宽、不倾斜 */
+  .window { font-variant-ligatures: none; }
+  #src { left: 90px; top: 462px; width: 1740px; overflow: visible; }
+  #src .bar0 { height: 44px; display: flex; align-items: center; padding: 0 26px; box-sizing: border-box;
+               background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 8px 8px 0 0;
+               font-family: var(--mono); font-size: 24px; line-height: 1; color: var(--cream); white-space: nowrap; }
+  #src .bd { padding: 10px 24px 14px; font-family: var(--mono); font-size: 23px; line-height: 29px; color: #e4e0d6; }
+  .ln { display: flex; gap: 16px; }
+  .ln > i { flex: none; width: 44px; text-align: right; font-style: normal; color: var(--unlit); }
+  .ln > span { flex: 1; min-width: 0; white-space: pre; }
+  .ln .dm { color: var(--unlit); }
+  .ln b { color: #fff; font-weight: 700; }
+  #goBlock { position: relative; padding: 10px 0 4px; margin-top: 2px; }
+  .fb { position: absolute; box-sizing: border-box; border: 6px solid transparent; border-radius: 8px; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="abs" id="headw"><div class="chip" id="head">规格批了，拆成什么样再交给 AI？</div></div>
+
+  <div class="chip name" id="cSP">Superpowers</div>
+
+  <div class="card" id="plan" data-r="0.3">
+    <div class="tab ink">实录 · 原文摘要 · mqtt-console</div>
+    <span class="lab">任务清单 tasks.md</span><div class="bar" id="bT"></div><span class="num2">72 行</span>
+    <svg class="arr" id="arr" viewBox="0 0 90 30" aria-hidden="true"><path id="arrP" d="M2 15 H78" stroke="#161616" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M62 4 L80 15 L62 26" stroke="#161616" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="lab">计划</span><div class="bar" id="bP"></div><span class="num2">1111 行 · 22 段代码</span>
+  </div>
+
+  <div class="window" id="src">
+    <div class="bar0">superpowers-plan.md:32-60</div>
+    <div class="bd">
+<div class="ln"><i>32</i><span><b>### Task 1: Command Pack 模型与校验（internal/pack/model.go）</b></span></div>
+<div class="ln"><i>34</i><span>**Files:**</span></div>
+<div class="ln"><i>35</i><span>- Create: `internal/pack/model.go`</span></div>
+<div class="ln"><i></i><span class="dm">⋮</span></div>
+<div class="ln"><i>42</i><span>- [ ] **Step 1: Write the failing test** — 解析 + 校验</span></div>
+<div id="goBlock">
+<div class="ln"><i>44</i><span>```go</span></div>
+<div class="ln"><i>45</i><span>// internal/pack/model_test.go</span></div>
+<div class="ln"><i></i><span class="dm">⋮</span></div>
+<div class="ln"><i>55</i><span>const validYAML = `name: thermostat-v2</span></div>
+<div class="ln"><i>56</i><span>description: 温控器 v2</span></div>
+<div class="ln"><i>57</i><span>subscribes:</span></div>
+<div class="ln"><i>58</i><span>  - topic: "dev/{{deviceId}}/status"</span></div>
+</div>
+    </div>
+  </div>
+  <div class="fb" id="fGo"></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）：已按录音实测句子起点对齐（2026-11-03）。
+  var CUE = {
+    head: 0.0, headHold: 1.647, headMove: 0.6,
+    names: 5.6,               // 第 2 句：Superpowers 名字贴纸
+    plan: 10.96, barT: 11.184, barP: 11.452,   // 第 3 句：数量对比
+    src: 12.66,                // 第 4 句：原文窗口
+    box: 13.96                 // 「代码其实就写得差不多了」：Go 测试代码加黄框
+  };
+  var HEAD_SCALE = 1.5;
+  var HEAD_CENTER = [960, 500];
+  var YELLOW = '245,207,74';
+
+  function frame(box, target, g) {
+    var r = T.rect(target);
+    box.style.left = (r.x - 12) + 'px'; box.style.top = (r.y - 2) + 'px';
+    box.style.width = (r.w + 24) + 'px'; box.style.height = (r.h + 4) + 'px';
+    box.style.opacity = g > 0.001 ? 1 : 0;
+    box.style.borderColor = 'rgba(' + YELLOW + ',' + g + ')';
+    box.style.boxShadow = '0 0 36px rgba(' + YELLOW + ',' + (0.45 * g) + ')';
+  }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 16.820,
+    init: function () { return T.fonts('规格批了拆成什么样再交给实录原文摘要任务清单行计划段代码'); },
+    render: function (t) {
+      // 第 1 句：问题贴纸先在正中放大，再缩到左上
+      T.enter(T.$('head'), T.p(t, CUE.head, 0.45), -14);
+      var hw = T.$('headw'), hd = T.$('head');
+      var mv = T.ease(T.p(t, CUE.headHold, CUE.headMove));
+      var fx = HEAD_CENTER[0] - HEAD_SCALE * hd.offsetWidth / 2 - 90, fy = HEAD_CENTER[1] - HEAD_SCALE * hd.offsetHeight / 2 - 56;
+      hw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + (HEAD_SCALE + (1 - HEAD_SCALE) * mv) + ')';
+
+      // 第 2 句：两张名字贴纸
+      T.enter(T.$('cSP'), T.p(t, CUE.names, 0.45), 14);
+
+      // 第 3 句：数量对比卡；细条、箭头、长条依次擦出
+      T.enter(T.$('plan'), T.p(t, CUE.plan, 0.5), 14);
+      T.wipe(T.$('bT'), T.p(t, CUE.barT, 0.4), 'x');
+      T.$('bT').style.opacity = t >= CUE.barT ? 1 : 0;
+      T.$('arr').style.opacity = T.ease(T.p(t, CUE.barP, 0.3));
+      T.wipe(T.$('bP'), T.p(t, CUE.barP, 0.9), 'x');
+      T.$('bP').style.opacity = t >= CUE.barP ? 1 : 0;
+
+      // 第 4 句：原文窗口；Go 测试代码黄框
+      T.enter(T.$('src'), T.p(t, CUE.src, 0.5), 14);
+      var g = T.ease(T.p(t, CUE.box, 0.4));
+      if (t >= CUE.src) frame(T.$('fGo'), T.$('goBlock'), g); else T.$('fGo').style.opacity = 0;
+      // 黄框的位置要等窗口落定后再量，进场位移 14px 在 0.5 秒内收完，黄框在其后出现
+    }
+  });
+</script>
+</body>
+</html>

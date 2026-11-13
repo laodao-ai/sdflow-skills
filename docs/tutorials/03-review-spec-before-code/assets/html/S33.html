@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- S33 · 标题卡 · script 221–223「示例项目和 SDFlow 的仓库地址，都在简介里。……我是老刀Cheney，下期见。」
+     10-24 作者定：照第 2 期 S34（口播与画面都一样，不加琥珀色）。
+     片尾三项自上而下：两行仓库地址（等宽，照原样）、征集一句、logo 加署名。结构同第 2 期 S34。
+     logo 用 channel/brand/logo/logo.svg 原样，相对路径引用（img/logo.svg）。
+     「SDFlow」作名称写大小写，仓库地址与命令小写。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒（221 句开口 0、222 句开口 5.28、223 句开口 11.28，念完 13.04；r2 念到「SDFlow」1.12），全页 14.43。
+     内容整体在 y 910 以上，避开底部字幕带。  -->
+<html lang="zh-CN" data-frame-id="S33">
+<head>
+<meta charset="utf-8">
+<title>S33 · 片尾</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .repo { left: 210px; width: 1500px; height: 130px; display: flex; align-items: center; padding: 0 56px; }
+  .repo .a { font-family: var(--mono); font-weight: 700; font-size: 54px; color: var(--ink); white-space: nowrap; }
+  .repo .tab { font-size: 40px; }
+  .ask { left: 240px; top: 520px; width: 1440px; height: 150px; padding: 0 56px; display: flex; align-items: center; }
+  .ask .big { font-size: 58px; }
+  .ask .tab { font-size: 40px; }
+  .sig { left: 560px; top: 740px; width: 800px; height: 170px; padding: 0 40px; display: flex; align-items: center; gap: 36px; }
+  .sig img { width: 130px; height: 130px; flex: none; }
+  .sig .big { font-size: 84px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card repo" id="r1" data-r="-1.2" style="top:90px"><div class="tab ink">示例项目 · 见简介</div><div class="a">github.com/laodao-ai/demo-temp-monitor</div></div>
+  <div class="card repo" id="r2" data-r="1.2" style="top:300px"><div class="tab ink" style="transform:rotate(2deg)">SDFlow · 见简介</div><div class="a">github.com/laodao-ai/sdflow-skills</div></div>
+  <div class="card ask" id="ask" data-r="-1"><div class="tab ink" style="transform:rotate(2deg)">留言告诉我</div><div class="big">你用 AI 开发的时候碰到过什么问题？</div></div>
+  <div class="card dark sig" id="sig" data-r="1"><img src="img/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，实测减 0.2）：r1 221 句开口（0.00，不能小于 0）；r2 念到「SDFlow」（1.12）；ask 222 句开口（5.28）；sig 223 句开口（11.28）。
+  var CUE = { r1: 0.0, r2: 0.92, ask: 5.08, sig: 11.08 };
+  Stage({
+    duration: 14.43,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.enter(T.$('r1'), T.p(t, CUE.r1, 0.6), 30);
+      T.enter(T.$('r2'), T.p(t, CUE.r2, 0.6), 30);
+      T.enter(T.$('ask'), T.p(t, CUE.ask, 0.6), 30);
+      T.enter(T.$('sig'), T.p(t, CUE.sig, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

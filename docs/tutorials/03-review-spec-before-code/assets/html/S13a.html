@@ -1,0 +1,79 @@
+<!doctype html>
+<!-- S13a · 标题卡（小结）· script 103–104「好，AI 这一侧就是这样：换个干净的上下文，分多个角度审，按需求加派 agent。……审出来的，先核引用，再逐条裁决。」
+     「AI 怎么审」小结卡（作者 10-24 定加，从 S13 末句拆出；10-24 长句拆两句：第 103 句出前三格，第 104 句出第 4 格）。四格一行，随口播逐格出现并当前，最后一帧四格全在：
+       ① 独立上下文  ② 多角度审（gstack 三审 · 另一个模型 · SDFlow 三审）  ③ 按需求加派（领域 · 高风险）  ④ 合并 · 核引用 · 裁决（裁掉写理由，拿不准交人）
+     10-24 作者意见：①第 3 格「按改动加派」改「按需求加派」（稿子第 104 句同改）；②没讲到的不先放出来（visual-v4 4.8），四格不再以淡色空壳先出现，讲到哪格才出现哪格；
+       ③一页一层：格子出现后留到页末，不淡出、不换内容；只有「当前」黄框在四格间移动，最后停在 ④。
+     - 开头：标题「AI 怎么审」开口就在（句首「好，AI 这一侧就是这样：」，页上只有标题，不超过 3 秒）。
+     - 「换个干净的上下文」：① 落下并当前。「分多个角度审」：② 连同箭头落下并当前。「按需求加派」：③ 落下并当前。「先核引用，再逐条裁决」：④ 落下并当前，留到页末。
+     配色：卡奶白；只有 ④ 用蓝浅（裁决，规格一侧）；标题标签墨底；黄框 = 当前（同一时刻一个）。
+     - 口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。第 103 句 0–6.56：「好，AI 这一侧就是这样：」0.0，「换个干净的上下文，」1.88，「分多个角度审，」3.48，「按需求加派 agent。」5.0；第 104 句：「审出来的，先核引用，再逐条裁决。」起点 7.6，7.4 起出第 4 格；页长 11.20 秒。内容整体在 y 920 以上，避开字幕带。
+     - 10-25 版面：副行字 34px，整体下移 60px 上下居中。 -->
+<html lang="zh-CN" data-frame-id="S13a">
+<head>
+<meta charset="utf-8">
+<title>S13a · AI 怎么审：小结</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  :root { --notyet: rgba(22,22,22,.65); }
+  #sumTab { left: 90px; top: 300px; font-size: 56px; padding: 6px 32px; }
+
+  .st { top: 460px; height: 340px; padding: 0 36px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; }
+  .st .hd { font-family: var(--display); font-weight: 800; font-size: 52px; line-height: 1.15; white-space: nowrap; }
+  .st .sb { font-weight: 600; font-size: 34px; line-height: 1.5; color: var(--ink); }
+  .st .num { position: absolute; left: -28px; top: -32px; }
+  #s1 { left: 100px;  width: 320px; }
+  #s2 { left: 490px;  width: 370px; }
+  #s3 { left: 930px;  width: 350px; }
+  #s4 { left: 1350px; width: 470px; background: var(--blue-soft); }
+  .ar { top: 606px; width: 46px; text-align: center; font-family: var(--display); font-weight: 800; font-size: 54px; line-height: 1; color: var(--ink); }
+  #a1 { left: 432px; } #a2 { left: 872px; } #a3 { left: 1286px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="tab ink" id="sumTab" data-r="-2">AI 怎么审</div>
+
+  <div class="card st" id="s1" data-r="-0.8"><div class="num">1</div><div class="hd">独立上下文</div></div>
+  <div class="abs ar" id="a1">→</div>
+  <div class="card st" id="s2" data-r="0.8"><div class="num">2</div><div class="hd">多角度审</div><div class="sb">gstack 三审<br>另一个模型<br>SDFlow 三审</div></div>
+  <div class="abs ar" id="a2">→</div>
+  <div class="card st" id="s3" data-r="-0.8"><div class="num">3</div><div class="hd">按需求加派</div><div class="sb">领域 · 高风险</div></div>
+  <div class="abs ar" id="a3">→</div>
+  <div class="card st" id="s4" data-r="0.8"><div class="num">4</div><div class="hd">合并 · 核引用 · 裁决</div><div class="sb">裁掉写理由，拿不准交人</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。录音前按每分钟 220 字估；注释写的是本页第几句（全稿 103–104）。
+  var CUE = {
+    tab: 0.0,                           // 一开口：标题「AI 怎么审」
+    lit: [1.88, 3.48, 5.0, 7.4]         // 103 句：「换个干净的上下文」「分多个角度审」「按需求加派」；104 句开口：第 4 格「先核引用，再逐条裁决」
+  };
+
+  function on(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+  function cur(el, g, size) {
+    T.current(el, g, size);
+    if (g === 0) el.style.outline = 'none';
+  }
+
+  Stage({
+    duration: 11.20,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.enter(T.$('sumTab'), T.p(t, CUE.tab, 0.45), -12);
+      for (var i = 0; i < 4; i++) {
+        var c = T.$('s' + (i + 1));
+        // 讲到这一格才出现；出现后留到页末
+        T.enter(c, T.p(t, CUE.lit[i], 0.45), 16);
+        cur(c, on(t, CUE.lit[i] + 0.2, i < 3 ? CUE.lit[i + 1] : 999), 10);
+        if (i > 0) {
+          var a = T.$('a' + i);
+          a.style.opacity = T.ease(T.p(t, CUE.lit[i], 0.4));
+        }
+      }
+    }
+  });
+</script>
+</body>
+</html>

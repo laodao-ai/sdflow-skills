@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- S47 · 标题卡 · script 231–233「所以我的判断是：……先把这两个用起来。」
+     判断句大字放在一张贴纸卡里，下面一张小条件条。「做什么」下划线蓝（OpenSpec）、「怎么做对」下划线琥珀（Superpowers），
+     字本身保持墨色，保证对比度。倾角小（定下来的结论）。
+     时刻按实测（2026-10-06，frame-times.py）：判断卡 0 秒（231 句开口），条件条在 233 句开口（7.04 秒）。 -->
+<html lang="zh-CN" data-frame-id="S47">
+<head>
+<meta charset="utf-8">
+<title>S47 · 我的判断</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .verdict { left:160px; top:250px; width:1600px; height:380px; padding: 40px 64px; display:flex; align-items:center; }
+  .verdict .big { font-size: 108px; line-height: 1.3; }
+  .verdict .tab { font-size: 44px; }
+  .u-os { border-bottom: 12px solid var(--blue); padding-bottom: 2px; }
+  .u-sp { border-bottom: 12px solid var(--amber); padding-bottom: 2px; }
+  .cond { left: 200px; top: 760px; font-size: 46px; padding: 18px 36px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card verdict" id="v" data-r="-1">
+    <div class="tab ink">我的判断</div>
+    <div class="big">配起来，能管住「<span class="u-os">做什么</span>」<br>和「<span class="u-sp">怎么做对</span>」</div>
+  </div>
+  <div class="chip cond" id="cond" data-r="1.5">还在一句话让 AI 开写的，先把这两个用起来</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 8,
+    init: function () { return T.fonts('我的判断配起来能管住「做什么」和「怎么做对」'); },
+    render: function (t) {
+      T.enter(T.$('v'), T.p(t, 0.0, 0.7), 30);
+      T.enter(T.$('cond'), T.p(t, 7.04, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

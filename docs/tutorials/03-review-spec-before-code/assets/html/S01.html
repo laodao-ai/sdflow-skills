@@ -1,0 +1,341 @@
+<!doctype html>
+<!-- S01 · 机制动画 + 终端实录 · script 1–7「AI 写的 Spec，能直接拿去生成代码吗？……它查了一下，认为是规格里的测试写错了，改正以后才继续。」
+     示意画面（右上角「示意」），下半段是真实终端回放。原 S02（终端）合并进本页（作者 2026-10-23 定）：只留黄框那一页，前面的回放不要。
+     上半：首期那个最小循环，两格：规格（蓝）→ 开发（琥珀）。
+     - 片头：开头盖一层主封面（assets/cover/，和封面同一份组件，接法照第 2 期 S01）。时间按 visual-v4.md「片头」：
+       0–2.0 秒全显，2.0–2.2 秒淡出，2.2–2.5 秒主卡进场；第 1 句没念完画面就先动起来（作者 2026-10-11 定，试行）。
+       分镜写「第 1 句念完前是封面」，和 visual-v4 的 2.0 秒不一致，这里按 visual-v4（第 2 期同做法）。
+       cover.js 不存在时（HAS_COVER 为假）跳过封面，两张卡从 0.2 秒进场，不留空屏。
+       封面和主卡不交叉淡化；「示意」角标等封面走完再淡入。
+     - 两张卡一次落下：规格（蓝标签，副标 OpenSpec）、开发（琥珀标签，副标 Superpowers：写计划、按计划写代码）。
+     - 第 2 句「规格写好了就开始写代码」：规格 → 开发 一条前进箭头擦出。
+     - 第 3 句「规格出错了，开发也照做了」：规格上圈出一处错（墨色虚线框，不用红：红只表示测试失败）；
+       开发照样打勾，旁注「照做了」。
+     - 第 4 句开口（14.04 秒）：两张卡连同箭头、错框、打勾、旁注装在 #loop 里，0.6 秒缩到 0.5 倍移到画面上方居中，让出下半屏。
+       #loop 本身不带 data-r（theme.js 会拿 data-r 改它的 transform）。缩小后不碰右上角「示意」。
+     下半：终端实录（cast 03-sp-subagent-dev，首期 assets/casts/ 复制到本期），约 S02 窗口的 0.67 倍。
+     - 14.34 秒淡入。不回放前面那段，播放器直接定在回放秒 190（原 S02 的最后一帧，黄框那一页），静止显示；不加速，不标倍速。
+     - 底部状态栏、启动头、输入框里提前打好的字：同首期 S35g，按行文字盖住。
+     - 框（黄色，只给当前一个）：主会话那句「The plan's input 81.2 would alert after Task 2 …」，第 6 句开口出现，留到结尾。
+     - 小卡「需求和测试对不上」放在终端右侧，不压终端：第 4 句开口落下，先只有「需求」一行；第 5 句出「测试」一行；
+       测试那一行用墨色虚线框（红只表示测试失败或通过，这里是规格里写错的一条，不是测试结果，作者 10-25 定）。小卡留到结尾，不淡出。
+     - 放大（作者 10-23 定）：26.44 秒起 0.6 秒，黄框那两行长成一张放大卡，起点 = 黄框此刻的位置和尺寸，终点 x 110–1840、y 690–922
+       （盖在终端下半部，底边加投影不过 930，字幕带 y ≥ 940 无内容；小卡底边约 660，不压；比原来下移 18px，让引线露出一段）。同时 .clip 上盖 0.35 的黑层压暗终端。留到结尾。
+       放大卡是终端深底 + 墨描边 + 墨色硬投影，等宽字，原文完整，「The plan's input 81.2 would alert after Task 2」加粗加奶白下划线，
+       下面附中文译文（visual-v4：引用英文附中文）。不用黄色实底：黄实底只表示 AI 的猜；黄色只留给黄框这个「当前」；不用红绿。
+     - 引线（visual-v4 4.7，10-24 新规则）：本页只有这一张放大卡，不存在共存还是一次一张。卡长出时用 T.lead() 画一根黄色细线（2px，不加箭头），
+       从黄框离卡最近的角连到卡离黄框最近的角，随卡展开从黄框一端擦出；线在 #leads 层（theme.js 新建，z-index 20），在终端和压暗层之上、放大卡（z-index 30）之下。
+       黄框的矩形在第一次画到黄框时量一次（先把窗口摆到终态缩放 0.63 再量，量完恢复）；卡的终点矩形直接用 ZOOM_END。
+     窗口本身不倾斜，只让标签倾斜（终端要能读）。内容都在 y 920 以上，避开字幕带（y ≥ 940）。
+     配色（2026-10-23）：封面区不动；两张大卡保持奶白，只靠标签区分：规格标签蓝（OpenSpec）、开发标签琥珀（Superpowers）（作者 10-23 定）；
+       「实录」标签保持原来的奶白 / 墨，和终端深底区分（作者 10-23 定）；小卡里「测试」那行改墨色虚线框（红只表示测试失败或通过）；黄框仍是唯一的当前。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。第 1 句 1.04，第 2 句 4.72，第 3 句 10.72，
+     第 4 句 14.24，第 5 句 19.36，第 6 句 26.24，第 7 句 30.56，全页 36.08。 -->
+<html lang="zh-CN" data-frame-id="S01">
+<head>
+<meta charset="utf-8">
+<title>S01 · 规格出错，开发照做</title>
+<link rel="stylesheet" href="lib/asciinema-player.css">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../../assets/cover/cover.css">
+<style>
+  /* 循环容器：和舞台一样大，子元素的坐标不变；动画只改容器的 transform。 */
+  #loop { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 960px 525px; }
+
+  .st { top: 330px; width: 720px; height: 310px; padding: 0; }
+  .st .tab { font-size: 44px; }
+  .st .sub { position: absolute; left: 36px; top: 52px; font-weight: 600; font-size: 30px; color: var(--ink); white-space: nowrap; }
+  #cs { left: 130px; } #cc { left: 1070px; }
+  .bar { position: absolute; left: 36px; height: 20px; border-radius: 10px; background: var(--cream-dim); }
+  .bar.h { height: 30px; border-radius: 15px; background: var(--ink); }
+  /* 规格里出错的那一条：墨色虚线框圈住 */
+  #errbar { position: absolute; left: 24px; top: 188px; width: 450px; height: 44px; box-sizing: border-box;
+            border: 4px dashed var(--ink); border-radius: 8px; opacity: 0; }
+  #errtag { left: 150px; top: 690px; }
+
+  .fa { position: absolute; left: 870px; top: 455px; width: 180px; height: 50px; }
+
+  .tick { position: absolute; width: 64px; height: 64px; box-sizing: border-box; border-radius: 50%;
+          background: var(--cream); border: 5px solid var(--ink); color: var(--ink);
+          display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 36px; }
+  #tb { left: 1090px; top: 676px; }
+  #done { left: 1190px; top: 690px; }
+
+  /* 终端窗口：布局尺寸 1620×908，缩到 0.63（≈ 1021×572），左上角定位。底边 330+572 = 902，加投影不过 920。 */
+  .window { left: 110px; top: 330px; width: 1620px; height: 908px; padding: 18px 20px; overflow: visible; transform-origin: 0 0; opacity: 0; }
+  .clip { position: absolute; left: 20px; top: 18px; width: 1580px; height: 872px; overflow: hidden; }
+  #term { position: absolute; left: 0; top: 0; width: 1580px; height: 1004px; }
+  /* 播放器暂停时会画播放按钮和加载圈；画面不可交互，全部藏掉。 */
+  #term .ap-overlay-start, #term .ap-overlay-loading,
+  #term .ap-overlay-help, #term .ap-overlay-info { display: none !important; }
+  /* 终端底色跟随主题，盖过 cast 自带的底色。 */
+  #term .ap-player { --term-color-background: #1b1b1d !important; }
+  .mask { position: absolute; right: 0; background: #1b1b1d; display: none; }
+  /* 框在缩小后的窗口里，边框放粗一点，缩完还有 4–5px。 */
+  .qbox { position: absolute; left: 6px; width: 1568px; box-sizing: border-box; border: 7px solid transparent; border-radius: 8px; opacity: 0; }
+  .window .tab { top: -46px; }
+  .window .tab .m { font-family: var(--mono); font-weight: 500; font-size: 30px; margin-left: 14px; }
+
+  /* 压暗层：放大卡出现时盖在终端内容上，在黄框之下（黄框那行同样被压暗，框本身不受影响）。 */
+  #dim { position: absolute; left: 0; top: 0; width: 1580px; height: 872px; background: #000; opacity: 0; }
+  /* 放大卡：位置和尺寸由脚本从黄框插值到终点（x 110–1840，y 672–922）；内容按终点尺寸排版，起点处被裁掉。 */
+  #zoom { position: absolute; left: 110px; top: 690px; width: 1730px; height: 232px; box-sizing: border-box; overflow: hidden; opacity: 0;
+          z-index: 30; padding: 22px 40px; background: var(--term); border: 5px solid var(--ink); border-radius: 10px; box-shadow: 8px 8px 0 var(--ink); }
+  #zoom .en { font-family: var(--mono); font-size: 28px; line-height: 40px; color: #cfcbc2; }
+  #zoom .en b { color: var(--cream); font-weight: 800; text-decoration: underline; text-decoration-color: var(--cream); text-decoration-thickness: 3px; text-underline-offset: 6px; }
+  #zoom .zh { margin-top: 12px; font-family: var(--body); font-weight: 600; font-size: 26px; line-height: 36px; color: var(--cream); }
+
+  /* 小卡：放在终端右侧的舞台空白处，不压终端（终端右沿 ≈ 1131）。 */
+  #pair { left: 1200px; top: 420px; width: 640px; padding: 22px 26px 24px; box-shadow: 8px 8px 0 var(--ink); }
+  #pair .row { display: flex; align-items: center; gap: 18px; padding: 8px 14px; border: 4px dashed transparent; border-radius: 8px; font-size: 38px; font-weight: 600; }
+  #pair .row + .row { margin-top: 10px; }
+  #pair .k { flex: none; width: 84px; font-family: var(--display); font-weight: 800; }
+  #pair .v { font-family: var(--mono); font-weight: 700; }
+  #pair .tab { font-size: 34px; top: -34px; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div id="loop">
+    <div class="card st" id="cs" data-r="-1">
+      <div class="tab os" data-r="-2">规格</div>
+      <div class="sub">OpenSpec</div>
+      <div class="bar h" style="top:110px;width:170px"></div>
+      <div class="bar" style="top:158px;width:420px"></div>
+      <div class="bar" style="top:200px;width:380px"></div>
+      <div class="bar" style="top:242px;width:300px"></div>
+      <div id="errbar"></div>
+    </div>
+    <div class="tag" id="errtag" data-r="-4">有一处错</div>
+
+    <div class="card st" id="cc" data-r="-1.5">
+      <div class="tab sp" data-r="2">开发</div>
+      <div class="sub">Superpowers：写计划、按计划写代码</div>
+      <div class="bar h" style="top:110px;width:190px"></div>
+      <div class="bar" style="top:158px;width:460px"></div>
+      <div class="bar" style="top:200px;width:400px"></div>
+      <div class="bar" style="top:242px;width:480px"></div>
+    </div>
+
+    <!-- 前进箭头：规格 → 开发 -->
+    <svg class="fa" id="fa1" viewBox="0 0 190 50" aria-hidden="true">
+      <path d="M8 25 H166" fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="8" stroke-linecap="round"/>
+      <polygon points="164,8 190,25 164,42" fill="#161616" fill-opacity=".85"/>
+    </svg>
+
+    <div class="tick" id="tb" data-r="0">✓</div>
+    <div class="tag" id="done" data-r="3.5">照做了</div>
+  </div>
+
+  <div class="window" id="win">
+    <div class="clip" id="clip">
+      <div id="term"></div>
+      <div id="dim"></div>
+      <div class="qbox" id="b1"></div>
+    </div>
+    <div class="tab ink">实录<span class="m">sdd-tdd-loop-demo</span></div>
+  </div>
+
+  <div id="zoom">
+    <div class="en">The implementer's change to the characterization test is sound. <b>The plan's input 81.2 would alert after Task 2</b>, so the empty-stderr assertion could never hold. I'll rule on that, then send the task to review.</div>
+    <div class="zh">实现者改测试改对了。计划里的输入 81.2，做完任务 2 就会告警，所以「stderr 为空」这条断言不可能成立。我先裁定，再送去评审。</div>
+  </div>
+
+  <div class="card" id="pair" data-r="1.5">
+    <div class="tab" data-r="-2">需求和测试对不上</div>
+    <div class="row" id="r1"><span class="k">需求</span><span class="v">&gt; 80 → 告警</span></div>
+    <div class="row" id="r2"><span class="k">测试</span><span class="v">81.2 → 不告警</span></div>
+  </div>
+
+  <!-- 片头封面，盖在最上层。 -->
+  <div id="cover"></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script src="../../assets/cover/cover.js"></script>
+<script src="lib/asciinema-player.min.js"></script>
+<script src="casts/03-sp-subagent-dev.js"></script>
+<script>
+  var HAS_COVER = typeof Cover === 'function';
+  var COVER_END = HAS_COVER ? 2.0 : 0;   // 封面全显到 2.0 秒，2.0–2.2 淡出，2.2 主卡进场；没有封面组件时两张卡 0.2 秒进场
+
+  // 口播节点（秒，画面内，按录音实测：词首字开始时间减 0.2 秒）。
+  var AT = {
+    cards: COVER_END + 0.2,  // 两张卡落下
+    f1: 7.72,                // 第 2 句「规格写好了就开始写代码」：规格 → 开发
+    err: 10.52,              // 第 3 句「规格出错了」：圈出一处错
+    ticks: 11.56,            // 「开发也照做了」：开发打勾
+    done: 12.04,             // 旁注「照做了」
+    shrink: 14.04,           // 第 4 句开口：整个循环缩小上移（0.6 秒）
+    term: 14.34,             // 终端窗口淡入
+    pair: 14.54,             // 小卡落下，先只有「需求」一行
+    row2: 19.16,             // 第 5 句开口：「测试」一行出现
+    red: 23.16,              // 第 5 句「81.2 度不告警」：测试那一行红框
+    box: 26.04,              // 第 6 句开口：主会话那句加黄框，留到结尾
+    zoom: 26.44              // 黄框那行长成放大卡（0.6 秒），同时压暗终端，留到结尾
+  };
+  var ZOOM_END = { x: 110, y: 690, w: 1730, h: 232 };   // 放大卡终点，底边 922，加投影不过 930
+
+  var CAST_SEC = 190;                     // 回放秒 190 = 原 S02 最后一帧，主会话那句所在的页
+  var WIN_SCALE = 0.63;                   // 终端窗口缩放
+  var LOOP_SCALE = 0.5, LOOP_DY = -360;   // 循环缩小后的倍数；容器中心（y 525）上移到约 165
+
+  var YELLOW = [245, 207, 74];
+  var MAIN_LINE = ["The plan's input 81.2 would alert after Task 2", null, 1];
+  var player;
+  var LEAD = null;   // 放大卡的引线，第一次画到黄框时建一次
+
+  function lines() { return T.all('#term .ap-line'); }
+  function find(L, text, after) {
+    for (var i = after || 0; i < L.length; i++) if (L[i].textContent.indexOf(text) >= 0) return i;
+    return -1;
+  }
+  // 行在 .clip 里的上下沿（px，按窗口自己的布局坐标）。
+  function span(L, i0, i1) {
+    var clip = T.$('clip').getBoundingClientRect();
+    var k = T.$('win').getBoundingClientRect().width / T.$('win').offsetWidth;  // 屏幕像素 ÷ 布局像素，含舞台与窗口两层缩放
+    return { top: (L[i0].getBoundingClientRect().top - clip.top) / k, bottom: (L[i1].getBoundingClientRect().bottom - clip.top) / k };
+  }
+
+  // 引线：黄框在窗口里，窗口缩放 0.63，所以先把窗口摆到终态缩放再量黄框，量完恢复。
+  function makeLead() {
+    var win = T.$('win'), prev = win.style.transform;
+    win.style.transform = 'scale(' + WIN_SCALE + ')';
+    LEAD = T.lead(T.rect(T.$('b1')), ZOOM_END);
+    win.style.transform = prev;
+  }
+
+  // 要盖住的行：[起始行, 结束行, 左边留几个字符]。
+  function maskRows(L) {
+    var out = [];
+    for (var i = 0; i < L.length; i++) {
+      var s = L[i].textContent;
+      // 启动头：版本号、模型名和套餐、目录。
+      if (/Claude Code v\d/.test(s)) { out.push([Math.max(i - 1, 0), Math.min(i + 2, L.length - 1), 0]); }
+      else if (s.indexOf('· Claude Pro') >= 0) { out.push([i, Math.min(i + 1, L.length - 1), 0]); }
+    }
+    // 底部状态栏：从模型名 / 费用那一行盖到底。
+    for (var j = 0; j < L.length; j++) {
+      if (/Cost \$|Context\s+\d+%|Usage\s+\d+%/.test(L[j].textContent)) { out.push([j, L.length - 1, 0]); break; }
+    }
+    // 输入框里提前打好、当时还没发出去的字：留下「❯」，盖住后面的字。
+    for (var k = L.length - 1; k > 0; k--) {
+      var t = L[k].textContent;
+      if (t.charAt(0) === '❯' && L[k - 1].textContent.indexOf('────') >= 0) {
+        if (t.slice(1).trim() && t.indexOf('Message @') < 0) out.push([k, k, 2]);
+        break;
+      }
+    }
+    return out;
+  }
+
+  function overlays(t) {
+    var L = lines();
+    var clip = T.$('clip');
+    var rows = maskRows(L);
+    var cw = 1580 / 120;
+    var masks = T.all('#clip .mask');
+    while (masks.length < rows.length) {
+      var d = document.createElement('div');
+      d.className = 'mask';
+      clip.insertBefore(d, T.$('b1'));
+      masks.push(d);
+    }
+    masks.forEach(function (m, n) {
+      if (n >= rows.length) { m.style.display = 'none'; return; }
+      var s = span(L, rows[n][0], rows[n][1]);
+      m.style.display = 'block';
+      m.style.left = (rows[n][2] * cw) + 'px';
+      m.style.top = s.top + 'px';
+      m.style.height = (s.bottom - s.top) + 'px';
+    });
+
+    // 主会话那句：找得到才框；找不到框不显示。
+    var box = T.$('b1');
+    var i0 = find(L, MAIN_LINE[0]);
+    if (i0 < 0 || t < AT.box) { box.style.opacity = 0; T.$('zoom').style.opacity = 0; if (LEAD) T.leadDraw(LEAD, 0); return; }
+    var i1 = MAIN_LINE[1] ? find(L, MAIN_LINE[1], i0) : -1;
+    if (i1 < 0) i1 = Math.min(i0 + MAIN_LINE[2], L.length - 1);
+    var s = span(L, i0, i1);
+    var g = T.ease(T.p(t, AT.box, 0.35));
+    var rgb = YELLOW.join(',');
+    box.style.opacity = 1;
+    box.style.top = (s.top - 4) + 'px';
+    box.style.height = (s.bottom - s.top + 8) + 'px';
+    box.style.borderColor = 'rgba(' + rgb + ',' + g + ')';
+    box.style.boxShadow = '0 0 40px rgba(' + rgb + ',' + (0.45 * g) + '), inset 0 0 24px rgba(' + rgb + ',' + (0.25 * g) + ')';
+
+    // 放大卡：起点取黄框此刻在舞台里的位置和尺寸，插值到终点。
+    var z = T.ease(T.p(t, AT.zoom, 0.6));
+    var zm = T.$('zoom');
+    T.$('dim').style.opacity = 0.35 * T.ease(T.p(t, AT.zoom, 0.4));
+    if (!LEAD) makeLead();
+    T.leadDraw(LEAD, z);
+    if (z <= 0) { zm.style.opacity = 0; return; }
+    var st = T.$('stage').getBoundingClientRect();
+    var kk = st.width / 1920;
+    var br = box.getBoundingClientRect();
+    var x0 = (br.left - st.left) / kk, y0 = (br.top - st.top) / kk, w0 = br.width / kk, h0 = br.height / kk;
+    zm.style.left = (x0 + (ZOOM_END.x - x0) * z) + 'px';
+    zm.style.top = (y0 + (ZOOM_END.y - y0) * z) + 'px';
+    zm.style.width = (w0 + (ZOOM_END.w - w0) * z) + 'px';
+    zm.style.height = (h0 + (ZOOM_END.h - h0) * z) + 'px';
+    zm.style.opacity = Math.min(1, z * 4);
+  }
+
+  Stage({
+    duration: 36.08,
+    init: function () {
+      player = AsciinemaPlayer.create(
+        { data: window.CASTS['03-sp-subagent-dev'] },
+        T.$('term'),
+        { controls: false, autoPlay: false, fit: 'both', idleTimeLimit: 2 }
+      );
+      var jobs = [T.fonts('示意规格开发OpenSpecSuperpowers：写计划、按计划写代码有一处错照做了✓实录需求和测试对不上告警')];
+      if (HAS_COVER) jobs.push(Cover(T.$('cover'), { mode: 'main', base: '../../assets/cover/', brand: '../../../shared/logo.svg' }));
+      return Promise.all(jobs);
+    },
+    render: function (t) {
+      // 片头封面：0–2.0 秒全显，2.0–2.2 秒淡出；「示意」等封面走完再淡入。
+      T.$('cover').style.opacity = HAS_COVER ? 1 - T.p(t, COVER_END, 0.2) : 0;
+
+      // 两张卡
+      T.enter(T.$('cs'), T.p(t, AT.cards, 0.3), 20);
+      T.enter(T.$('cc'), T.p(t, AT.cards + 0.15, 0.3), 20);
+
+      // 第 2 句：前进箭头
+      T.wipe(T.$('fa1'), T.p(t, AT.f1, 0.5), 'x');
+      T.$('fa1').style.opacity = t >= AT.f1 ? 1 : 0;
+
+      // 第 3 句：规格上圈出一处错（虚线框），开发照样打勾
+      T.$('errbar').style.opacity = T.ease(T.p(t, AT.err, 0.4));
+      T.enter(T.$('errtag'), T.p(t, AT.err, 0.45), -10);
+      T.enter(T.$('tb'), T.p(t, AT.ticks, 0.35), 8);
+      T.enter(T.$('done'), T.p(t, AT.done, 0.45), 10);
+
+      // 第 4 句开口：整个循环缩小上移
+      var e = T.ease(T.p(t, AT.shrink, 0.6));
+      T.$('loop').style.transform = 'translate(0px,' + (LOOP_DY * e) + 'px) scale(' + (1 - (1 - LOOP_SCALE) * e) + ')';
+
+      // 终端窗口淡入（不用 T.enter：它会覆盖 scale）
+      var w = T.ease(T.p(t, AT.term, 0.4));
+      T.$('win').style.opacity = w;
+      T.$('win').style.transform = 'translate(0px,' + ((1 - w) * 20) + 'px) scale(' + WIN_SCALE + ')';
+
+      // 小卡：第 4 句落下，第 5 句出测试那一行，「81.2 度不告警」时红框（红 = 测试失败）。留到结尾。
+      T.enter(T.$('pair'), T.p(t, AT.pair, 0.5), -16);
+      var r = T.ease(T.p(t, AT.red, 0.35));
+      var row = T.$('r2');
+      row.style.opacity = T.ease(T.p(t, AT.row2, 0.4));
+      row.style.borderColor = 'rgba(22,22,22,' + r + ')';
+
+      // seek 完再等一帧，让播放器把行写进 DOM，再按行文字定位遮罩和框。
+      return Promise.resolve(player.seek(CAST_SEC))
+        .then(function () { return new Promise(function (res) { requestAnimationFrame(function () { res(); }); }); })
+        .then(function () { overlays(t); });
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!doctype html>
+<!-- S16 · 角色图 · script 第 11 轮后 9 句：「ticket 拆好了，接下来怎么生成合格的代码呢？……缺信息报「要上下文」，做不下去报「卡住了」。」
+     ticket 结构取自示例项目 alarm-notify（6 个 ticket），标「实录 · 示例项目」；角色图本身是示意。
+     角色图：主会话是 Agent（六边形）；每个 ticket 派一个新的 Agent（visual-v4 第五节，只用几何图形，名字贴纸挂在方块下沿外 18px）。
+     - 第 1 句：主会话（编排）+ 六个 ticket，六条线从主会话连出去；「实录 · 示例项目」标签。
+     - 第 2 句：主会话亮起（黄描边），给每个 ticket 派一个 Agent。
+     - 第 3 句：每个 Agent 出「空白上下文」标签。
+     - 第 4 句：ticket 1、2、3 同时亮起（黄描边），各在一个 worktree 框里；ticket 4、5、6 随后一个接一个亮。
+     - 第 5 句：旁边出小字卡「worktree：同一个仓库的另一份独立目录，改动互不干扰」（放在 worktree 框下方右侧，不挡 Agent 和锁）。
+     - 第 6 句：第一个 Agent 只连到 ticket 和「硬约束」两张卡。
+     - 第 7 句：两把锁：设计文件、完成勾。
+     - 第 8 句：状态牌 DONE、DONE_WITH_CONCERNS 依次亮，后者旁小字「这次 ticket 4 报的就是它」。
+     - 第 9 句：状态牌 NEEDS_CONTEXT、BLOCKED 依次亮，BLOCKED 一个箭头指回主会话。
+     配色：角色保持炭灰中性；「硬约束」属于规格一侧，卡带蓝色标签、卡底奶白；不用红绿（BLOCKED 不是测试失败）；黄只作「当前」描边。
+     内容都在 y 920 以内（名字贴纸挂在方块下沿外 18px），避开字幕带。
+     口播时刻按每分钟 220 字估算（标点算字，英文词算 2 字，句间 0.5 秒；还没录音；2026-10-31 按第 11 轮的 9 句重估），录音后用 frame-times.py 对齐：
+       1 句 0.0 · 2 句 6.0 · 3 句 13.0 · 4 句 19.2 · 5 句 26.0 · 6 句 33.6 · 7 句 42.5 · 8 句 52.0 · 9 句 59.9，第 9 句约 65.9 念完。 -->
+<html lang="zh-CN" data-frame-id="S16">
+<head>
+<meta charset="utf-8">
+<title>S16 · 每个 ticket 派一个新 agent</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .tile { position: absolute; box-sizing: border-box; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 12px 12px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 96px; height: 96px; margin-top: -24px; }
+  .tile .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+          padding: 8px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1; }
+  #main { left: 60px; top: 40px; width: 300px; height: 160px; }
+  .ag { width: 250px; height: 150px; top: 495px; }
+  .ag .name { font-size: 40px; }
+
+  /* 六列：列左边 70 + 300 * (n-1)，宽 250 */
+  .tk { top: 320px; width: 250px; height: 80px; padding: 0; display: flex; align-items: center; justify-content: center;
+        font-family: var(--display); font-weight: 800; font-size: 44px; }
+  .blank { position: absolute; top: 413px; font-size: 28px; padding: 4px 14px; }
+  #t1, #a1 { left: 70px; } #t2, #a2 { left: 370px; } #t3, #a3 { left: 670px; }
+  #t4, #a4 { left: 970px; } #t5, #a5 { left: 1270px; } #t6, #a6 { left: 1570px; }
+  #b1 { left: 130px; } #b2 { left: 430px; } #b3 { left: 730px; }
+  #b4 { left: 1030px; } #b5 { left: 1330px; } #b6 { left: 1630px; }
+
+  /* worktree 框：虚线，不倾斜；名字贴在下沿，避开上方的连线 */
+  .ws { position: absolute; box-sizing: border-box; border: 5px dashed var(--ink); border-radius: 14px; top: 290px; width: 290px; height: 410px; }
+  #ws1 { left: 50px; } #ws2 { left: 350px; } #ws3 { left: 650px; }
+  .ws .tab { left: 14px; top: auto; bottom: -40px; font-size: 30px; padding: 2px 18px; }
+
+  /* 第 5 句：worktree 说明卡，放在 worktree 框下方右侧（y 706 起），在 Agent 名字贴纸之下、锁之上 */
+  #wn { left: 900px; top: 712px; font-size: 32px; font-weight: 600; padding: 10px 24px; white-space: nowrap; }
+  #hc { left: 60px; top: 790px; width: 520px; height: 90px; padding: 0 30px; display: flex; align-items: center; }
+  #hc .tab { left: 14px; top: -34px; font-size: 32px; padding: 2px 18px; background: var(--blue); }
+  #hc div.t { font-size: 36px; font-weight: 600; line-height: 1.35; }
+  .lock { position: absolute; top: 805px; display: flex; align-items: center; gap: 12px; font-size: 32px; padding: 8px 22px 8px 16px; }
+  .lock svg { width: 34px; height: 34px; flex: none; }
+  #k1 { left: 650px; } #k2 { left: 1090px; }
+
+  .st { position: absolute; font-family: var(--mono); font-weight: 700; font-size: 28px; padding: 6px 18px; }
+  .st i { font-style: normal; font-family: var(--body); font-weight: 600; margin-left: 12px; }
+  #s1 { left: 460px; top: 50px; } #s2 { left: 700px; top: 50px; }
+  #s3 { left: 460px; top: 140px; } #s4 { left: 900px; top: 140px; }
+  #sn { left: 1290px; top: 58px; font-size: 30px; padding: 6px 18px; }
+  #rec { left: 1330px; top: 135px; font-size: 34px; padding: 4px 20px; }
+
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#161616"/></marker></defs>
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="w1" d="M210 226 V262 H285 V314"/>
+      <path id="w2" d="M210 226 V262 H585 V314"/>
+      <path id="w3" d="M210 226 V262 H885 V314"/>
+      <path id="w4" d="M210 226 V262 H1185 V314"/>
+      <path id="w5" d="M210 226 V262 H1485 V314"/>
+      <path id="w6" d="M210 226 V262 H1785 V314"/>
+      <path id="x1" d="M105 404 V489"/>
+      <path id="x2" d="M405 404 V489"/>
+      <path id="x3" d="M705 404 V489"/>
+      <path id="x4" d="M1005 404 V489"/>
+      <path id="x5" d="M1305 404 V489"/>
+      <path id="x6" d="M1605 404 V489"/>
+      <path id="hw" d="M308 656 V782"/>
+      <path id="bk" d="M1030 208 V236 H410 V120 H378"/>
+    </g>
+  </svg>
+
+  <div class="ws" id="ws1" data-r="0" data-shadow="0"><div class="tab" data-r="-3">worktree A</div></div>
+  <div class="ws" id="ws2" data-r="0" data-shadow="0"><div class="tab" data-r="2">worktree B</div></div>
+  <div class="ws" id="ws3" data-r="0" data-shadow="0"><div class="tab" data-r="-2">worktree C</div></div>
+
+  <!-- 主会话：编排，一开始就在，黄描边（第 1 句） -->
+  <div class="tile" id="main" data-r="-1.5">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg>
+    <div class="name" style="--r:-2deg">主会话 · 编排</div>
+  </div>
+  <div class="tab ink" id="rec" data-r="-2">实录 · 示例项目</div>
+
+  <div class="card tk" id="t1" data-r="-1.2">ticket 1</div>
+  <div class="card tk" id="t2" data-r="1">ticket 2</div>
+  <div class="card tk" id="t3" data-r="-0.8">ticket 3</div>
+  <div class="card tk" id="t4" data-r="1.2">ticket 4</div>
+  <div class="card tk" id="t5" data-r="-1">ticket 5</div>
+  <div class="card tk" id="t6" data-r="0.8">ticket 6</div>
+
+  <div class="tile ag" id="a1" data-r="1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">Agent</div></div>
+  <div class="tile ag" id="a2" data-r="-1.5"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:-2deg">Agent</div></div>
+  <div class="tile ag" id="a3" data-r="1.5"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:-2deg">Agent</div></div>
+  <div class="tile ag" id="a4" data-r="-1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">Agent</div></div>
+  <div class="tile ag" id="a5" data-r="1.2"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:-2deg">Agent</div></div>
+  <div class="tile ag" id="a6" data-r="-1.4"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">Agent</div></div>
+  <div class="chip blank" id="b1" data-r="-3">空白上下文</div>
+  <div class="chip blank" id="b2" data-r="3">空白上下文</div>
+  <div class="chip blank" id="b3" data-r="-3">空白上下文</div>
+  <div class="chip blank" id="b4" data-r="3">空白上下文</div>
+  <div class="chip blank" id="b5" data-r="-3">空白上下文</div>
+  <div class="chip blank" id="b6" data-r="3">空白上下文</div>
+
+  <!-- 第 5 句：worktree 说明 -->
+  <div class="card" id="wn" data-r="-1">worktree：同一个仓库的另一份独立目录，改动互不干扰</div>
+
+  <!-- 第 6 句：硬约束 -->
+  <div class="card" id="hc" data-r="1.2"><div class="tab" data-r="-3">硬约束</div><div class="t">必须……　禁止……</div></div>
+  <!-- 第 7 句：两把锁 -->
+  <div class="chip lock" id="k1" data-r="-2"><svg viewBox="0 0 34 34" fill="none" stroke="#161616" stroke-width="3.5" stroke-linejoin="round"><rect x="6" y="15" width="22" height="16" rx="3" fill="#161616"/><path d="M11 15 V10 a6 6 0 0 1 12 0 V15"/></svg>设计文件 · 碰不了</div>
+  <div class="chip lock" id="k2" data-r="2"><svg viewBox="0 0 34 34" fill="none" stroke="#161616" stroke-width="3.5" stroke-linejoin="round"><rect x="6" y="15" width="22" height="16" rx="3" fill="#161616"/><path d="M11 15 V10 a6 6 0 0 1 12 0 V15"/></svg>完成勾 · 不能自己打</div>
+  <!-- 第 8–9 句：状态牌 -->
+  <div class="chip st" id="s1" data-r="-2">DONE<i>完成</i></div>
+  <div class="chip st" id="s2" data-r="1.5">DONE_WITH_CONCERNS<i>完成，有顾虑</i></div>
+  <div class="tag" id="sn" data-r="-3">这次 ticket 4 报的就是它</div>
+  <div class="chip st" id="s3" data-r="-1.5">NEEDS_CONTEXT<i>要上下文</i></div>
+  <div class="chip st" id="s4" data-r="2">BLOCKED<i>卡住了</i></div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按每分钟 220 字估算）。
+  var AT = {
+    base: 0.0,     // 第 1 句：主会话、六个 ticket、六条线
+    ag: 4.32,       // 第 2 句：主会话亮起，派出 Agent
+    blank: 11.2,   // 第 3 句：空白上下文标签
+    par: 16.48,     // 第 4 句：ticket 1、2、3 同时亮起，各在 worktree 里；4、5、6 随后依次亮
+    note: 22.96,    // 第 5 句：worktree 说明卡
+    hard: 27.92,    // 第 6 句：只连到 ticket、硬约束
+    lock: 34.8,    // 第 7 句：两把锁
+    st: 42.24,      // 第 8 句：DONE、DONE_WITH_CONCERNS
+    st2: 48.437      // 第 9 句：NEEDS_CONTEXT、BLOCKED，BLOCKED 指回主会话
+  };
+
+  function wire(el, p) {
+    var L = el.getTotalLength();
+    el.style.strokeDasharray = L; el.style.strokeDashoffset = L * (1 - p);
+    el.style.opacity = p > 0 ? 1 : 0;
+    el.style.markerEnd = p >= 0.99 ? 'url(#ah)' : 'none';
+  }
+  // 一段亮度：from 起亮，to 起灭
+  function glow(t, from, to) { return T.ease(T.p(t, from, 0.4)) * (1 - T.ease(T.p(t, to, 0.4))); }
+
+  // 2026-11-03：节点按本期 voice.srt 实测句子起点重排。
+  Stage({
+    duration: 53.737,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      var P = T.p, E = T.ease;
+
+      // 第 1 句：主会话 + 六个 ticket
+      T.enter(T.$('main'), P(t, AT.base, 0.5), 20);
+      T.enter(T.$('rec'), P(t, AT.base + 0.4, 0.4), -10);
+      for (var i = 1; i <= 6; i++) {
+        T.enter(T.$('t' + i), P(t, AT.base + 0.6 + i * 0.4, 0.45), 14);
+        wire(T.$('w' + i), E(P(t, AT.base + 0.9 + i * 0.4, 0.6)));
+      }
+
+      // 第 2 句：主会话亮起，给每个 ticket 派一个新 Agent
+      T.current(T.$('main'), E(P(t, AT.ag + 0.2, 0.4)) * (1 - E(P(t, AT.blank, 0.4))), 8);
+      for (var j = 1; j <= 6; j++) {
+        var s = AT.ag + 0.4 + (j - 1) * 0.7;
+        T.enter(T.$('a' + j), P(t, s, 0.5), 12);
+        wire(T.$('x' + j), E(P(t, s, 0.5)));
+      }
+
+      // 第 3 句：每个 Agent 一个「空白上下文」
+      for (var q = 1; q <= 6; q++) T.enter(T.$('b' + q), P(t, AT.blank + 0.5 + (q - 1) * 0.5, 0.4), -10);
+
+      // 第 4 句：ticket 1、2、3 同时亮，各在一个 worktree 里；ticket 4、5、6 随后一个接一个亮
+      for (var k = 1; k <= 3; k++) T.enter(T.$('ws' + k), P(t, AT.par, 0.5), 0);
+      var g123 = glow(t, AT.par + 0.3, AT.par + 3.0);
+      for (var m = 1; m <= 3; m++) T.current(T.$('t' + m), g123, 10);
+      T.current(T.$('t4'), glow(t, AT.par + 3.2, AT.par + 4.6), 10);
+      T.current(T.$('t5'), glow(t, AT.par + 4.6, AT.par + 6.0), 10);
+      T.current(T.$('t6'), glow(t, AT.par + 6.0, AT.note - 0.3), 10);
+
+      // 第 5 句：worktree 说明卡
+      T.enter(T.$('wn'), P(t, AT.note - 0.18, 0.5), 14);
+
+      // 第 6 句：Agent 1 只连到 ticket 和硬约束
+      T.enter(T.$('hc'), P(t, AT.hard, 0.5), 14);
+      wire(T.$('hw'), E(P(t, AT.hard + 0.3, 0.5)));
+
+      // 第 7 句：两把锁
+      T.enter(T.$('k1'), P(t, AT.lock + 0.6, 0.4), 12);
+      T.enter(T.$('k2'), P(t, AT.lock + 2.4, 0.4), 12);
+
+      // 第 8 句：DONE、DONE_WITH_CONCERNS（旁注）；第 9 句：NEEDS_CONTEXT、BLOCKED，BLOCKED 指回主会话
+      T.enter(T.$('s1'), P(t, AT.st + 0.4, 0.4), 12);
+      T.enter(T.$('s2'), P(t, AT.st + 2.8, 0.4), 12);
+      T.enter(T.$('sn'), P(t, AT.st + 4.6, 0.4), -8);
+      T.enter(T.$('s3'), P(t, AT.st2 + 0.2, 0.4), 12);
+      T.enter(T.$('s4'), P(t, AT.st2 + 3.0, 0.4), 12);
+      wire(T.$('bk'), E(P(t, AT.st2 + 3.6, 1.2)));
+    }
+  });
+</script>
+</body>
+</html>

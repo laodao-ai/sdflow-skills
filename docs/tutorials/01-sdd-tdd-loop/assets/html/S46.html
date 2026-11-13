@@ -1,0 +1,69 @@
+<!doctype html>
+<!-- S46 · 标题卡 · script 224–230「好，我们回到开头的那两种情况。……一步一步来。」
+     上排：S03 的两句话再出现（同样的墨色「第一件 / 第二件」标签，倾角 -2° / 1.5°）。
+     下排：各接一个答案。答案落到工具上，所以第一个用蓝（OpenSpec 管规格），第二个用琥珀（Superpowers 管测试）。
+     箭头从问题卡擦向答案卡，表示「接」。
+     时刻按实测（2026-10-07，frame-times.py）：224 句 0–2.48，225 句 3.60–4.88，226 句 5.60–8.80，227 句 9.76–13.36，228 句 14.64–16.40，229 句 17.60–19.36，230 句 20.08–22.40。
+     224 句 2026-10-07 从 S45a 移来（章节标签页不配口播），之后各时刻 +3.60。
+     第一张问题卡在开头出现，对应 224 句「回到开头的那两种情况」；第二张在 228 句开口（14.64）出现（作者 2026-10-06 定）。
+     箭头在答案那句开口（226 句 5.60、229 句 17.60），答案卡在念到卡上第一个词（问清楚 7.52、看测试 18.80）。 -->
+<html lang="zh-CN" data-frame-id="S46">
+<head>
+<meta charset="utf-8">
+<title>S46 · 两件事的答案</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .q { width: 760px; height: 190px; display: flex; align-items: center; padding: 20px 40px; }
+  .q .big { font-size: 64px; white-space: nowrap; }
+  .q .tab { font-size: 38px; }
+  .a { width: 760px; height: 290px; display: flex; align-items: center; padding: 30px 56px; }
+  .a .big { font-size: 80px; }
+  .a .tab { font-size: 42px; }
+  .arrow { position: absolute; width: 60px; height: 130px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card q" id="q1" data-r="-2" style="left:150px;top:180px">
+    <div class="tab ink">第一件</div>
+    <div class="big">做出来的不是我要的</div>
+  </div>
+  <div class="card q" id="q2" data-r="1.5" style="left:1010px;top:190px">
+    <div class="tab ink" style="transform:rotate(2deg)">第二件</div>
+    <div class="big">说做完了，其实不对</div>
+  </div>
+
+  <svg class="arrow" id="r1" style="left:490px;top:410px" viewBox="0 0 60 130">
+    <path d="M30 4 V96 M8 76 L30 112 L52 76" fill="none" stroke="#161616" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <svg class="arrow" id="r2" style="left:1350px;top:410px" viewBox="0 0 60 130">
+    <path d="M30 4 V96 M8 76 L30 112 L52 76" fill="none" stroke="#161616" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+  <div class="card a os" id="a1" data-r="1.5" style="left:150px;top:590px">
+    <div class="tab os">OpenSpec</div>
+    <div class="big">问清楚、<br>写成场景</div>
+  </div>
+  <div class="card a sp" id="a2" data-r="-1.5" style="left:1010px;top:600px">
+    <div class="tab sp">Superpowers</div>
+    <div class="big">看测试，<br>先失败再通过</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 19.60,
+    init: function () { return T.fonts('第一件二做出来的不是我要说完了，其实对问清楚、写成场景看测试先失败再通过'); },
+    render: function (t) {
+      T.enter(T.$('q1'), T.p(t, 0.0, 0.6), 30);
+      T.enter(T.$('q2'), T.p(t, 14.64, 0.6), 30);   // 228 句开口@14.64（实测）
+      T.wipe(T.$('r1'), T.p(t, 5.60, 0.5), 'y');
+      T.enter(T.$('a1'), T.p(t, 7.52, 0.6), 30);
+      T.wipe(T.$('r2'), T.p(t, 17.60, 0.5), 'y');
+      T.enter(T.$('a2'), T.p(t, 18.80, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

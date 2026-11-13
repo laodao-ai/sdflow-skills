@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- S04 · 标题卡 · script 13「大家好，我是老刀Cheney。」
+     署名卡：logo + 「老刀Cheney」（炭灰卡，同第 2 期 S34）；logo 用 channel/brand/logo/logo.svg 原样，相对路径引用，不复制、不改。
+     只有这一句：署名卡一开口就落下，居中放。
+     颜色：不上蓝 / 琥珀 / 黄；定下来的东西倾角 1–2°（theme.js 自动算）。内容整体在 y 790 以上。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。第 13 句 0.0，全页 2.40。 -->
+<html lang="zh-CN" data-frame-id="S04">
+<head>
+<meta charset="utf-8">
+<title>S04 · 署名</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .sig { left: 500px; top: 400px; width: 920px; height: 280px; padding: 0 40px; display: flex; align-items: center; justify-content: center; gap: 44px; }
+  .sig img { width: 190px; height: 190px; flex: none; }
+  .sig .big { font-size: 124px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card dark sig" id="sig" data-r="-1"><img src="img/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播时刻（秒，画面内，按录音实测）。
+  var AT = { sig: 0.0 };
+  Stage({
+    duration: 2.4,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.tilt();
+      T.enter(T.$('sig'), T.p(t, AT.sig, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

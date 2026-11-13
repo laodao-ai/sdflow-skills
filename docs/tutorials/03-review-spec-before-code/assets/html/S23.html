@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- S23 · 标题卡（对照 + 引文卡）· script 156–160「还有的问题，同样的审法跑几次也看不到。……分几路，每路一个角度，一路漏掉的，别的路能补上。」
+     第 6 章第 2 页。第 1–2 句（156、157）：S11a 那条推送 panic（r3 D2，r3 报告第 106 行）的两张小卡：左「三次自查：0 次」，右「这一套评审：4 路报出」，
+       4 路 = 对抗 A · 对抗 B · 工程审 · Go 领域（同 S11a）；对抗审是本期的粉，对抗 A / B 用浅粉，工程审、Go 领域奶白。
+     第 3–4 句（158、159）：引文卡（visual-v4 4.6）：出处卡在上「Anthropic · Building effective agents · 2024-12-19」，
+       原文与中文放同一张卡，在出处卡下面；158 句讲到文章时出处卡进场，159 句进原文与中文。
+       原文：Anthropic，《Building effective agents》，2024-12-19，投票（Parallelization）一节的第二个例子（2026-10-24 核对）。
+       英文逐字抄入；中文是按原意译的，作者录前对一遍。
+     第 5 句（160）：右栏三路小卡，每路一个角度，每路四格（四个问题）：已查到的格墨底，漏掉的格虚线框；第 1 路漏第 3 格，第 2 路查到。
+       念到「别的路能补上」时两路的第 3 格一起当前（黄描边）。示意，不加角标。
+     不放空壳：页头一张问题陈述贴纸，只有标题的时长 0.9 秒；左卡「三次自查：0 次」在 156 句念到「同样的审法看不到」时进场，右卡 157 句念到「这一套评审里」时进场。
+     句子起点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒）：156 句 0，157 句 4.72，158 句 13.20，159 句 18.56，160 句 26.20，念完 31.40；页时长 32.44。
+     内容整体在 y 900 以内；三路卡的标签与格子分开（10-25），避开底部字幕带。
+     配色：粉 = 对抗审（对抗 A / B 浅粉）；其余奶白 / 墨；黄只给「当前」。 -->
+<html lang="zh-CN" data-frame-id="S23">
+<head>
+<meta charset="utf-8">
+<title>S23 · 分几路：一路漏掉的别的路补上</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #q { left: 70px; top: 24px; font-size: 42px; }
+
+  /* 第一行：两张对照小卡 */
+  #cl { left: 70px; top: 176px; width: 560px; height: 150px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  #cl .tab, #cr .tab { font-size: 34px; }
+  #cl .big { font-size: 56px; white-space: nowrap; }
+  #cr { left: 700px; top: 176px; width: 1150px; height: 150px; padding: 0 30px; display: flex; align-items: center; gap: 24px; }
+  #cr .big { font-size: 48px; white-space: nowrap; }
+  #rts { display: flex; gap: 12px; }
+  #rts .chip { position: relative; font-size: 34px; padding: 8px 14px; box-shadow: 5px 5px 0 var(--ink); }
+  #rA, #rB { background: var(--pink-soft); }
+
+  /* 左栏：引文卡 */
+  .src { left: 70px; width: 1000px; padding: 10px 30px; }
+  #src { top: 420px; height: 118px; display: flex; flex-direction: column; justify-content: center; }
+  #src .a { font-family: var(--display); font-weight: 800; font-size: 42px; line-height: 1.2; white-space: nowrap; }
+  #src .b { font-weight: 600; font-size: 34px; line-height: 1.3; white-space: nowrap; }
+  #quote { left: 70px; top: 580px; width: 1000px; height: 250px; padding: 20px 30px; }
+  #quote .en { font-weight: 600; font-size: 29px; line-height: 1.3; }
+  #quote .cn { font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1.25; margin-top: 10px; }
+
+  /* 右栏：三路小卡 */
+  #cap { left: 1130px; top: 352px; }
+  /* 三路卡：格子贴卡底（下边距 12px），标签压在卡上沿外 34px，和格子之间留 8px 以上；卡距 158px 让下一张的标签不压上一张 */
+  .rt { left: 1130px; width: 720px; height: 108px; padding: 0 30px 12px; display: flex; align-items: flex-end; gap: 14px; }
+  .rt .tab { font-size: 34px; left: -12px; top: -34px; padding: 2px 20px; }
+  #r1 { top: 470px; } #r2 { top: 628px; } #r3 { top: 786px; }
+  .cell { position: relative; box-sizing: border-box; width: 78px; height: 56px; border-radius: 8px; border: 4px solid var(--ink);
+          display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 34px; }
+  .cell.on { background: var(--ink); color: var(--cream); }
+  .cell.off { border-style: dashed; color: rgba(22,22,22,.55); }
+  .rt .nt { font-weight: 600; font-size: 34px; margin-left: 10px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" id="q" data-r="-3.5">有的问题，同样的审法看不到</div>
+
+  <div class="card" id="cl" data-r="-0.8">
+    <div class="tab ink" data-r="-2">推送 panic 那一条</div>
+    <div class="big">三次自查：0 次</div>
+  </div>
+  <div class="card" id="cr" data-r="0.6">
+    <div class="tab ink" data-r="-2">同一条 · 换成这一套评审</div>
+    <div class="big">这一套评审：4 路报出</div>
+    <div id="rts">
+      <div class="chip" id="rA" data-r="-1.5">对抗 A</div>
+      <div class="chip" id="rB" data-r="1.5">对抗 B</div>
+      <div class="chip" id="rE" data-r="-1.2">工程审</div>
+      <div class="chip" id="rG" data-r="1.2">Go 领域</div>
+    </div>
+  </div>
+
+  <div class="card src" id="src" data-r="-0.4">
+    <div class="a">Anthropic · 2024-12-19</div>
+    <div class="b">《Building effective agents》</div>
+  </div>
+  <div class="card" id="quote" data-r="0.3">
+    <div class="en" id="qen">Reviewing a piece of code for vulnerabilities, where several different prompts review and flag the code if they find a problem.</div>
+    <div class="cn" id="qcn">审代码里的漏洞：几个不同的提示词各审一遍，谁发现问题就标出来</div>
+  </div>
+
+  <div class="tag" id="cap" data-r="0.8">每路一个角度 · 漏掉的格，别的路补上</div>
+  <div class="card rt" id="r1" data-r="-0.6">
+    <div class="tab ink" data-r="-2">第 1 路 · 角度 1</div>
+    <div class="cell on">①</div><div class="cell on">②</div><div class="cell off" id="m1">③</div><div class="cell on">④</div>
+  </div>
+  <div class="card rt" id="r2" data-r="0.6">
+    <div class="tab ink" data-r="-2">第 2 路 · 角度 2</div>
+    <div class="cell off">①</div><div class="cell on">②</div><div class="cell on" id="m2">③</div><div class="cell off">④</div>
+  </div>
+  <div class="card rt" id="r3" data-r="-0.4">
+    <div class="tab ink" data-r="-2">第 3 路 · 角度 3</div>
+    <div class="cell off">①</div><div class="cell off">②</div><div class="cell off">③</div><div class="cell on">④</div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒，页内）：按录音实测（frame-times.py，2026-10-25），取词首字实测开始时间减 0.2 秒。
+  var CUE = {
+    q: 0.1,                                   // 156 句：陈述贴纸
+    cl: 0.92, clEnd: 6.68,                     // 156 句末「同样的审法看不到」起，到 157 句「三次都没查到」
+    cr: 9.88, rts: [11.0, 11.25, 11.5, 11.75], // 「有四路报了」：右卡进场，四路依次
+    src: 13.0, srcEnd: 17.96,                 // 158 句：出处卡
+    quote: 18.36, cn: 19.0, quoteEnd: 25.6,    // 159 句：原文与中文
+    cap: 26.0, r: [26.48, 27.44, 28.4], fill: 30.08 // 160 句：三路小卡；念到「别的路能补上」第 3 格当前
+  };
+  var P = T.p, E = T.ease;
+  function gate(t, from, to) { return E(P(t, from, 0.4)) * (1 - E(P(t, to, 0.4))); }
+
+  Stage({
+    duration: 32.44,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.enter(T.$('q'), P(t, CUE.q, 0.45), -14);
+
+      // 157 句：左右对照
+      T.enter(T.$('cl'), P(t, CUE.cl, 0.45), 16);
+      T.current(T.$('cl'), gate(t, CUE.cl + 0.3, CUE.clEnd), 10);
+      T.enter(T.$('cr'), P(t, CUE.cr, 0.45), 16);
+      T.current(T.$('cr'), gate(t, CUE.cr + 0.3, CUE.src - 0.3), 10);
+      ['rA', 'rB', 'rE', 'rG'].forEach(function (id, n) { T.enter(T.$(id), P(t, CUE.rts[n], 0.4), 12); });
+
+      // 158–159 句：出处卡，原文与中文
+      T.enter(T.$('src'), P(t, CUE.src, 0.45), 16);
+      T.current(T.$('src'), gate(t, CUE.src + 0.3, CUE.srcEnd), 10);
+      T.enter(T.$('quote'), P(t, CUE.quote, 0.45), 16);
+      T.$('qen').style.opacity = E(P(t, CUE.quote, 0.4));
+      T.$('qcn').style.opacity = E(P(t, CUE.cn, 0.4));
+      T.current(T.$('quote'), gate(t, CUE.quote + 0.3, CUE.quoteEnd), 10);
+
+      // 160 句：三路小卡，一路漏的格另一路补上
+      T.enter(T.$('cap'), P(t, CUE.cap, 0.45), -10);
+      ['r1', 'r2', 'r3'].forEach(function (id, n) { T.enter(T.$(id), P(t, CUE.r[n], 0.45), 16); });
+      var g = E(P(t, CUE.fill, 0.4));
+      ['m1', 'm2'].forEach(function (id) {
+        var c = T.$(id);
+        c.style.outline = '6px solid rgba(245,207,74,' + g + ')';
+        c.style.outlineOffset = '5px';
+      });
+    }
+  });
+</script>
+</body>
+</html>

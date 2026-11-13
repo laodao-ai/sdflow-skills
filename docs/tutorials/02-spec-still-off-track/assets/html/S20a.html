@@ -1,0 +1,197 @@
+<!doctype html>
+<!-- S20a · 机制动画 · script 69–75「问清楚了，要写成规格文档，但是好几个文件，要怎么写，才不会改错、漏改呢？……同一件事，两个文档说的不一样，照哪个做，都有一个是错的。」
+     2026-10-19 第七轮改稿：全稿句号按 139 句重排
+     实录卡（示例项目旧流程 old-01 重画；review/old-flow-comparison.md 第二节「回改一致性」），右上角标「实录 · 示例项目」。只重画那两行，不贴整段。
+     原文行号已用 git 核过（示例项目 f2702c9）：GLOSSARY.md 第 30 行（分镜与 script-check 写 29，是「通知」词条的起始行 `**通知**：`，说法在第 30 行）；
+     alarm-notify/spec.md 第 211 行（NTF-13 正文在 208–211，「重启前处于超温事件中的设备……」在第 211 行）。画面上标的是 :30 和 :211。
+     句子与动画节点（时刻按录音实测，frame-times.py，2026-10-19，集中在下面的 CUE 常量里）：
+       69 句 好几个文件，怎么写才不会改错、漏改 → 一开口（0.15 秒）问题贴纸在屏幕正中放大出现（约 1.7 倍），停约 1 秒，再用 0.6 秒缩小并移到左上的位置；
+              落位后（约 1.6 秒）右上角「实录 · 示例项目」和下方两个代码窗口的空壳淡淡地出（透明度 .3，只有标签和标题栏，原文不显示）
+       70 句 先看原来的流程是怎么漏改的 → 「旧流程」小标
+       71 句 我拿示例项目，按原来的流程跑的一轮 → 上方一行「拷问 → 回改四个文档 + 术语表」
+       72 句 拷问完、回头改完四个文档，有两处说法打架 → 下方左右两个黑底代码窗口从空壳点亮，原文一行出现（标题栏 GLOSSARY.md:30 / spec.md:211，等宽字）
+       73 句 术语表里写着：一次超温，最多发一条「超温告警」的通知 → 左窗原文那一行加黄框，窗口下奶白小卡「即：……」
+       74 句 规格里却写着：服务重启以后，还在超温的设备，会再发一条 → 右窗原文那一行加黄框，窗口下奶白小卡「即：……」
+       75 句 同一件事，两个文档说的不一样，照哪个做，都有一个是错的 → 念到「两个文档说的不一样」前后，两窗之间出一道黄描边闪电，标「打架」；
+              念到「照哪个做」附近，四个文档和术语表之间连出虚线，标「改没改全？无法核对」（作者 2026-10-18 定），本页最后一句
+     文件原文一律黑底代码窗口（分镜「约定」· 文件原文，作者 2026-10-17 定）：窗口本身不倾斜（data-r="0"），只有「术语表」「规格」标签倾斜。
+     开头不留空屏（visual-v4 §4.8，作者 2026-10-18 定）：放大的问题贴纸本身就是开口 0.5 秒内的内容；贴纸缩小落位后，空壳淡入。
+     贴纸放大落位的做法：贴纸外包一层不带倾角类名的定位容器 #qw，对容器做 translate + scale；贴纸自己仍只由 T.enter 管倾角。
+     内容整体在 y 940 以上，避开字幕带。 -->
+<html lang="zh-CN" data-frame-id="S20a">
+<head>
+<meta charset="utf-8">
+<title>S20a · 旧流程回改：两处说法打架</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #real { right: 64px; top: 46px; }
+  /* 问题贴纸的定位容器：对它做 scale / translate；贴纸 #q 在里面，只管自己的倾角 */
+  #qw { left: 90px; top: 100px; transform-origin: 0 0; }
+  #qw .chip { left: 0; top: 0; }
+  #old { left: 90px; top: 214px; }
+  #f1 { left: 320px; top: 206px; }
+  #fa { left: 478px; top: 206px; font-family: var(--mono); font-weight: 700; font-size: 44px; color: var(--ink); }
+  #f2 { left: 556px; top: 206px; }
+
+  /* 文件原文：黑底代码窗口（基于 .cmd），顶部标题栏写文件与行号，窗口不倾斜，只有标签倾斜。 */
+  .src { top: 350px; width: 780px; height: 200px; padding: 0; overflow: visible; white-space: normal; }
+  #dl { left: 90px; }
+  #dr { left: 1050px; }
+  .src .tab { left: -12px; top: -50px; font-size: 34px; padding: 4px 20px; }
+  .src .bar { height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 22px; box-sizing: border-box;
+              background: var(--charcoal); border-bottom: 4px solid var(--ink); border-radius: 7px 7px 0 0;
+              font-size: 26px; line-height: 1; color: var(--cream); }
+  .src .body { padding: 18px 22px; display: flex; gap: 34px; font-size: 34px; line-height: 1.45; }
+  .src .ln { flex: none; color: var(--unlit); }
+  .src .code { flex: 1; white-space: pre-wrap; border-radius: 6px; padding: 0 8px; margin: 0 -8px; }
+  /* 白话解释：窗口下的奶白小卡 */
+  .say { top: 584px; padding: 10px 26px; font-weight: 600; font-size: 34px; white-space: nowrap; }
+  #sl { left: 110px; }
+  #sr { left: 1070px; }
+
+  #bolt { left: 896px; top: 410px; width: 128px; height: 240px; }
+  #fight { left: 892px; top: 340px; width: 136px; padding: 6px 0; text-align: center;
+           background: var(--ink); color: var(--cream); font-family: var(--display); font-weight: 800; font-size: 46px; }
+
+  .node { top: 750px; width: 236px; padding: 10px 0; text-align: center; font-size: 36px; }
+  #n0 { left: 150px; } #n1 { left: 480px; } #n2 { left: 810px; } #n3 { left: 1140px; } #n4 { left: 1470px; }
+  #links { left: 0; top: 600px; width: 1920px; height: 330px; }
+  #why { left: 760px; top: 850px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="tag" id="real">实录 · 示例项目</div>
+
+  <div class="abs" id="qw"><div class="chip" id="q">好几个文档，怎么写才不会改错、漏改？</div></div>
+
+  <div class="tag" id="old">旧流程</div>
+  <div class="chip" id="f1">拷问</div>
+  <span class="abs" id="fa">→</span>
+  <div class="chip" id="f2">回改四个文档 + 术语表</div>
+
+  <div class="cmd src" id="dl" data-r="0">
+    <div class="tab" data-r="-2" style="transform: rotate(-2deg)">术语表</div>
+    <div class="bar">GLOSSARY.md:30</div>
+    <div class="body" id="bl"><span class="ln">30</span><span class="code" id="kl">一个超温事件最多产生一条 triggered</span></div>
+  </div>
+  <div class="cmd src" id="dr" data-r="0">
+    <div class="tab" data-r="2" style="transform: rotate(2deg)">规格</div>
+    <div class="bar">spec.md:211</div>
+    <div class="body" id="br"><span class="ln">211</span><span class="code" id="kr">……重启后的下一条超温读数会再产生一条 triggered</span></div>
+  </div>
+  <div class="card say" id="sl">即：一次超温，最多一条超温告警</div>
+  <div class="card say" id="sr">即：重启后还在超温，再发一条</div>
+
+  <svg class="abs" id="bolt" viewBox="0 0 128 270" aria-hidden="true">
+    <polygon points="70,4 16,134 60,134 30,266 112,100 66,100 104,4" fill="#161616" stroke="#f5cf4a" stroke-width="7" stroke-linejoin="round"/>
+  </svg>
+  <div class="chip" id="fight">打架</div>
+
+  <svg class="abs" id="links" viewBox="0 600 1920 330" aria-hidden="true"></svg>
+  <div class="chip node" id="n0">proposal</div>
+  <div class="chip node" id="n1">design</div>
+  <div class="chip node" id="n2">specs</div>
+  <div class="chip node" id="n3">tasks</div>
+  <div class="chip node" id="n4">术语表</div>
+  <div class="tag" id="why">改没改全？无法核对</div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 节点时刻（秒）。按录音实测（frame-times.py，2026-10-19）。注释写的是对应全稿第几句。
+  var CUE = {
+    q: 0.15,         // 69 句一开口：问题贴纸在屏幕正中放大出现
+    qHold: 1.15,     // 69 句：放大停约 1 秒后开始缩小
+    qMove: 0.6,      // 缩小并移到左上位置用 0.6 秒
+    real: 1.7,       // 69 句：贴纸落位后，右上角「实录 · 示例项目」
+    shell: 1.6,      // 69 句：贴纸落位后，左右两个代码窗口的空壳（淡）
+    old: 7.5,        // 70 句「先看原来的流程」
+    flow: 13.7,      // 71 句「按原来的流程跑的一轮」：拷问 → 回改四个文档 + 术语表
+    docs: 17.1,      // 72 句「回头改完四个文档」：左右两个代码窗口点亮，原文出现
+    frameL: 22.1,    // 73 句「术语表里写着」：左窗原文一行加框，窗口下「即：……」小卡
+    frameR: 27.6,    // 74 句「规格里却写着」：右窗原文一行加框，窗口下「即：……」小卡
+    bolt: 34.9,      // 75 句「两个文档说的不一样」前后：黄描边闪电 + 「打架」
+    nodes: 37.2,     // 75 句「照哪个做」附近：五个节点
+    links: 37.8,     // 75 句：虚线连出（每条间隔 0.3 秒）
+    why: 37.9        // 75 句「都有一个是错的」：标「改没改全？无法核对」
+  };
+  var Q_SCALE = 1.7;        // 问题贴纸开头的放大倍数
+  var Q_CENTER = [960, 500]; // 放大时贴纸中心在画布上的位置
+  var SHELL = 0.3;  // 空壳透明度：讲到之前先占位，讲到时点亮到 1
+  var NODE_CX = [268, 598, 928, 1258, 1588];
+  var NODE_TOP = 750;
+  // 五条虚线：节点序号对（0 proposal 1 design 2 specs 3 tasks 4 术语表）
+  var PAIRS = [[0, 2], [1, 3], [2, 4], [0, 4], [1, 4]];
+  var NS = 'http://www.w3.org/2000/svg';
+
+  function buildLinks() {
+    var svg = T.$('links');
+    PAIRS.forEach(function (p, i) {
+      var x1 = NODE_CX[p[0]], x2 = NODE_CX[p[1]], h = 24 + 0.03 * Math.abs(x2 - x1);
+      var path = document.createElementNS(NS, 'path');
+      path.setAttribute('id', 'lk' + i);
+      path.setAttribute('d', 'M' + x1 + ' ' + NODE_TOP + ' Q' + ((x1 + x2) / 2) + ' ' + (NODE_TOP - 2 * h) + ' ' + x2 + ' ' + NODE_TOP);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#161616');
+      path.setAttribute('stroke-width', '6');
+      path.setAttribute('stroke-dasharray', '16 12');
+      path.setAttribute('stroke-linecap', 'round');
+      path.style.opacity = 0;
+      svg.appendChild(path);
+    });
+  }
+  buildLinks();
+
+  // 代码窗口里的「当前」行：同 T.current 的黄描边，去掉为浅色底准备的灰环，深色窗口里只留黄框 + 外发光。
+  function lineOn(el, g) {
+    T.current(el, g, 0.01);
+    el.style.outlineOffset = '5px';
+    el.style.boxShadow = '0 0 40px rgba(245,207,74,' + (0.5 * g) + ')';
+  }
+
+  Stage({
+    duration: 40.1,
+    init: function () { return T.fonts('实录示例项目好几个文档怎么写才不会改错漏改旧流程拷问回改四个术语表一次超温最多产生条开始通知告警即重启后规格还在再发一打架改没全处可对无法核'); },
+    render: function (t) {
+      T.enter(T.$('real'), T.p(t, CUE.real, 0.45), -14);
+      // 问题贴纸：容器先放大到正中，停一会儿，再缩小移回原位；贴纸自己的进场（淡入、倾角）照旧
+      T.enter(T.$('q'), T.p(t, CUE.q, 0.45), -16);
+      var qw = T.$('qw'), q = T.$('q');
+      var mv = T.ease(T.p(t, CUE.qHold, CUE.qMove));
+      var sc = Q_SCALE + (1 - Q_SCALE) * mv;
+      var w = q.offsetWidth, h = q.offsetHeight;
+      var fx = Q_CENTER[0] - Q_SCALE * w / 2 - 90, fy = Q_CENTER[1] - Q_SCALE * h / 2 - 100; // 放大时容器的平移
+      qw.style.transform = 'translate(' + (fx * (1 - mv)) + 'px,' + (fy * (1 - mv)) + 'px) scale(' + sc + ')';
+      T.enter(T.$('old'), T.p(t, CUE.old, 0.45), -10);
+      T.enter(T.$('f1'), T.p(t, CUE.flow, 0.45), -14);
+      T.$('fa').style.opacity = T.ease(T.p(t, CUE.flow + 0.35, 0.3));
+      T.enter(T.$('f2'), T.p(t, CUE.flow + 0.7, 0.45), -14);
+
+      // 两个代码窗口：开头以空壳淡入，73 句点亮，原文一行随之出现
+      T.enter(T.$('dl'), T.p(t, CUE.shell, 0.5), 20);
+      T.enter(T.$('dr'), T.p(t, CUE.shell + 0.15, 0.5), 20);
+      var onL = T.ease(T.p(t, CUE.docs, 0.5)), onR = T.ease(T.p(t, CUE.docs + 0.4, 0.5));
+      T.$('dl').style.opacity = parseFloat(T.$('dl').style.opacity) * (SHELL + (1 - SHELL) * onL);
+      T.$('dr').style.opacity = parseFloat(T.$('dr').style.opacity) * (SHELL + (1 - SHELL) * onR);
+      T.$('bl').style.opacity = onL;
+      T.$('br').style.opacity = onR;
+
+      lineOn(T.$('kl'), T.ease(T.p(t, CUE.frameL, 0.4)));
+      lineOn(T.$('kr'), T.ease(T.p(t, CUE.frameR, 0.4)));
+      T.enter(T.$('sl'), T.p(t, CUE.frameL + 0.3, 0.45), 12);
+      T.enter(T.$('sr'), T.p(t, CUE.frameR + 0.3, 0.45), 12);
+
+      var b = T.p(t, CUE.bolt, 0.35);
+      T.$('bolt').style.opacity = b > 0 ? 1 : 0;
+      T.wipe(T.$('bolt'), b, 'y');
+      T.enter(T.$('fight'), T.p(t, CUE.bolt + 0.3, 0.4), 10);
+
+      for (var i = 0; i < 5; i++) T.enter(T.$('n' + i), T.p(t, CUE.nodes + i * 0.12, 0.4), 14);
+      for (var j = 0; j < PAIRS.length; j++) T.$('lk' + j).style.opacity = T.ease(T.p(t, CUE.links + j * 0.3, 0.4));
+      T.enter(T.$('why'), T.p(t, CUE.why, 0.45), 10);
+    }
+  });
+</script>
+</body>
+</html>

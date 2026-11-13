@@ -1,0 +1,185 @@
+<!doctype html>
+<!-- S24 · 标题卡（收束卡）· script 169–176「再说第二件事：为什么要在写代码之前审？……而在写代码之前就改掉，也就是改几行字而已。」
+     第 6 章「值不值得」第 5 页（目的 ②，序号 10-24 去掉）。左半示意：一份规格（7 行，含判漏那一行）、代码评审；右半引文卡；底部两格。原末句的两条结论卡 10-24 移到下一页 S24b。
+     - 第 169 句：目的卡「越早发现，越早改，越便宜」先在正中放大，停约 1 秒，再约 0.6 秒缩小移到左上，当前（黄描边）到下一句前淡出（visual-v4 4.8 问题贴纸的同款动作）。
+       规格卡 3.0 秒进场（169 句最后一小段，念到「审呢」），比 170 句开口早约 2.1 秒，避免左上只有一张目的卡超过 3 秒。
+     - 第 170 句「规格里错了、漏了，代码评审对着规格去看，每一处都是「照做了」」：
+       念到「错了」三处句子右侧贴黄色实底贴纸「猜的」（黄色实底只用于 AI 的猜，visual-v4 第二节）；
+       念到「漏了」两段之间的空位出现墨色虚线框，标「判漏」并加黄描边（当前）；
+       念到「代码评审」：「代码评审：代码照规格做了吗」卡，念到「照做了」旁边「照做了 ✓ ✓ ✓」逐个出现。✓ 用墨色，红绿只留给测试失败 / 通过。
+     - 第 171–174 句：右半引文卡（visual-v4 4.6；作者名只上画面，口播说「有篇总结」）：出处卡在上「Boehm & Basili · IEEE Computer 2001 / Software Defect Reduction Top 10 List」，
+       引用的原文和中文放同一张卡，在出处卡下面：第 172 句第一段（100 倍），第 173 句同卡加第二段（5:1），第 174 句卡下一行限定「几十年前的数据 · 倍数不一定准」。
+       原文（2026-10-24 核对）：Boehm & Basili，2001，Software Defect Reduction Top 10 List，IEEE Computer 34(1)。英文逐字抄入；第二段原文是省略号加半句「… more like 5:1 than 100:1」，中文是按原意译的，作者录前对一遍。
+     - 第 175–176 句：底部两格「写代码前：改几行字」（规格一侧，蓝浅）/「写完以后：重测 · 重审 · 上线才发现」（执行一侧，琥珀浅）；175 句先出右格，176 句出左格，各自当前；左格当前到页末前淡出。
+     句子起点（口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒）：169 句 0，170 句 5.12，171 句 12.24，172 句 17.44，173 句 24.96，174 句 29.28，175 句 34.24，176 句 42.88，念完 46.40；页时长 47.52。
+     内容都在 y 920 以内，避开底部字幕带。内容多，卡片和字取小：正文 34px 以上，标签 26px 以上，英文原文 28px。
+     配色：规格卡与「写代码前」蓝浅（规格一侧）；「代码评审」卡、「照做了」、「写完以后」琥珀浅（执行一侧），勾仍是墨色；「猜的」黄贴纸；引文卡奶白。 -->
+<html lang="zh-CN" data-frame-id="S24">
+<head>
+<meta charset="utf-8">
+<title>S24 · 越早发现越便宜</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #doc, #b1 { background: var(--blue-soft); }
+  #rv, #tk, #b2 { background: var(--amber-soft); }
+  #pur { left: 70px; top: 24px; padding: 8px 26px; display: flex; align-items: center; }
+  #pur .big { font-size: 42px; white-space: nowrap; }
+
+  #doc { left: 70px; top: 176px; width: 880px; height: 440px; padding: 0; }
+  #doc .tab { font-size: 40px; }
+  .ln { position: absolute; left: 24px; width: 830px; height: 46px; box-sizing: border-box; padding-left: 8px;
+        line-height: 44px; font-weight: 600; font-size: 34px; color: var(--ink); white-space: nowrap;
+        border-bottom: 2px solid rgba(22,22,22,.12); }
+  /* 两段之间的空位：常驻，判漏的虚线框画在这里 */
+  #gap { position: absolute; left: 24px; width: 830px; height: 46px; box-sizing: border-box; border-radius: 8px;
+         border: 4px dashed var(--ink); opacity: 0; display: flex; align-items: center; padding-left: 20px;
+         font-family: var(--display); font-weight: 800; font-size: 32px; line-height: 1; color: var(--ink); }
+  #gap span { opacity: 0; }
+  .gs { font-size: 30px; padding: 0 12px; line-height: 1.1; }
+
+  #rv { left: 70px; top: 648px; width: 560px; height: 84px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  #rv .big { font-size: 38px; white-space: nowrap; }
+  #tk { left: 670px; top: 652px; font-size: 40px; font-weight: 700; padding: 10px 22px; }
+  #tk .ok { display: inline-block; margin-left: 10px; }
+
+  /* 右半：出处卡在上，引文卡在下 */
+  #src { left: 1000px; top: 150px; width: 850px; height: 108px; padding: 8px 28px; display: flex; flex-direction: column; justify-content: center; }
+  #src .a { font-family: var(--display); font-weight: 800; font-size: 38px; line-height: 1.2; white-space: nowrap; }
+  #src .b { font-weight: 600; font-size: 32px; line-height: 1.3; white-space: nowrap; }
+  #quote { left: 1000px; top: 292px; width: 850px; height: 40px; padding: 16px 28px; overflow: hidden; }
+  .pair .en { font-weight: 600; font-size: 28px; line-height: 1.28; }
+  .pair .cn { font-family: var(--display); font-weight: 800; font-size: 36px; line-height: 1.22; margin-top: 6px; }
+  #p2 { margin-top: 14px; padding-top: 12px; border-top: 4px dashed rgba(22,22,22,.75); }
+  #lim { left: 1000px; top: 664px; }
+
+  .bt { top: 758px; width: 870px; height: 76px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  .bt .big { font-size: 40px; white-space: nowrap; }
+  #b1 { left: 70px; } #b2 { left: 980px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="pur" data-r="-1.5"><span class="big">越早发现，越早改，越便宜</span></div>
+
+  <div class="card" id="doc" data-r="-0.6">
+    <div class="tab os" data-r="-2">规格</div>
+    <div class="ln" style="top:46px">设备温度超过阈值时，发送一条钉钉告警。</div>
+    <div class="ln" style="top:102px">同一设备 10 分钟内不重复推送。</div>
+    <div class="ln" style="top:158px">推送超时时间为 5 秒。</div>
+    <div class="ln" style="top:214px">阈值缺省为 80.0 度。</div>
+    <div id="gap" style="top:270px"><span id="gapT">判漏：这里少了一种情况</span></div>
+    <div class="ln" style="top:326px">服务重启后，仍超温的设备按新事件处理。</div>
+    <div class="ln" style="top:382px">消息时间使用 RFC 3339 格式。</div>
+  </div>
+
+  <!-- 猜的：黄色实底贴纸，贴在所在行的行尾空白里，不越过行高（abs top = 卡顶 176 + 边框 5 + 行顶 + 行高一半 23 − 贴纸半高约 19） -->
+  <div class="guess gs" id="g1" style="left:540px;top:343px" data-r="-2">猜的</div>
+  <div class="guess gs" id="g2" style="left:500px;top:399px" data-r="2">猜的</div>
+  <div class="guess gs" id="g3" style="left:620px;top:567px" data-r="-2">猜的</div>
+
+  <div class="card" id="rv" data-r="1"><div class="big">代码评审：代码照规格做了吗</div></div>
+  <div class="chip" id="tk" data-r="-1.5">照做了<span class="ok" id="k1">✓</span><span class="ok" id="k2">✓</span><span class="ok" id="k3">✓</span></div>
+
+  <div class="card" id="src" data-r="-0.4">
+    <div class="a">Boehm &amp; Basili · IEEE Computer 2001</div>
+    <div class="b">Software Defect Reduction Top 10 List</div>
+  </div>
+  <div class="card" id="quote" data-r="0.3">
+    <div class="pair" id="q1">
+      <div class="en">Finding and fixing a software problem after delivery is often 100 times more expensive than finding and fixing it during the requirements and design phase.</div>
+      <div class="cn">交付以后再发现、修复软件问题，成本常常是需求、设计阶段的 100 倍。</div>
+    </div>
+    <div class="pair" id="p2">
+      <div class="en">&hellip; more like 5:1 than 100:1</div>
+      <div class="cn">小型、非关键系统：约 5 倍</div>
+    </div>
+  </div>
+  <div class="tag" id="lim" data-r="2">几十年前的数据 · 倍数不一定准</div>
+
+  <div class="card bt" id="b1" data-r="-1"><div class="big">写代码前：改几行字</div></div>
+  <div class="card bt" id="b2" data-r="1"><div class="big">写完以后：重测 · 重审 · 上线才发现</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内）：按录音实测（frame-times.py，2026-10-25），取词首字实测开始时间减 0.2 秒。
+  var AT = {
+    hold: 1.0, move: 0.6, purEnd: 4.5,    // 169 句：目的卡居中停 1 秒，再 0.6 秒移到左上，当前到 4.5 淡出
+    doc: 3.0,                             // 规格卡落下，句子依次出现
+    g: [5.32, 5.6, 5.88],                 // 170 句念到「错了」：三张「猜的」依次贴上
+    gap: 6.04, gapLabel: 6.44, gapEnd: 7.24, // 170 句念到「漏了」：虚线框，标「判漏」
+    rv: 6.84, rvEnd: 9.84,                  // 170 句念到「代码评审」：代码评审卡
+    tk: 10.04, k: [10.44, 10.74, 11.04],     // 念到「照做了」：一串 ✓
+    src: 14.36, srcEnd: 17.24,             // 171 句念到「软件工程」：出处卡
+    q1: 19.4, q2: 24.76, lim: 29.08,       // 172 句第一段；173 句第二段（同一张卡变高）；174 句限定
+    b2: 36.68, b1: 42.68, end: 46.4        // 175 句先出「写完以后」，176 句出「写代码前」；念完淡出当前
+  };
+
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function win(t, a, b) { return T.ease(T.p(t, a, 0.4)) * (1 - T.ease(T.p(t, b, 0.4))); }
+
+  Stage({
+    duration: 47.52,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      // 169 句：目的卡，正中放大 -> 缩小移到左上，当前
+      var q = T.$('pur'), r = parseFloat(q.getAttribute('data-r'));
+      var w = q.offsetWidth, h = q.offsetHeight;
+      var fx = 70 + w / 2, fy = 24 + h / 2;
+      var a = T.ease(T.p(t, 0, 0.4));
+      var m = T.ease(T.p(t, AT.hold, AT.move));
+      q.style.opacity = a;
+      q.style.transform = 'translate(' + ((960 - fx) * (1 - m)) + 'px,' + ((440 - fy) * (1 - m)) + 'px) scale(' + lerp(1.7, 1, m) + ') rotate(' + (r * (1 + (1 - a))) + 'deg)';
+      T.current(q, win(t, AT.hold + AT.move, AT.purEnd), 8);
+
+      // 规格卡落下，句子依次出现
+      T.enter(T.$('doc'), T.p(t, AT.doc, 0.5), 20);
+      var rows = T.all('#doc .ln');
+      for (var i = 0; i < rows.length; i++) rows[i].style.opacity = T.ease(T.p(t, AT.doc + 0.3 + i * 0.06, 0.3));
+
+      // 170 句：三张「猜的」
+      for (var j = 0; j < 3; j++) T.enter(T.$('g' + (j + 1)), T.p(t, AT.g[j], 0.4), 20);
+
+      // 170 句：虚线框，念到「漏了」时标「判漏」并加黄描边（当前）
+      var gap = T.$('gap');
+      gap.style.opacity = T.ease(T.p(t, AT.gap, 0.4));
+      T.$('gapT').style.opacity = T.ease(T.p(t, AT.gapLabel, 0.3));
+      var cur = T.ease(T.p(t, AT.gapLabel, 0.3)) * (1 - T.ease(T.p(t, AT.gapEnd, 0.4)));
+      gap.style.outline = '7px solid rgba(245,207,74,' + cur + ')';
+      gap.style.outlineOffset = '4px';
+
+      // 170 句：代码评审卡，「照做了 ✓ ✓ ✓」
+      T.enter(T.$('rv'), T.p(t, AT.rv, 0.5), 20);
+      T.current(T.$('rv'), win(t, AT.rv + 0.3, AT.rvEnd), 10);
+      T.enter(T.$('tk'), T.p(t, AT.tk, 0.4), 12);
+      ['k1', 'k2', 'k3'].forEach(function (id, n) { T.$(id).style.opacity = T.ease(T.p(t, AT.k[n], 0.25)); });
+
+      // 171 句：出处卡
+      T.enter(T.$('src'), T.p(t, AT.src, 0.5), 16);
+      T.current(T.$('src'), win(t, AT.src + 0.3, AT.srcEnd), 10);
+
+      // 172–173 句：引文卡，第一段进来时卡落下；第二段进来时卡变高。段高按排版后的实际高度算
+      var quote = T.$('quote'), qh = 32;
+      [['q1', AT.q1], ['p2', AT.q2]].forEach(function (x) {
+        var e = T.ease(T.p(t, x[1], 0.5)), p = T.$(x[0]);
+        p.style.opacity = e;
+        p.style.transform = 'translateY(' + ((1 - e) * 12) + 'px)';
+        qh += (p.offsetHeight + parseFloat(getComputedStyle(p).marginTop)) * e;
+      });
+      quote.style.height = qh + 'px';
+      T.enter(quote, T.p(t, AT.q1, 0.5), 16);
+      T.current(quote, T.ease(T.p(t, AT.q1 + 0.3, 0.4)) * (1 - T.ease(T.p(t, AT.lim, 0.4))), 10);
+
+      // 174 句：限定
+      T.enter(T.$('lim'), T.p(t, AT.lim, 0.45), 12);
+
+      // 175–176 句：底部两格，各自当前
+      T.enter(T.$('b2'), T.p(t, AT.b2, 0.5), 20);
+      T.enter(T.$('b1'), T.p(t, AT.b1, 0.5), 20);
+      T.current(T.$('b2'), win(t, AT.b2 + 0.3, AT.b1), 10);
+      T.current(T.$('b1'), win(t, AT.b1 + 0.3, AT.end), 10);
+    }
+  });
+</script>
+</body>
+</html>

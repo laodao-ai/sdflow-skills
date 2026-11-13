@@ -1,0 +1,97 @@
+<!doctype html>
+<!-- S12 · 机制动画 · script 48–51「这里有个挺常见的误会。……关键是把那些要它猜的地方写清楚。」
+     左边一摞厚文档，被一道墨线划掉并变暗（「错」不用红）；右边换成一页纸。
+     纸上三格先是「？」，再换成写清楚的答案：单独一行 / 写死 80 / 超过才报（S19 里作者的回答）。
+     倾斜沿用本风格的规矩：「？」没定，倾角大（±4°）；答案定了，倾角小（±1°）。
+     还没讲到工具：不用蓝 / 琥珀；没有测试：不用红 / 绿。 -->
+<html lang="zh-CN" data-frame-id="S12">
+<head>
+<meta charset="utf-8">
+<title>S12 · 一页就够</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .doc { width: 520px; height: 640px; padding: 70px 44px; }
+  .doc .bar { height: 16px; border-radius: 8px; background: #c9c5bb; margin-bottom: 30px; }
+  .stack-tab { left: 120px; top: 120px; z-index: 5; }
+  .strike { position: absolute; left: 70px; top: 470px; width: 700px; height: 120px; z-index: 6; }
+  .arrow { position: absolute; left: 820px; top: 500px; width: 220px; height: 70px; }
+  .page { left: 1080px; top: 150px; width: 740px; height: 740px; padding: 110px 48px 40px; }
+  .page .tab { font-size: 44px; }
+  .row { position: relative; height: 150px; margin-bottom: 40px; border-bottom: 4px solid #c9c5bb; }
+  .row .lab { position: absolute; left: 0; top: 46px; font-weight: 600; font-size: 38px; color: var(--ink); white-space: nowrap; }
+  .slot { left: 290px; top: 26px; font-family: var(--display); font-weight: 800; font-size: 50px; padding: 10px 28px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 一摞厚文档：四张错开叠放。 -->
+  <div id="stack">
+    <div class="card doc dd" data-r="-5" style="left:130px;top:240px"></div>
+    <div class="card doc dd" data-r="3" style="left:170px;top:220px"></div>
+    <div class="card doc dd" data-r="-2" style="left:110px;top:200px"></div>
+    <div class="card doc dd" data-r="1.5" style="left:150px;top:180px">
+      <div class="bar" style="width:70%"></div><div class="bar" style="width:92%"></div><div class="bar" style="width:84%"></div>
+      <div class="bar" style="width:90%"></div><div class="bar" style="width:60%"></div><div class="bar" style="width:88%"></div>
+      <div class="bar" style="width:76%"></div><div class="bar" style="width:94%"></div><div class="bar" style="width:52%"></div>
+      <div class="bar" style="width:86%"></div><div class="bar" style="width:70%"></div>
+    </div>
+  </div>
+  <div class="tab ink stack-tab" id="stab" data-r="-3">很长的文档</div>
+  <!-- 划掉：一道墨线（墨芯 + 奶白描边，压在奶白纸上也看得见）。 -->
+  <svg class="strike" id="strike" viewBox="0 0 700 120">
+    <path d="M20 96 Q 340 40 680 20" fill="none" stroke="#f2efe6" stroke-width="34" stroke-linecap="round"/>
+    <path d="M20 96 Q 340 40 680 20" fill="none" stroke="#161616" stroke-width="20" stroke-linecap="round"/>
+  </svg>
+
+  <svg class="arrow" id="arrow" viewBox="0 0 220 70">
+    <path d="M28 38 Q 100 22 170 34" fill="none" stroke="#f2efe6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="20" cy="38" r="14" fill="#8a939d" stroke="#f2efe6" stroke-width="8"/>
+    <polygon points="162,12 214,34 164,56" fill="#f2efe6"/>
+  </svg>
+
+  <!-- 一页纸：三格先「？」，再写清楚。 -->
+  <div class="card page" id="page" data-r="1" data-shadow="10">
+    <div class="tab ink">一页</div>
+    <div class="row"><div class="lab">告警发到哪</div>
+      <div class="chip slot q" data-r="-4">？</div><div class="chip slot a" data-r="-1">单独一行</div></div>
+    <div class="row"><div class="lab">阈值</div>
+      <div class="chip slot q" data-r="4">？</div><div class="chip slot a" data-r="1">写死 80</div></div>
+    <div class="row" style="border-bottom:none"><div class="lab">正好 80 度</div>
+      <div class="chip slot q" data-r="-3.5">？</div><div class="chip slot a" data-r="-1">超过才报</div></div>
+  </div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  Stage({
+    duration: 12.4,
+    init: function () { return T.fonts('很长的文档一页告警发到哪阈值正好80度？单独一行写死超过才报'); },
+    render: function (t) {
+      // 时刻按实测（2026-10-06，frame-times.py），画面内秒数；括号里是对应的口播。
+      // 1. 一摞厚文档。0.00（48 句开口）；标签 1.36（念到「误会」的「误」）。
+      T.items('.dd', 0.0, 0.18, t, 30);
+      T.enter(T.$('stab'), T.p(t, 1.36, 0.4), -12);
+
+      // 2. 不是要写很长的文档：划掉，变暗（还看得清）。划掉 2.40（49 句开口「规格不是」）；变暗 2.80（「不是」的「不」）。
+      T.strike(T.$('strike'), T.p(t, 2.4, 0.5));
+      var dim = T.ease(T.p(t, 2.8, 0.6));
+      T.all('.dd').forEach(function (el) { el.style.background = T.mix([242, 239, 230], [160, 157, 151], dim); });
+
+      // 3. 一个小需求，一页就够。箭头 5.52（50 句开口）；一页纸 6.40（念到「一页纸」的「一」）；「？」6.80 起，间隔 0.15。
+      T.wipe(T.$('arrow'), T.p(t, 5.52, 0.4), 'x');
+      T.enter(T.$('page'), T.p(t, 6.4, 0.5), 24);
+      var qs = T.all('.slot.q'), as = T.all('.slot.a');
+      qs.forEach(function (el, i) { T.enter(el, T.p(t, 6.8 + i * 0.15, 0.35), 12); });
+
+      // 4. 把要它猜的地方写清楚：「？」换成答案。10.80 起（51 句念到「写清楚」的「写」），间隔 0.55。
+      as.forEach(function (el, i) {
+        var at = 10.8 + i * 0.55;
+        var out = T.ease(T.p(t, at, 0.25));
+        qs[i].style.opacity = Math.min(parseFloat(qs[i].style.opacity || '0'), 1 - out);
+        T.enter(el, T.p(t, at + 0.1, 0.35), -14);
+      });
+    }
+  });
+</script>
+</body>
+</html>

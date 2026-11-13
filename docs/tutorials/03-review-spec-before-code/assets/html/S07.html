@@ -1,0 +1,151 @@
+<!doctype html>
+<!-- S07 · 角色图 · script 20–22「先说第一个问题：让 AI 审，怎么审？……每个 agent 起来都是干净的，只看文档和代码，没有写的时候那些想法。」
+     示意，原理图，不标「实录」（右上角「示意」）。人、Agent、仓库文件、运行环境四个固定角色（visual-v4 第五节），运行环境不点亮（.unlit）；
+     图形放在炭灰方块上，名字贴纸挂在方块下沿外 18px。只用几何图形，不画人物。
+     左：写规格的那个会话框，整张灰（灰 = 被留下，visual-v4 第二节）。
+     右：仓库文件在上，四个独立的 Agent 并排在下，每个头上一张「空白上下文」小贴纸；Agent 只连到仓库文件（文档和代码），不连左边的会话。
+     - 第 20 句：人、仓库文件、运行环境（不点亮）从开头就在，不留空屏。
+     - 第 21 句：念到「不在写规格的那个会话里审」时左边灰色会话框落下（当前，黄描边）；念到「派独立的 agent」时第一个 Agent 落下，其余三个跟着，各带「空白上下文」。
+     - 第 22 句：念到「只看文档和代码」时四条线从各 Agent 连到仓库文件；左边会话框不连线（不动）。
+     - 原第 23 句「为什么一定要换，后面再说」和角上问号贴纸作者 10-23 删去。
+     - 仓库文件旁两张小贴纸：「规格」蓝（规格一侧）、「代码」琥珀（执行一侧）；红 / 绿 / 黄实底不用（黄只作「当前」描边）。
+     - 内容都在 y 920 以上，避开字幕带（名字贴纸挂在方块下沿外 18px；落差只有 12）。
+     配色（2026-10-23）：人、Agent、仓库文件、运行环境保持炭灰中性；写规格的会话整张灰（被留下）；仓库文件旁「规格」蓝、「代码」琥珀照旧；
+       不再补色：本页的重点是「换个干净的上下文」，加色只会分散。
+     口播时刻按录音实测（frame-times.py，2026-10-25），节点取词首字实测开始时间减 0.2 秒。第 20 句 0.0，第 21 句 6.00，第 22 句 13.04，全页 19.84。 -->
+<html lang="zh-CN" data-frame-id="S07">
+<head>
+<meta charset="utf-8">
+<title>S07 · 换个上下文，派独立的 agent</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .tile { position: absolute; box-sizing: border-box; border-radius: 12px; background: var(--charcoal); border: 5px solid var(--ink);
+          box-shadow: 12px 12px 0 var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .tile svg { width: 110px; height: 110px; margin-top: -26px; }
+  .tile .name { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%) rotate(var(--r, -2deg));
+          padding: 8px 22px; background: var(--cream); color: var(--ink); white-space: nowrap;
+          border: 4px solid var(--ink); border-radius: 8px; box-shadow: 6px 6px 0 var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1; }
+  #repo { left: 1030px; top: 140px; width: 290px; height: 250px; }
+  #human { left: 90px; top: 140px; width: 290px; height: 250px; }
+  #runtime { left: 1530px; top: 140px; width: 290px; height: 250px; }
+  .tile.unlit { color: var(--unlit); }
+  .tile.unlit .name { background: #b9b6ae; }
+  .ag { top: 570px; width: 230px; height: 210px; }
+  .ag svg { width: 96px; height: 96px; margin-top: -20px; }
+  #a1 { left: 640px; } #a2 { left: 900px; } #a3 { left: 1160px; } #a4 { left: 1420px; }
+  .blank { position: absolute; top: 494px; font-size: 32px; padding: 6px 16px; }
+  #b1 { left: 646px; } #b2 { left: 906px; } #b3 { left: 1166px; } #b4 { left: 1426px; }
+  #wires { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+
+  /* 左：写规格的那个会话，整张灰 */
+  #sess { left: 90px; top: 500px; width: 470px; height: 290px; padding: 0; background: var(--cream-dim); }
+  #sess .tab { background: var(--cream-dim); }
+  #sess .it { position: absolute; left: 40px; top: 60px; width: 330px; padding: 10px 24px; border: 4px solid var(--ink); border-radius: 8px;
+              background: #b9b6ae; font-weight: 600; font-size: 40px; color: var(--ink); box-shadow: 6px 6px 0 var(--ink); }
+  #sess .sub { position: absolute; left: 40px; top: 160px; font-size: 34px; font-weight: 600; color: var(--ink); line-height: 1.3; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div class="card" id="sess" data-r="-1">
+    <div class="tab" data-r="-3">写规格的会话</div>
+    <div class="it" id="wr" data-r="-1.5">写规格</div>
+    <div class="sub">写的时候的想法<br>还在里面</div>
+  </div>
+
+  <!-- 人、运行环境（不点亮） -->
+  <div class="tile" id="human" data-r="-1.5">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8">
+      <circle cx="60" cy="60" r="42"/><circle cx="60" cy="60" r="13" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name" style="--r:-3deg">人</div>
+  </div>
+  <div class="tile unlit" id="runtime" data-r="1">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="12" y="22" width="96" height="76" rx="12"/><path d="M32 48 L46 60 L32 72"/><line x1="56" y1="74" x2="82" y2="74"/>
+    </svg>
+    <div class="name" style="--r:1.5deg">运行环境</div>
+  </div>
+
+  <!-- 仓库文件：文档和代码 -->
+  <div class="tile" id="repo" data-r="-1">
+    <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round">
+      <path d="M34 22 H78 L98 42 V102 H34 Z"/><path d="M78 22 V42 H98"/>
+      <path d="M22 34 V112 H84"/><line x1="48" y1="62" x2="84" y2="62"/><line x1="48" y1="80" x2="76" y2="80"/>
+    </svg>
+    <div class="name" style="--r:-2deg">仓库文件</div>
+  </div>
+  <div class="chip" id="rdoc" data-r="-3" style="left:1330px;top:150px;font-size:34px;padding:6px 18px;background:var(--blue)">规格</div>
+  <div class="chip" id="rcode" data-r="3" style="left:1340px;top:240px;font-size:34px;padding:6px 18px;background:var(--amber)">代码</div>
+
+  <!-- 四个独立的 Agent，每个头上一张空白上下文 -->
+  <svg id="wires" viewBox="0 0 1920 1080" aria-hidden="true">
+    <g fill="none" stroke="#161616" stroke-opacity=".85" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path id="w1" d="M755 570 V450 H1175 V412"/>
+      <path id="w2" d="M1015 570 V450 H1175 V412"/>
+      <path id="w3" d="M1275 570 V450 H1175 V412"/>
+      <path id="w4" d="M1535 570 V450 H1175 V412"/>
+    </g>
+    <g fill="#161616" fill-opacity=".85">
+      <circle cx="1175" cy="412" r="9"/>
+    </g>
+  </svg>
+  <div class="tile ag" id="a1" data-r="1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">Agent</div></div>
+  <div class="tile ag" id="a2" data-r="-1.5"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:-2deg">Agent</div></div>
+  <div class="tile ag" id="a3" data-r="1.5"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:2deg">Agent</div></div>
+  <div class="tile ag" id="a4" data-r="-1"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"><polygon points="60,12 102,36 102,84 60,108 18,84 18,36"/><polygon points="60,44 74,52 74,68 60,76 46,68 46,52" fill="currentColor" stroke="none"/></svg><div class="name" style="--r:-2deg">Agent</div></div>
+  <div class="chip blank" id="b1" data-r="-3">空白上下文</div>
+  <div class="chip blank" id="b2" data-r="3">空白上下文</div>
+  <div class="chip blank" id="b3" data-r="-3">空白上下文</div>
+  <div class="chip blank" id="b4" data-r="3">空白上下文</div>
+
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 口播节点（秒，画面内，按录音实测：词首字开始时间减 0.2 秒）。
+  var AT = {
+    base: 0.0,       // 第 20 句开口：人、仓库文件、运行环境落下
+    sess: 7.96,      // 第 21 句「不在写规格的那个会话里审」：灰色会话框落下，当前
+    sessOff: 10.08,   // 当前描边淡出
+    a1: 10.28,        // 「派独立的 agent」：第一个 Agent
+    a234: 11.08,     // 其余三个，各带空白上下文
+    wires: 15.32     // 第 22 句「只看文档和代码」：四条线连到仓库文件
+  };
+
+  Stage({
+    duration: 19.84,
+    init: function () { return T.fonts('示意写规格的会话时候想法还在里面人仓库文件运行环境代码空白上下文'); },
+    render: function (t) {
+
+      // 第 20 句：人、仓库文件、运行环境（不点亮）
+      T.enter(T.$('human'), T.p(t, AT.base, 0.5), 20);
+      T.enter(T.$('repo'), T.p(t, AT.base + 0.2, 0.5), 20);
+      T.enter(T.$('runtime'), T.p(t, AT.base + 0.4, 0.5), 12);
+      T.enter(T.$('rdoc'), T.p(t, AT.base + 0.7, 0.4), -10);
+      T.enter(T.$('rcode'), T.p(t, AT.base + 0.9, 0.4), -10);
+
+      // 第 21 句：写规格的会话框（灰），当前
+      T.enter(T.$('sess'), T.p(t, AT.sess, 0.5), 20);
+      T.current(T.$('sess'), T.ease(T.p(t, AT.sess + 0.3, 0.4)) * (1 - T.ease(T.p(t, AT.sessOff, 0.4))), 8);
+
+      // Agent：落差只有 12，名字贴纸不掉进字幕带
+      var st = [AT.a1, AT.a234, AT.a234 + 0.3, AT.a234 + 0.6];
+      for (var i = 0; i < 4; i++) {
+        T.enter(T.$('a' + (i + 1)), T.p(t, st[i], 0.5), 12);
+        T.enter(T.$('b' + (i + 1)), T.p(t, st[i] + 0.25, 0.4), -10);
+      }
+
+      // 第 22 句：四条线连到仓库文件（只连文件和代码，不连左边的会话）
+      for (var j = 0; j < 4; j++) {
+        var p = T.$('w' + (j + 1)), L = p.getTotalLength();
+        var pw = T.ease(T.p(t, AT.wires + j * 0.2, 0.7));
+        p.style.strokeDasharray = L; p.style.strokeDashoffset = L * (1 - pw);
+        p.style.opacity = pw > 0 ? 1 : 0;
+      }    }
+  });
+</script>
+</body>
+</html>

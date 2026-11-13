@@ -1,0 +1,152 @@
+/* E-a 主题：灰纸底 + 点阵，奶白贴纸卡，墨色粗描边，墨色硬投影，整体轻微倾斜。
+   取自已过审的 S07 / S38（同目录，原样保留）。新画面只用这里的变量和组件，
+   不在单帧里另起颜色。
+
+   颜色只表达四件事：
+   - 蓝 = OpenSpec，琥珀 = Superpowers（区块底色、标签、箭头）
+   - 红 / 绿 = 测试失败 / 通过，别处不用
+   - 黄色描边 + 外发光 = 当前讲到的元素（theme.js 的 T.current）
+   - 黄色实底贴纸 = AI 的「猜」（S07 定下的，只用于猜测）
+   倾斜：定下来的东西 ±1–2°，没定的（问题、猜测、注意事项）±3–5°。
+   终端、代码、录像窗口本身不倾斜，只让它们的标签倾斜。 */
+
+@font-face {
+  font-family: "SHS Heavy";
+  src: url("../../../shared/fonts/SourceHanSansCN-Heavy.otf") format("opentype");
+  font-weight: 900;
+}
+/* 等宽字放在期内 lib/fonts/，同名 @font-face 优先于系统字体：不依赖本机安装，也不怕另一账号用户目录里的同名字体遮住（deps.md「字体、音效与水印」）。 */
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("../../../shared/fonts/JetBrainsMonoNerdFont-Regular.ttf") format("truetype");
+  font-weight: 400;
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("../../../shared/fonts/JetBrainsMonoNerdFont-Medium.ttf") format("truetype");
+  font-weight: 500;
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("../../../shared/fonts/JetBrainsMonoNerdFont-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("../../../shared/fonts/JetBrainsMonoNerdFont-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("../../../shared/fonts/JetBrainsMonoNerdFont-ExtraBold.ttf") format("truetype");
+  font-weight: 800;
+}
+:root {
+  --paper: #73818f;
+  --charcoal: #262626;
+  --term: #1b1b1d;
+  --cream: #f2efe6;
+  --cream-dim: #a09d97;
+  --ink: #161616;
+  --yellow: #f5cf4a;
+  --unlit: #9a9a9a;
+  --blue: #43a0ed;
+  --blue-fill: #1e3349;
+  --blue-soft: #8cc8f5;
+  --amber: #f29b50;
+  --amber-fill: #3d2a1b;
+  --amber-soft: #f7c08f;
+  --fail: #e5534b;
+  --pass: #4cc38a;
+  --display: "Avenir Next Condensed", "SHS Heavy", sans-serif;
+  --body: "Avenir Next", "PingFang SC", system-ui, sans-serif;
+  --mono: "JetBrainsMono Nerd Font", Menlo, monospace;
+}
+html, body { margin: 0; background: var(--paper); }
+#stage {
+  position: relative; width: 1920px; height: 1080px; overflow: hidden;
+  background: var(--paper); font-family: var(--body); color: #fff;
+}
+.paper { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.abs { position: absolute; }
+
+/* 大字：标题卡的主句。中文落到 SHS Heavy，拉丁落到 Avenir Next Condensed。 */
+.big { font-family: var(--display); font-weight: 800; line-height: 1.15; }
+
+/* 奶白贴纸卡：默认容器。 */
+.card {
+  position: absolute; box-sizing: border-box; padding: 28px 36px;
+  background: var(--cream); color: var(--ink);
+  border: 5px solid var(--ink); border-radius: 10px; box-shadow: 10px 10px 0 var(--ink);
+}
+.card.dark { background: var(--charcoal); color: #fff; }
+.card.os { background: var(--blue-fill); color: #fff; }
+.card.sp { background: var(--amber-fill); color: #fff; }
+
+/* 区块名：贴在卡片上沿的彩色标签。 */
+.tab {
+  position: absolute; left: -14px; top: -40px; padding: 6px 26px; white-space: nowrap;
+  border: 5px solid var(--ink); border-radius: 8px; box-shadow: 7px 7px 0 var(--ink);
+  font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1.1;
+  background: var(--cream); color: var(--ink); transform: rotate(-3deg);
+}
+.tab.os { background: var(--blue); }
+.tab.sp { background: var(--amber); transform: rotate(2deg); }
+.tab.ink { background: var(--ink); color: #fff; }
+
+/* 小贴纸：问题、要点、文件名。 */
+.chip {
+  position: absolute; padding: 12px 24px; border-radius: 8px; white-space: nowrap;
+  font-weight: 600; font-size: 38px; color: var(--ink); background: var(--cream);
+  border: 4px solid var(--ink); box-shadow: 7px 7px 0 var(--ink);
+}
+.guess {
+  position: absolute; padding: 10px 22px; border-radius: 8px; white-space: nowrap;
+  font-weight: 600; font-size: 36px; color: var(--ink); background: var(--yellow);
+  border: 4px solid var(--ink); box-shadow: 7px 7px 0 var(--ink);
+}
+.guess b { font-family: var(--display); font-weight: 800; margin-right: 10px; }
+
+/* 编号圆片。 */
+.num {
+  flex: none; width: 64px; height: 64px; box-sizing: border-box; border-radius: 50%;
+  background: var(--cream); border: 5px solid var(--ink); color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 700; font-size: 32px;
+}
+.num.os { background: var(--blue); }
+.num.sp { background: var(--amber); }
+
+/* 注意事项 / 非官方说明：白色虚线框，倾斜最大。 */
+.tag {
+  position: absolute; padding: 10px 24px; border-radius: 8px; white-space: nowrap;
+  border: 4px dashed #161616; color: #161616; font-weight: 600; font-size: 32px;
+}
+/* 「示意」角标：示意画面固定放右上角。 */
+.mock {
+  position: absolute; right: 64px; top: 52px; padding: 6px 20px; border-radius: 8px;
+  border: 4px dashed #161616; color: #161616; transform: rotate(3deg);
+  font-family: var(--display); font-weight: 800; font-size: 34px;
+}
+/* 「N 倍速」角标：加速播放的终端 / 录像，贴在窗口右上沿。 */
+.speed {
+  position: absolute; padding: 6px 20px; border-radius: 8px; white-space: nowrap;
+  background: var(--cream); color: var(--ink); border: 4px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+  font-family: var(--display); font-weight: 800; font-size: 36px; transform: rotate(3deg);
+}
+
+/* 静态命令卡（S15、S31 这类）：深色卡 + 等宽字。 */
+.cmd {
+  position: absolute; box-sizing: border-box; padding: 30px 40px;
+  background: var(--term); color: var(--cream); border: 5px solid var(--ink); border-radius: 12px;
+  box-shadow: 12px 12px 0 var(--ink);
+  font-family: var(--mono); font-size: 36px; line-height: 1.6; white-space: pre;
+}
+.cmd .p { color: var(--unlit); }
+
+/* 活终端 / 录像窗口：不倾斜，粗墨框 + 硬投影。 */
+.window {
+  position: absolute; box-sizing: border-box; overflow: hidden;
+  background: var(--term); border: 6px solid var(--ink); border-radius: 14px;
+  box-shadow: 16px 16px 0 var(--ink);
+}
