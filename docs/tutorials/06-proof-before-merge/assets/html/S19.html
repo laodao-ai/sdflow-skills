@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN" data-frame-id="S19"><head><meta charset="utf-8"><title>S19 · 交接报告：接下来怎样继续</title>
+<link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css"><style>.card{z-index:21;padding:20px 26px}.card h2{font-size:42px}#todo{padding-top:32px}.card p{font-size:34px}.card.os,.card.sp{background:#f8f7f3;color:var(--ink)}.doc .tab{z-index:2}.hl{z-index:3}</style></head><body><div id="stage">
+<div class="chip cue frame-title" data-at="0.0">交接报告：接下来怎样继续</div>
+<div id="doc-handoff-overview" class="window doc cue" data-at="0.73" data-r="0" style="left:60px;top:230px;width:1110px;height:632.37px"><div class="tab ink">实录 · hand-off.md · 原文节选</div><img src="../../assets/evidence/documents/handoff-overview.png" width="1200" height="678" alt="hand-off.md 原文节选"><div id="hl-handoff-overview-0" class="hl" style="left:165.2px;top:104.8px;width:156.4px;height:44.8px"></div><div id="hl-handoff-overview-1" class="hl" style="left:165.2px;top:170.2px;width:188.4px;height:44.8px"></div><div id="hl-handoff-overview-2" class="hl" style="left:119.4px;top:301.1px;width:188px;height:44.8px"></div><div id="hl-handoff-overview-3" class="hl" style="left:161.9px;top:411.8px;width:183.8px;height:44.8px"></div></div><section id="done" class="card cue os" data-at="8.506" data-r="0" style="left:1300px;top:190px;width:545px"><div class="tab os">交接报告</div><h2>完成了什么</h2><p>当前已交付的功能与依据</p></section><section id="todo" class="card cue " data-at="16.0" data-r="0" style="left:1300px;top:425px;width:545px"><div class="tab ">未完成 / 延后</div><h2>T48：待人工验证</h2><p>保留未完成状态</p></section><section id="next" class="card cue os" data-at="23.735" data-r="0" style="left:1300px;top:670px;width:545px"><div class="tab os">继续步骤</div><h2>后续操作</h2><p>具体步骤与结果回填要求</p></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script>
+<script>window.FRAME_TIMING={"starts": [0.0, 6.32, 16.0, 26.08], "duration": 34.72, "note": "按 2026-11-18 重录 voice.srt 实测句子时间对齐"};window.FRAME_LINKS=[{"box": "hl-handoff-overview-0", "card": "done", "at": 8.506}, {"box": "hl-handoff-overview-1", "card": "todo", "at": 16.0}, {"box": "hl-handoff-overview-2", "card": "next", "at": 23.735}];
+window.frameRender=function(t){
+  var links=window.FRAME_LINKS.slice().sort(function(a,b){return a.at-b.at;});
+  links.forEach(function(l,i){
+    var next=links[i+1];
+    if(next)T.$(l.box).style.opacity=T.ease(T.p(t,l.at,.4))*(1-T.ease(T.p(t,next.at,.4)));
+  });
+  document.querySelectorAll('.doc').forEach(function(doc){
+    var own=links.filter(function(l){return doc.contains(T.$(l.box));});
+    if(own.length)doc.querySelector('img').style.filter='brightness('+(1-.35*T.ease(T.p(t,own[0].at,.4)))+')';
+  });
+};
+</script>
+<script src="episode.js"></script></body></html>

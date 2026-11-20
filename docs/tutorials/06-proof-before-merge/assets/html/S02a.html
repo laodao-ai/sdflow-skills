@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- S02a · 本期内容。沿用第 4、5 期 S04 的六步系列流程布局。
+     第 6 句从署名页移至本页，口播不变；只突出收尾归档，不把前几步标为讲过。 -->
+<html lang="zh-CN" data-frame-id="S02a">
+<head>
+<meta charset="utf-8">
+<title>S02a · 本期：任务验收与知识归档</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  :root { --notyet: rgba(22,22,22,.65); }
+  .sf-step { top: 330px; width: 280px; height: 104px; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px; }
+  .sf-step .big { font-size: 42px; white-space: nowrap; }
+  .sf-step .num { width: 56px; height: 56px; font-size: 30px; flex: none; }
+  .sf-step.off { background: transparent; border-color: var(--notyet); color: var(--notyet); box-shadow: none; }
+  .sf-step.off .num { background: transparent; border-color: var(--notyet); color: var(--notyet); }
+  #sd { left: 640px; top: 96px; width: 640px; height: 180px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  #sd .big { font-family: var(--mono); font-weight: 700; font-size: 120px; line-height: 1; letter-spacing: -3px; }
+  #skill { left: 1260px; top: 505px; width: 430px; height: 70px; padding: 0 28px; display: flex; align-items: center; font-size: 36px; }
+  #skill .tab { font-size: 26px; padding: 4px 16px; top: -34px; }
+  #branch { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
+  #topics { left: 210px; top: 610px; width: 1500px; height: 170px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 72px; }
+  #topics .big { font-size: 76px; white-space: nowrap; }
+  #topics .tab { font-size: 38px; }
+  #detail { position: absolute; left: 210px; top: 825px; width: 1500px; text-align: center; font-size: 38px; color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="sd" data-r="-1"><div class="big">SDFlow</div></div>
+  <div id="steps"></div>
+  <div class="cmd" id="skill" data-r="0"><div class="tab ink">skill</div>/sdflow-done</div>
+  <svg id="branch" viewBox="0 0 1920 1080" aria-hidden="true"><path d="M1725 454 V695 H1710" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/></svg>
+  <div class="card" id="topics" data-r="-1"><div class="tab ink">本期内容</div><div class="big" id="verify">任务验收</div><div class="big" id="archive">知识归档</div></div>
+  <div id="detail">核对代码实现 · 留下项目决策和规格记录</div>
+</div>
+<script>
+  var names = ['需求明确', '规格编写', '规格评审', '代码实现', '代码评审', '收尾归档'];
+  names.forEach(function (name, index) {
+    var card = document.createElement('div');
+    card.className = 'card sf-step' + (index < 5 ? ' off' : '');
+    card.id = 'sf' + (index + 1);
+    card.style.left = (55 + 306 * index) + 'px';
+    card.innerHTML = '<span class="num">' + (index + 1) + '</span><span class="big">' + name + '</span>';
+    document.getElementById('steps').appendChild(card);
+  });
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  window.FRAME_TIMING={"starts": [0.0, 5.04], "duration": 10.56, "note": "按 2026-11-18 重录 voice.srt 实测句子时间对齐"};
+  Stage({
+    duration: window.FRAME_TIMING.duration,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.tilt();
+      T.enter(T.$('sd'), T.p(t, 0.0, 0.5), 20);
+      for (var i = 1; i <= 6; i++) T.enter(T.$('sf' + i), T.p(t, 0.2 + (i - 1) * 0.08, 0.5), 20);
+      T.current(T.$('sf6'), T.ease(T.p(t, 1.0, 0.4)));
+      T.enter(T.$('skill'), T.p(t, 1.347, 0.5), 20);
+      var line = document.querySelector('#branch path');
+      line.style.strokeDasharray = 1;
+      line.style.strokeDashoffset = 1 - T.ease(T.p(t, 2.101, 0.4));
+      T.enter(T.$('topics'), T.p(t, 2.462, 0.5), 20);
+      T.enter(T.$('verify'), T.p(t, 2.462, 0.5), 10);
+      T.enter(T.$('archive'), T.p(t, 5.083, 0.5), 10);
+      T.enter(T.$('detail'), T.p(t, 7.501, 0.5), 10);
+    }
+  });
+</script>
+</body>
+</html>

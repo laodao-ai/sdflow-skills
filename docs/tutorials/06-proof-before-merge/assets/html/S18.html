@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN" data-frame-id="S18"><head><meta charset="utf-8"><title>S18 · 验收报告：保存验收依据</title>
+<link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css"><style>.card{z-index:21;padding:20px 26px}.card h2{font-size:44px}.card p{font-size:34px}.card.os,.card.sp{background:#f8f7f3;color:var(--ink)}.doc .tab{z-index:2}.hl{z-index:3}</style></head><body><div id="stage">
+<div class="chip cue frame-title" data-at="0.0">验收报告：保存验收依据</div>
+<div id="doc-verify-overview" class="window doc cue" data-at="1.1" data-r="0" style="left:60px;top:230px;width:1110px;height:632.37px"><div class="tab ink">实录 · verify-report.md · 原文节选</div><img src="../../assets/evidence/documents/verify-overview.png" width="1200" height="678" alt="verify-report.md 原文节选"><div id="hl-verify-overview-0" class="hl" style="left:114.3px;top:104.8px;width:171.9px;height:44.8px"></div><div id="hl-verify-overview-1" class="hl" style="left:128.6px;top:260.8px;width:183.8px;height:44.8px"></div><div id="hl-verify-overview-2" class="hl" style="left:128.6px;top:391.7px;width:156.4px;height:44.8px"></div><div id="hl-verify-overview-3" class="hl" style="left:128.6px;top:457.1px;width:128.9px;height:44.8px"></div></div><section id="verdict" class="card cue os" data-at="6.08" data-r="0" style="left:1300px;top:190px;width:545px"><div class="tab os">验收报告</div><h2>验收结论</h2><p>PASS · 无核心缺口</p><small>保留 Minor 与待人工事项</small></section><section id="mapping" class="card cue os" data-at="10.649" data-r="0" style="left:1300px;top:470px;width:545px"><div class="tab os">核对依据</div><h2>逐项核对</h2><p>要求 → 代码位置 → 测试</p></section><section id="remaining" class="card cue os" data-at="20.889" data-r="0" style="left:1300px;top:694px;width:545px"><div class="tab os">后续检查</div><h2>测试与缺口</h2><p>重跑结果 · 未完成事项</p></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script>
+<script>window.FRAME_TIMING={"starts": [0.0, 6.08, 10.649, 20.889, 29.449], "duration": 39.049, "note": "按 2026-11-18 重录 voice.srt 实测句子时间对齐"};window.FRAME_LINKS=[{"box": "hl-verify-overview-0", "card": "verdict", "at": 6.08}, {"box": "hl-verify-overview-1", "card": "mapping", "at": 10.649}, {"box": "hl-verify-overview-3", "card": "remaining", "at": 20.889}];
+window.frameRender=function(t){
+  var links=window.FRAME_LINKS.slice().sort(function(a,b){return a.at-b.at;});
+  links.forEach(function(l,i){
+    var next=links[i+1];
+    if(next)T.$(l.box).style.opacity=T.ease(T.p(t,l.at,.4))*(1-T.ease(T.p(t,next.at,.4)));
+  });
+  document.querySelectorAll('.doc').forEach(function(doc){
+    var own=links.filter(function(l){return doc.contains(T.$(l.box));});
+    if(own.length)doc.querySelector('img').style.filter='brightness('+(1-.35*T.ease(T.p(t,own[0].at,.4)))+')';
+  });
+};
+</script>
+<script src="episode.js"></script></body></html>

@@ -13,7 +13,7 @@
 
 ## 视频教程与配套页面
 
-前 5 期教程的说明、HTML 画面和播放器见 [视频配套资料](docs/tutorials/README.md)。每期附 B站、YouTube 与博客入口。下载后打开 `docs/tutorials/index.html` 即可浏览，也可按说明启动本地静态服务。
+前 6 期教程的说明、HTML 画面和播放器见 [视频配套资料](docs/tutorials/README.md)。每期附 B站、YouTube 与博客入口。下载后打开 `docs/tutorials/index.html` 即可浏览，也可按说明启动本地静态服务。
 
 ## Quick Start（跑一个变更，从需求到 merge）
 

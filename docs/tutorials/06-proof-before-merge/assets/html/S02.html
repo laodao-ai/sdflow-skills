@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- S02 · 署名页。沿用第 4、5 期 S03 的布局、原 logo 与入场动作。
+     本页对应第 3–5 句，第 6 句转至 S02a 介绍本期内容；节点按字数估时。 -->
+<html lang="zh-CN" data-frame-id="S02">
+<head>
+<meta charset="utf-8">
+<title>S02 · 老刀Cheney</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .sig { left: 480px; top: 400px; width: 960px; height: 280px; padding: 0 40px; display: flex; align-items: center; justify-content: center; gap: 44px; }
+  .sig img { width: 190px; height: 190px; flex: none; }
+  .sig .big { font-size: 124px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card dark sig" id="sig" data-r="-1"><img src="../../../shared/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  window.FRAME_TIMING={"starts": [0.0, 2.96, 6.56], "duration": 12.32, "note": "按 2026-11-18 重录 voice.srt 实测句子时间对齐"};
+  Stage({
+    duration: window.FRAME_TIMING.duration,
+    init: function () { return Promise.all([T.fonts(T.$('stage').textContent), document.querySelector('#sig img').decode()]); },
+    render: function (t) {
+      T.tilt();
+      T.enter(T.$('sig'), T.p(t, 0.0, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

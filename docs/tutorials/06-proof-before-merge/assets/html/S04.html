@@ -1,0 +1,124 @@
+<!doctype html>
+<!-- S04 · 第 17–20 句：项目背景、调用命令与完成结果合页。
+     调用片段取自原片 00:20–00:27；完成摘要取自 10:27，明确标出中间执行省略。
+     调用缩小时收起命令放大卡；两处证据和结果放大卡保留到页末。节点按字数估时。 -->
+<html lang="zh-CN" data-frame-id="S04">
+<head>
+<meta charset="utf-8">
+<title>S04 · 执行 sdflow-done 与完成结果</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="episode.css">
+<style>
+  #win { left: 90px; top: 220px; width: 1740px; height: 390px; overflow: visible; transform-origin: 0 0; }
+  .clip { position: absolute; left: 6px; top: 6px; width: 1716px; height: 366px; overflow: hidden; border-radius: 6px; }
+  #rec { position: absolute; left: -245px; top: -270px; width: 2210px; height: 1243px; }
+  #win .tab { top: -46px; font-size: 30px; }
+  #win .speed { right: 12px; top: -34px; }
+  #command-focus { left: 44.9px; top: 46.4px; width: 368.0px; height: 44.5px; }
+  #command { left: 800px; top: 685px; width: 1000px; padding: 22px 24px; z-index: 21; }
+  #command code { display: block; font: 500 40px var(--mono); white-space: nowrap; }
+  #command p { font-size: 30px; }
+  #receipt { left: 70px; top: 465px; width: 1775px; height: 294px; }
+  .doc .tab { z-index: 2; }
+  .hl { z-index: 3; }
+  .result { top: 790px; width: 530px; padding: 16px 24px; z-index: 21; background: var(--term); color: var(--cream); }
+  .result h2 { margin: 0; font-size: 38px; line-height: 1.2; }
+  .result p { margin: 6px 0 0; font-size: 29px; line-height: 1.2; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="chip" style="left:65px;top:48px;font-size:48px;font-family:var(--display)">执行 sdflow-done</div>
+  <div class="window" id="win">
+    <div class="clip"><video id="rec" src="../video/s04-command.mp4" muted preload="auto" playsinline></video></div>
+    <div class="tab ink">实录 · 调用 00:20–00:27</div>
+    <div class="speed" id="spd">1 倍速</div>
+    <div id="command-focus" class="hl"></div>
+  </div>
+  <section id="command" class="card dark" data-r="0">
+    <div class="tab ink">调用命令</div>
+    <code>/sdflow-done alarm-notify</code>
+    <p>指定这次要收尾的变更</p>
+  </section>
+  <div id="receipt" class="window doc" data-r="0">
+    <div class="tab ink">实录 · 完成摘要 · 原片 10:27 · 中间执行省略</div>
+    <img src="../../assets/evidence/done-result.png" width="1404" height="224" alt="sdflow-done 实录完成摘要">
+    <div id="h-verify" class="hl" style="left:27.6px;top:27.0px;width:1651.2px;height:75.3px"></div>
+    <div id="h-archive" class="hl" style="left:27.6px;top:97.3px;width:1378.7px;height:108.6px"></div>
+    <div id="h-merge" class="hl" style="left:27.6px;top:200.9px;width:943.0px;height:75.3px"></div>
+  </div>
+  <section id="verified" class="card result" data-r="0" style="left:95px"><h2>验收与交接报告</h2><p>Verify PASS · Hand-off</p></section>
+  <section id="archived" class="card result" data-r="0" style="left:700px"><h2>规格与 ADR</h2><p>Archive · Specs · ADR</p></section>
+  <section id="merged" class="card result" data-r="0" style="left:1305px"><h2>提交与合并</h2><p>8a2f27f → main</p></section>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  window.FRAME_TIMING={"starts": [0.0, 7.52, 15.44, 26.88], "duration": 30.32, "note": "按 2026-11-18 重录 voice.srt 实测句子时间对齐"};
+  var REC_START = 0, REC_END = 7;
+  var video = T.$('rec'), leads = [];
+  var RESULTS = [
+    { box: 'h-verify', card: 'verified', at: 17.088 },
+    { box: 'h-archive', card: 'archived', at: 20.504 },
+    { box: 'h-merge', card: 'merged', at: 23.932 }
+  ];
+
+  function seekVideo(sec) {
+    return new Promise(function (resolve) {
+      function painted() { requestAnimationFrame(function () { resolve(); }); }
+      if (Math.abs(video.currentTime - sec) < 0.001 && video.readyState >= 2) { painted(); return; }
+      video.addEventListener('seeked', painted, { once: true });
+      video.currentTime = sec;
+    });
+  }
+  function loaded() {
+    return new Promise(function (resolve) {
+      if (video.readyState >= 2) { resolve(); return; }
+      video.addEventListener('loadeddata', resolve, { once: true });
+    });
+  }
+  function link(box, card, progress) {
+    if (progress <= 0) return;
+    var line = T.lead(T.rect(T.$(box)), T.rect(T.$(card)));
+    T.leadDraw(line, progress);
+    leads.push(line);
+  }
+
+  Stage({
+    duration: window.FRAME_TIMING.duration,
+    init: function () { return Promise.all([loaded(), T.fonts(T.$('stage').textContent), document.querySelector('#receipt img').decode()]); },
+    render: function (t) {
+      T.tilt();
+      var move = T.ease(T.p(t, 14.911, 0.4));
+      var win = T.$('win'), command = T.$('command');
+      win.style.left = (90 + 365.4 * move) + 'px';
+      win.style.top = (220 - 35 * move) + 'px';
+      win.style.transform = 'scale(' + (1 - 0.42 * move) + ')';
+      T.enter(T.$('spd'), T.p(t, 0.0, 0.4), -12);
+      T.enter(command, T.p(t, 10.033, 0.6), 12);
+      command.style.opacity = T.ease(T.p(t, 10.033, 0.6)) * (1 - move);
+      var call = T.ease(T.p(t, 9.86, 0.4));
+      T.$('command-focus').style.opacity = call * (1 - move);
+      video.style.filter = 'brightness(' + (1 - 0.35 * call) + ')';
+
+      T.enter(T.$('receipt'), T.p(t, 15.44, 0.55), 14);
+      RESULTS.forEach(function (item, i) {
+        var next = RESULTS[i + 1];
+        var current = T.ease(T.p(t, item.at, 0.4));
+        if (next) current *= 1 - T.ease(T.p(t, next.at, 0.4));
+        T.$(item.box).style.opacity = current;
+        T.enter(T.$(item.card), T.p(t, item.at + 0.25, 0.55), 14);
+      });
+      document.querySelector('#receipt img').style.filter = 'brightness(' + (1 - 0.35 * T.ease(T.p(t, RESULTS[0].at, 0.4))) + ')';
+
+      // 调用区域缩放时，用实际位置重建引线，保持线端贴住原文与放大卡。
+      leads.forEach(function (line) { line.remove(); });
+      leads = [];
+      link('command-focus', 'command', T.ease(T.p(t, 10.033, 0.6)) * (1 - move));
+      RESULTS.forEach(function (item) { link(item.box, item.card, T.ease(T.p(t, item.at + 0.25, 0.55))); });
+      return seekVideo(Math.min(REC_START + t, REC_END));
+    }
+  });
+</script>
+</body>
+</html>

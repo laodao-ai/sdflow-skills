@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- S22：沿用第 4 期 S26、第 5 期 S25 的片尾布局与入场动作；动画按正式录音对齐（2026-11-18）。 -->
+<html lang="zh-CN" data-frame-id="S22">
+<head>
+<meta charset="utf-8">
+<title>S22 · 片尾</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .repo { left: 210px; width: 1500px; height: 130px; display: flex; align-items: center; padding: 0 56px; }
+  .repo .a { font-family: var(--mono); font-weight: 700; font-size: 54px; color: var(--ink); white-space: nowrap; }
+  .repo .tab { font-size: 40px; }
+  .ask { left: 240px; top: 520px; width: 1440px; height: 150px; padding: 0 56px; display: flex; align-items: center; }
+  .ask .big { font-size: 58px; white-space: nowrap; }
+  .ask .tab { font-size: 40px; }
+  .sig { left: 560px; top: 740px; width: 800px; height: 170px; padding: 0 40px; display: flex; align-items: center; gap: 36px; }
+  .sig img { width: 130px; height: 130px; flex: none; }
+  .sig .big { font-size: 84px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card repo" id="r1" data-r="-1.2" style="top:90px"><div class="tab ink">示例项目 · 见简介</div><div class="a">github.com/laodao-ai/demo-temp-monitor</div></div>
+  <div class="card repo" id="r2" data-r="1.2" style="top:300px"><div class="tab ink" style="transform:rotate(2deg)">SDFlow · 见简介</div><div class="a">github.com/laodao-ai/sdflow-skills</div></div>
+  <div class="card ask" id="ask" data-r="-1"><div class="tab ink" style="transform:rotate(2deg)">留言告诉我</div><div class="big">你用 AI 开发的时候碰到过什么问题？</div></div>
+  <div class="card dark sig" id="sig" data-r="1"><img src="../../../shared/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  // 按正式录音对齐（2026-11-18）。
+  var CUE = { r1: 0, r2: 1.2, ask: 6.25, sig: 10.4 };
+  Stage({
+    duration: 13.681,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.enter(T.$('r1'), T.p(t, CUE.r1, 0.6), 30);
+      T.enter(T.$('r2'), T.p(t, CUE.r2, 0.6), 30);
+      T.enter(T.$('ask'), T.p(t, CUE.ask, 0.6), 30);
+      T.enter(T.$('sig'), T.p(t, CUE.sig, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

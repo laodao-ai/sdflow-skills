@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN" data-frame-id="S19b"><head><meta charset="utf-8"><title>S19b · 同步项目决策</title>
+<link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css"><style>.card{z-index:21}.card h2{font-size:42px}.card p{font-size:35px}.doc .tab{font-size:28px}.card.os,.card.sp{background:#f8f7f3;color:var(--ink)}.doc .tab{z-index:2}.hl{z-index:3}</style></head><body><div id="stage">
+<div class="chip cue frame-title" data-at="0.0">同步项目决策</div>
+<div id="doc-adr" class="window doc cue" data-at="0.98" data-r="0" style="left:60px;top:370px;width:1060px;height:248.673px"><div class="tab ink">实录 · hand-off.md:71 · 原文节选</div><img src="../../assets/evidence/documents/adr.png" width="1200" height="271" alt="hand-off.md:71 原文节选"><div id="hl-adr-0" class="hl" style="left:762.9px;top:99.8px;width:247.5px;height:43.2px"></div><div id="hl-adr-1" class="hl" style="left:82.3px;top:143px;width:670.1px;height:43.2px"></div></div><section id="adr" class="card cue os" data-at="6.56" data-r="0" style="left:1300px;top:370px;width:540px"><div class="tab os">ADR 决策</div><h2>ADR-0005</h2><p>日志脱敏决策</p><small>更新处理器签名<br>与密钥替换语义</small></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script>
+<script>window.FRAME_TIMING={"starts": [0.0, 6.56], "duration": 17.76, "note": "按 2026-11-18 重录 voice.srt 实测句子时间对齐"};window.FRAME_LINKS=[{"box": "hl-adr-0", "card": "adr", "at": 6.56}];
+window.frameRender=function(t){
+  T.$('hl-adr-1').style.opacity=T.$('hl-adr-0').style.opacity;
+  var links=window.FRAME_LINKS.slice().sort(function(a,b){return a.at-b.at;});
+  links.forEach(function(l,i){
+    var next=links[i+1];
+    if(next)T.$(l.box).style.opacity=T.ease(T.p(t,l.at,.4))*(1-T.ease(T.p(t,next.at,.4)));
+  });
+  document.querySelectorAll('.doc').forEach(function(doc){
+    var own=links.filter(function(l){return doc.contains(T.$(l.box));});
+    if(own.length)doc.querySelector('img').style.filter='brightness('+(1-.35*T.ease(T.p(t,own[0].at,.4)))+')';
+  });
+};
+</script>
+<script src="episode.js"></script></body></html>

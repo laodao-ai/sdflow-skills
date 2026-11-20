@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- S07：沿用第 4、5 期 theme 组件；各 cue 按本页口播句子估时，录音后再对齐。 -->
+<html lang="zh-CN" data-frame-id="S07"><head><meta charset="utf-8"><title>S07 · 一条需求，如何验收</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css"><style>.card{padding:20px 26px;z-index:21}.card h2{font-size:38px;margin-bottom:8px}.card p{font-size:34px;margin-top:8px}.card small{font-size:26px;margin-top:8px}.card code{font-size:29px}#test code{display:block;font-size:26px;line-height:1.3}.doc img{transition:none}.card.os,.card.sp{background:#f8f7f3;color:var(--ink)}.doc .tab{z-index:2}.hl{z-index:3}</style></head><body><div id="stage">
+<div class="chip cue frame-title" data-at="0.0" style="left:60px;top:48px;">一条需求，如何验收</div><div id="doc-cooldown" class="window doc cue" data-at="0.0" data-r="0" style="left:65px;top:245px;width:1120px;height:491.21px"><div class="tab ink">实录 · verify-report.md · NTF-03</div><img src="../../assets/evidence/documents/cooldown.png" width="1200" height="519" alt="cooldown 原文节选"><div id="hl-cooldown-0" class="hl" style="left:102px;top:105.8px;width:270px;height:45.1px"></div><div id="hl-code" class="hl" style="left:87.3px;top:151.5px;width:277.5px;height:45.1px"></div><div id="hl-cooldown-1" class="hl" style="left:87.3px;top:242.9px;width:618.4px;height:45.1px"></div></div><section id="req" class="card cue " data-at="0.0" data-r="0" style="left:1290px;top:150px;width:550px"><div class="tab os">按设备冷却</div><h2>同一设备并发到达</h2><p>只为其中一条发起推送</p><small>规格：NTF-03</small></section><section id="test" class="card cue " data-at="19.2" data-r="0" style="left:1270px;top:620px;width:575px"><div class="tab sp">测试锚点</div><h2>找到对应测试</h2><code>TestConcurrentNotify<br>SameDeviceSendsOnce</code><small>throttled_test.go · tasks 4.2</small></section><section id="implementation" class="card cue sp" data-at="10.88"  style="left:1285px;top:405px;width:555px"><div class="tab sp">代码</div><h2>实现位置</h2><code>throttled.go:85–94</code></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 3.44, 10.88, 19.2, 29.2, 36.88], "duration": 46.48, "note": "按 2026-11-18 重录 voice.srt 实测句子时间对齐"};window.FRAME_LINKS=[{"box": "hl-cooldown-0", "card": "req", "at": 1.659}, {"box": "hl-cooldown-1", "card": "test", "at": 19.739}, {"box": "hl-code", "card": "implementation", "at": 11.774}];
+window.frameRender=function(t){
+  var links=window.FRAME_LINKS.slice().sort(function(a,b){return a.at-b.at;});
+  links.forEach(function(l,i){
+    var next=links[i+1];
+    if(next)T.$(l.box).style.opacity=T.ease(T.p(t,l.at,.4))*(1-T.ease(T.p(t,next.at,.4)));
+  });
+  document.querySelectorAll('.doc').forEach(function(doc){
+    var own=links.filter(function(l){return doc.contains(T.$(l.box));});
+    if(own.length)doc.querySelector('img').style.filter='brightness('+(1-.35*T.ease(T.p(t,own[0].at,.4)))+')';
+  });
+};
+</script><script src="episode.js"></script></body></html>

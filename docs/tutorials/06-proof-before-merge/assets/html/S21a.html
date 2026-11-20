@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- S21a · 下一期预告。沿用第 4 期 S25、第 5 期 S24 的 SDFlow 卡与六步系列流程。
+     总览覆盖整个流程，六步同等展开；括线表示讲解范围，不增加新的流程步骤。
+     第 108–111 句，口播尚未录制，时间按每秒约 4 字估算。 -->
+<html lang="zh-CN" data-frame-id="S21a">
+<head>
+<meta charset="utf-8">
+<title>S21a · 下一期：SDFlow 总览与自动化</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  #sd { left: 640px; top: 96px; width: 640px; height: 180px; padding: 0; display: flex; align-items: center; justify-content: center; }
+  #sd .big { font-family: var(--mono); font-weight: 700; font-size: 120px; line-height: 1; letter-spacing: -3px; }
+  .sf-step { top: 330px; width: 280px; height: 104px; display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 16px; }
+  .sf-step .big { font-size: 42px; white-space: nowrap; }
+  .sf-step .num { width: 56px; height: 56px; font-size: 30px; flex: none; }
+  #scope { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
+  #next { left: 220px; top: 590px; width: 1480px; height: 290px; padding: 32px 50px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  #next .tab { font-size: 38px; }
+  #overview { font-size: 70px; line-height: 1.15; }
+  #automation { display: flex; align-items: center; gap: 24px; font-size: 48px; line-height: 1.25; }
+  #automation .auto { padding: 3px 18px; border: 4px solid var(--ink); border-radius: 7px; background: var(--amber-soft); }
+  #reason { font-size: 36px; line-height: 1.2; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card" id="sd" data-r="-1"><div class="big">SDFlow</div></div>
+  <div id="steps"></div>
+  <svg id="scope" viewBox="0 0 1920 1080" aria-hidden="true"><path d="M195 470 V510 H1725 V470 M960 510 V558" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/></svg>
+  <div class="card" id="next" data-r="-1">
+    <div class="tab ink">下一期</div>
+    <div class="big" id="overview">总览与总结</div>
+    <div class="big" id="automation"><span class="auto">自动化</span><span>人和 AI 的分工</span></div>
+    <div id="reason">设计原因与取舍</div>
+  </div>
+</div>
+<script>
+  var names = ['需求明确', '规格编写', '规格评审', '代码实现', '代码评审', '收尾归档'];
+  names.forEach(function (name, index) {
+    var card = document.createElement('div');
+    card.className = 'card sf-step';
+    card.id = 'sf' + (index + 1);
+    card.style.left = (55 + 306 * index) + 'px';
+    card.innerHTML = '<span class="num">' + (index + 1) + '</span><span class="big">' + name + '</span>';
+    document.getElementById('steps').appendChild(card);
+  });
+</script>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  window.FRAME_TIMING={"starts": [0.0, 5.28, 11.6, 18.08], "duration": 23.92, "note": "按 2026-11-18 重录 voice.srt 实测句子时间对齐"};
+  Stage({
+    duration: window.FRAME_TIMING.duration,
+    init: function () { return T.fonts(T.$('stage').textContent); },
+    render: function (t) {
+      T.tilt();
+      T.enter(T.$('sd'), T.p(t, 0.0, 0.5), 20);
+      for (var i = 1; i <= 6; i++) T.enter(T.$('sf' + i), T.p(t, 0.2 + (i - 1) * 0.08, 0.5), 20);
+      var bracket = document.querySelector('#scope path');
+      var scope = T.ease(T.p(t, 5.28, 0.45));
+      bracket.style.opacity = scope;
+      bracket.style.strokeDasharray = 1;
+      bracket.style.strokeDashoffset = 1 - scope;
+      T.enter(T.$('next'), T.p(t, 5.28, 0.5), 20);
+      T.enter(T.$('overview'), T.p(t, 5.28, 0.5), 10);
+      T.enter(T.$('automation'), T.p(t, 11.6, 0.5), 10);
+      T.enter(T.$('reason'), T.p(t, 18.08, 0.5), 10);
+    }
+  });
+</script>
+</body>
+</html>
