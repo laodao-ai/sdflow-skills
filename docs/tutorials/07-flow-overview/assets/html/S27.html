@@ -1,0 +1,75 @@
+<!doctype html>
+<!-- S27：第 6 轮（意见 62，作者 2026-11-22 定）换成告警示例。左上角标「实现与评审 · AI 自动推进」，缩小六步条只亮第 4、5 步。上一页的决定卡固定在第二行。
+     第 106 句「钉钉报错回复」示意卡，回显的密钥（示意假值 SEC"a\b）黄框；第 107 句机制三步：转义后变了样子 ≠ 脱敏规则按原样找，对不上 → 密钥进了日志，
+     再摘代码评审 Findings 第 89 行的问题（code-review-report.md，省略处用「……」，去掉反引号）；第 108 句底部出现「已确认的要求」卡，
+     摘 specs/service-runtime/spec.md 第 160 行场景标题；第 109 句虚线框「已确认的要求之内」，框内「改写法 → 补测试 → 再验证」，
+     Findings 窗里展开同一条的修复记录；第 110 句框外没有人形图标；
+     第 111 句问题卡跨出虚线框，箭头带回决定卡旁的人形位置，执行线停在这张卡处。回复卡只是示意，不放真实密钥与错误码。来源 B。 -->
+<html lang="zh-CN" data-frame-id="S27"><head><meta charset="utf-8"><title>S27 · 实现与评审 · AI 自动推进</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .mini{left:700px;top:44px;width:1800px;transform:scale(.5);transform-origin:0 0}
+  /* 只亮第 4、5 步：其余步骤压淡，不改共用组件 */
+  .mini .nav-step:nth-child(-n+3),.mini .nav-step:nth-child(6){opacity:.35}
+  .dec{left:60px;top:146px;width:560px;height:84px;padding:0 30px;display:flex;align-items:center}.dec p{margin:0;font-size:38px;font-weight:700}
+  /* 第 106–107 句的机制行（y 290–410）：回复卡 → 转义后 ≠ 脱敏规则 → 进了日志。密钥只用示意假值 SEC"a\b。 */
+  .rp{left:60px;top:290px;width:500px;height:118px;padding:30px 22px 0}.rp .tab{font-size:32px;top:-36px;padding:4px 16px}
+  .code{background:var(--term);color:var(--cream);border-radius:8px;padding:8px 18px;font:500 32px/1.6 var(--mono);white-space:nowrap}
+  .nd{top:290px;height:118px;padding:10px 20px;text-align:center}
+  .nd .lab{font:800 28px/1.3 var(--display);margin:0 0 6px}
+  .nd .v{font:600 32px/1.5 var(--mono);white-space:nowrap}
+  .alab{position:absolute;font:800 28px/1.2 var(--display);color:var(--ink);text-align:center}
+  .ne{position:absolute;top:312px;font:800 64px/1 var(--display);color:var(--ink)}
+  /* 第 108–111 句：底部虚线框，框内是已确认的要求和「改写法 → 补测试 → 再验证」，问题卡跨出右框线。 */
+  .loop{left:60px;top:730px;width:1440px;height:170px}.loop .tab{font-size:34px;top:-34px}
+  .step{top:776px;height:84px;padding:0 24px;display:flex;align-items:center;font-size:36px;font-weight:700}
+  .qc{left:1456px;top:752px;width:380px;height:112px;padding:8px 28px;display:flex;align-items:center;font-size:38px;font-weight:700;line-height:1.35}
+  #fix{box-sizing:border-box;overflow:hidden}
+</style></head><body><div id="stage">
+<div class="sixbar mini" data-done="all"></div>
+<div class="chip" data-r="-1" style="left:60px;top:36px;background:var(--amber);font-size:38px">实现与评审 · AI 自动推进</div>
+
+<!-- 上一页的决定，固定在第二行 -->
+<section class="card sm dec cue" data-at="0.1" data-r="0"><p>决定：失败只记日志</p></section>
+
+<!-- 第 106 句：钉钉报错回复里带着密钥（示意假值） -->
+<section class="card rp cue" data-at="2.86" data-r="-1"><div class="tab">钉钉报错回复 · 示意</div><div class="code">errmsg: "……<span class="mk" data-current="5.26" data-until="7.77" style="margin:0 8px">SEC"a\b</span>……"</div></section>
+
+<!-- 第 107 句：转义后变了样子 → 脱敏规则按原样去找，对不上 → 密钥进了日志 -->
+<i class="arr cue" data-at="8.76" data-d="M574 350 L640 350"></i>
+<div class="alab cue" data-at="8.76" style="left:566px;top:302px;width:80px">转义</div>
+<section class="card nd cue" data-at="8.86" data-r="1" style="left:655px;width:280px"><div class="lab">转义后变了样子</div><div class="v">SEC\"a\\b</div></section>
+<div class="ne cue" data-at="10.7" style="left:950px">≠</div>
+<section class="card nd cue" data-at="9.98" data-r="-1" style="left:1004px;width:320px"><div class="lab">脱敏规则按原样找</div><div class="v">SEC"a\b</div></section>
+<i class="arr cue" data-at="10.99" data-d="M1338 350 L1450 350"></i>
+<div class="alab cue" data-at="10.99" style="left:1344px;top:300px;width:100px">对不上</div>
+<section class="card nd cue" data-at="12.06" data-r="1" style="left:1464px;width:396px"><div class="lab">密钥进了日志</div><div class="v">……SEC\"a\\b……</div></section>
+
+<!-- 第 107 句摘 Findings 第 89 行的问题，第 109 句在同一窗里展开修复记录 -->
+<div class="q tight cue" data-at="12.51" style="left:60px;top:452px;width:1800px"><div class="src"><span class="rec">项目记录摘录</span>code-review-report.md · Findings</div><div class="body">errcode≠0 时用 %q 拼 errmsg：……密钥被对端回显时，<span class="mk" data-current="12.74" data-until="15.83" style="margin:0 8px">转义后的文本匹配不上 redact 的原文全文替换</span>，会以可还原形式进日志。</div><div class="body" id="fix">已修[impl-review-fix]：改 %s……补 TestEchoedSecretWithQuoteAndBackslashIsMasked（<span class="mk" data-current="23.82" style="margin:0 12px">旧代码红、新代码绿，已实跑</span>）</div></div>
+
+<!-- 第 108 句：已确认的要求 -->
+<div class="boundary loop cue" data-at="20.24"><div class="tab">已确认的要求之内</div></div>
+<div class="q tight cue" data-at="15.6" data-current="15.83" data-until="20.24" data-shadow="10" style="left:90px;top:758px;width:620px"><div class="src"><span class="rec">项目记录摘录</span>已确认的要求 · spec.md</div><div class="body">Scenario: 推送失败的日志不含推送密钥</div></div>
+
+<!-- 第 109 句：改写法 → 补测试 → 再验证 -->
+<section class="card step cue" data-at="21.02" data-r="-1" style="left:750px">改写法</section>
+<i class="arr cue" data-at="22.12" data-d="M926 818 L962 818"></i>
+<section class="card step cue" data-at="22.22" data-r="1" style="left:972px">补测试</section>
+<i class="arr cue" data-at="23.16" data-d="M1148 818 L1184 818"></i>
+<section class="card step cue" data-at="23.26" data-r="-1" style="left:1194px">再验证</section>
+
+<!-- 第 111 句：问题卡跨出虚线框，箭头带回决定卡旁的人形位置 -->
+<i class="arr cue" data-at="32.79" data-d="M1372 818 L1444 818"></i>
+<section class="card qc cue" data-at="32.86" data-r="1"><span>要求冲突<br>要改业务含义</span></section>
+<i class="arr cue" data-at="38.06" data-d="M1848 808 L1894 808 L1894 188 L742 188"></i>
+<div class="who human cue" data-at="38.16" style="left:650px;top:150px"></div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+window.frameRender=function(t){
+  document.querySelectorAll(".mini .nav-step").forEach(function(e){e.style.outline="none";if(!e.classList.contains("notyet"))e.style.boxShadow="7px 7px 0 #161616";});
+  // 修复记录：第 109 句 22.4 秒起在 Findings 窗里向下展开，之前不占位（不留空的深色条）。
+  var b=T.$('fix');
+  if(!b._h){b.style.display='block';b.style.height='auto';b._h=b.offsetHeight;}
+  var k=T.ease(T.p(t,22.22,0.5));
+  b.style.display=k>0?'block':'none';b.style.height=(k*b._h)+'px';b.style.opacity=k;
+};
+window.FRAME_TIMING={"starts": [0.0, 7.36, 15.36, 20.08, 25.28, 32.16], "duration": 41.28, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- S24：中断后续跑。保留六步条（第 4 步「代码实现」进行中）和 S19a 的 ship 括线（同一写法）。第 89 句指针停在代码实现中间，标「中断」；第 90 句再出现命令卡 /sdflow-ship <change>（调用示意，change 名与 S19a 相同）；第 91 句 ship_gate 脚本框读变更目录，指向「代码实现 · 进行中」；第 92 句实现区任务单：已完成的打勾留在原位不重派，从第一张未完成的接着做；第 93 句「失效检查」卡标「重跑」，指回对应阶段，不只补一个勾；第 94 句「没解决的问题：保留」移入待办；第 95 句三类卡排齐，标「接着做的位置」。来源 A：ship 定义「停即停、重调即续」、ship_gate 的 CONTINUE_IMPL（done_tasks 透传）与 RERUN_STALE。不承诺所有场景都能无损恢复。 -->
+<html lang="zh-CN" data-frame-id="S24"><head><meta charset="utf-8"><title>S24 · 中断后接着做</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  /* ship 括线：与 S19a 完全相同的写法 */
+  .shipb{position:absolute;left:977px;top:150px;width:883px;height:40px}
+  .shipb svg{position:absolute;left:0;top:0;overflow:visible}
+  .shipb .chip{left:395px;top:6px;padding:2px 24px;font:800 32px/1.4 var(--display);background:var(--amber);box-shadow:5px 5px 0 var(--ink)}
+  .gbox{position:absolute;left:640px;top:320px;width:430px;height:200px;box-sizing:border-box;background:var(--term);color:var(--cream);border:5px solid var(--ink);border-radius:0;box-shadow:12px 12px 0 var(--ink);padding:26px 32px;font-family:var(--mono)}
+  .gbox .nm{font-size:44px;font-weight:700}.gbox .sub{font:500 28px/1.4 var(--mono);color:var(--cream-dim);margin-top:10px}
+  .col{position:absolute;top:580px;height:210px}
+  .tk{position:absolute;top:50px;width:104px;height:122px;box-sizing:border-box;padding:12px 6px;text-align:center;font:800 34px/1.35 var(--display)}
+  .tk small{display:block;margin:0;font:700 36px/1.1 var(--body)}
+  .fc{left:1330px;top:580px;width:530px;height:210px;padding:26px 30px}.fc p{font-size:34px;margin:0}
+  .fc .chip{left:20px;top:128px;background:var(--amber);font-size:36px;padding:6px 26px}
+  .todo{left:740px;width:550px}
+  .pb{position:absolute;left:30px;top:52px;width:490px;padding:22px 26px;text-align:center}.pb b{font:800 40px/1.3 var(--display)}
+</style></head><body><div id="stage">
+<!-- 前三格从开头就是「讲过」：3:0 让前三格算讲过，0:0.01 立刻取消黄框；说到「实现」才点亮第 4 格 -->
+<div class="sixbar" data-seq="3:0,0:0.01,4:17.74"></div>
+
+<!-- 第 89 句 -->
+<div class="shipb cue" data-at="0.3"><svg width="883" height="40" viewBox="0 0 883 40"><path d="M2 4 L2 30 L881 30 L881 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="chip" data-r="0">ship</div></div>
+<div class="chip cue" data-at="1.1" data-r="-2" style="left:1010px;top:222px;font-size:36px">▲ 中断</div>
+
+<!-- 第 90 句 -->
+<div class="cmd short cue" data-at="4.81" data-r="0" style="left:60px;top:350px"><div class="tab ink">skill</div>/sdflow-ship &lt;change&gt;</div>
+
+<!-- 第 91 句 -->
+<i class="arr cue" data-at="11.49" data-d="M580 400 L626 400"></i>
+<div class="gbox cue" data-at="11.78" data-r="0"><div class="nm">ship_gate</div><div class="sub">读取变更目录<br>判断做到哪一步</div></div>
+<div class="tag cue" data-at="17.74" data-r="-3" style="left:1230px;top:222px;font-size:34px">代码实现 · 进行中</div>
+<i class="arr cue" data-at="17.64" data-d="M1084 400 Q1380 400 1380 296"></i>
+
+<!-- 第 92 句：任务单，已完成的留在原位 -->
+<div class="boundary col cue" data-at="17.24" style="left:60px;width:650px"><div class="tab ink" style="left:20px;top:-30px;font-size:32px">实现 · 任务单</div>
+  <section class="card tk cue" data-at="19.1" data-r="0" style="left:20px">T1<small>✓</small></section>
+  <section class="card tk cue" data-at="19.34" data-r="0" style="left:144px">T2<small>✓</small></section>
+  <section class="card tk cue" data-at="21.5" data-r="0" data-current="21.6" style="left:268px">T3<small>&nbsp;</small></section>
+  <section class="card tk dash cue" data-at="22.14" data-r="0" style="left:392px;color:var(--ink)">T4<small>&nbsp;</small></section>
+  <section class="card tk dash cue" data-at="22.3" data-r="0" style="left:516px;color:var(--ink)">T5<small>&nbsp;</small></section></div>
+
+<!-- 第 93 句 -->
+<section class="card fc cue" data-at="24.97" data-r="1"><div class="tab">失效检查</div><p>旧结果对不上当前内容</p><span class="chip" data-r="0">重跑</span></section>
+<i class="arr cue" data-at="27.1" data-d="M1640 570 Q1640 380 1530 202"></i>
+
+<!-- 第 94 句 -->
+<div class="boundary col todo cue" data-at="29.26"><div class="tab ink" style="left:20px;top:-30px;font-size:32px">待办</div>
+  <section class="card pb" id="pb" data-r="0"><b>没解决的问题：保留</b></section></div>
+
+<!-- 第 95 句 -->
+<div class="tag cue" data-at="34.06" data-r="-2" style="left:700px;top:830px;font-size:40px">接着做的位置</div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 4.64, 11.12, 17.12, 24.72, 29.2, 33.36], "duration": 36.64, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.frameRender=function(t){
+  var E=T.ease,P=T.p;
+  // 第 94 句：「没解决的问题」从右侧滑进待办框
+  var k=E(P(t,29.69,.8)),el=T.$('pb');
+  el.style.opacity=E(P(t,29.61,.4));
+  el.style.transform='translateX('+((1-k)*420)+'px)';
+};</script><script src="episode.js"></script></body></html>

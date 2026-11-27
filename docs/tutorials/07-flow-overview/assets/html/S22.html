@@ -1,0 +1,76 @@
+<!doctype html>
+<!-- S22：「状态 → 下一步」对照表，三行随口播逐行长出来并留到页末，当前讲到的一行加黄框，下一行出现时黄框移走。第 85 句「条件齐全 → 继续」；第 86 句「条件不足」，三个原因逐个并排出现，再出「停下，报告原因」；第 87 句「结果过期」，版本 A ≠ 版本 B，指回代码评审重跑。
+     第 88 句三行都不加框，表格下方出「自动推进的依据」总结卡，两条逐条出现并留到页末，总结卡加黄框。对应 ship_gate.py 的 verdict：RUN_CODE_REVIEW / REFUSE_START / BLOCKED_UPSTREAM / VERIFY_FAIL / RERUN_STALE。来源 A。第 85–88 句。 -->
+<html lang="zh-CN" data-frame-id="S22"><head><meta charset="utf-8"><title>S22 · 自动推进的依据</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  /* 每行一张通栏卡，内部用 flex 垂直居中，行高由脚本随内容改 */
+  .rw{left:60px;width:1800px;padding:0;opacity:0}
+  .rw .lb{position:absolute;left:36px;top:0;bottom:0;display:flex;align-items:center;font:800 46px/1.3 var(--display);color:var(--ink);white-space:nowrap}
+  .rw .lf{position:absolute;left:250px;top:0;bottom:0;display:flex;align-items:center;gap:12px}
+  .rw .dv{position:absolute;left:1040px;top:14px;bottom:14px;border-left:4px dashed #16161688}
+  .rw .rt{position:absolute;left:1070px;top:0;bottom:0;display:flex;align-items:center;gap:28px;white-space:nowrap}
+  .rw .rt .tx{font:800 46px/1.3 var(--display);color:var(--ink)}
+  .rw .chip{position:static;display:inline-block;line-height:1.3}
+  .rw .lf .chip{font-size:36px;padding:10px 24px;opacity:0}
+  .rw .am{background:var(--amber)}
+  .rw .lf .card{position:static;width:320px;padding:18px 22px;text-align:center;box-shadow:7px 7px 0 var(--ink)}
+  .rw .lf .card b{display:block;font:800 40px/1.3 var(--display)}
+  .rw .lf .card small{font:600 30px/1.3 var(--mono);margin-top:6px}
+  .rw .ne{width:90px;text-align:center;font:800 90px/1 var(--display);color:var(--ink)}
+  #t1{top:180px;height:112px}
+  #t2{top:322px;height:120px}
+  #t3{top:472px;height:100px}
+  #sm{left:60px;top:696px;width:1000px;height:116px;padding:0;opacity:0}
+  #sm .row{position:absolute;left:36px;font:700 46px/1.3 var(--body);color:var(--ink);white-space:nowrap}
+  #sm .row i{font:800 44px var(--display);font-style:normal;margin-right:18px}
+</style></head><body><div id="stage">
+<div class="chip cue frame-title" data-at="0">ship_gate 指出下一步</div>
+
+<!-- 第 85 句：标题落位后（0.95 秒）出第 1 行 -->
+<section class="card rw" id="t1" data-r="0" data-current="2.95" data-until="7.05">
+  <div class="lb">条件齐全</div><div class="dv"></div>
+  <div class="rt"><span class="tx">→ 继续</span><span class="chip am" style="font-size:42px;padding:10px 28px">下一步：代码评审</span></div>
+</section>
+
+<!-- 第 86 句：第 2 行，三个原因逐个并排出现，再出「停下，报告原因」 -->
+<section class="card rw cue" id="t2" data-r="0" data-at="7.05" data-current="7.05" data-until="16.78">
+  <div class="lb">条件不足</div>
+  <div class="lf"><span class="chip" id="r1">设计未批准</span><span class="chip" id="r2">上游阻塞</span><span class="chip" id="r3">验证没通过</span></div>
+  <div class="dv"></div>
+  <div class="rt"><span class="tx" id="stp" style="opacity:0">→ 停下，报告原因</span></div>
+</section>
+
+<!-- 第 87 句：第 3 行，版本对不上，再出指回代码评审 -->
+<section class="card rw cue" id="t3" data-r="0" data-at="16.78" data-current="16.78" data-until="25.85">
+  <div class="lb">结果过期</div>
+  <div class="lf" id="pr" style="opacity:0"><section class="card" data-r="0"><b>评审报告</b><small>评审时的版本 A</small></section>
+    <div class="ne">≠</div>
+    <section class="card" data-r="0"><b>当前代码</b><small>现在的版本 B</small></section></div>
+  <div class="dv"></div>
+  <div class="rt"><span class="chip am" id="rr" style="font-size:40px;padding:8px 28px;opacity:0">→ 代码评审 · 重跑对应检查</span></div>
+</section>
+
+<!-- 第 88 句：三行无黄框，总结卡随两条依据长高，黄框留到页末 -->
+<section class="card cue" id="sm" data-at="28.28" data-current="28.28" data-r="0"><div class="tab ink">自动推进的依据</div>
+  <div class="row" style="top:40px"><i>1</i>每一步留下的结果</div>
+  <div class="row" id="sm2" style="top:108px;opacity:0"><i>2</i>这些结果现在是否还有效</div>
+</section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 6.96, 16.72, 25.736], "duration": 34.216, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.frameRender=function(t){
+  var E=T.ease,P=T.p;
+  function en(id,at){T.enter(T.$(id),P(t,at,.45),12);}
+  // 标题贴纸 0–0.95 秒从画面中部落到左上，途中会盖住第 1 行；第 1 行等它落位再出现（开头 0.5 秒的主体是标题）
+  T.enter(T.$('t1'),P(t,2.95,.4),14);  // 口播 3.68 才说到；提前到 2.95，让只有标题的时间不超过 3 秒（visual-v4 4.8）
+  // 三个原因并排逐个出现，留到页末
+  en('r1',7.7);en('r2',8.54);en('r3',10.94);
+  T.$('stp').style.opacity=E(P(t,13.26,.4));
+  // 第 3 行：行高随内容长高（先只有标签，版本对比出现时长到 170）
+  var g3=E(P(t,19.18,.5));
+  T.$('t3').style.height=(100+70*g3)+'px';
+  T.$('pr').style.opacity=g3;
+  T.$('rr').style.opacity=E(P(t,22.06,.4));
+  // 总结卡：先一条，第二条出现时卡长高
+  var g4=E(P(t,31.0,.5));
+  T.$('sm').style.height=(116+68*g4)+'px';
+  T.$('sm2').style.opacity=g4;
+};</script><script src="episode.js"></script></body></html>

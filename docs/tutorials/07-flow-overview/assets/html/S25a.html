@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- S25a：第 4 版。六步条加两个人形位置、三段括线。
+     第 96 句问题「人在哪里介入？」先在正中放大，再缩到左上；第 97 句留两个空的人形位置；
+     第 98 句左段（需求明确 → 规格评审，连同设计门）括线，左人形旁依次三张小卡；
+     第 99 句左段括线加粗标「人重度参与」，设计门向后画箭头标「以规格为准」，箭头指向自动推进区；
+     第 100 句从「收尾归档」右端引线，沿右侧下到自动推进区下方，标「归档之后」，接到人形图标和两张报告卡，下方「决定下一步」，这一组在自动推进区外面；
+     第 101 句中段 ship 括线标「AI 自动推进」，括线下虚线框出自动推进区，框内是「实现 · 评审 · 修复」，没有人形图标。
+     （句号按旧编号；分镜现为第 94–99 句。）来源 A。
+     六步条在这一章里六步都已讲过，用 data-done="all"。 -->
+<html lang="zh-CN" data-frame-id="S25a"><head><meta charset="utf-8"><title>S25a · 人在哪里介入</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  /* 空的人形位置：虚线框，和 .who.big 同大小 */
+  .slot{position:absolute;width:110px;height:110px;box-sizing:border-box;border:5px dashed var(--ink);border-radius:12px}
+  .mid{position:absolute;box-sizing:border-box}
+  .lc{left:190px;width:720px;padding:20px 30px}.lc p{margin:0;font-size:40px;font-weight:700}
+  .rc{top:620px;padding:20px 30px;text-align:center}.rc p{margin:0;font-size:40px;font-weight:700}
+  .gate{position:absolute;left:956px;top:140px;width:8px;height:680px;background:var(--ink);border-radius:4px}
+  /* 自动推进区：ship 括线下方的虚线框，x 与括线同宽（990–1860），上沿让开「设计门」标签。归档之后的人形一组在它下方、框外。 */
+  .auto{left:990px;top:318px;width:870px;height:220px}
+  .lab{font-size:36px;font-weight:700}
+</style></head><body><div id="stage">
+<div class="sixbar" data-done="all"></div>
+
+<!-- 第 96 句：问题，先居中放大，再缩到左上 -->
+<div class="chip" id="q" data-r="-1" style="left:60px;top:262px;font-size:44px;opacity:0">人在哪里介入？</div>
+
+<!-- 第 97 句：两个空的人形位置 -->
+<div class="slot cue" data-at="6.84" style="left:60px;top:380px"></div>
+<div class="slot cue" data-at="6.91" style="left:1005px;top:620px"></div>
+
+<!-- 第 98 句：左段括线、设计门、人形、三张小卡 -->
+<i class="arr cue" data-at="8.84" data-w="6" data-nohead data-d="M60 166 L60 186 L943 186 L943 166"></i>
+<div class="gate cue" data-at="9.46"></div>
+<div class="chip cue" data-at="9.46" data-r="0" style="left:870px;top:222px;background:var(--charcoal);color:var(--cream);font-size:36px;width:180px;text-align:center;padding:10px 0">设计门</div>
+<div class="who big human cue" data-at="8.92" style="left:60px;top:380px"></div>
+<section class="card sm lc cue" data-at="11.5" data-r="-1" style="top:380px"><p>讨论需求</p></section>
+<section class="card sm lc cue" data-at="13.31" data-r="1" style="top:520px"><p>规格评审报告</p></section>
+<section class="card sm lc cue" data-at="15.22" data-r="-1" style="top:660px"><p>批准设计</p></section>
+
+<!-- 第 99 句：左段加粗，设计门向后的箭头 -->
+<i class="arr cue" data-at="17.73" data-w="13" data-nohead data-d="M60 166 L60 186 L943 186 L943 166"></i>
+<div class="chip cue" data-at="18.22" data-r="1" style="left:376px;top:153px;background:var(--blue);font-size:38px">人重度参与</div>
+<!-- 箭头从设计门指向自动推进区（第 99 句框出的位置），不指向人形 -->
+<i class="arr cue" data-at="20.41" data-w="6" data-d="M972 444 L1196 444"></i>
+<div class="tag cue" data-at="21.02" data-r="-3" style="left:1000px;top:340px">以规格为准</div>
+
+<!-- 第 98 句：从「收尾归档」右端引线，沿右侧下到自动推进区下方，接到归档之后的人形和两张报告卡 -->
+<i class="arr cue" data-at="24.7" data-w="6" data-d="M1868 90 L1894 90 L1894 578 L1060 578 L1060 610"></i>
+<div class="chip cue" data-at="25.87" data-r="-2" style="left:1560px;top:540px;font-size:34px;padding:4px 20px">归档之后</div>
+<div class="who big human cue" data-at="24.94" style="left:1005px;top:620px"></div>
+<section class="card sm rc cue" data-at="28.64" data-r="1" style="left:1150px;width:340px"><p>代码评审报告</p></section>
+<section class="card sm rc cue" data-at="29.89" data-r="-1" style="left:1540px;width:300px"><p>交接报告</p></section>
+<i class="arr cue" data-at="31.28" data-d="M1515 722 L1515 782"></i>
+<div class="chip cue" data-at="31.45" data-r="1" style="left:1388px;top:790px;background:var(--charcoal);color:var(--cream);font-size:40px">决定下一步</div>
+
+<!-- 第 99 句：中段 ship 括线标「AI 自动推进」，括线下虚线框出自动推进区，框内没有人形图标 -->
+<i class="arr cue" data-at="33.64" data-w="6" data-nohead data-d="M977 166 L977 186 L1860 186 L1860 166"></i>
+<div class="chip cue" data-at="37.15" data-r="-1" style="left:1270px;top:153px;background:var(--amber);font-size:38px">AI 自动推进</div>
+<div class="boundary auto cue" data-at="34.32" data-r="0"></div>
+<section class="card sp cue mid" data-at="34.95" data-r="1" style="left:1210px;top:392px;width:420px;padding:20px 24px"><p style="margin:0;font-size:34px;font-weight:700;text-align:center">实现 · 评审 · 修复</p></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+// 问题贴纸：0–1.6 秒在正中放大，之后 0.6 秒缩小移到左上（visual-v4 4.8）。
+window.frameRender=function(t){
+  var q=T.$('q'),W=q.offsetWidth,H=q.offsetHeight;
+  var o=T.ease(T.p(t,0.1,0.4)),mv=T.ease(T.p(t,1.89,0.6));
+  var dx=(960-(60+W/2))*(1-mv),dy=(540-(262+H/2))*(1-mv),sc=1+0.7*(1-mv);
+  q.style.opacity=o;
+  q.style.transform='translate('+dx+'px,'+dy+'px) scale('+sc+') rotate(-1deg)';
+};
+window.FRAME_TIMING={"starts": [0.0, 6.8, 8.72, 17.6, 24.609, 33.489], "duration": 39.249, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>

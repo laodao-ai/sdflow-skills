@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- S35：环路，节点分两行、每行不超过三个：「做项目 → 发现问题 → 人决定怎么改」「用 SDFlow 修改 → 继续实践」，修改回到继续实践再回到做项目。
+     第 134 句右上 SDFlow 同时出现在「用作工具」和「被修改的对象」两个位置，用小标签区分；第 135 句「人决定怎么改」放在修改前，AI 只做「分析、修改、检查」；第 136 句环路闭合；
+     第 137 句「发现问题」的例子：冷却卡 + 决策纪要 D13 一行（原文，项目记录摘录），箭头指向规格、落点空白；旁边「AI 最后检查时说」摘录加黄色问号（AI 的猜）；只说规格漏写，不推断代码没实现；
+     第 138 句下方两条方向相反的虚线「纪要 ⇄ 规格」，标「计划加入 · 还没有实现」；第 139 句环路停在「继续实践」，不加自动进化光效。来源 I、J。
+     D13 与 AI 终审的原文出处：decision-memo.md:31；02-spec-still-off-track/review/main-spec-check.md:223。 -->
+<html lang="zh-CN" data-frame-id="S35"><head><meta charset="utf-8"><title>S35 · SDFlow 自己用 SDFlow 改</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .who.agent svg{margin:0}
+  .nd{width:340px;height:100px;padding:0;display:flex;align-items:center;justify-content:center;gap:14px;font:800 44px var(--display);white-space:nowrap}
+  .nd .who{position:relative;width:60px;height:60px;box-shadow:4px 4px 0 var(--ink)}.nd .who svg{width:38px;height:38px}
+  .sf{height:110px;padding:40px 20px 10px;text-align:center;font:800 50px var(--display)}
+  .sf .tab{font-size:28px;top:-34px;padding:2px 14px}
+  .q .body{font-size:28px;line-height:1.55}
+  .aibox{display:flex;align-items:center;gap:14px;font:600 34px var(--body);color:var(--ink)}
+  .aibox .who{position:relative;width:60px;height:60px}.aibox .who svg{width:38px;height:38px}
+  .slot{margin-top:10px;border:4px dashed rgba(22,22,22,.65);border-radius:8px;padding:10px 14px;font:600 34px var(--body);text-align:center}
+</style></head><body><div id="stage">
+<!-- 134：SDFlow 的两个位置 -->
+<section class="card sf cue" data-at="0" data-r="-1" style="left:1290px;top:215px;width:250px"><div class="tab ink">用作工具</div>SDFlow</section>
+<i class="arr cue" data-at="1.56" data-d="M1548 270 L1592 270"></i>
+<section class="card sf cue" data-at="1.64" data-r="1" style="left:1600px;top:215px;width:260px"><div class="tab ink">被修改的对象</div>SDFlow</section>
+
+<!-- 135–136：环路 -->
+<section class="card nd cue" data-at="6.7" data-r="-1" style="left:60px;top:175px">做项目</section>
+<i class="arr cue" data-at="7.25" data-d="M405 225 L465 225"></i>
+<section class="card nd cue" id="nFind" data-at="7.43" data-r="1" style="left:470px;top:175px">发现问题</section>
+<i class="arr cue" data-at="8.85" data-d="M815 225 L875 225"></i>
+<section class="card nd cue" data-at="9.01" data-r="-1" style="left:880px;top:175px"><div class="who human"></div>人决定怎么改</section>
+<i class="arr cue" data-at="10.75" data-d="M1050 285 L1050 330"></i>
+<section class="card nd cue" data-at="12.33" data-r="1" style="left:880px;top:335px">用 SDFlow 修改</section>
+<div class="aibox cue" data-at="12.4" style="position:absolute;left:880px;top:452px"><div class="who agent"></div>AI：分析、修改、检查</div>
+<i class="arr cue" data-at="16.99" data-d="M870 385 L418 385"></i>
+<section class="card nd cue" id="nGo" data-at="17.61" data-r="-1" data-current="39.17" style="left:60px;top:335px">继续实践</section>
+<i class="arr cue" data-at="19.11" data-d="M230 330 L230 285"></i>
+
+<!-- 137：发现问题的例子 -->
+<div class="chip cue" data-at="23.6" data-r="-2" style="left:60px;top:500px;font-size:34px">告警示例里发现的问题</div>
+<section class="card sm cue" data-at="23.69" data-r="1" data-current="25.63" data-until="31.17" style="left:60px;top:640px;width:350px"><div class="tab ink">冷却需求点</div><div>同一台设备，多久才能再发一次？</div></section>
+<div class="q tight cue" data-at="25.78" style="left:440px;top:585px;width:670px"><div class="src"><span class="rec">项目记录摘录</span>decision-memo.md:31</div><div class="body"><span class="ln">31</span>- <b>D13</b> <span class="mk" style="display:inline;white-space:normal" data-current="26.59" data-until="30.21">注销后 10 分钟内同 ID 重新注册仍处旧冷却期不推，接受</span></div></div>
+<i class="arr cue" data-at="27.37" data-d="M1120 675 L1190 675"></i>
+<section class="card sm cue" data-at="27.5" data-r="-1" style="left:1200px;top:615px;width:310px"><div class="tab os">规格</div><div class="slot">落点：空白</div></section>
+<section class="card sm cue" data-at="29.44" data-r="1" style="left:1530px;top:595px;width:330px;padding-top:24px"><div class="lab">AI 最后检查时说</div>13 条决策和 6 条约束<br>在产物里都有落点<small>项目记录摘录</small><div class="guess" style="right:-18px;top:-30px;font-size:44px;padding:0 18px" data-r="4">?</div></section>
+
+<!-- 138：计划中的双向核对，虚线，还没有实现 -->
+<div class="chip cue" data-at="33.23" data-r="-1" style="left:440px;top:848px">纪要</div>
+<i class="arr cue" data-at="35.63" data-dash data-d="M640 872 L1180 872"></i>
+<i class="arr cue" data-at="35.87" data-dash data-d="M1180 908 L640 908"></i>
+<div class="chip cue" data-at="33.4" data-r="1" style="left:1200px;top:848px">规格</div>
+<div class="tag cue" data-at="35.57" data-r="-3" style="left:700px;top:778px;font-size:32px">计划加入 · 还没有实现</div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 6.527, 16.847, 23.567, 33.167], "duration": 39.167, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- S01：封面全显 2 秒、2.35 秒淡完，内容 2.4 秒起进场（visual-v4 第七节）。
+     左上标「2026 年 3 月起」，右上角标「作者项目经历」。第 1–2 句出「8 款」卡（居中），第 3 句它缩回左侧、「3 个」卡出现在右侧，
+     末帧两张卡并排；S02 从这个位置把两张卡收到右侧。只放数量卡，不画产品外形，不出现产品型号与客户名。来源 J。
+     第 1 句 2.4 秒后到第 2 句 6.35 秒之间只有标签与「8 款」卡先出现，早于口播「八款」约 4 秒，按分镜保留。 -->
+<html lang="zh-CN" data-frame-id="S01"><head><meta charset="utf-8"><title>S01 · 开场结果</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css"><link rel="stylesheet" href="../../assets/cover/cover.css"><script src="../../assets/cover/cover.js"></script>
+<style>
+  /* 两张数量卡的外层只负责位置和缩放，卡本身负责进场动画，互不抢 transform。 */
+  .w{position:absolute;top:400px;width:600px;height:340px;transform-origin:50% 50%}
+  .stat{left:0;top:0;width:600px;height:340px;padding:22px 30px;text-align:center}
+  .stat .n{font:800 150px/1 var(--display);white-space:nowrap}
+  .stat .n small{display:inline;font-size:68px;margin:0 0 0 8px}
+  .stat .what{font:700 46px/1.25 var(--body);margin-top:14px}
+  .stat .sub{display:inline-block;margin-top:16px;font:600 36px/1.2 var(--body);padding:2px 18px;border:4px dashed var(--ink);border-radius:8px}
+</style></head><body><div id="stage">
+<div id="intro-cover"></div>
+<div class="tag cue" data-at="1.66" style="left:60px;top:110px;">2026 年 3 月起</div>
+<div class="tag cue" data-at="0.94" style="left:1420px;top:110px;">作者项目经历</div>
+<div class="w" id="w1" style="left:330px"><section class="card stat cue" data-at="3.33" data-r="-1.5"><div class="n">8<small>款</small></div><div class="what">量产出货的硬件</div><div class="sub">嵌入式软件</div></section></div>
+<div class="w" id="w2" style="left:990px"><section class="card stat cue" data-at="14.7" data-r="1.5"><div class="n">3<small>个</small></div><div class="what">客户项目交付</div><div class="sub">后端 + Web</div></section></div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+window.COVER_END=2.0;
+window.FRAME_TIMING={"starts": [1.04, 6.88, 12.96], "duration": 17.84, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+// 第 3 句起第一张卡从居中缩回左侧，给第二张卡让位。
+window.frameRender=function(t){
+  var m=T.ease(T.p(t,14.6,.7));
+  T.$('w1').style.transform='translate('+((1-m)*330)+'px,0) scale('+(1.12-.12*m)+')';
+};
+</script><script src="episode.js"></script></body></html>

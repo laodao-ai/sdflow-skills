@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- S14：六步条高亮「规格评审」。第 46 句左上角标 sdflow-spec-review；第 47 句两条独立轨道「默认值：10 分钟」「允许的下限：> 0」，光标把配置拖到 1 秒，仍在 > 0 范围内，默认值那条不动；
+     第 48 句两条轨道之间标「默认值不限制下限」；第 49 句右侧两格并排（纵向叠放）：「评审建议：下限 1 分钟」与「人定：下限 10 分钟」（黄框），建议格保留，摘 spec-review-report.md 第 82 行（Q1）与第 93 行拍板记录各一行（项目记录摘录）；
+     第 50 句规格、设计两卡同步更新，再过一个「复核」标记；第 51 句「设计门」卡只列范围、依赖、风险，之后才向「代码实现」连线。来源 A、B。
+     冷却需求点卡（left 60 / top 240 / 宽 460）与 S11 同位。 -->
+<html lang="zh-CN" data-frame-id="S14"><head><meta charset="utf-8"><title>S14 · 规格评审</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .sk{position:absolute;box-sizing:border-box;height:44px;padding:0 18px;display:flex;align-items:center;background:var(--term);color:var(--cream);border:3px solid var(--ink);border-radius:8px;font:600 26px/1 var(--mono);white-space:nowrap;opacity:0;left:60px;top:150px}
+  .lab{font-size:34px}
+  .axis{position:absolute;height:4px;background:var(--ink);opacity:.75}
+  .mark{position:absolute;width:30px;height:30px;box-sizing:border-box;border-radius:50%;background:var(--ink);border:4px solid var(--cream)}
+  .band{position:absolute;box-sizing:border-box;height:44px;background:var(--blue-soft);color:var(--ink);border:4px solid var(--ink);border-radius:8px;font:700 28px/36px var(--body);padding:0 16px;text-align:right;white-space:nowrap}
+  .thumb{width:230px;text-align:center;font-size:30px;padding:6px 0;z-index:4}
+  .rv .tab{font-size:30px}
+  .rv .big{font:800 44px/1.2 var(--display);white-space:nowrap}
+  .rv .q .body{padding:10px 14px 12px}
+  .rv .q{position:relative;margin-top:12px;box-shadow:6px 6px 0 var(--ink)}
+  .upd{width:290px}
+  .upd .t{font:800 36px/1.3 var(--display);white-space:nowrap}
+  .gate .chip{position:relative;display:inline-block;margin:0 14px 0 0;font-size:32px}
+</style></head><body><div id="stage">
+<div class="sixbar" data-seq="2:0,3:1.5"></div>
+<section class="card sm" data-r="-1" data-current="-1" style="left:60px;top:240px;width:460px"><div class="tab">冷却需求点</div><p>同一台设备，<br>多久才能再发一次？</p></section>
+<div class="sk cue" data-at="0.3" data-r="0">sdflow-spec-review</div>
+
+<!-- 第 47 句：两条独立轨道 -->
+<div class="chip lab cue trk" data-at="7.57" data-r="-1" style="left:580px;top:215px">默认值：10 分钟</div>
+<div class="axis cue trk" data-at="8.12" style="left:590px;top:295px;width:560px"></div>
+<div class="mark cue trk" data-at="8.14" style="left:885px;top:282px"></div>
+<div class="chip lab cue trk" data-at="10.14" data-r="1" style="left:580px;top:350px">允许的下限：&gt; 0</div>
+<div class="band cue trk" data-at="11.18" style="left:590px;top:440px;width:560px">&gt; 0 都能通过</div>
+<div class="chip thumb cue trk" id="thumb" data-at="12.3" data-r="0" style="left:785px;top:431px">配置：10 分钟</div>
+<svg id="cur" class="cue trk" data-at="12.3" width="34" height="40" viewBox="0 0 34 40" style="position:absolute;z-index:6;left:990px;top:466px"><path d="M4 3 L4 30 L11 24 L16 36 L21 34 L16 22 L26 22 Z" fill="#f2efe6" stroke="#161616" stroke-width="3" stroke-linejoin="round"/></svg>
+<!-- 第 48 句 -->
+<div class="tag cue trk" data-at="16.62" data-r="3" style="left:912px;top:352px;font-size:26px">默认值不限制下限</div>
+
+<!-- 第 49 句：评审建议与人定并排保留 -->
+<section class="card sm rv cue" data-at="20.67" data-r="-1" style="left:1205px;top:250px;width:655px;padding:16px 8px"><div class="tab">评审建议 · 下限 1 分钟</div>
+  <div class="q tight cue" data-at="21.74"><div class="src"><span class="rec">项目记录摘录</span>spec-review-report.md:82</div><div class="body">- 选项 A（推荐）：下限定为 <span style="white-space:nowrap"><span class="mk" data-current="21.94" data-until="26.93">1m</span>。……</span></div></div></section>
+<section class="card sm rv cue" data-at="22.66" data-r="1" data-current="22.83" style="left:1205px;top:525px;width:655px;padding:16px 8px"><div class="tab ink">人定 · 下限 10 分钟</div>
+  <div class="q tight cue" data-at="23.5"><div class="src"><span class="rec">项目记录摘录</span>spec-review-report.md:93</div><div class="body">- 拍板结果（设计门，2026-10-24）：人同意选项 A，下限改为 <span class="mk" data-current="23.7" data-until="26.93">10m</span>（评审页意见 1）。<span style="white-space:nowrap">已修订：</span></div></div></section>
+
+<!-- 第 50 句：规格、设计同步更新，再复核 -->
+<section class="card sm upd cue" data-at="29.71" data-r="-1" style="left:580px;top:538px"><div class="tab os">规格</div><div class="t">下限 10 分钟</div></section>
+<section class="card sm upd cue" data-at="30.38" data-r="1" style="left:900px;top:538px"><div class="tab os">设计</div><div class="t">下限 10 分钟</div></section>
+<div class="chip cue" data-at="32.31" data-r="-1" style="left:580px;top:674px;font-size:30px">复核修改结果 ✓</div>
+
+<!-- 第 51 句：设计门 -->
+<section class="card sm gate cue" data-at="37.1" data-r="-1" style="left:580px;top:790px;width:610px;padding:10px 22px 12px"><div class="tab ink">设计门 · 人确认</div>
+  <div style="display:flex;align-items:center"><span class="chip cue" data-at="37.74" data-r="0">范围</span><span class="chip cue" data-at="38.38" data-r="0">依赖</span><span class="chip cue" data-at="38.95" data-r="0">风险</span></div></section>
+<i class="arr cue" data-at="42.85" data-d="M1200 852 L1250 852"></i>
+<section class="card sm cue" data-at="44.46" data-r="1" style="left:1262px;top:816px;width:300px;padding:10px 20px;display:flex;align-items:center;gap:14px"><span class="num">4</span><span style="font:800 38px/1.2 var(--display);white-space:nowrap">代码实现</span></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 7.36, 15.28, 20.24, 25.36, 35.28], "duration": 46.32, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.frameRender=function(t){
+  // 第 47 句：光标把配置从 10 分钟拖到 1 秒；默认值那条（上方圆点）不动。
+  var m=T.ease(T.p(t,12.64,1.8)),th=T.$('thumb'),cur=T.$('cur');
+  var cx=900-(900-700)*m;
+  th.style.left=(cx-115)+'px';
+  cur.style.left=(cx+88)+'px';
+  // 第 52 句起：上半部两条轨道变淡到 0.45，仍留在画面上。
+  var dim=1-.55*T.ease(T.p(t,25.36,.5));
+  Array.prototype.forEach.call(document.querySelectorAll('.trk'),function(el){el.style.opacity=parseFloat(el.style.opacity||1)*dim;});
+  var txt=m>0.5?'配置：1 秒':'配置：10 分钟';
+  if(th.textContent!==txt)th.textContent=txt;
+};</script><script src="episode.js"></script></body></html>

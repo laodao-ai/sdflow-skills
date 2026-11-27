@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- S19：六步条，第 4–6 步下各一个人形图标加「提醒下一步」小卡（第 68 句）；右侧引文卡「human time and attention」（第 69 句），其上加「Humans steer. Agents execute.」并标「我的目标」（第 70 句）；第 71 句人形图标收成两处（设计门之前、收尾归档之后），中间三张小卡收成一条自动推进线。与 S25a 的两处介入位置一致。引文只用两句英文原文，出处见 script.md 来源 M。 -->
+<html lang="zh-CN" data-frame-id="S19"><head><meta charset="utf-8"><title>S19 · 人只在需要判断的地方出现</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  /* 六步条第 4–6 格左缘：976.8 / 1282.4 / 1588 */
+  .rem{position:absolute;top:170px;width:182px;height:76px;box-sizing:border-box;padding:0;display:flex;align-items:center;justify-content:center;font:700 30px var(--body);white-space:nowrap}
+  .hu{position:absolute;top:170px;opacity:0}
+  .glab{position:absolute;font:800 28px/1.2 var(--display);color:var(--ink);white-space:nowrap;text-align:center;opacity:0}
+  .auto{position:absolute;left:1380px;top:184px;width:150px;margin-left:0;text-align:center;padding:4px 0;font-size:32px;background:var(--amber)}
+  .qa{left:980px;width:880px}
+  .qa .body{font-size:38px;line-height:1.5;padding:16px 26px}
+  .qa .zh{display:block;margin-top:8px;font:600 34px/1.4 var(--body);color:var(--cream-dim)}
+  .qsrc{position:absolute;left:980px;top:736px;width:880px;font:500 27px/1.4 var(--body);color:var(--ink)}
+  .goal{left:60px;top:420px;width:830px;padding:34px 36px}
+</style></head><body><div id="stage">
+<div class="sixbar" data-seq="0:0" data-done="all"></div>
+
+<!-- 第 68 句：三步前各一个人形图标和提醒卡；动作由 frameRender 按时间推进（第 71 句要把它们收起） -->
+<div class="who human hu" id="h4" style="left:976.8px"></div>
+<div class="who human hu" id="h5" style="left:1282.4px"></div>
+<div class="who human hu" id="h6" style="left:1588px"></div>
+<section class="card rem cue" id="c4" data-at="6.38" style="left:1068.8px">提醒下一步</section>
+<section class="card rem cue" id="c5" data-at="6.8" style="left:1374.4px">提醒下一步</section>
+<section class="card rem cue" id="c6" data-at="7.2" style="left:1680px">提醒下一步</section>
+<div class="tag cue" id="need" data-at="7.42" data-r="-3" style="left:60px;top:420px;font-size:44px;padding:20px 32px">每一步都要我来提醒</div>
+
+<!-- 第 69–70 句：引文卡。出处小字在两张卡下方，先于第二张卡出现 -->
+<div class="q qa cue" id="qa" data-at="12.86" style="top:520px"><div class="body"><span class="ln">……</span>human time and attention<span class="zh">真正稀缺：人的时间和注意力</span></div></div>
+<div class="qsrc cue" data-at="9.87">Ryan Lopopolo · OpenAI《Harness engineering》· 2026-02-11</div>
+<div class="q qa cue" id="qb" data-at="18.62" style="top:320px"><div class="body">Humans steer. Agents execute.<span class="zh">人来掌舵，AI 来执行</span></div></div>
+<div class="chip cue" data-at="18.72" data-r="-2" style="left:1010px;top:262px;font-size:34px;z-index:6">我的目标</div>
+
+<!-- 第 71 句：人只留两处，中间三格收成一条自动推进线 -->
+<div class="glab" id="gl1" style="left:900px;top:252px;width:120px">设计门</div>
+<div class="glab" id="gl2" style="left:1790px;top:252px;width:124px">归档之后</div>
+<i class="arr cue" data-at="25.26" data-d="M1010 208 L1780 208"></i>
+<div class="chip auto cue" data-at="26.86" data-r="0">自动推进</div>
+<section class="card goal cue" id="goal" data-at="23.3" data-r="-1"><b class="big" style="font-size:52px;white-space:nowrap">人只在需要判断的地方出现</b></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 9.36, 17.12, 22.56], "duration": 28.72, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.frameRender=function(t){
+  var E=T.ease,P=T.p;
+  // 人形图标：第 68 句随卡出现；第 71 句（23.14 秒）起，第 4 格的移到设计门之前，第 6 格的移到收尾归档之后，第 5 格的淡出。
+  var mv=E(P(t,22.75,.8));
+  function hu(id,at,x0,x1,fade){var el=T.$(id);var a=E(P(t,at,.5));el.style.opacity=a*(1-(fade?mv:0));el.style.transform='translate('+(x0+(x1-x0)*mv)+'px,'+((1-a)*14)+'px)';el.style.left='0px';}
+  hu('h4',6.38,976.8,922,false);hu('h5',6.8,1282.4,1282.4,true);hu('h6',7.2,1588,1822,false);
+  // 三张提醒卡与「每一步都要我来提醒」在第 71 句淡出，由新内容替换
+  ['c4','c5','c6','need'].forEach(function(id){var el=T.$(id);el.style.opacity=parseFloat(el.style.opacity||0)*(1-mv);});
+  // 设计门、归档之后的小标签随人形图标就位后出现
+  var l=E(P(t,23.22,.5));T.$('gl1').style.opacity=l;T.$('gl2').style.opacity=l;
+  // 引文卡 B 出现时，A 卡不动；人只留两处之后引文卡仍留在右侧
+};</script><script src="episode.js"></script></body></html>

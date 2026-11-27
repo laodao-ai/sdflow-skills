@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- S38：S09 的四格演进条回到画面，第 ④ 格右侧虚线标「还在改」。第 140 句虚线下两张小卡「领域规则」「编排与成本」；第 141 句「外部方法」小卡留在左侧，箭头先进「适用吗」，再从它出来指向右侧一列；第 142 句屏显「每个步骤解决什么问题？」，其他卡变淡收起；第 143 句两张同内容的检查卡合并成一张，标「调整示意」，不宣称已完成具体删减。来源 J（作者口述）。 -->
+<html lang="zh-CN" data-frame-id="S38"><head><meta charset="utf-8"><title>S38 · 还在改：补规则、吸收方法、减步骤</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .stk{left:1420px;width:440px;height:84px;padding:0 24px;display:flex;align-items:center;justify-content:center;font:700 38px var(--body)}
+  .gate{left:640px;top:446px;width:260px;height:92px;padding:0;display:flex;align-items:center;justify-content:center;font:800 42px var(--display);background:var(--charcoal);color:#fff}
+  .ask{left:280px;top:580px;width:1120px;height:130px;padding:0;display:flex;align-items:center;justify-content:center;font:800 62px var(--display);background:var(--charcoal);color:#fff}
+  .chk{top:770px;width:560px;height:90px;padding:0;display:flex;align-items:center;justify-content:center;font:700 40px var(--body)}
+</style></head><body><div id="stage">
+<div class="tline cue" data-at="0" data-seq="4:9.34" data-done="all"></div>
+<i class="arr cue" data-at="0.3" data-dash data-nohead data-d="M1712 90 L1852 90"></i>
+<div class="tag cue" data-at="1" data-r="3" style="left:1690px;top:150px">还在改</div>
+<section class="card stk cue dm" data-at="3.99" data-r="-1" style="top:250px">领域规则</section>
+<section class="card stk cue dm" data-at="6.21" data-r="1" style="top:350px">编排与成本</section>
+
+<section class="card sm cue dm" id="ext" data-at="9.52" data-r="-1" style="left:250px;top:446px;width:300px;height:92px;display:flex;align-items:center;justify-content:center;font:700 38px var(--body)">外部方法</section>
+<section class="card gate cue dm" data-at="10.46" data-r="0" data-current="10.5" data-until="12.93">适用吗？</section>
+<i class="arr cue dm" data-at="10.06" data-d="M565 492 L626 492"></i>
+<i class="arr cue dm" data-at="12.24" data-d="M914 492 L1380 492 L1380 392 L1404 392"></i>
+
+<section class="card ask cue" data-at="14.86" data-r="0">每个步骤解决什么问题？</section>
+
+<section class="card sm chk cue" id="c1" data-at="19.77" data-r="-1" style="left:280px">同样的检查</section>
+<section class="card sm chk cue" id="c2" data-at="19.82" data-r="1" style="left:1080px">同样的检查</section>
+<div class="tag cue" data-at="22.05" data-r="3" style="left:1290px;top:790px">调整示意</div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+  // 「外部方法」卡在左侧，箭头先进「适用吗」，再从它出来指向右列（第 142 句）；第 143 句起其余卡变淡；第 143 句两张检查卡向中间合并成一张。
+  window.frameRender=function(t){
+    var T_=window.T,p=T_.p,e=T_.ease;
+    var dim=1-0.65*e(p(t,14.86,0.6));
+    Array.prototype.forEach.call(document.querySelectorAll('.dm'),function(el){el.style.opacity=parseFloat(el.style.opacity||1)*dim;});
+    var m=e(p(t,22.14,1.0)),c1=T_.$('c1'),c2=T_.$('c2');
+    c1.style.transform='translate('+(400*m)+'px,0) '+c1.style.transform;
+    c2.style.transform='translate('+(-400*m)+'px,0) '+c2.style.transform;
+    c2.style.opacity=parseFloat(c2.style.opacity||1)*(1-e(p(t,22.7,0.4)));
+  };
+</script><script>window.FRAME_TIMING={"starts": [0.0, 3.68, 9.44, 13.92, 19.52], "duration": 23.68, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>

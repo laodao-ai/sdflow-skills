@@ -1,0 +1,79 @@
+<!doctype html>
+<!-- S28：第 4 版。左上角标「验证和归档以后」，缩小六步条只亮第 6 步，右端挂人形位置。
+     三栏位置复用 S02：人 left60、AI left690、结果 left1320，各宽 540，顶 200、高 680。右栏是交接报告（作者 2026-11-22 定）。
+     第 113 句第 6 期 OBS 原片（20261031-031511-done-done.mp4 约 10:40，sdflow-done 最后一段话）以大窗口出现在 AI 与右栏位置，
+     第 114 句先框「人工真机冒烟（tasks 5.5，T48）还没有执行」，窗口缩进右栏，两张放大卡：T48 未执行、补做验证的步骤；
+     「接受？」标记出现在右栏底部。第 115 句 AI 区出现，人一侧依次出现「目标」「业务取舍」「风险」「完成边界」，
+     「接受？」飞到「完成边界」旁；AI 区标「约定的范围」，里面是「实现」「检查」「修复」。
+     截图裁掉了本机路径（评审页一行），图在 assets/evidence/done-final-message.png。来源 B、G、J。 -->
+<html lang="zh-CN" data-frame-id="S28"><head><meta charset="utf-8"><title>S28 · 验证和归档以后</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .mini{left:420px;top:44px;width:1800px;transform:scale(.5);transform-origin:0 0}
+  /* 只亮第 6 步：其余步骤压淡，不改共用组件 */
+  .mini .nav-step:nth-child(-n+5){opacity:.35}
+  .col{top:200px;height:680px}
+  .who{z-index:2}
+  .who.agent svg{margin:0}
+  /* 实录窗口：CSS 位置是缩进右栏后的位置，大窗口阶段用 transform 放大（引线按缩小后的位置量）。 */
+  .obs{left:1340px;top:250px;width:500px;opacity:0;transform-origin:0 0;z-index:6}
+  .obs .src{font-size:13px;padding:4px 10px}
+  .obs .rec{font-size:12px;padding:0 6px;margin-right:8px}
+  .obs .shot{position:relative}
+  /* 窗口放大 2.34 倍时边框也跟着放大，这里用细边框 */
+  .obs .hl{border-width:2px;box-shadow:0 0 6px #f5cf4a88}
+  .obs{border-width:3px;box-shadow:5px 5px 0 var(--ink)}
+  .obs img{display:block;width:100%;height:auto;border-radius:0 0 7px 7px}
+  .zc{position:absolute;left:1340px;width:500px;box-sizing:border-box;background:var(--term);color:var(--cream);border:5px solid var(--ink);border-radius:12px;box-shadow:10px 10px 0 var(--ink);padding:12px 24px 14px;z-index:25;opacity:0}
+  .zc b{display:block;font:800 40px/1.3 var(--display);white-space:nowrap}
+  .zc span{display:block;margin-top:4px;font:600 30px/1.4 var(--body);color:var(--cream-dim)}
+  .pick{left:85px;width:330px;box-sizing:border-box;text-align:center;font-size:40px;line-height:1.15;padding:8px 24px}
+  .ask{left:1360px;top:780px;font-size:34px;padding:8px 18px;background:var(--charcoal);color:var(--cream);opacity:0;z-index:26}
+  .scope{left:720px;top:400px;width:480px;height:380px}
+  .scope .tab{font-size:34px}
+  .sc{left:770px;width:380px;box-sizing:border-box;text-align:center;font-size:42px;padding:8px 24px}
+</style></head><body><div id="stage">
+<div class="sixbar mini" data-done="all"></div>
+<div class="who human" style="left:1318px;top:40px;width:56px;height:56px;border-width:3px;box-shadow:4px 4px 0 var(--ink)"></div>
+<div class="chip" data-r="-1" style="left:60px;top:36px;background:var(--charcoal);color:var(--cream);font-size:38px">验证和归档以后</div>
+
+<div class="boundary col cue" data-at="9.5" data-r="0" style="left:60px;width:540px"><div class="tab ink">人</div></div>
+<div class="who human big cue" data-at="9.6" data-r="0" style="left:275px;top:240px"></div>
+<div class="boundary col cue" data-at="0.62" data-r="0" style="left:1320px;width:540px"><div class="tab">交接报告</div></div>
+
+<!-- 第 113–114 句：实录窗口先大后小 -->
+<div class="q obs" id="obs" data-r="0"><div class="src"><span class="rec">实录</span>第 6 期收尾录像 · sdflow-done 最后的说明</div>
+  <div class="shot"><img src="../../assets/evidence/done-final-message.png" width="1440" height="215" alt="sdflow-done 收尾时的最后说明">
+  <i class="hl" id="hl1" data-current="4.62" style="left:18%;top:27.5%;width:37.3%;height:18%"></i>
+  <i class="hl" id="hl2" data-current="6.78" style="left:1.6%;top:55%;width:98%;height:43%"></i></div></div>
+<div class="zc" id="z1" style="top:430px"><b>人工真机冒烟</b><span>T48 · 还没有执行</span></div>
+<div class="zc" id="z2" style="top:600px"><b>交接报告写了怎么补</b><span>加签、关键词各推一次</span></div>
+<div class="chip ask" id="ask" data-r="1">接受？</div>
+
+<!-- 第 115 句：人把住的四件事，AI 在约定的范围内 -->
+<!-- 末状态至少停 2 秒：最后一个动作（「约定的范围」与三张卡）17.3 秒起、17.85 秒结束，页长 19.92。 -->
+<div class="boundary col cue" data-at="11.96" data-r="0" style="left:690px;width:540px"><div class="tab sp">AI</div></div>
+<div class="who agent big cue" data-at="12.05" data-r="0" style="left:905px;top:240px"></div>
+<div class="chip pick cue" data-at="13.34" data-r="-1.5" style="top:400px">目标</div>
+<div class="chip pick cue" data-at="14.46" data-r="1.5" style="top:510px">业务取舍</div>
+<div class="chip pick cue" data-at="15.66" data-r="-1" style="top:620px">风险</div>
+<div class="chip pick cue" data-at="17.26" data-r="1" style="top:730px">完成边界</div>
+<div class="boundary scope cue" data-at="17.98" data-r="0"><div class="tab sp">约定的范围</div></div>
+<div class="chip sc cue" data-at="17.98" data-r="-1" style="top:470px">实现</div>
+<div class="chip sc cue" data-at="17.98" data-r="1" style="top:580px">检查</div>
+<div class="chip sc cue" data-at="17.98" data-r="-1" style="top:690px">修复</div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+window.FRAME_TIMING={"starts": [0.0, 3.2, 11.84], "duration": 19.6, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.FRAME_LINKS=[{"box":"hl1","card":"z1","at":5.61},{"box":"hl2","card":"z2","at":7.39}];
+window.frameRender=function(t){
+  document.querySelectorAll(".mini .nav-step").forEach(function(e){e.style.outline="none";if(!e.classList.contains("notyet"))e.style.boxShadow="7px 7px 0 #161616";});
+  // 实录窗口：0.4 秒以大窗口出现在 AI 栏与右栏位置（left 690，宽 1170），4.0–4.8 秒缩进右栏。
+  var w=T.$('obs'),s=1170/500,k=1-T.ease(T.p(t,4.84,0.8));
+  w.style.opacity=T.ease(T.p(t,0.4,0.4));
+  w.style.transform='translate('+(k*(690-1340))+'px,'+(k*(240-250))+'px) scale('+(1+(s-1)*k)+')';
+  // 第 113 句末「接受？」出现在右栏底部，第 114 句「完成边界」出现后飞到它旁边（16.4–17.1 秒），落在「人」框内。
+  var ask=T.$('ask'),a=T.ease(T.p(t,9.41,0.4)),m=T.ease(T.p(t,17.5,0.7));
+  ask.style.opacity=a;
+  ask.style.left=(1360+(432-1360)*m)+'px';
+  ask.style.top=(780+(736-780)*m+(1-a)*12)+'px';
+  ask.style.transform='rotate(1deg)';
+};</script><script src="episode.js"></script></body></html>

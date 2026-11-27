@@ -1,0 +1,75 @@
+<!doctype html>
+<!-- S31：嵌入式实践线。第 117 句（第一句）一张跟着口播长出来的小图：「这套工作流」时中部偏左出「SDFlow」卡，「在实际项目里」时中部偏右出「项目」卡，「用出来」时上方一条箭头从 SDFlow 指向项目标「用」，「改出来」时下方一条箭头从项目指回 SDFlow 标「改」；句末整组缩小移到右上角留到页末（不再有标题文字）；第 118 句中间依次放大出现「嵌入式」「Go 后端」「React 前端」，第 119 句起缩到左上角，后两块变淡。两行并列：上游「原框架」→ 下游「N 款产品」。第 119 句两张框架卡各出「重构、升级」；第 120 句两行产品卡依次出现，标「已量产出货」，不汇总成 8；第 121 句每行产生一张经验卡，落进 S09 的「工作流规则」抽屉（宽 420、高 150，顶部居中一条墨色把手），抽屉里出现 embedded-ml307c、embedded-esp32 两个领域清单名。数量为作者口述，标「作者项目经历」。不用生成的硬件图。来源 J、K。 -->
+<html lang="zh-CN" data-frame-id="S31"><head><meta charset="utf-8"><title>S31 · 嵌入式实践线</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .fw,.pd{height:170px;padding:40px 28px 16px}
+  .fw .tab{font-size:30px;top:-34px;padding:3px 16px}
+  .fw .big,.pd .big{font-size:52px;white-space:nowrap;line-height:1.1}
+  .fw .chg,.pd .chg{position:relative;display:inline-block;margin-top:12px;font-size:28px;padding:2px 14px;box-shadow:5px 5px 0 var(--ink)}
+  /* 第 117 句小图：放大状态字号 52 / 42，缩放 .68 后卡名 35px、「用」「改」28px。 */
+  #sg{position:absolute;left:1200px;top:142px;width:900px;height:160px;transform-origin:0 0}
+  .gc{top:0;height:160px;padding:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:800 52px var(--display)}
+  .gl{font-size:42px;line-height:1.3;padding:0 14px}
+  .xp{width:330px;height:100px;padding:0;display:flex;align-items:center;justify-content:center;font:800 40px var(--display)}
+  /* 抽屉：与 S09 同形，宽 420、高 150，把手宽 120、高 14 */
+  .drawer{left:1440px;top:425px;width:420px;height:150px;padding:0}
+  .drawer .hd{position:absolute;left:150px;top:26px;width:120px;height:14px;border-radius:7px;background:var(--ink)}
+  .drawer .nm{position:absolute;left:28px;top:54px;font:600 30px/1.3 var(--mono);color:var(--ink)}
+  .drawer .nm div{height:38px;white-space:nowrap}
+</style></head><body><div id="stage">
+<!-- 第 117 句：小图先在画面中部放大，句末缩到右上留到页末（#sg 内是放大前的本地坐标，宽 900、高 160）；第 118 句三块依次出现；第 119 句起 Go 后端、React 前端变淡留在原位 -->
+<div id="sg">
+  <section class="card gc cue" data-at="0.2" data-r="-1" style="left:0;width:320px;background:var(--charcoal);color:var(--cream)">SDFlow</section>
+  <section class="card gc cue" data-at="1.36" data-r="1" style="left:660px;width:240px">项目</section>
+  <i class="arr cue" data-at="2.48" data-d="M335 40 L650 40"></i>
+  <div class="chip gl cue" data-at="2.58" data-r="-2" style="left:454px;top:8px">用</div>
+  <i class="arr cue" data-at="3.12" data-d="M650 124 L335 124"></i>
+  <div class="chip gl cue" data-at="3.22" data-r="2" style="left:454px;top:92px">改</div>
+</div>
+<div class="tag cue" data-at="13.38" data-r="3" style="left:1500px;top:268px">作者项目经历</div>
+<div class="chip" id="b1" data-at="7.26" style="left:60px;top:150px;opacity:0;transform-origin:0 0">嵌入式</div>
+<div class="chip" id="b2" data-at="8.54" style="left:290px;top:150px;opacity:0;transform-origin:0 0">Go 后端</div>
+<div class="chip" id="b3" data-at="9.9" style="left:540px;top:150px;opacity:0;transform-origin:0 0">React 前端</div>
+
+<section class="card fw cue" data-at="13.01" data-r="-1" style="left:60px;top:285px;width:420px"><div class="tab ink">原框架</div><div class="big">ML307C 框架</div><span class="chip chg cue" data-at="14.54" data-r="0">重构、升级</span></section>
+<section class="card fw cue" data-at="13.23" data-r="1" style="left:60px;top:565px;width:420px"><div class="tab ink">原框架</div><div class="big">ESP32 框架</div><span class="chip chg cue" data-at="15.02" data-r="0">重构、升级</span></section>
+
+<i class="arr cue" data-at="21.4" data-d="M495 370 L570 370"></i>
+<i class="arr cue" data-at="25.3" data-d="M495 650 L570 650"></i>
+<section class="card pd cue" data-at="21.5" data-r="1" style="left:585px;top:285px;width:420px"><div class="big">5 款产品</div><span class="chip chg cue" data-at="26.78" data-r="0">已量产出货</span></section>
+<section class="card pd cue" data-at="25.42" data-r="-1" style="left:585px;top:565px;width:420px"><div class="big">3 款产品</div><span class="chip chg cue" data-at="26.98" data-r="0">已量产出货</span></section>
+
+<section class="card drawer cue" data-at="31.18" data-r="1"><div class="tab ink">工作流规则</div><div class="hd"></div>
+  <div class="nm"><div class="cue" data-at="32.78">embedded-ml307c</div><div class="cue" data-at="33.34">embedded-esp32</div></div></section>
+<section class="card xp cue" id="xp1" data-at="29.21" data-r="-1" style="left:1060px;top:320px">ML307C 经验</section>
+<section class="card xp cue" id="xp2" data-at="29.51" data-r="1" style="left:1060px;top:600px">ESP32 经验</section>
+<i class="arr cue" id="ar1" data-at="29.21" data-d="M1015 370 L1052 370"></i>
+<i class="arr cue" id="ar2" data-at="29.51" data-d="M1015 650 L1052 650"></i>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+// 经验卡落进抽屉：第 121 句起，两张卡缩小、移向抽屉，到位后淡出，由抽屉里的领域清单名接替。
+window.frameRender=function(t){
+  // 第 117 句（0–3.84 秒，实测）：小图 #sg 在画面中部以 1.35 倍出现，4.6–5.2 秒缩成 .68 倍移到右上（左 1200、上 142）。
+  // 第 118 句（6.35 秒起）：三块依次放大出现在画面中间；第 119 句（11.3 秒起）三块缩到左上，Go 后端、React 前端变淡留在原位。
+  var k=T.ease(T.p(t,12.92,.8)),dim=1-.6*T.ease(T.p(t,13.19,.5));
+  var ks=T.ease(T.p(t,4.6,.6)),sg=T.$('sg');
+  // 放大时整组居中：宽 900、高 160，左上角落在 (960-900*1.35/2, 540-160*1.35/2)；缩放原点为左上角。
+  sg.style.transform='translate('+((960-900*1.35/2-1200)*(1-ks))+'px,'+((540-160*1.35/2-142)*(1-ks))+'px) scale('+(.68+.67*(1-ks))+')';
+  var big=[[420,520,1.9,-2],[820,520,1.9,1],[1260,520,1.9,-1]];
+  ["b1","b2","b3"].forEach(function(id,i){
+    var e=T.$(id),g=big[i],x0=parseFloat(e.style.left),y0=parseFloat(e.style.top),kk=k;
+    var dx=(g[0]-x0)*(1-kk),dy=(g[1]-y0)*(1-kk),sc=1+(g[2]-1)*(1-kk);
+    var vis=T.ease(T.p(t,Number(e.dataset.at),.4));
+    e.style.opacity=vis*(i>=1?dim:1);
+    e.style.transform='translate('+dx+'px,'+(dy+(1-vis)*14)+'px) scale('+sc+') rotate('+g[3]+'deg)';
+  });
+  // 经验卡走后，产生它的箭头一起淡出，避免空指
+  [['ar1',32.2],['ar2',32.9]].forEach(function(a){var e=T.$(a[0]);e.style.opacity=Number(e.style.opacity||1)*(1-T.ease(T.p(t,a[1]+.5,.3)));});
+  [['xp1',31.7,32.2],['xp2',32.4,32.9]].forEach(function(a){
+    var el=T.$(a[0]),k=T.ease(T.p(t,a[1],.9));
+    var dx=1440+90-1060,dy=450-(a[0]==='xp1'?320:600);
+    var vis=T.ease(T.p(t,Number(el.dataset.at),.55));
+    el.style.opacity=vis*(1-T.ease(T.p(t,a[2]+.5,.3)));
+    el.style.transform='translate('+(k*dx)+'px,'+(k*dy)+'px) scale('+(1-.55*k)+') rotate('+(Number(el.dataset.r)*(1-k))+'deg)';
+  });
+};
+</script><script>window.FRAME_TIMING={"starts": [0.0, 5.6, 12.96, 18.24, 29.2], "duration": 36.0, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>

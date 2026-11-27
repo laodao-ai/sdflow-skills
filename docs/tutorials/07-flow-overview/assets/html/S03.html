@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- S03 · 署名页。沿用第 4、5、6 期署名页：居中炭灰卡、原 logo、老刀Cheney署名；不加流程卡或互动贴纸。
+     第 6–8 句：口播未录，按每分钟 220 字估算，录音后按 voice.srt 重对。 -->
+<html lang="zh-CN" data-frame-id="S03">
+<head>
+<meta charset="utf-8">
+<title>S03 · 老刀Cheney</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .sig { left: 480px; top: 400px; width: 960px; height: 280px; padding: 0 40px; display: flex; align-items: center; justify-content: center; gap: 44px; }
+  .sig img { width: 190px; height: 190px; flex: none; }
+  .sig .big { font-size: 124px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card dark sig" id="sig" data-r="-1"><img src="../../../shared/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  window.FRAME_TIMING={"starts": [0.0, 3.04, 6.0], "duration": 11.6, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+  Stage({
+    duration: window.FRAME_TIMING.duration,
+    init: function () { return Promise.all([T.fonts(T.$('stage').textContent), document.querySelector('#sig img').decode()]); },
+    render: function (t) {
+      T.tilt();
+      T.enter(T.$('sig'), T.p(t, 0, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

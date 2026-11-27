@@ -1,0 +1,43 @@
+/* 第 6 期只补页内布局通用样式。card/tab/chip/window 与倾角继续使用系列 theme。 */
+.cue{opacity:0}.frame-title{left:60px;top:48px;font-family:var(--display);font-size:48px;font-weight:800;z-index:4}
+.card{font-size:36px;line-height:1.45;padding:26px 32px}.card h2{font:800 46px/1.2 var(--display);margin:0 0 18px}.card p{margin:12px 0 0}.card small{display:block;font-size:28px;line-height:1.45;margin-top:14px}.card code{font:500 31px/1.5 var(--mono);overflow-wrap:anywhere}.card .tab{font-size:34px;top:-36px;padding:5px 18px}.card>.tab+h2{margin-top:14px}.card.document{padding-top:42px}.document:after{content:"";position:absolute;right:18px;top:16px;width:26px;height:30px;border-right:4px solid currentColor;border-bottom:4px solid currentColor;opacity:.35}
+.source{position:absolute;font:500 27px/1.45 var(--body);color:var(--ink)}.wire{position:absolute;inset:0;width:1920px;height:1080px;pointer-events:none}.doc{overflow:visible;background:#f8f7f3}.doc img{display:block;width:100%;height:auto;border-radius:6px}.doc .tab{font-size:30px;top:-42px}.hl{position:absolute;border:5px solid var(--yellow);box-shadow:0 0 12px #f5cf4a66;box-sizing:border-box;opacity:0;pointer-events:none}
+.agent{position:absolute;width:180px;height:135px;background:var(--charcoal);border:5px solid var(--ink);border-radius:12px;box-shadow:12px 12px var(--ink);color:var(--cream);display:flex;justify-content:center}.agent svg{width:80px;height:80px;margin-top:12px}.agent .chip{left:-70px;top:102px;width:320px;box-sizing:border-box;text-align:center;font-size:32px;padding:6px 18px}
+.comparison{position:absolute;color:var(--ink);font-size:34px;line-height:1.45}.th,.tr{display:grid;grid-template-columns:240px 1fr 1fr;border:4px solid var(--ink);background:var(--cream);box-shadow:8px 8px var(--ink);margin-bottom:20px;border-radius:8px}.th{font:800 39px var(--display);background:var(--charcoal);color:var(--cream)}.th>div,.tr>div{padding:18px 24px}.tr>div+div,.th>div+div{border-left:3px dashed #888}.tr>div:first-child{font-weight:700}.th>div:nth-child(2){color:var(--blue-soft)}.th>div:nth-child(3){color:var(--violet-soft)}
+.boundary{position:absolute;border:4px dashed var(--ink);border-radius:16px;box-sizing:border-box;color:var(--ink)}.boundary .tab{font-size:34px}.test-pass{color:var(--pass)}.number{font:800 82px var(--mono)}.doc-icon{display:block;width:74px;height:86px;border:5px solid currentColor;border-radius:7px;margin:0 auto 20px}.doc-icon:before,.doc-icon:after{content:"";display:block;width:42px;height:5px;background:currentColor;margin:19px auto}.cmd{font-size:34px}.signature{display:flex;align-items:center;justify-content:center;gap:38px}.signature img{width:160px;height:160px}.signature .big{font-size:100px}.intro-cover{position:absolute;inset:0;z-index:50}
+/* 第 7 期补充：紧凑卡、原文引用窗、虚线卡、被留下的旧路线、六步行。 */
+.sm{padding:16px 24px;font-size:32px;line-height:1.4}.sm h2{font-size:38px;margin:0 0 6px}.sm p{margin:6px 0 0;font-size:32px}.sm small{font-size:26px;margin-top:6px}.sm .tab{font-size:30px;top:-34px;padding:4px 16px}.sm>.tab+*{margin-top:16px!important}
+.quote{white-space:normal;font-size:28px;line-height:1.5;padding:62px 26px 20px;overflow:hidden}.quote .src{position:absolute;left:0;right:0;top:0;padding:8px 20px;background:#2c2c30;border-bottom:3px solid var(--ink);font:500 26px/1.3 var(--mono);color:var(--cream-dim)}.quote b{color:var(--cream);text-decoration:underline}
+.cmd.short{white-space:nowrap;font-size:34px;padding:18px 28px}.cmd.short .tab{font-family:var(--display);font-size:28px;top:-36px;padding:3px 14px}
+.dash{background:transparent!important;border-style:dashed!important;box-shadow:none!important}
+.old{background:var(--cream-dim)!important}
+.sf-step{top:300px;width:280px;height:104px;display:flex;align-items:center;justify-content:center;gap:14px;padding:0 16px}.sf-step .big{font-size:42px;white-space:nowrap}.sf-step .num{width:56px;height:56px;font-size:30px;flex:none}
+.li{display:block;margin-top:8px}.li:before{content:"· "}
+.hl-text{display:inline-block;padding:0 4px;border-radius:4px}
+/* 第 7 期第 3 版：两条导航条（六步条、四格时间线）、原文窗、角色图标。 */
+.sixbar,.tline{position:absolute;left:60px;top:44px;width:1800px;height:92px;z-index:5}
+.nav-step{position:absolute;top:0;height:92px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:12px;background:var(--cream);color:var(--ink);border:5px solid var(--ink);border-radius:10px;box-shadow:7px 7px 0 var(--ink)}
+.nav-step.six{width:272px}.nav-step.four{width:380px}
+.nav-step.four .big{font-size:32px}
+.nav-step .num{width:50px;height:50px;font-size:28px;border-width:4px}
+.nav-step .big{font-size:38px;white-space:nowrap}
+.nav-step.notyet{background:transparent;border-color:rgba(22,22,22,.65);color:rgba(22,22,22,.65);box-shadow:none!important}
+.nav-step.notyet .num{background:transparent;border-color:rgba(22,22,22,.65);color:rgba(22,22,22,.65)}
+.nav-arrows{position:absolute;left:0;top:0;overflow:visible}
+.q{position:absolute;box-sizing:border-box;background:var(--term);color:var(--cream);border:5px solid var(--ink);border-radius:12px;box-shadow:10px 10px 0 var(--ink);z-index:3}
+.q .src{padding:8px 18px;background:#2c2c30;border-bottom:3px solid var(--ink);border-radius:7px 7px 0 0;font:500 26px/1.35 var(--mono);color:var(--cream-dim);white-space:nowrap;overflow:hidden}
+.q .rec{display:inline-block;margin-right:14px;padding:0 12px;background:var(--cream);color:var(--ink);border-radius:5px;font:800 26px/1.4 var(--display);vertical-align:1px}
+.q .body{padding:14px 22px 16px;font:500 28px/1.65 var(--mono);white-space:normal;overflow-wrap:anywhere}
+.q .body+.body{border-top:2px dashed #555;padding-top:12px}
+.q .ln{color:var(--cream-dim);margin-right:14px}
+.mk{display:inline-block;white-space:nowrap;border-radius:4px;padding:0 4px;line-height:1.3}
+.gray{filter:grayscale(1)}
+.who{position:absolute;width:76px;height:76px;box-sizing:border-box;background:var(--charcoal);border:4px solid var(--ink);border-radius:12px;box-shadow:6px 6px 0 var(--ink);display:flex;align-items:center;justify-content:center}
+.who svg{width:50px;height:50px}
+.who.big{width:110px;height:110px}.who.big svg{width:72px;height:72px}
+.card .lab{font:800 30px/1.2 var(--display);margin:0 0 8px}
+.mono{font-family:var(--mono)}
+.center{text-align:center}
+.ink-soft{color:#4a4a4a}
+/* 字号按 visual-v4 第三节下限：标签 26px，等宽摘录 28px；tight 只收行距和内边距。 */
+.q.tight .src{font-size:26px;padding:6px 16px}.q.tight .rec{font-size:26px}.q.tight .body{font-size:28px;line-height:1.5;padding:10px 20px 12px}

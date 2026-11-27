@@ -1,0 +1,55 @@
+<!doctype html>
+<!-- S15：六步条高亮「代码实现」，第 56 句起高亮「代码评审」。第 52 句左上角标 sdflow-implement；第 53 句冷却 ticket 卡依次填入目标、依赖、验收；第 54 句箭头到「代码与测试」；
+     第 56 句左上角换成 sdflow-code-review，实现区缩小；第 57 句评审一侧出现「要求落实了吗」「代码有没有问题」；
+     第 58 句代码与测试之间出现同色的偏差标记，一条规格对照线（蓝）指向它。来源 A、B。
+     ticket 的「依赖：Task 1、2、3」对应 tickets.md Task 4 的 Blocked-by 1, 2, 3；目标、验收两项是对该票的概括，不是原文。
+     冷却需求点卡（left 60 / top 240 / 宽 460）与 S11 同位。 -->
+<html lang="zh-CN" data-frame-id="S15"><head><meta charset="utf-8"><title>S15 · 代码实现与代码评审</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .sk{position:absolute;box-sizing:border-box;height:44px;padding:0 18px;display:flex;align-items:center;background:var(--term);color:var(--cream);border:3px solid var(--ink);border-radius:8px;font:600 26px/1 var(--mono);white-space:nowrap;opacity:0;left:60px;top:150px}
+  #impl{position:absolute;left:580px;top:215px;width:1280px;height:560px;transform-origin:0 0}
+  #impl .abs{position:absolute}
+  .tk .li{font-size:30px;margin-top:10px;white-space:nowrap}
+  .bx{display:inline-block;padding:6px 22px;margin-right:16px;background:var(--amber-soft);color:var(--ink);border:4px solid var(--ink);border-radius:8px;font:800 38px/1.2 var(--display)}
+  .brg{position:relative;height:44px;margin-top:6px}
+  .disc{position:absolute;top:2px;width:38px;height:38px;box-sizing:border-box;border-radius:50%;background:var(--amber);border:4px solid var(--ink);font:800 26px/30px var(--display);text-align:center;color:var(--ink)}
+  .bar{position:absolute;top:19px;height:6px;background:var(--amber);border:2px solid var(--ink);box-sizing:border-box}
+  .rv2{width:440px}
+  .rv2 .t{font:800 42px/1.25 var(--display);white-space:nowrap}
+  #sl{position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none;z-index:7}
+</style></head><body><div id="stage">
+<div class="sixbar" data-seq="4:0,5:21.18"></div>
+<section class="card sm" data-r="-1" data-current="-1" style="left:60px;top:240px;width:460px"><div class="tab">冷却需求点</div><p>同一台设备，<br>多久才能再发一次？</p></section>
+<div class="sk cue" id="skA" data-at="0.2" data-r="0">sdflow-implement</div>
+<div class="sk cue" id="skB" data-at="21.66" data-r="0">sdflow-code-review</div>
+
+<div id="impl">
+  <!-- 第 53 句：ticket -->
+  <section class="card sm tk cue abs" data-at="6.7" data-r="-1.5" style="left:0;top:20px;width:400px"><div class="tab sp">ticket · 冷却</div>
+    <span class="li cue" data-at="9.82">目标：按设备冷却推送</span><span class="li cue" data-at="10.54">依赖：Task 1、2、3</span><span class="li cue" data-at="11.42">验收：冷却与并发测试</span></section>
+  <!-- 第 54 句 -->
+  <i class="arr cue" data-at="14.47" data-d="M410 105 L490 105"></i>
+  <section class="card sm cue abs" id="ct" data-at="15.1" data-r="1" style="left:500px;top:20px;width:440px"><div class="tab sp">代码与测试</div>
+    <div><span class="bx cue" data-at="15.34">代码</span><span class="bx cue" data-at="16.06">测试</span></div>
+    <div class="brg"><div class="disc cue" id="d1" data-at="34.25" data-r="0" style="left:80px">≠</div><div class="bar cue" id="br" data-at="36.14" data-r="0" style="left:112px;width:176px"></div><div class="disc cue" id="d2" data-at="34.8" data-r="0" style="left:288px">≠</div></div></section>
+  <div class="tag cue abs" data-at="16.78" data-r="-3" style="left:0;top:300px;width:400px;white-space:normal;line-height:1.35;font-size:30px">AI 按任务写代码、做测试，<br>留下每一步的结果</div>
+</div>
+
+<!-- 第 57 句：评审一侧两项 -->
+<section class="card sm rv2 cue" data-at="28.7" data-r="-1" style="left:580px;top:700px"><div class="tab ink">独立检查</div><div class="t">要求落实了吗？</div></section>
+<section class="card sm rv2 cue" data-at="30.86" data-r="1" style="left:1070px;top:700px"><div class="tab ink">独立检查</div><div class="t">代码有没有问题？</div></section>
+<!-- 第 58 句：规格对照线 -->
+<section class="card sm cue" id="spc" data-at="38.54" data-r="1" style="left:1500px;top:530px;width:340px"><div class="tab os">规格</div><p style="font:800 40px/1.25 var(--display);white-space:nowrap">原来的要求</p></section>
+<svg id="sl" viewBox="0 0 1920 1080"><defs><marker id="mh" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="4.2" markerHeight="4.2" orient="auto"><path d="M2 1 L10 6 L2 11" fill="none" stroke="#43a0ed" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+  <path id="slp" d="M0 0 L0 0" fill="none" stroke="#43a0ed" stroke-width="6" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" marker-end="url(#mh)"/></svg>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 5.2, 14.24, 20.24, 26.16, 33.52], "duration": 41.36, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.frameRender=function(t){
+  // 第 56 句：左上角标换成 sdflow-code-review；实现区保持原大小不动，评审放到下方空位。
+  var a=T.$('skA');a.style.opacity=T.ease(T.p(t,0.2,.55))*(1-T.ease(T.p(t,21.56,.3)));
+  // 第 58 句：蓝色规格对照线，从「原来的要求」指向偏差标记。
+  var sp=T.rect(T.$('spc')),br=T.rect(T.$('d2')),path=T.$('slp');
+  var x1=sp.x-6,y1=sp.y+sp.h/2,x2=br.x+br.w+10,y2=br.y+br.h/2;
+  path.setAttribute('d','M'+x1+' '+y1+' L'+x2+' '+y2);
+  path.setAttribute('stroke-dashoffset',1-T.ease(T.p(t,38.64,.7)));
+  path.style.opacity=t>=38.64?1:0;  // 线长为 0 时箭头头仍会画出来，所以出场前整条隐藏
+};</script><script src="episode.js"></script></body></html>

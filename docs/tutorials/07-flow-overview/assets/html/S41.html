@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- S41 · 下一期预告。参照第 4、5、6 期预告页：顶部 SDFlow 卡，六步流程保留；收尾归档下接「交接报告」，再接独立的「后续 issues」卡；
+     「下一期」卡显示「遗留问题怎样继续处理」，不写期号（作者 2026-11-22 定）；第 162 句依次出现核对、分类、安排修复、验证关闭。这是后续工作，不新增第七步。
+     第 161–162 句：口播未录，按每分钟 220 字估算。 -->
+<html lang="zh-CN" data-frame-id="S41"><head><meta charset="utf-8"><title>S41 · 下一期：遗留问题怎样继续处理</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  #sd{left:640px;top:70px;width:640px;height:150px;padding:0;display:flex;align-items:center;justify-content:center}
+  #sd .big{font-family:var(--mono);font-weight:700;font-size:100px;line-height:1;letter-spacing:-3px}
+  .s6{top:270px;width:280px;height:96px;display:flex;align-items:center;justify-content:center;gap:14px;padding:0 16px}
+  .s6 .big{font-size:42px;white-space:nowrap}
+  .s6 .num{width:54px;height:54px;font-size:30px}
+  #hand{left:1535px;top:440px;width:330px;height:96px;padding:0;display:flex;align-items:center;justify-content:center}
+  #hand .big{font-size:42px}
+  #iss{left:1250px;top:650px;width:615px;height:130px;padding:0;display:flex;align-items:center;justify-content:center}
+  #iss .tab{font-size:34px}
+  #iss .big{font-size:60px;font-family:var(--mono);font-weight:700}
+  #next{left:60px;top:470px;width:1090px;height:400px;padding:50px 40px 30px;text-align:center}
+  #next .tab{font-size:38px}
+  #next .title{font:900 78px/1.15 var(--display);margin-top:6px}
+  #flow{position:absolute;left:0;top:0;width:100%;height:100%}
+  #chips{position:absolute;left:30px;right:30px;top:215px;display:flex;align-items:center;justify-content:center;gap:12px}
+  #chips .chip{position:relative;font-size:44px;padding:10px 24px}
+  #chips svg{flex:none}
+  #wire{position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none}
+</style></head><body><div id="stage">
+<section class="card" id="sd" data-r="-1"><div class="big">SDFlow</div></section>
+<div id="steps"></div>
+<svg id="wire" viewBox="0 0 1920 1080" aria-hidden="true">
+  <path id="w1" d="M1700 395 V440" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" pathLength="1"/>
+  <path id="w2" d="M1700 545 V645" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" pathLength="1"/>
+  <path id="w3" d="M1240 715 H1160" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" stroke-dasharray="14 12"/>
+  <path id="h3" d="M1176 703 L1160 715 L1176 727" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+<section class="card cue" id="hand" data-at="1.3" data-r="1.5"><div class="big">交接报告</div></section>
+<section class="card cue" id="iss" data-at="3.16" data-r="-1.2"><div class="tab ink">后续工作</div><div class="big">后续 issues</div></section>
+<section class="card cue" id="next" data-at="5.32" data-r="-1"><div class="tab ink">下一期</div><div class="title">遗留问题怎样继续处理</div>
+  <div id="chips">
+    <span class="chip cue" data-at="7.82" data-r="-1.5">核对</span>
+    <svg class="cue" data-at="8.02" data-r="0" width="44" height="30" viewBox="0 0 44 30"><path d="M4 15 H36 M28 7 L38 15 L28 23" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="chip cue" data-at="8.56" data-r="1.5">分类</span>
+    <svg class="cue" data-at="8.92" data-r="0" width="44" height="30" viewBox="0 0 44 30"><path d="M4 15 H36 M28 7 L38 15 L28 23" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="chip cue" data-at="9.92" data-r="-1.5">安排修复</span>
+    <svg class="cue" data-at="10.11" data-r="0" width="44" height="30" viewBox="0 0 44 30"><path d="M4 15 H36 M28 7 L38 15 L28 23" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="chip cue" data-at="11.69" data-r="1.5">验证关闭</span>
+  </div></section>
+</div><script>
+['需求明确','规格编写','规格评审','代码实现','代码评审','收尾归档'].forEach(function(name,i){
+  var c=document.createElement('div');c.className='card s6';c.id='sf'+(i+1);c.setAttribute('data-r',i%2?'1':'-1');
+  c.style.left=(55+306*i)+'px';c.innerHTML='<span class="num">'+(i+1)+'</span><span class="big">'+name+'</span>';
+  document.getElementById('steps').appendChild(c);
+});
+</script><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+window.FRAME_TIMING={"starts": [0.0, 5.2], "duration": 13.92, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+// 页首的 SDFlow 卡与六步条 0 秒起出现；交接报告、后续 issues 的连线随各自卡擦出。
+window.frameRender=function(t){
+  T.enter(T.$('sd'),T.p(t,0,.5),20);
+  for(var i=1;i<=6;i++)T.enter(T.$('sf'+i),T.p(t,0.15+(i-1)*.08,.5),20);
+  function draw(id,at){var p=T.ease(T.p(t,at,.45)),e=T.$(id);e.style.strokeDasharray=1;e.style.strokeDashoffset=1-p;e.style.opacity=p?1:0;}
+  draw('w1',1.3);draw('w2',3.16);
+  var a=T.ease(T.p(t,5.32,.4));T.$('w3').style.opacity=a;T.$('h3').style.opacity=a;
+};
+</script><script src="episode.js"></script></body></html>

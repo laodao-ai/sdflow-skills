@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- S34：作者工作台的任务重新分布。左「人」、右「AI 协作区」。第 130 句「调研」「比较方案」「实现」「修改」四张卡依次进 AI 协作区；第 130 句四张卡先在人一侧出现，再移进 AI 协作区；第 131 句「想尝试的事」先在人一侧标「待尝试」，再移进 AI 协作区，标「进行中」；第 132 句角标「个人感受 · 没有对照统计」，不画省时柱形图，不写倍数或百分比；第 133 句 AI 协作区下方依次出现三张小卡「代码交出去」「测试更完善」「排查更快」，留到页末；第 134 句人一侧留下「需求」「方案」「规范」「结果判断」，黄框停在人这一侧。来源 J。 -->
+<html lang="zh-CN" data-frame-id="S34"><head><meta charset="utf-8"><title>S34 · 使用感受</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .who.agent svg{margin:0}
+  .boundary .tab{font-size:34px}
+  .tk{height:100px;padding:0 28px;display:flex;align-items:center;font:800 46px var(--display);white-space:nowrap}
+  .tk .tab{font-size:28px;top:-32px;padding:2px 14px}
+  .tk2{height:72px;width:310px;padding:0;justify-content:center;font-size:38px}
+  .slot{position:absolute;height:100px;border:4px dashed rgba(22,22,22,.65);border-radius:10px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font:600 36px var(--body);color:rgba(22,22,22,.8)}
+</style></head><body><div id="stage">
+<div class="boundary cue" data-r="0" data-shadow="0" data-current="27.65" id="hz" data-at="0" style="left:60px;top:200px;width:580px;height:620px"><div class="tab ink">人</div></div>
+<div class="who human big cue" data-at="0.2" data-r="0" style="left:90px;top:225px"></div>
+<div class="boundary cue" data-r="0" data-at="0.1" style="left:700px;top:200px;width:1160px;height:620px"><div class="tab ink">AI 协作区</div></div>
+<div class="who agent big cue" data-at="0.3" data-r="0" style="left:735px;top:225px"></div>
+
+<!-- 第 130 句：四张卡先在人一侧出现（data-hx/hy 是人一侧的位置），讲到「都比以前方便了」整组移进 AI 协作区 -->
+<section class="card tk fly" data-at="2.82" data-r="-1" data-hx="100" data-hy="352" style="left:740px;top:360px;width:500px">调研</section>
+<section class="card tk fly" data-at="4.02" data-r="1" data-hx="100" data-hy="468" style="left:1290px;top:360px;width:520px">比较方案</section>
+<section class="card tk fly" data-at="5.5" data-r="1" data-hx="100" data-hy="584" style="left:740px;top:490px;width:500px">实现</section>
+<section class="card tk fly" data-at="5.34" data-r="-1" data-hx="100" data-hy="700" style="left:1290px;top:490px;width:520px">修改</section>
+
+<!-- 第 131 句：「想尝试的事」先在人一侧标「待尝试」，后半句移进 AI 协作区，标签换成「进行中」 -->
+<section class="card tk" id="try" data-r="1" style="left:740px;top:640px;width:500px">想尝试的事<span class="tab" id="tab-wait" data-r="-2">待尝试</span><span class="tab ink" id="tab-go" data-r="-2">进行中</span></section>
+
+<div class="tag cue" data-at="16.38" data-r="4" style="left:1330px;top:104px;font-size:36px">个人感受 · 没有对照统计</div>
+
+<section class="card tk cue" data-at="28.86" data-r="1" style="left:100px;top:352px;width:500px">需求</section>
+<section class="card tk cue" data-at="29.66" data-r="-1" style="left:100px;top:468px;width:500px">方案</section>
+<section class="card tk cue" data-at="30.65" data-r="1" style="left:100px;top:584px;width:500px">规范</section>
+<section class="card tk cue" data-at="31.67" data-r="-1" style="left:100px;top:700px;width:500px">结果判断</section>
+
+<!-- 第 133 句：三个分句各出一张小卡，放在 AI 协作区下方，留到页末；y 不进字幕带，右端停在 x=1700，不进右下角 200×200 -->
+<section class="card tk tk2 cue" data-at="21.1" data-r="-1" style="left:740px;top:858px">代码交出去</section>
+<section class="card tk tk2 cue" data-at="22.7" data-r="1" style="left:1065px;top:858px">测试更完善</section>
+<section class="card tk tk2 cue" data-at="24.38" data-r="-1" style="left:1390px;top:858px">排查问题更快</section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+// 第 130 句：卡在人一侧依次出现，6.4 秒起逐张移进 AI 协作区。
+// 第 131 句：「想尝试的事」7.6 秒在人一侧出现，11.6 秒移进 AI 协作区，12.3 秒标签换成「进行中」。
+window.frameRender=function(t){
+  function place(el,hx,hy,show,go){
+    var x=Number(el.style.left.replace('px','')),y=Number(el.style.top.replace('px','')),e=T.ease(T.p(t,go,.8));
+    el.style.opacity=T.ease(T.p(t,show,.4));
+    el.style.transform='translate('+((1-e)*(hx-x))+'px,'+((1-e)*(hy-y)+(1-T.ease(T.p(t,show,.4)))*14)+'px) rotate('+Number(el.dataset.r)+'deg)';
+  }
+  T.all('.fly').forEach(function(el,i){place(el,Number(el.dataset.hx),Number(el.dataset.hy),Number(el.dataset.at),6.99+i*.18);});
+  place(T.$('try'),100,468,8.57,11.74);
+  var g=T.ease(T.p(t,12.04,.4));
+  T.$('tab-wait').style.opacity=1-g;
+  T.$('tab-go').style.opacity=g;
+};
+</script><script>window.FRAME_TIMING={"starts": [0.0, 8.48, 14.8, 19.12, 27.2], "duration": 33.28, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>

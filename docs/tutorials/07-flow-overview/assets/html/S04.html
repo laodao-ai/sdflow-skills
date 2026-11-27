@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- S04：本期内容页，沿用第 4、5、6 期的 SDFlow 卡加六步小条。第 9 句出 SDFlow 卡和六步小条（各步分开，不标期号、不标讲过）；
+     第 10 句括线把六步连起来，标「串起来」；第 11–14 句下方五条结论依次出现（第 13 句出「人来掌舵」「人看报告」两条），用语与五张章节标签页一致。不画成新的流程节点。 -->
+<html lang="zh-CN" data-frame-id="S04"><head><meta charset="utf-8"><title>S04 · 本期内容</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  #sd{left:640px;top:60px;width:640px;height:150px;padding:0;display:flex;align-items:center;justify-content:center}
+  #sd .big{font-family:var(--mono);font-weight:700;font-size:100px;line-height:1;letter-spacing:-3px}
+  .s6{top:250px;width:280px;height:96px;display:flex;align-items:center;justify-content:center;gap:14px;padding:0 16px}
+  .s6 .big{font-size:42px;white-space:nowrap}
+  .s6 .num{width:54px;height:54px;font-size:30px}
+  .row{left:360px;width:1200px;height:76px;padding:0 30px;display:flex;align-items:center;gap:26px}
+  .row .num{width:54px;height:54px;font-size:30px}
+  .row .big{font-size:46px;white-space:nowrap;line-height:1.1}
+  #join{position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none}
+  .lab{background:var(--cream)}
+</style></head><body><div id="stage">
+<section class="card" id="sd" data-r="-1"><div class="big">SDFlow</div></section>
+<div id="steps"></div>
+<svg id="join" viewBox="0 0 1920 1080" aria-hidden="true"><path d="M195 362 V388 H1725 V362" fill="none" stroke="#161616" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/></svg>
+<div class="tag lab cue" data-at="9.68" data-r="3" style="left:850px;top:357px">串起来</div>
+<section class="card row cue" data-at="14.06" data-r="-.3" style="top:455px"><span class="num">1</span><span class="big">工作流是边用边改出来的</span></section>
+<section class="card row cue" data-at="17.85" data-r=".3" style="top:548px"><span class="num">2</span><span class="big">六个步骤，每次交接都留依据</span></section>
+<section class="card row cue" data-at="24.38" data-r="-.3" style="top:641px"><span class="num">3</span><span class="big">人来掌舵，AI 来执行</span></section>
+<section class="card row cue" data-at="27.58" data-r=".3" style="top:734px"><span class="num">4</span><span class="big">人看报告，做决定</span></section>
+<section class="card row cue" data-at="32.32" data-r="-.3" style="top:827px"><span class="num">5</span><span class="big">在真实项目里用，也在项目里改</span></section>
+</div><script>
+['需求明确','规格编写','规格评审','代码实现','代码评审','收尾归档'].forEach(function(name,i){
+  var c=document.createElement('div');c.className='card s6 cue';c.setAttribute('data-at',(3.65+i*.25).toFixed(2));c.setAttribute('data-r',i%2?'1':'-1');
+  c.style.left=(55+306*i)+'px';c.innerHTML='<span class="num">'+(i+1)+'</span><span class="big">'+name+'</span>';
+  document.getElementById('steps').appendChild(c);
+});
+</script><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+window.FRAME_TIMING={"starts": [0.0, 8.24, 12.24, 16.96, 21.2, 31.28], "duration": 35.92, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+// SDFlow 卡 0 秒出现；括线在第 10 句（9.58 秒）起从左到右擦出。
+window.frameRender=function(t){
+  T.enter(T.$('sd'),T.p(t,0,.5),20);
+  var p=T.ease(T.p(t,9.58,.6)),j=document.querySelector('#join path');
+  j.style.strokeDasharray=1;j.style.strokeDashoffset=1-p;j.style.opacity=p?1:0;
+};
+</script><script src="episode.js"></script></body></html>

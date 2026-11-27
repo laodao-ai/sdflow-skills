@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- S38a：第 145 句「复盘报告」文件卡先在正中放大出现，再缩到左侧，标 sdflow-retro；第 146 句只出标题行「SDFlow 开发仓 · 89 个 change」；第 147 句前半出「各步骤耗时」栏，小条形只标收尾 28%、规格评审 24%（原文：done 28%、spec-review 24%），后半出「各评审查出的问题数」栏（原文：出问题最多的是规格评审对抗镜，586 条）；第 147 句右侧摘「待复评」一行，镜名改写为「代码评审 · 历史对照检查」，原文为 history 镜「已处置: 降采样 (2026-08-10)」，黄框；第 148 句回到四格演进条，第 ④ 格右侧虚线停稳。来源 N（retro/report.md，提交 cf79afa1，2026-10-21 生成）。不展示整张表。 -->
+<html lang="zh-CN" data-frame-id="S38a"><head><meta charset="utf-8"><title>S38a · 靠记录决定留哪些检查</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .rep{left:60px;top:300px;width:1030px;height:470px;padding:0}
+  /* .document:after 是卡片右上角的折角小图标，会从 sdflow-retro 标签后露出一截灰边，本页不要。 */
+  .rep.document:after{display:none}
+  .rep .chip{left:auto;right:30px;top:-30px;font:700 34px var(--mono)}
+  .rep .meta{position:absolute;left:44px;top:34px;font-size:34px;font-weight:600}
+  .col{position:absolute;top:112px;width:480px}
+  .col .lab{font:800 40px/1.2 var(--display);margin-bottom:22px}
+  .row{display:flex;align-items:center;gap:14px;height:64px;margin-bottom:18px;font:700 34px var(--body)}
+  .row .nm{width:150px}.row .bar{height:46px;background:var(--charcoal);border:4px solid var(--ink);border-radius:6px;box-sizing:border-box}
+  .row .pc{font:800 38px var(--mono)}
+  .col .note{font-size:28px;line-height:1.4;margin-top:6px}
+  .big586{font:800 84px/1.1 var(--mono)}
+  .q.tight{left:1140px;top:370px;width:720px}
+  .q.tight .body{font-size:28px}
+</style></head><body><div id="stage">
+<section class="card document rep cue" data-at="0.2" data-r="-1"><div class="tab ink">复盘报告</div><span class="chip">sdflow-retro</span>
+  <div class="meta cue" data-at="4.43">SDFlow 开发仓 · 89 个 change</div>
+  <div class="col cue" data-at="13.02" style="left:44px"><div class="lab">各步骤耗时</div>
+    <div class="row"><span class="nm">收尾</span><span class="bar cue" data-at="13.12" style="width:190px"></span><span class="pc cue" data-at="13.36">28%</span></div>
+    <div class="row"><span class="nm">规格评审</span><span class="bar cue" data-at="13.82" style="width:163px"></span><span class="pc cue" data-at="14.06">24%</span></div>
+    <div class="note">实际用时，含人读与拍板</div></div>
+  <div class="col cue" data-at="15.3" style="left:540px"><div class="lab">各评审查出的问题数</div>
+    <div class="note" style="margin:0">查出最多的一项</div><div style="font:700 36px/1.4 var(--body);margin-bottom:6px">规格评审 · 对抗检查</div>
+    <div class="big586 cue" data-at="16.56">586 条</div></div>
+</section>
+<div class="q tight cue" data-at="18.85"><div class="src"><span class="rec">项目记录摘录</span>retro/report.md · 待复评</div><div class="body">- 代码评审 · 历史对照检查 → <span class="mk" data-current="23.5">已处置：降采样（2026-08-10）</span></div></div>
+<div class="tline cue" data-at="25.91" data-seq="4:27.82"></div>
+<i class="arr cue" data-at="29.42" data-dash data-nohead data-d="M1712 90 L1852 90"></i>
+<div class="tag cue" data-at="31.26" data-r="3" style="left:1690px;top:150px">还在改</div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+// 第 145 句：复盘报告文件卡先在画面正中放大出现，停到 2.0 秒，再用 0.9 秒缩回左侧原位。
+window.frameRender=function(t){
+  var m=T.ease(T.p(t,1.92,.9)),el=document.querySelector('.rep');
+  // 卡先只有标题行高度（110），第 147 句栏目出现（9.8 秒）前 0.2 秒起 0.5 秒内长到 470，不留空壳。
+  var h=110+360*T.ease(T.p(t,12.92,.5));
+  el.style.height=h+'px';
+  // 居中放大阶段按当前高度算垂直偏移，让卡中心对准画面中心（540）。
+  el.style.transform='translate('+(385*(1-m))+'px,'+((540-(300+h/2))*(1-m))+'px) scale('+(1+.12*(1-m))+') '+el.style.transform;
+};
+</script><script>window.FRAME_TIMING={"starts": [0.0, 4.4, 10.96, 18.8, 25.92], "duration": 33.68, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>

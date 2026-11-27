@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- S42 · 结尾页。沿用第 4、5、6 期的结尾页：两行公开仓库入口、留言征集、原 logo 与老刀Cheney署名。
+     只放教学示例与 SDFlow 发布仓地址，不展示本期内部项目地址。第 160–162 句：口播未录，按每分钟 220 字估算。 -->
+<html lang="zh-CN" data-frame-id="S42">
+<head>
+<meta charset="utf-8">
+<title>S42 · 片尾</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+  .repo { left: 210px; width: 1500px; height: 130px; display: flex; align-items: center; padding: 0 56px; }
+  .repo .a { font-family: var(--mono); font-weight: 700; font-size: 54px; color: var(--ink); white-space: nowrap; }
+  .repo .tab { font-size: 40px; }
+  .ask { left: 240px; top: 520px; width: 1440px; height: 150px; padding: 0 56px; display: flex; align-items: center; }
+  .ask .big { font-size: 58px; white-space: nowrap; }
+  .ask .tab { font-size: 40px; }
+  .sig { left: 560px; top: 740px; width: 800px; height: 170px; padding: 0 40px; display: flex; align-items: center; gap: 36px; }
+  .sig img { width: 130px; height: 130px; flex: none; }
+  .sig .big { font-size: 84px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="card repo" id="r1" data-r="-1.2" style="top:90px"><div class="tab ink">示例项目 · 见简介</div><div class="a">github.com/laodao-ai/demo-temp-monitor</div></div>
+  <div class="card repo" id="r2" data-r="1.2" style="top:300px"><div class="tab ink" style="transform:rotate(2deg)">SDFlow · 见简介</div><div class="a">github.com/laodao-ai/sdflow-skills</div></div>
+  <div class="card ask" id="ask" data-r="-1"><div class="tab ink" style="transform:rotate(2deg)">留言告诉我</div><div class="big">你用 AI 开发的时候碰到过什么问题？</div></div>
+  <div class="card dark sig" id="sig" data-r="1"><img src="../../../shared/logo.svg" alt=""><div class="big">老刀Cheney</div></div>
+</div>
+<script src="lib/stage.js"></script>
+<script src="theme.js"></script>
+<script>
+  window.FRAME_TIMING={"starts": [0.0, 5.36, 11.76], "duration": 15.039, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+  // 第 160 句出两行仓库，第 161 句出留言征集，第 162 句出署名。
+  var CUE = { r1: 0, r2: 1.66, ask: 5.42, sig: 11.76 };
+  Stage({
+    duration: window.FRAME_TIMING.duration,
+    init: function () { return Promise.all([T.fonts(T.$('stage').textContent), document.querySelector('#sig img').decode()]); },
+    render: function (t) {
+      T.enter(T.$('r1'), T.p(t, CUE.r1, 0.6), 30);
+      T.enter(T.$('r2'), T.p(t, CUE.r2, 0.6), 30);
+      T.enter(T.$('ask'), T.p(t, CUE.ask, 0.6), 30);
+      T.enter(T.$('sig'), T.p(t, CUE.sig, 0.6), 30);
+    }
+  });
+</script>
+</body>
+</html>

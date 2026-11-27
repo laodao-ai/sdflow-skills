@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- S11：第 32 句左上出现「示例项目 · 告警」小卡；第 33 句六步条在画面中部随口播依次点亮，每步下方标对应 skill（sdflow-spec 跨前两步）；
+     第 34 句其余变淡（六步条、项目卡），黄框「冷却需求点」卡进入左端；第 35 句六步条缩到顶部（S12–S17 的标准位置）。
+     不把 ship 画成新的一步。冷却需求点卡：left 60 / top 240 / 宽 460，S12–S17 同位。来源 A、B。 -->
+<html lang="zh-CN" data-frame-id="S11"><head><meta charset="utf-8"><title>S11 · 六个步骤与冷却需求点</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  /* skill 小标：深底等宽字，宽度与所在步骤对齐；sdflow-spec 横跨前两步。 */
+  .sk{position:absolute;box-sizing:border-box;height:44px;display:flex;align-items:center;justify-content:center;background:var(--term);color:var(--cream);border:3px solid var(--ink);border-radius:8px;font:600 26px/1 var(--mono);white-space:nowrap;opacity:0}
+  .sixbar .sk{top:106px}
+  .proj{left:60px;top:240px;width:520px}
+  .proj p{font-size:34px;margin-top:6px}
+</style></head><body><div id="stage">
+<div class="sixbar" id="bar" data-seq="1:10.14,2:12.08,3:13.76,4:15.63,5:16.06,6:18.38,0:21.5" style="opacity:0;top:500px">
+  <div class="sk" data-at="10.14" style="left:0;width:577px">sdflow-spec</div>
+  <div class="sk" data-at="13.58" style="left:594px;width:294px">sdflow-spec-review</div>
+  <div class="sk" data-at="15.18" style="left:900px;width:294px">sdflow-implement</div>
+  <div class="sk" data-at="16.94" style="left:1205px;width:294px">sdflow-code-review</div>
+  <div class="sk" data-at="18.19" style="left:1511px;width:294px">sdflow-done</div>
+</div>
+<section class="card sm proj cue" id="proj" data-at="0" data-r="-1.5"><div class="tab ink">示例项目 · 告警</div><p>设备超温时，发出通知</p></section>
+<section class="card sm cue" id="cdc" data-at="22.06" data-r="-1" data-current="22.56" style="left:60px;top:240px;width:460px"><div class="tab">冷却需求点</div><p>同一台设备，<br>多久才能再发一次？</p></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 8.64, 20.8, 29.44], "duration": 36.08, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.frameRender=function(t){
+  var bar=T.$('bar'),pc=T.$('proj');
+  var fin=T.ease(T.p(t,8.65,.5));        // 第 33 句：六步条出现
+  var dim=T.ease(T.p(t,20.77,.5));        // 第 34 句：其余变淡
+  var up=T.ease(T.p(t,29.41,.9));        // 第 35 句：六步条缩到顶部，同时恢复亮度
+  bar.style.opacity=fin*(1-.65*dim*(1-up));
+  bar.style.top=(44+456*(1-up))+'px';
+  Array.prototype.forEach.call(bar.querySelectorAll('.sk'),function(s){s.style.opacity=T.ease(T.p(t,Number(s.dataset.at),.4));});
+  // 项目卡：第 34 句移到右侧并变淡，给冷却需求点卡让位。
+  var mv=T.ease(T.p(t,20.77,.8));
+  // 第 34 句：卡先在画面正中放大出现，念到约 8.3 秒再用 0.6 秒缩回左上原位（60,240）；缩放绕卡片中心。
+  var sh=T.ease(T.p(t,6.71,.6)),W=pc.offsetWidth,H=pc.offsetHeight;
+  pc.style.left=((960-W/2)*(1-sh)+60*sh+1280*mv)+'px';
+  pc.style.top=((540-H/2)*(1-sh)+240*sh)+'px';
+  pc.style.transform+=' scale('+(1+.7*(1-sh))+')';
+  pc.style.opacity=T.ease(T.p(t,0,.4))*(1-.55*dim);
+};</script><script src="episode.js"></script></body></html>

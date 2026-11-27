@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- S39：回到 S02 的人、AI、结果三个位置（坐标与 S02 相同：人 left:60、AI left:690、结果 left:1320，宽 540，顶 200，高 680），六步条作为淡色背景。
+     第 149 句人向 AI 区交出「冷却需求点」卡（黄框）；第 150 句 AI 区带着这张卡持续工作；第 151 句沿用 S24 的任务单形态表示「停下来有记录可接」，
+     结果一侧出现报告「做完有结果可查」（任务单上的勾用墨色，不用绿）；第 152 句一条反馈箭头从结果回到人的下一次决定。不出现全绿流程，不增加新机制。 -->
+<html lang="zh-CN" data-frame-id="S39"><head><meta charset="utf-8"><title>S39 · 协作方式</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .bg{opacity:.32}
+  .col{top:200px;height:680px}
+  .who{z-index:2}
+  .who.agent svg{margin:0}
+  /* 冷却需求点卡：外层负责从人一侧移到 AI 区，卡本身负责进场与黄框。 */
+  .mvw{position:absolute;left:100px;top:395px;width:460px}
+  .dc{position:relative;width:460px;padding:30px 26px 20px;font:600 34px/1.35 var(--body);text-align:left}
+  .dc .tab{font-size:30px;top:-34px;padding:4px 16px}
+  .ts{top:668px;width:140px;height:84px;display:flex;align-items:center;justify-content:center;padding:0}
+  .ck{width:30px;height:16px;border-left:7px solid var(--ink);border-bottom:7px solid var(--ink);transform:rotate(-45deg) translate(3px,-6px);box-sizing:border-box}
+  .op{width:38px;height:38px;border:5px solid var(--ink);border-radius:50%;box-sizing:border-box}
+  .lab{background:var(--cream)}
+</style></head><body><div id="stage">
+<div class="sixbar bg" data-done="all" data-seq=""></div>
+
+<div class="boundary col cue" data-at="0" data-r="0" style="left:60px;width:540px"><div class="tab ink">人</div></div>
+<div class="boundary col cue" data-at="0.1" data-r="0" style="left:690px;width:540px"><div class="tab sp">AI</div></div>
+<div class="boundary col cue" data-at="0.2" data-r="0" style="left:1320px;width:540px"><div class="tab">结果</div></div>
+<div class="who human big cue" data-at="0.2" data-r="0" style="left:275px;top:230px"></div>
+<div class="who agent big cue" data-at="0.3" data-r="0" style="left:905px;top:230px"></div>
+
+<div class="mvw" id="dc"><section class="card dc cue" data-at="1.18" data-r="-1.5" data-current="6.64" data-until="11.62" data-shadow="10"><div class="tab ink">冷却需求点</div>同一台设备，多久才能再发一次？</section></div>
+<div class="tag cue" data-at="10.54" data-r="-3" style="left:770px;top:568px">持续工作</div>
+
+<section class="card ts cue" data-at="13.51" data-r="-2" style="left:726px"><div class="ck"></div></section>
+<section class="card ts cue" data-at="13.77" data-r="1.5" style="left:890px"><div class="ck"></div></section>
+<section class="card ts dash cue" data-at="14" data-r="-1" style="left:1054px"><div class="op"></div></section>
+<div class="tag cue" data-at="14.61" data-r="2" style="left:800px;top:762px">停下来有记录可接</div>
+
+<section class="card cue" data-at="16.57" data-r="1.5" style="left:1420px;top:390px;width:340px;padding:22px 20px 18px;text-align:center"><div class="doc-icon"></div><div class="big" style="font-size:50px">报告</div></section>
+<div class="tag cue" data-at="17.34" data-r="-2" style="left:1380px;top:640px">做完有结果可查</div>
+
+<i class="arr cue" data-at="20.8" data-d="M1340 850 Q960 920 330 800"></i>
+<div class="tag lab cue" data-at="21.17" data-r="3" style="left:790px;top:845px">发现的问题</div>
+<section class="card sm dash cue" data-at="23.42" data-r="-1" data-current="23.52" data-shadow="0" style="left:100px;top:640px;width:460px"><p style="margin:0;font-size:36px;text-align:center">下一次的决定</p></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+window.FRAME_TIMING={"starts": [0.0, 6.24, 13.28, 20.56], "duration": 25.76, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+// 第 149 句末（4.0 秒起）冷却需求点卡从人一侧移到 AI 区。
+window.frameRender=function(t){
+  T.$('dc').style.transform='translateX('+(630*T.ease(T.p(t,9.26,1.0)))+'px)';
+};
+</script><script src="episode.js"></script></body></html>

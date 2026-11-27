@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- S02：人、AI、结果三个位置。这个布局 S28、S39 复用：人一栏 left:60 width:540，AI 区 left:690 width:540，结果一栏 left:1320 width:540，
+     三栏顶 top:200、高 680，底部 140px 留字幕。人用 .who.human，AI 用 .who.agent。
+     S01 末帧的两张成果卡从原位置收到右侧「交付结果」栏；第 4 句代码图标从人一侧移到 AI 区，不打「0 行」大字；
+     第 5 句人一侧依次出现「需求」「方案」「规范」「交付判断」，一条检查箭头从结果回到人。来源 J（作者口述）。 -->
+<html lang="zh-CN" data-frame-id="S02"><head><meta charset="utf-8"><title>S02 · 人、AI、结果</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  /* 成果卡与 S01 末帧同尺寸同位置，用外层定位、缩放；卡本身不做进场动画。 */
+  .w{position:absolute;width:600px;height:340px;transform-origin:0 0}
+  .stat{left:0;top:0;width:600px;height:340px;padding:22px 30px;text-align:center}
+  .stat .n{font:800 150px/1 var(--display);white-space:nowrap}
+  .stat .n small{display:inline;font-size:68px;margin:0 0 0 8px}
+  .stat .what{font:700 46px/1.25 var(--body);margin-top:14px}
+  .stat .sub{display:inline-block;margin-top:16px;font:600 36px/1.2 var(--body);padding:2px 18px;border:4px dashed var(--ink);border-radius:8px}
+  .col{top:200px;height:680px}
+  .who{z-index:2}
+  .who.agent svg{margin:0}
+  .pick{left:110px;width:440px;box-sizing:border-box;text-align:center;font-size:44px;line-height:1.15;padding:8px 24px}
+  .mvw{position:absolute;left:110px;top:395px;width:440px;height:70px}
+  .mvw .chip{left:0;top:0;width:440px;box-sizing:border-box;text-align:center;font-size:44px;line-height:1.15;padding:8px 24px}
+  .lab{background:var(--cream)}
+</style></head><body><div id="stage">
+<div class="tag" style="left:1560px;top:70px;">作者项目经历</div>
+<div class="w" id="w1" style="left:330px;top:400px"><section class="card stat" data-r="-1.5"><div class="n">8<small>款</small></div><div class="what">量产出货的硬件</div><div class="sub">嵌入式软件</div></section></div>
+<div class="w" id="w2" style="left:990px;top:400px"><section class="card stat" data-r="1.5"><div class="n">3<small>个</small></div><div class="what">客户项目交付</div><div class="sub">后端 + Web</div></section></div>
+
+<div class="boundary col cue" data-at="0.9" data-r="0" style="left:1320px;width:540px"><div class="tab">交付结果</div></div>
+<div class="boundary col cue" data-at="1.42" data-r="0" style="left:60px;width:540px"><div class="tab ink">人</div></div>
+<div class="boundary col cue" data-at="1.42" data-r="0" style="left:690px;width:540px"><div class="tab sp">AI</div></div>
+<div class="who human big cue" data-at="1.42" data-r="0" style="left:275px;top:240px"></div>
+<div class="who agent big cue" data-at="1.42" data-r="0" style="left:905px;top:240px"></div>
+
+<div class="mvw" id="code"><div class="chip cue" data-at="2.46" data-r="-2"><span class="mono">&lt;/&gt;</span> 代码</div></div>
+
+<div class="chip pick cue" data-at="7.14" data-r="-1.5" style="top:395px">需求</div>
+<div class="chip pick cue" data-at="7.42" data-r="1.5" style="top:487px">方案</div>
+<div class="chip pick cue" data-at="8.14" data-r="-1" style="top:579px">规范</div>
+<div class="chip pick cue" data-at="9.1" data-r="1" style="top:671px">交付判断</div>
+
+<i class="arr cue" data-at="5.28" data-d="M1340 790 Q960 870 420 790"></i>
+<div class="tag lab cue" data-at="5.3" data-r="3" style="left:830px;top:835px">我来审</div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+window.FRAME_TIMING={"starts": [0.0, 3.84], "duration": 12.72, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+// 0–0.9 秒：两张成果卡从 S01 末帧的位置收到右侧栏；3.4 秒起代码图标从人一侧移到 AI 区。
+window.frameRender=function(t){
+  var m=T.ease(T.p(t,0,.9)),s=1-.2*m;
+  var a=T.$('w1').style,b=T.$('w2').style;
+  a.left=(330+(1350-330)*m)+'px';a.top=(400+(250-400)*m)+'px';a.transform='scale('+s+')';
+  b.left=(990+(1350-990)*m)+'px';b.top=(400+(560-400)*m)+'px';b.transform='scale('+s+')';
+  T.$('code').style.transform='translateX('+(630*T.ease(T.p(t,2.9,.9)))+'px)';
+};
+</script><script src="episode.js"></script></body></html>

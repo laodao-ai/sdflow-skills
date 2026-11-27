@@ -1,0 +1,55 @@
+<!doctype html>
+<!-- S08：演进条高亮第 ④ 格，工具卡与 Claude Code 条位置同 S06、S07。上方三个维护问题依次出现（第 26 句两条、第 27 句一条），每条讲到时加黄框，讲完后变淡；第 28 句三张外部工具卡缩到 0.93 倍移进右侧边栏「参考的方法」，中间出现「自己的 skill」虚线框；第 29 句边栏第四格出现「Matt Pocock」卡（标签 skills，小字「拷问、任务单」），一条折线箭头沿边栏左侧上行，指向贴在「自己的 skill」框右上角的「拷问 → sdflow-spec」；第 30 句框里出「评审：自己维护」摘 ADR 0040 标题，第 31 句出「实现：只走 tickets」摘 ADR 0042 标题，句末「切法也来自 Matt Pocock」时 Matt Pocock 卡再加一次黄框。两条摘录都标「项目记录摘录」。不画成现行 ship 仍调用第三方工具，Matt Pocock 卡不进前三格的工具行。来源 J、F、O。 -->
+<html lang="zh-CN" data-frame-id="S08"><head><meta charset="utf-8"><title>S08 · 吸收方法，自己维护</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .tool{top:450px;width:340px;height:150px;padding:30px 24px 12px;text-align:center}
+  .tool .big{font-size:44px}.tool small{font-size:28px;margin-top:8px}
+  .cc{left:60px;top:680px;width:1320px;height:84px;display:flex;align-items:center;justify-content:center;padding:0}
+  .cc .tab{background:var(--cream)}
+  .prob{top:190px;width:410px;height:130px;padding:0 24px;display:flex;flex-direction:column;justify-content:center;font:700 34px/1.4 var(--body)}
+  .side{left:1440px;top:204px;width:420px;height:676px}
+  /* Matt Pocock 卡直接放在边栏第四格，尺寸等于工具卡缩到 0.93 倍后的大小；底边 861，不进右下角 200×200 */
+  .mp{left:1492px;top:721px;width:316px;height:140px;padding:26px 16px 8px;text-align:center}
+  .mp .big{font-size:40px;white-space:nowrap}.mp small{font-size:26px;margin-top:6px}
+  .into{left:1040px;top:330px;font-size:32px;padding:8px 18px;z-index:3}
+  .skillbox{left:60px;top:380px;width:1320px;height:256px}
+  .adr{top:408px;width:620px;height:220px;padding:10px 20px}
+  .adr h2{font-size:36px;margin:0 0 6px}
+  .adr .q{position:relative;box-shadow:6px 6px 0 var(--ink);z-index:1}
+  .adr .q .body{font-size:28px;line-height:1.35;padding:6px 18px 8px}.adr .q .src{font-size:26px}.adr .mk{display:inline;white-space:normal}
+</style></head><body><div id="stage">
+<div class="tline cue" data-at="0" data-seq="3:0,4:22.14"></div>
+<section class="card dark cc cue" data-at="0.9" data-r="0"><div class="tab">执行区</div><span class="big" style="font-size:44px">Claude Code</span></section>
+<section class="card tool cue" id="t1" data-at="0.3" data-r="-1" style="left:60px"><div class="tab os">规格</div><div class="big">OpenSpec</div><small>规格和变更</small></section>
+<section class="card tool cue" id="t2" data-at="0.5" data-r="1" style="left:550px"><div class="tab sp">开发方法</div><div class="big">Superpowers</div><small>计划、实现、测试</small></section>
+<section class="card tool cue" id="t3" data-at="0.7" data-r="-1" style="left:1040px"><div class="tab" style="background:var(--violet)">评审</div><div class="big">gstack</div><small>规格评审、代码评审</small></section>
+
+<section class="card prob cue" id="m1" data-at="4.97" data-r="-1" data-current="5.21" data-until="9.83" style="left:60px"><div>外部工具升级</div><div>→ 自己的 skill 跟着改</div></section>
+<section class="card prob cue" id="m2" data-at="9.83" data-r="1" data-current="10.11" data-until="15.56" style="left:515px"><div>两份计划</div><div>→ 两条执行路线</div></section>
+<section class="card prob cue" id="m3" data-at="15.56" data-r="-1" data-current="15.8" data-until="20.03" style="left:970px"><div>评审读进用不上的内容</div></section>
+
+<div class="boundary side cue" data-at="22.14"><div class="tab" style="background:var(--cream)">参考的方法</div></div>
+<div class="boundary skillbox cue" data-at="23.53"><div class="tab ink">自己的 skill</div></div>
+
+<!-- 第 29 句：Matt Pocock 的方法进了 sdflow-spec -->
+<section class="card mp cue" id="mp" data-at="26.8" data-r="1"><div class="tab ink">skills</div><div class="big">Matt Pocock</div><small>拷问、任务单</small></section>
+<i class="arr cue" data-at="33.02" data-d="M1484 791 L1410 791 L1410 361 L1384 361"></i>
+<div class="chip into cue" data-at="33.74" data-r="-1">拷问 → sdflow-spec</div>
+
+<section class="card adr cue" data-at="36.01" data-r="-1" style="left:90px"><h2>评审：自己维护</h2><div class="q tight"><div class="src"><span class="rec">项目记录摘录</span>ADR 0040 · 2026-08-09</div><div class="body"><span class="mk" data-current="36.78">gstack 运行时依赖全退役</span>……</div></div></section>
+<section class="card adr cue" data-at="39.41" data-r="1" style="left:750px"><h2>实现：只走 tickets</h2><div class="q tight"><div class="src"><span class="rec">项目记录摘录</span>ADR 0042 · 2026-08-11</div><div class="body"><span class="mk" data-current="40.47">tickets 成唯一实现管线（superpowers 路由退役）</span></div></div></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>
+  // 讲完的问题变淡；第 28 句三张工具卡从原位移到右侧边栏并缩到 0.93 倍（平移量 = 目标中心 - 原中心），
+  // 缩小是为了给第四格的 Matt Pocock 卡让出位置，缩后小字 26px，仍在字号下限内。
+  window.frameRender=function(t){
+    var T_=window.T,p=T_.p,e=T_.ease;
+    [['m1',10.11],['m2',15.8],['m3',20.21]].forEach(function(a){var el=T_.$(a[0]);el.style.opacity=parseFloat(el.style.opacity||1)*(1-0.55*e(p(t,a[1],0.5)));});
+    [['t1',1420,-203],['t2',930,-47],['t3',440,110]].forEach(function(a,i){
+      var el=T_.$(a[0]),k=e(p(t,22.7+i*0.25,0.8));
+      el.style.transform='translate('+(a[1]*k)+'px,'+(a[2]*k)+'px) scale('+(1-0.07*k)+') '+el.style.transform;
+    });
+    // Matt Pocock 卡的黄框：第 29 句讲到它时一次，第 31 句末「切法也来自 Matt Pocock」再一次。
+    var g=e(p(t,27.23,0.4))*(1-e(p(t,35.32,0.4)))+e(p(t,47.26,0.4));
+    T_.current(T_.$('mp'),g,8);
+  };
+</script><script>window.FRAME_TIMING={"starts": [0.0, 4.88, 15.44, 20.08, 26.56, 35.84, 39.12], "duration": 49.52, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>

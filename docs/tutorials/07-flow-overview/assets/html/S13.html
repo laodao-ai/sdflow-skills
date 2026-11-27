@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- S13：六步条高亮「规格编写」。四类文件二乘二排开，先只显示标题（proposal、specs、design、tasks），每次只展开与口播对应的一张，只截一行原文（项目记录摘录）：
+     第 42 句 specs（spec.md:51，并带「多条输入汇成一次推送」小动画）、第 43 句 design（design.md:132）与 tasks（tasks.md:28）、第 44 句 proposal（proposal.md:8）。
+     冷却卡向当前展开的文件引一条线（同一时刻只有一条）。第 45 句四卡收成一组（虚线框），一根线回到冷却卡，屏显「前面定的事，后面找得到吗？」。来源 B；不放目录树。
+     冷却需求点卡（left 60 / top 240 / 宽 460）与 S11 同位。 -->
+<html lang="zh-CN" data-frame-id="S13"><head><meta charset="utf-8"><title>S13 · 规格编写</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  .file{width:400px;padding:14px 24px;display:flex;align-items:center;gap:18px}
+  .fl{flex:none;padding:2px 14px;background:var(--blue);color:var(--ink);border:3px solid var(--ink);border-radius:6px;font:700 30px/1.35 var(--mono)}
+  .role{font:800 36px/1.3 var(--display);white-space:nowrap}
+  .ex{left:1010px;width:680px}
+  .mini{position:absolute;width:150px;height:66px}
+  .bound{border-color:rgba(22,22,22,.75)}
+  .ask{left:60px;top:600px;width:460px;padding:26px 24px}
+  .ask p{font:800 52px/1.3 var(--display);margin:0;white-space:nowrap}
+</style></head><body><div id="stage">
+<div class="sixbar" data-seq="2:0"></div>
+<section class="card sm" data-r="-1" data-current="-1" style="left:60px;top:240px;width:460px"><div class="tab">冷却需求点</div><p>同一台设备，<br>多久才能再发一次？</p></section>
+
+<!-- 第 41 句：四类文件只显示标题（一列四行：左标题卡，右展开原文） -->
+<section class="card sm file cue" data-at="3.26" data-r="-1" style="left:580px;top:245px"><span class="fl">proposal</span><span class="role">本次范围</span></section>
+<section class="card sm file cue" data-at="3.45" data-r="1" style="left:580px;top:425px"><span class="fl">specs</span><span class="role">要有的行为</span></section>
+<svg class="mini cue" data-at="9.02" data-r="0" style="left:610px;top:515px" viewBox="0 0 150 66"><g fill="none" stroke="#161616" stroke-width="3" stroke-linecap="round">
+    <path id="ml1" d="M12 12 L80 33" pathLength="1"/><path id="ml2" d="M12 33 L80 33" pathLength="1"/><path id="ml3" d="M12 54 L80 33" pathLength="1"/><path id="ml4" d="M80 33 L124 33 M116 27 L124 33 L116 39" pathLength="1"/></g>
+    <circle cx="10" cy="12" r="6" fill="#161616"/><circle cx="10" cy="33" r="6" fill="#161616"/><circle cx="10" cy="54" r="6" fill="#161616"/><circle id="mc" cx="80" cy="33" r="10" fill="#f2efe6" stroke="#161616" stroke-width="4"/><text id="mt" x="134" y="40" font-family="monospace" font-weight="800" font-size="22" fill="#161616">1</text></svg>
+<section class="card sm file cue" data-at="3.55" data-r="1.2" style="left:580px;top:605px"><span class="fl">design</span><span class="role">怎样实现</span></section>
+<section class="card sm file cue" data-at="4.4" data-r="-1.2" style="left:580px;top:785px"><span class="fl">tasks</span><span class="role">要做的任务</span></section>
+
+<!-- 引线：冷却卡 → 当前展开的文件；a1 specs、a2 design、a3 tasks、a4 proposal -->
+<i class="arr" id="a1" data-d="M524 330 C550 340 548 463 574 463" data-dash="1"></i>
+<i class="arr" id="a2" data-d="M524 345 C548 400 548 643 574 643" data-dash="1"></i>
+<i class="arr" id="a3" data-d="M524 360 C546 480 548 823 574 823" data-dash="1"></i>
+<i class="arr" id="a4" data-d="M524 320 C548 300 548 283 574 283" data-dash="1"></i>
+
+<!-- 展开的原文（项目记录摘录，一行） -->
+<div class="q tight ex cue" data-at="8.06" style="top:378px"><div class="src"><span class="rec">项目记录摘录</span>spec.md:51</div><div class="body">- 同一设备的多条超温读数并发到达时，系统 MUST <span class="mk" data-current="11.58" data-until="16.28">只为其中一条发起推送</span>。</div></div>
+<div class="q tight ex cue" data-at="16.38" style="top:572px"><div class="src"><span class="rec">项目记录摘录</span>design.md:132</div><div class="body">4. 并发：……<span class="mk" data-current="17.66" data-until="19.24">判断与写入在同一临界区</span>（GO-01、GO-03）。……</div></div>
+<div class="q tight ex cue" data-at="19.34" style="top:745px"><div class="src"><span class="rec">项目记录摘录</span>tasks.md:28</div><div class="body">- [x] 4.2 notify.Throttled 单元测试……<span class="mk" data-current="20.38" data-until="24.43">20 条并发只放行 1 次</span>……</div></div>
+<div class="q tight ex cue" data-at="24.43" style="top:196px"><div class="src"><span class="rec">项目记录摘录</span>proposal.md:8</div><div class="body">- 新增按设备冷却：同一设备在<span class="mk" data-current="24.67" data-until="30.34">冷却期（默认 10 分钟）</span>内只推一条；……</div></div>
+
+<!-- 第 45 句：四卡收成一组，一根线回到冷却卡 -->
+<div class="boundary bound cue" data-at="31.73" data-r="0" style="left:560px;top:182px;width:1160px;height:740px"></div>
+<i class="arr cue" data-at="34.36" data-d="M556 640 C440 650 330 560 300 424"></i>
+<section class="card ask cue" data-at="34.46" data-r="-1"><p>前面定的事，<br>后面找得到吗？</p></section>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 6.88, 14.4, 23.28, 31.36], "duration": 39.04, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.frameRender=function(t){
+  // 引线：同一时刻只有一条，出现 0.4 秒，到下一条出现时淡出。
+  [['a1',8.06,16.28],['a2',16.38,19.24],['a3',19.34,23.96],['a4',24.43,30.34]].forEach(function(a){
+    var e=T.$(a[0]);e.style.opacity=T.ease(T.p(t,a[1],.4))*(1-T.ease(T.p(t,a[2],.4)));
+  });
+  // specs 小动画：三条输入线汇到一点，再出一条线到「1」。
+  var p=T.ease(T.p(t,9.02,1.6)),q=T.ease(T.p(t,11.42,1.0));
+  ['ml1','ml2','ml3'].forEach(function(id){T.$(id).setAttribute('stroke-dasharray','1');T.$(id).setAttribute('stroke-dashoffset',1-p);});
+  T.$('ml4').setAttribute('stroke-dasharray','1');T.$('ml4').setAttribute('stroke-dashoffset',1-q);
+  T.$('mt').setAttribute('opacity',q);
+  T.$('mc').setAttribute('opacity',p);
+};</script><script src="episode.js"></script></body></html>

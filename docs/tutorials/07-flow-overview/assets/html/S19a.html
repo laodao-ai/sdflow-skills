@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- S19a：六步条下的 ship 括线（括住第 4–6 格，中间琥珀 chip「ship」；S24、S25a 复用同一写法）。第 73 句括线下依次出现三个 skill；第 74 句先亮「设计门」人确认，再出现静态命令卡 /sdflow-ship <change>（调用示意，不是实录）；第 75 句指针落在当前进度（实现），依次点亮准备任务 → 实现 → 代码评审 → 收尾；第 76 句三个步骤保持独立。来源 A：sdflow-ship/SKILL.md 与 ship_gate.py 的 verdict 表。 -->
+<html lang="zh-CN" data-frame-id="S19a"><head><meta charset="utf-8"><title>S19a · sdflow-ship 串起三个步骤</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  /* ship 括线：固定在六步条下方 top:150，从第 4 格左缘 977 到第 6 格右缘 1860，两端向上短折（S19a 首次出现，S24、S25a 复用）。 */
+  .shipb{position:absolute;left:977px;top:150px;width:883px;height:40px}
+  .shipb svg{position:absolute;left:0;top:0;overflow:visible}
+  .shipb .chip{left:395px;top:6px;padding:2px 24px;font:800 32px/1.4 var(--display);background:var(--amber);box-shadow:5px 5px 0 var(--ink)}
+  .sk{position:absolute;top:290px;width:304px;box-sizing:border-box;padding:10px 6px 12px;text-align:center}
+  .sk .mono{font-size:26px;font-weight:600;white-space:nowrap}.sk p{margin:2px 0 0;font:700 34px/1.3 var(--body)}
+  .gate{position:absolute;left:922px;top:196px}
+  .st{position:absolute;top:530px;width:220px;height:72px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border:5px solid var(--ink);border-radius:10px;font:800 38px var(--display);white-space:nowrap}
+  .ptr{position:absolute;top:450px;width:160px;margin-left:-80px;text-align:center;font:800 30px/1.2 var(--display);color:var(--ink);opacity:0}
+  .ptr svg{display:block;margin:6px auto 0;width:30px;height:26px}
+</style></head><body><div id="stage">
+<div class="sixbar" data-seq="0:0"></div>
+
+<!-- 第 72 句 -->
+<div class="shipb cue" data-at="0.4"><svg width="883" height="40" viewBox="0 0 883 40"><path d="M2 4 L2 30 L881 30 L881 4" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="chip" data-r="0">ship</div></div>
+
+<!-- 第 73 句 -->
+<section class="card sm sk cue" data-at="9.9" style="left:934px"><div class="mono">sdflow-implement</div><p>实现</p></section>
+<section class="card sm sk cue" data-at="13.42" style="left:1252px"><div class="mono">sdflow-code-review</div><p>代码评审</p></section>
+<section class="card sm sk cue" data-at="17.1" style="left:1570px"><div class="mono">sdflow-done</div><p>验证 + 归档</p></section>
+
+<!-- 第 74 句 -->
+<div class="chip cue" data-at="21.75" data-r="-2" style="left:560px;top:206px;font-size:34px">设计门 · 人已确认</div>
+<div class="who human gate cue" data-at="21.75" data-current="21.98" data-until="23.86"></div>
+<div class="cmd short cue" data-at="24.02" data-r="0" style="left:60px;top:520px"><div class="tab ink">skill</div>/sdflow-ship &lt;change&gt;</div>
+
+<!-- 第 75 句：四个步骤先是未到达的淡墨，指针落在实现上，依次点亮 -->
+<i class="arr cue" data-at="28.98" data-d="M566 566 L640 566"></i>
+<div class="st" id="s1" style="left:650px">准备任务</div>
+<div class="st" id="s2" style="left:924px">实现</div>
+<div class="st" id="s3" style="left:1198px">代码评审</div>
+<div class="st" id="s4" style="left:1472px">收尾</div>
+<div class="ptr" id="ptr">当前进度<svg viewBox="0 0 30 26"><polygon points="2,2 28,2 15,24" fill="#161616"/></svg></div>
+
+<!-- 第 76 句 -->
+<div class="tag cue" data-at="33.67" data-r="-3" style="left:520px;top:740px;font-size:40px">ship 只组织调用，检查仍由各 skill 做</div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.FRAME_TIMING={"starts": [0.0, 6.4, 21.6, 28.96, 33.52], "duration": 37.52, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};
+window.frameRender=function(t){
+  var E=T.ease,P=T.p;
+  // 阶段 chip：没到 = 透明底淡墨；到过 = 奶白；指针所在 = 奶白 + 黄框。出现时间：准备任务 21.73 / 实现 22.13 / 代码评审 23.53 / 收尾 24.83
+  var at=[29.15,29.56,30.66,31.64],cx=[760,1034,1308,1582];
+  var enter=E(P(t,28.98,.5));
+  for(var i=0;i<4;i++){
+    var el=T.$('s'+(i+1)),lit=E(P(t,at[i],.35));
+    el.style.opacity=enter;
+    el.style.background=lit>.5?'#f2efe6':'transparent';
+    el.style.color=lit>.5?'#161616':'rgba(22,22,22,.65)';
+    el.style.borderColor=lit>.5?'#161616':'rgba(22,22,22,.65)';
+    el.style.boxShadow=lit>.5?'7px 7px 0 #161616':'none';
+    // 黄框：指针到这一格起，到下一格止；准备任务已完成，不加黄框
+    var g=0;
+    if(i>=1){var nxt=i<3?at[i+1]:1e9;g=E(P(t,at[i]+.1,.4))*(1-E(P(t,nxt,.3)));}
+    if(g>0)T.current(el,g,7);else if(lit>.5)el.style.outline='none';
+  }
+  // 指针：21.83 落在「实现」，之后随点亮向右移动
+  var pe=E(P(t,29.42,.5)),x=cx[1];
+  x+=(cx[2]-cx[1])*E(P(t,30.46,.5))+(cx[3]-cx[2])*E(P(t,31.51,.5));
+  var p=T.$('ptr');p.style.opacity=pe;p.style.left=x+'px';p.style.top=(450-(1-pe)*24)+'px';
+};</script><script src="episode.js"></script></body></html>

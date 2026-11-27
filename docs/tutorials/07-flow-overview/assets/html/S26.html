@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- S26：第 6 轮（意见 62，作者 2026-11-22 定）换成告警示例。设计门前的一次决定：推送失败以后要不要保证送到。
+     第 102 句（第一句）两拍：「设计门前」时六步条以正常大小出现在画面中部偏上，前三步亮、后三步暗，前三步下方一条括线，
+     括线下「设计门前」标签加人形图标；「还是这个告警项目」时「示例项目 · 告警」卡（带一行「设备超温时，发出通知」）出现在六步条下方居中；
+     句末六步条（连括线）缩回顶部，标签加人形图标缩到左上，项目卡缩到右上角（缩小后说明行仍是 30px，不收起）。
+     第 103 句「推送失败」卡，箭头接到问题「要不要保证送到？」；第 104 句从问题卡分出两条线，接两个分支卡；
+     第 105 句左分支出「更可靠」「复杂度翻倍」；第 106 句右分支出「偶尔漏一条」，虚线箭头接「下个冷却周期还会再推」；
+     第 107 句人形图标选中右分支（黄框），摘决策纪要 D5 一行，标「项目记录摘录」。
+     出处：demo-temp-monitor openspec/changes/archive/2026-10-31-alarm-notify/decision-memo.md 第 23 行（D5），省略处用「……」。来源 B。 -->
+<html lang="zh-CN" data-frame-id="S26"><head><meta charset="utf-8"><title>S26 · 设计门前的一次决定</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="episode.css">
+<style>
+  /* 第 102 句：六步条和括线放在 #g1 里，先以正常大小在中部偏上，句末整体缩成 .5 倍回到顶部（左 330、上 44）。 */
+  #g1{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+  /* 标签 + 人形图标：落位在左上（left 60，top 36），开头在括线下方，句末移回（frameRender 驱动）。 */
+  #gt{position:absolute;left:60px;top:36px;display:flex;align-items:center;gap:8px;transform-origin:0 0;opacity:0}
+  #gt .chip{position:relative;background:var(--blue);font-size:40px;padding:12px 16px}
+  #gt .who{position:relative;width:50px;height:50px;box-shadow:5px 5px 0 var(--ink)}#gt .who svg{width:34px;height:34px}
+  /* 项目卡：落位在右上角（left 1500，top 36）；第 102 句 2.3 秒起在六步条下方居中放大，句末缩回（frameRender 驱动，不用 cue）。 */
+  .proj{left:1500px;top:36px;background:var(--charcoal);color:var(--cream);font-size:40px;opacity:0}
+  .proj small{display:block;margin-top:6px;font:600 30px/1.3 var(--body)}
+  .dc{width:620px;height:170px;padding:22px 34px}.dc h2{font-size:50px;margin:0}
+  .dc small{display:block;margin-top:12px;font:600 34px/1.3 var(--body)}
+  .ask{left:780px;top:236px;font-size:50px;padding:14px 30px}
+  /* 分支卡先只有标题高度（104），内容那句到点再长到 220（frameRender 驱动），不留空壳。 */
+  .br{top:460px;height:104px;padding:24px 34px}.br h2{font-size:46px;margin:0;white-space:nowrap}
+  .br .ln{position:relative;display:inline-block;vertical-align:middle;margin:22px 14px 0 0;font-size:34px;padding:4px 16px}
+  .br .dsh{display:inline-block;vertical-align:middle;margin:22px 14px 0 0}
+</style></head><body><div id="stage">
+<!-- 第 102 句第一拍：六步条（前三步亮）+ 前三步下方括线；第二拍：示例项目卡 -->
+<div id="g1"><div class="sixbar" id="g1bar" data-seq="3:0" style="top:300px;opacity:0"></div>
+<i class="arr cue" data-at="0.7" data-w="8" data-nohead data-d="M60 422 L60 442 L943 442 L943 422"></i></div>
+<div id="gt"><div class="chip" data-r="-1">设计门前</div><div class="who human"></div></div>
+<div class="chip proj" id="proj"><div>示例项目 · 告警</div><small>设备超温时，发出通知</small></div>
+
+<!-- 第 103 句：推送失败 → 要不要保证送到 -->
+<section class="card dc cue" data-at="5.78" data-r="-1" style="left:60px;top:190px"><h2>推送失败</h2><small>超时、网络出错、钉钉返回错误</small></section>
+<i class="arr cue" data-at="7.03" data-d="M694 280 L766 280"></i>
+<div class="chip ask cue" data-at="7.09" data-r="1.5">要不要保证送到？</div>
+
+<!-- 第 104 句：两个分支都从问题卡出发 -->
+<i class="arr cue" data-at="10.5" data-d="M950 350 L950 404 L430 404 L430 438"></i>
+<section class="card br cue" id="bA" data-at="10.94" data-r="-1" style="left:60px;width:760px"><h2>待发送表 + 后台重发</h2>
+  <span class="chip ln cue" data-at="19.66" data-r="-1">更可靠</span><span class="tag ln cue" data-at="21.62" data-r="1">复杂度翻倍</span></section>
+<i class="arr cue" data-at="14.4" data-d="M1080 352 L1080 404 L1310 404 L1310 438"></i>
+<section class="card br cue" id="bB" data-at="14.78" data-r="1" data-current="34.0" data-shadow="10" style="left:900px;width:820px"><h2>失败只记日志，不重试</h2>
+  <span class="tag ln cue" data-at="25.02" data-r="1">偶尔漏一条</span><svg class="dsh cue" data-at="27.8" width="64" height="30" viewBox="0 0 64 30"><path d="M3 15 L56 15" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-dasharray="10 8"/><path d="M48 7 L58 15 L48 23" fill="none" stroke="#161616" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="chip ln cue" data-at="27.9" data-r="-1">下个冷却周期还会再推</span></section>
+
+<!-- 第 107 句：人选后一个分支，摘决策纪要 D5 -->
+<div class="who big human cue" data-at="33.9" style="left:1750px;top:515px"></div>
+<div class="q tight cue" data-at="34.1" style="left:60px;top:716px;width:1640px"><div class="src"><span class="rec">项目记录摘录</span>decision-memo.md · D5</div><div class="body">D5 尽力而为投递：异步、5 秒超时、<span class="mk" data-current="34.62">失败只写 ERROR 日志、不重试</span>……砍掉的候选：……outbox 表 + 后台重放保证送达（复杂度翻倍……）</div></div>
+</div><script src="lib/stage.js"></script><script src="theme.js"></script><script>window.frameRender=function(t){
+  document.querySelectorAll("#g1 .nav-step").forEach(function(e){e.style.outline="none";if(!e.classList.contains("notyet"))e.style.boxShadow="7px 7px 0 #161616";});
+  // 第 102 句：0.2 秒六步条出现，0.7 秒括线，1.1 秒标签 + 人形图标，2.3 秒项目卡在六步条下方居中放大出现；
+  // 句末 4.85–5.45 秒（第 103 句 5.53 秒起）六步条连括线缩成 .5 倍回顶部、标签回左上、项目卡缩到右上角（visual-v4 4.8 的动作）。
+  var mv=T.ease(T.p(t,3.95,0.6));
+  var g1=T.$('g1'),sc1=1-.5*mv;
+  T.$('g1bar').style.opacity=T.ease(T.p(t,0.2,0.4));
+  // 六步条大图原点 (60,300) → 缩小后 (330,44)：平移 (300,-106) 乘 mv，缩放 .5。
+  g1.style.transform='translate('+(300*mv)+'px,'+(-106*mv)+'px) scale('+sc1+')';
+  var gt=T.$('gt'),gw=gt.offsetWidth,gs=1+.15*(1-mv);
+  var gv=T.ease(T.p(t,1.1,0.4));
+  gt.style.opacity=gv;
+  gt.style.transform='translate('+((501-gw*1.15/2-60)*(1-mv))+'px,'+((470-36)*(1-mv)+(1-gv)*14)+'px) scale('+gs+')';
+  var p=T.$('proj'),W=p.offsetWidth,H=p.offsetHeight;
+  var o=T.ease(T.p(t,2.78,0.4));
+  var dx=(960-(1500+W/2))*(1-mv),dy=(700-(36+H/2))*(1-mv)+(1-o)*14,sc=1+0.5*(1-mv);
+  p.style.opacity=o;
+  p.style.transform='translate('+dx+'px,'+dy+'px) scale('+sc+') rotate(1deg)';
+  // 分支卡长高：左卡第 105 句（18.2 秒出第一个标签）、右卡第 106 句（23.0 秒）。长高比标签早 0.1 秒起，0.4 秒内完成。
+  T.$('bA').style.height=(104+116*T.ease(T.p(t,19.56,.4)))+'px';
+  T.$('bB').style.height=(104+116*T.ease(T.p(t,24.92,.4)))+'px';
+};window.FRAME_TIMING={"starts": [0.0, 5.68, 9.84, 18.96, 24.4, 31.12], "duration": 37.2, "note": "按 2026-11-24 录音 voice.srt 与逐字时间对齐；注释里的秒数是对齐前的估算"};</script><script src="episode.js"></script></body></html>
